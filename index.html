@@ -779,6 +779,12 @@ async function uploadFile(file,bucket='files'){
   return sb.storage.from(bucket).getPublicUrl(path).data.publicUrl;
 }
 
+async function uploadGroupAvatar(file,groupId){
+  const path=`groups/${groupId}/avatar.${file.name.split('.').pop()}`;
+  await sb.storage.from('avatars').upload(path,file,{upsert:true});
+  return sb.storage.from('avatars').getPublicUrl(path).data.publicUrl;
+}
+
 document.getElementById('photo-input')?.addEventListener('change',async e=>{
   const f=e.target.files[0]; if(!f) return; e.target.value='';
   try{ const url=await uploadFile(f); const t=f.type.startsWith('image/')?'image':'video'; await sendMessage(t,url,f.name); }catch(err){ alert(friendlyError(err)); }
@@ -883,18 +889,19 @@ document.getElementById('avatar-upload')?.addEventListener('change',async e=>{
   myProfile.avatar_url=data.publicUrl; updateAllUIs();
 });
 
-// Group/Channel avatar upload
+// Group avatar handlers
 document.getElementById('group-avatar-create')?.addEventListener('change',e=>{ groupAvatarFile=e.target.files[0]; });
 document.getElementById('channel-avatar-create')?.addEventListener('change',e=>{ channelAvatarFile=e.target.files[0]; });
 document.getElementById('gs-avatar')?.addEventListener('change',async e=>{
   const f=e.target.files[0]; if(!f||!activeGroup) return;
-  const path=`groups/${activeGroup.id}/avatar.${f.name.split('.').pop()}`;
-  await sb.storage.from('avatars').upload(path,f,{upsert:true});
-  const{data}=sb.storage.from('avatars').getPublicUrl(path);
-  await sb.from('groups').update({avatar_url:data.publicUrl}).eq('id',activeGroup.id);
-  activeGroup.avatar_url=data.publicUrl;
-  const pav=document.getElementById('partner-avatar');
-  pav.style.backgroundImage=`url(${data.publicUrl})`; pav.innerHTML=''; pav.style.background='';
+  try{
+    const url=await uploadGroupAvatar(f,activeGroup.id);
+    await sb.from('groups').update({avatar_url:url}).eq('id',activeGroup.id);
+    activeGroup.avatar_url=url;
+    const pav=document.getElementById('partner-avatar');
+    pav.style.backgroundImage=`url(${url})`; pav.innerHTML=''; pav.style.background='';
+    alert('Аватар обновлён!');
+  }catch(err){ alert(friendlyError(err)); }
 });
 
 document.getElementById('plus-btn')?.addEventListener('click',e=>{ e.stopPropagation(); document.getElementById('plus-dropdown').classList.toggle('show'); });
@@ -950,18 +957,20 @@ document.getElementById('create-group-confirm')?.addEventListener('click',async(
   const name=document.getElementById('group-name').value.trim();
   if(!name){ alert('Введите название'); return; }
   try{
-    let avatar_url=null;
-    if(groupAvatarFile){
-      const path=`groups/${myProfile.id}_${Date.now()}/avatar.${groupAvatarFile.name.split('.').pop()}`;
-      await sb.storage.from('avatars').upload(path,groupAvatarFile,{upsert:true});
-      avatar_url=sb.storage.from('avatars').getPublicUrl(path).data.publicUrl;
-    }
     const invite_code=randomCode(16);
-    const{data:group,error}=await sb.from('groups').insert({
+    const payload={
       name,description:document.getElementById('group-desc').value.trim(),type:'group',
-      owner_id:myProfile.id,color:colorFor(name),invite_policy:'all',invite_code,avatar_url
-    }).select().single();
+      owner_id:myProfile.id,color:colorFor(name),invite_policy:'all',invite_code
+    };
+    const{data:group,error}=await sb.from('groups').insert(payload).select().single();
     if(error) throw error;
+    if(groupAvatarFile){
+      try{
+        const url=await uploadGroupAvatar(groupAvatarFile,group.id);
+        await sb.from('groups').update({avatar_url:url}).eq('id',group.id);
+        group.avatar_url=url;
+      }catch(e){}
+    }
     await sb.from('group_members').insert({group_id:group.id,user_id:myProfile.id,role:'admin'});
     for(const u of groupSelectedUsers) await sb.from('group_members').insert({group_id:group.id,user_id:u.id,role:'member'});
     document.getElementById('create-group-modal').style.display='none';
@@ -975,17 +984,19 @@ document.getElementById('create-channel-confirm')?.addEventListener('click',asyn
   const isPublic=document.getElementById('channel-type').value==='public';
   const invite_code=randomCode(16);
   try{
-    let avatar_url=null;
-    if(channelAvatarFile){
-      const path=`channels/${myProfile.id}_${Date.now()}/avatar.${channelAvatarFile.name.split('.').pop()}`;
-      await sb.storage.from('avatars').upload(path,channelAvatarFile,{upsert:true});
-      avatar_url=sb.storage.from('avatars').getPublicUrl(path).data.publicUrl;
-    }
-    const{data:channel,error}=await sb.from('groups').insert({
+    const payload={
       name,description:document.getElementById('channel-desc').value.trim(),type:'channel',
-      owner_id:myProfile.id,color:colorFor(name),is_public:isPublic,invite_policy:'admin',invite_code,avatar_url
-    }).select().single();
+      owner_id:myProfile.id,color:colorFor(name),is_public:isPublic,invite_policy:'admin',invite_code
+    };
+    const{data:channel,error}=await sb.from('groups').insert(payload).select().single();
     if(error) throw error;
+    if(channelAvatarFile){
+      try{
+        const url=await uploadGroupAvatar(channelAvatarFile,channel.id);
+        await sb.from('groups').update({avatar_url:url}).eq('id',channel.id);
+        channel.avatar_url=url;
+      }catch(e){}
+    }
     await sb.from('group_members').insert({group_id:channel.id,user_id:myProfile.id,role:'admin'});
     for(const u of channelSelectedUsers) await sb.from('group_members').insert({group_id:channel.id,user_id:u.id,role:'member'});
     document.getElementById('create-channel-modal').style.display='none';
@@ -1016,19 +1027,9 @@ document.getElementById('group-settings-btn')?.addEventListener('click',()=>{
 });
 document.getElementById('gs-save-btn')?.addEventListener('click',async()=>{
   const u={name:document.getElementById('gs-name').value.trim(),description:document.getElementById('gs-desc').value.trim(),invite_policy:document.getElementById('gs-invite').value};
-  const avatarFile=document.getElementById('gs-avatar').files[0];
-  if(avatarFile){
-    const path=`groups/${activeGroup.id}/avatar.${avatarFile.name.split('.').pop()}`;
-    await sb.storage.from('avatars').upload(path,avatarFile,{upsert:true});
-    u.avatar_url=sb.storage.from('avatars').getPublicUrl(path).data.publicUrl;
-  }
   await sb.from('groups').update(u).eq('id',activeGroup.id);
   Object.assign(activeGroup,u);
   document.getElementById('chat-partner-name').textContent=activeGroup.name;
-  if(u.avatar_url){
-    const pav=document.getElementById('partner-avatar');
-    pav.style.backgroundImage=`url(${u.avatar_url})`; pav.innerHTML=''; pav.style.background='';
-  }
   document.getElementById('group-settings-modal').style.display='none';
   loadGroups();
 });
@@ -1108,8 +1109,6 @@ document.getElementById('accept-call')?.addEventListener('click',async()=>{
 document.getElementById('reject-call')?.addEventListener('click',()=>{ document.getElementById('incoming-call').style.display='none'; if(pendingOffer) sendSignal(pendingOffer.from,{type:'reject'}); });
 document.getElementById('video-btn')?.addEventListener('click',()=>startCall('video'));
 document.getElementById('call-btn')?.addEventListener('click',()=>startCall('audio'));
-document.getElementById('toggle-mic')?.addEventListener('click',()=>{ if(localStream){ const t=localStream.getAudioTracks()[0]; if(t) t.enabled=!t.enabled; } });
-document.getElementById('toggle-cam')?.addEventListener('click',()=>{ if(localStream){ const t=localStream.getVideoTracks()[0]; if(t) t.enabled=!t.enabled; } });
 
 // Circle
 document.getElementById('circle-btn')?.addEventListener('click',async()=>{
