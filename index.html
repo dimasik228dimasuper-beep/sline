@@ -210,8 +210,6 @@
     .bubble.me { background: linear-gradient(135deg, var(--accent-a), var(--accent-b)); color: #fff; border-bottom-right-radius: 5px; }
     .bubble.them { background: var(--panel-hover); border: 1px solid var(--line); border-bottom-left-radius: 5px; }
     .bubble-time { font-size: 10px; opacity: .65; margin-top: 4px; display: flex; align-items: center; gap: 4px; }
-    .read-status { display: inline-flex; align-items: center; }
-    .read-status svg { width: 14px; height: 14px; }
     .bubble img, .bubble video { max-width: 100%; border-radius: 12px; margin-top: 4px; display: block; cursor: pointer; }
     .bubble .file-card {
       display: flex; align-items: center; gap: 8px; padding: 8px 10px;
@@ -236,6 +234,15 @@
       cursor: pointer; box-shadow: 0 4px 20px rgba(0,0,0,.35);
     }
     .circle-msg video { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; display: block; }
+
+    .sticker-panel {
+      position: absolute; bottom: 70px; left: 0; right: 0; background: var(--panel);
+      border-top: 1px solid var(--line); max-height: 260px; overflow-y: auto; padding: 12px;
+      display: none; grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); gap: 8px; z-index: 20;
+    }
+    .sticker-panel.show { display: grid; }
+    .sticker-panel img { width: 100%; cursor: pointer; border-radius: 8px; transition: transform 0.2s; }
+    .sticker-panel img:hover { transform: scale(1.1); }
 
     .bottom-tabs {
       display: flex; background: var(--panel); border-top: 1px solid var(--line);
@@ -269,16 +276,6 @@
       0%, 100% { box-shadow: 0 0 0 0 rgba(240,112,138,0.4); }
       50% { box-shadow: 0 0 0 12px rgba(240,112,138,0); }
     }
-    .voice-recording-hint {
-      position: absolute; bottom: 70px; left: 50%; transform: translateX(-50%);
-      background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
-      padding: 8px 16px; font-size: 13px; color: var(--danger); z-index: 20;
-      animation: fadeInUp 0.2s ease;
-    }
-    @keyframes fadeInUp {
-      from { opacity: 0; transform: translateX(-50%) translateY(10px); }
-      to { opacity: 1; transform: translateX(-50%) translateY(0); }
-    }
 
     #circle-recorder {
       position: fixed; inset: 0; background: rgba(0,0,0,.94); z-index: 4000;
@@ -300,6 +297,59 @@
       width: 40px; height: 40px; border-radius: 50%; background: rgba(255,255,255,.15);
       border: none; color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 18px;
     }
+
+    #call-screen {
+      position: fixed; inset: 0; background: #0a0e17; z-index: 5000; display: none; flex-direction: column;
+    }
+    #call-screen.active { display: flex; }
+    #remote-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; background: #111; }
+    #local-video {
+      position: absolute; bottom: 120px; right: 20px; width: 120px; height: 160px;
+      object-fit: cover; border-radius: 16px; border: 2px solid rgba(255,255,255,.25);
+      box-shadow: 0 8px 32px rgba(0,0,0,.5); background: #222; z-index: 10;
+    }
+    .call-overlay {
+      position: absolute; inset: 0; display: flex; flex-direction: column;
+      justify-content: space-between; padding: 40px 20px; pointer-events: none; z-index: 20;
+    }
+    .call-overlay>* { pointer-events: auto; }
+    .call-top { text-align: center; }
+    .call-name { font-size: 22px; font-weight: 700; }
+    .call-status { font-size: 14px; color: rgba(255,255,255,.7); margin-top: 6px; }
+    .call-controls { display: flex; justify-content: center; gap: 20px; padding-bottom: 20px; }
+    .call-ctrl-btn {
+      width: 60px; height: 60px; border-radius: 50%; border: none; cursor: pointer;
+      display: flex; align-items: center; justify-content: center; font-size: 24px;
+      background: rgba(255,255,255,.15); color: #fff; transition: background 0.2s;
+    }
+    .call-ctrl-btn.hangup { background: var(--danger); }
+    #incoming-call {
+      position: fixed; inset: 0; background: rgba(0,0,0,.85); z-index: 5100;
+      display: none; flex-direction: column; align-items: center; justify-content: center; gap: 24px;
+    }
+    #incoming-call.active { display: flex; }
+    .incoming-avatar {
+      width: 100px; height: 100px; border-radius: 50%; background: var(--accent-a);
+      display: flex; align-items: center; justify-content: center; font-size: 40px; font-weight: 700;
+      animation: pulse-ring 1.5s ease-in-out infinite;
+    }
+    @keyframes pulse-ring {
+      0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(76,124,243,0.4); }
+      50% { transform: scale(1.1); box-shadow: 0 0 0 20px rgba(76,124,243,0); }
+    }
+    .incoming-name { font-size: 24px; font-weight: 700; }
+    .incoming-actions { display: flex; gap: 40px; margin-top: 20px; }
+    .incoming-accept, .incoming-reject {
+      width: 70px; height: 70px; border-radius: 50%; border: none; cursor: pointer;
+      display: flex; align-items: center; justify-content: center; font-size: 28px; color: #fff;
+    }
+    .incoming-accept { background: #22c55e; }
+    .incoming-reject { background: var(--danger); }
+
+    #story-viewer {
+      display: none; position: fixed; inset: 0; background: #000; z-index: 6000; flex-direction: column;
+    }
+    #story-viewer.active { display: flex; }
 
     .push-toast {
       position: fixed; top: 20px; right: 20px; background: var(--panel);
@@ -416,6 +466,7 @@
           </div>
         </div>
         <div class="messages" id="messages-list"></div>
+        <div class="sticker-panel" id="sticker-panel"></div>
         <button class="scroll-down-btn" id="scroll-down-btn" title="Вниз">
           <svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;"><path d="M6 9l6 6 6-6"/></svg>
         </button>
@@ -423,6 +474,9 @@
           <div class="composer-actions">
             <button class="icon-btn" id="attach-btn" title="Прикрепить">
               <svg viewBox="0 0 24 24"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>
+            </button>
+            <button class="icon-btn" id="sticker-btn" title="Стикеры">
+              <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01"/></svg>
             </button>
             <button class="icon-btn" id="circle-btn" title="Кружок">
               <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/></svg>
@@ -498,6 +552,42 @@
   <button class="icon-btn" id="circle-cancel" style="position:absolute;top:20px;left:20px;color:#fff;border-color:rgba(255,255,255,.3);">×</button>
 </div>
 
+<div id="call-screen">
+  <video id="remote-video" autoplay playsinline></video>
+  <video id="local-video" autoplay playsinline muted></video>
+  <div class="call-overlay">
+    <div class="call-top"><div class="call-name" id="call-partner-name">...</div><div class="call-status" id="call-status">Соединение...</div></div>
+    <div class="call-controls">
+      <button class="call-ctrl-btn" id="toggle-mic">
+        <svg viewBox="0 0 24 24" style="width:24px;height:24px;fill:none;stroke:#fff;stroke-width:2;"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/></svg>
+      </button>
+      <button class="call-ctrl-btn" id="toggle-cam">
+        <svg viewBox="0 0 24 24" style="width:24px;height:24px;fill:none;stroke:#fff;stroke-width:2;"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+      </button>
+      <button class="call-ctrl-btn hangup" id="hangup-btn">
+        <svg viewBox="0 0 24 24" style="width:24px;height:24px;fill:none;stroke:#fff;stroke-width:2;"><path d="M22 16.92v3a2 2 0 01-2.18 2A19.8 19.8 0 0111.19 18a19.5 19.5 0 01-6-6A19.8 19.8 0 012.12 3.38 2 2 0 014.11 2h3a2 2 0 012 1.72c.13.96.36 1.9.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0122 16.92z"/></svg>
+      </button>
+    </div>
+  </div>
+</div>
+
+<div id="incoming-call">
+  <div class="incoming-avatar" id="incoming-avatar">?</div>
+  <div class="incoming-name" id="incoming-name">Входящий звонок</div>
+  <div class="incoming-actions">
+    <button class="incoming-reject" id="reject-call">✕</button>
+    <button class="incoming-accept" id="accept-call">✓</button>
+  </div>
+</div>
+
+<div id="story-viewer">
+  <div style="position:absolute;top:0;left:0;right:0;height:4px;background:rgba(255,255,255,.2);z-index:2;"><div id="story-progress" style="height:100%;width:0%;background:#fff;transition:width .1s linear;"></div></div>
+  <button id="story-close" style="position:absolute;top:16px;right:16px;z-index:3;background:none;border:none;color:#fff;font-size:28px;cursor:pointer;">×</button>
+  <div id="story-user" style="position:absolute;top:20px;left:16px;z-index:3;color:#fff;font-weight:600;font-size:14px;"></div>
+  <img id="story-image" style="display:none;width:100%;height:100%;object-fit:contain;">
+  <video id="story-video" style="display:none;width:100%;height:100%;object-fit:contain;" playsinline></video>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 const SUPABASE_URL = "https://eshbyibuzvoztrsunvul.supabase.co";
@@ -508,13 +598,19 @@ try { sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY); } catc
 
 let currentUser, myProfile, contacts=[], groups=[], activePartner=null, activeGroup=null, messagesChannel=null, isRestricted=false;
 let lastMessageTime=0, searchTimeout, replyToMsg=null;
+const ICE_SERVERS = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
 const palette = ['#4C7CF3','#2DD4BF','#F0708A','#F7B955','#9B7CF3','#4CD4B0'];
 const UNREAD_KEY = 'sl_unread';
+const STICKER_BOT_USERNAME = 'sticker_bot';
+
+let peerConnection=null, localStream=null, signalingChannel=null, currentCallPartnerId=null, isCaller=false, pendingOffer=null, callType='video';
+let circleStream,mediaRecorder,recordedChunks=[],isRecording=false,recordTimer,recordedBlob,flashOn=false;
 
 function colorFor(id){ let s=0; for(const c of String(id||'')) s+=c.charCodeAt(0); return palette[s%palette.length]; }
 function escapeHtml(s){ const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
 function friendlyError(e){ if(!e) return 'Ошибка'; let m=e.message||e.msg||''; if(m.includes('duplicate')) return 'Уже занято'; if(m.includes('RLS')) return 'Нет доступа'; return String(m).slice(0,80)||'Ошибка'; }
 function randomCode(n=8){ const c='abcdefghijklmnopqrstuvwxyz0123456789'; let r=''; for(let i=0;i<n;i++) r+=c[Math.floor(Math.random()*c.length)]; return r; }
+function calcAge(b){ const d=new Date(b),t=new Date(); let a=t.getFullYear()-d.getFullYear(); if(t.getMonth()<d.getMonth()||(t.getMonth()===d.getMonth()&&t.getDate()<d.getDate())) a--; return a; }
 
 function getUnread(){ try{ return JSON.parse(localStorage.getItem(UNREAD_KEY)||'{}'); }catch(e){ return {}; } }
 function setUnread(id,c){ const u=getUnread(); if(c<=0) delete u[id]; else u[id]=c; localStorage.setItem(UNREAD_KEY,JSON.stringify(u)); }
@@ -557,10 +653,12 @@ async function loadChats(){
       if(m.type==='image') p='Фото'; else if(m.type==='video') p='Видео'; else if(m.type==='file') p='Файл'; else if(m.type==='circle') p='Кружок';
       map.set(pid,{lastMessage:p,lastAt:m.created_at});
     }
-    const ids=[...map.keys()];
+    const botEntry = { id:'sticker_bot', username:STICKER_BOT_USERNAME, first_name:'Sticker', last_name:'Bot', color:'#F7B955', isBot:true, lastMessage:'Отправь фото для стикера', lastAt:new Date().toISOString() };
+    const ids=[...map.keys()].filter(id=>id!=='sticker_bot');
     let profiles=[];
     if(ids.length){ const{data}=await sb.from('profiles').select('*').in('id',ids); profiles=data||[]; }
     contacts=profiles.map(p=>({...p,lastMessage:map.get(p.id)?.lastMessage||'',lastAt:map.get(p.id)?.lastAt})).sort((a,b)=>new Date(b.lastAt||0)-new Date(a.lastAt||0));
+    contacts.unshift(botEntry);
     renderContacts();
   }catch(e){ list.innerHTML='<div class="empty-state" style="padding:28px;text-align:center;color:var(--muted);">Ошибка</div>'; }
 }
@@ -596,7 +694,7 @@ function renderContacts(){
     row.innerHTML=`
       <div style="display:flex;align-items:center;gap:10px;width:100%;padding:10px 12px;">
         <div class="avatar" style="width:40px;height:40px;font-size:14px;${avBg}">${data.avatar_url?'':(name||'?')[0].toUpperCase()}</div>
-        <div style="min-width:0;flex:1;"><div class="contact-name">${escapeHtml(name)}</div><div class="contact-sub">${escapeHtml(sub)}</div></div>
+        <div style="min-width:0;flex:1;"><div class="contact-name">${escapeHtml(name)}${data.isBot?' <span style="font-size:10px;background:var(--accent-a);color:#fff;padding:2px 6px;border-radius:6px;">BOT</span>':''}</div><div class="contact-sub">${escapeHtml(sub)}</div></div>
         ${unread>0?`<span class="unread-badge">${unread>99?'99+':unread}</span>`:''}
       </div>
       <div class="contact-delete" id="del-${data.id}">Удалить</div>
@@ -623,8 +721,8 @@ async function openChat(partner){
   document.getElementById('no-chat-state').style.display='none';
   document.getElementById('chat-active').style.display='flex';
   document.getElementById('group-settings-btn').style.display='none';
-  document.getElementById('call-btn').style.display='flex';
-  document.getElementById('video-btn').style.display='flex';
+  document.getElementById('call-btn').style.display=partner.isBot?'none':'flex';
+  document.getElementById('video-btn').style.display=partner.isBot?'none':'flex';
   document.getElementById('chat-partner-name').textContent=partner.first_name?`${partner.first_name} ${partner.last_name||''}`:partner.username;
   updateChatStatus('в сети');
   const pav=document.getElementById('partner-avatar');
@@ -672,6 +770,12 @@ document.getElementById('back-btn').addEventListener('click',()=>document.getEle
 async function loadMessages(){
   const list=document.getElementById('messages-list');
   list.innerHTML='';
+  if(activePartner?.isBot){
+    const history=JSON.parse(localStorage.getItem('sticker_bot_chat')||'[]');
+    history.forEach(m=>renderMessage({...m,id:m.id||Math.random().toString(36)}));
+    if(!history.length) list.innerHTML='<div class="empty-state" style="padding:28px;text-align:center;color:var(--muted);">Отправь фото чтобы создать стикер</div>';
+    return;
+  }
   try{
     let res=await sb.from('messages').select('*').or(`and(sender_id.eq.${myProfile.id},receiver_id.eq.${activePartner.id}),and(sender_id.eq.${activePartner.id},receiver_id.eq.${myProfile.id})`).is('group_id',null).order('created_at',{ascending:true});
     if(res.error) return;
@@ -691,7 +795,7 @@ async function loadGroupMessages(){
 function renderMessage(msg,isGroup=false){
   if(document.querySelector(`.bubble-row[data-id="${msg.id}"]`)) return;
   const list=document.getElementById('messages-list');
-  const mine=msg.sender_id===myProfile.id;
+  const mine=msg.sender_id===myProfile.id||msg.sender_id==='me';
   const row=document.createElement('div');
   row.className='bubble-row '+(mine?'me':'them');
   row.dataset.id=msg.id;
@@ -701,11 +805,10 @@ function renderMessage(msg,isGroup=false){
   else if(msg.type==='image') content=`<img src="${msg.file_url}" loading="lazy" data-src="${msg.file_url}" data-type="image">`;
   else if(msg.type==='video') content=`<video src="${msg.file_url}" controls data-src="${msg.file_url}" data-type="video"></video>`;
   else if(msg.type==='file') content=`<div class="file-card" data-src="${msg.file_url}" data-type="file"><svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/></svg>${escapeHtml(msg.content||'Файл')}</div>`;
+  else if(msg.type==='sticker') content=`<img src="${msg.file_url}" style="width:120px;" alt="sticker">`;
   else content=escapeHtml(msg.content||'');
   let replyHtml='';
-  if(msg.reply_to){
-    replyHtml=`<div class="reply-preview">В ответ: ${escapeHtml((msg.reply_to_content||'').slice(0,50))}</div>`;
-  }
+  if(msg.reply_to) replyHtml=`<div class="reply-preview">В ответ: ${escapeHtml((msg.reply_to_content||'').slice(0,50))}</div>`;
   let senderLabel='';
   if(isGroup&&!mine&&msg.profiles) senderLabel=`<div style="font-size:11px;color:var(--mint);margin-bottom:2px;">${escapeHtml(msg.profiles.first_name||msg.profiles.username||'')}</div>`;
   row.innerHTML=`
@@ -730,11 +833,6 @@ function renderMessage(msg,isGroup=false){
     document.getElementById('message-input').focus();
     row.classList.remove('swiped-left');
   });
-  row.querySelector('.bubble').addEventListener('dblclick',()=>{
-    const badge=row.querySelector('.reaction-badge')||document.createElement('div');
-    if(!badge.classList.contains('reaction-badge')){ badge.className='reaction-badge'; badge.style.cssText='position:absolute;bottom:-6px;right:8px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:1px 6px;font-size:12px;'; row.querySelector('.bubble').appendChild(badge); }
-    badge.textContent='❤️';
-  });
   list.appendChild(row);
 }
 
@@ -756,19 +854,30 @@ async function sendMessage(type='text',fileUrl=null,content=null){
   const text=content??input.value.trim();
   if((!text&&type==='text')||(!activePartner&&!activeGroup)) return;
   if(isRestricted) return;
+  if(activeGroup&&activeGroup.rate_limit!==false){ const now=Date.now(); if(now-lastMessageTime<10000) return; lastMessageTime=now; }
   input.value=''; sendBtn.classList.remove('visible'); input.style.height='auto';
   input.placeholder='Сообщение...';
-  const payload={
-    sender_id:myProfile.id,
-    content:text||'',
-    type,
-    file_url:fileUrl
-  };
-  if(replyToMsg){
-    payload.reply_to=replyToMsg.id;
-    payload.reply_to_content=replyToMsg.content;
-    replyToMsg=null;
+  // Sticker bot
+  if(activePartner?.isBot){
+    if(type==='image'||type==='video'||(type==='file'&&fileUrl)){
+      const code='sticker_'+randomCode(8);
+      try{ await sb.from('stickers').insert({code,url:fileUrl||text,creator_id:myProfile.id}); }catch(e){}
+      const botReply={id:'bot_'+Date.now(),sender_id:'sticker_bot',content:`Стикер: ${code}`,type:'text',created_at:new Date().toISOString()};
+      const userMsg={id:'me_'+Date.now(),sender_id:'me',type,file_url:fileUrl,content:content||'файл',created_at:new Date().toISOString()};
+      const history=JSON.parse(localStorage.getItem('sticker_bot_chat')||'[]');
+      history.push(userMsg,botReply); localStorage.setItem('sticker_bot_chat',JSON.stringify(history.slice(-50)));
+      renderMessage(userMsg); renderMessage(botReply); scrollToBottom();
+      return;
+    }
+    const userMsg={id:'me_'+Date.now(),sender_id:'me',content:text,type:'text',created_at:new Date().toISOString()};
+    const botReply={id:'bot_'+Date.now(),sender_id:'sticker_bot',content:'Отправь фото чтобы создать стикер',type:'text',created_at:new Date().toISOString()};
+    const history=JSON.parse(localStorage.getItem('sticker_bot_chat')||'[]');
+    history.push(userMsg,botReply); localStorage.setItem('sticker_bot_chat',JSON.stringify(history.slice(-50)));
+    renderMessage(userMsg); renderMessage(botReply); scrollToBottom();
+    return;
   }
+  const payload={sender_id:myProfile.id,content:text||'',type,file_url:fileUrl};
+  if(replyToMsg){ payload.reply_to=replyToMsg.id; payload.reply_to_content=replyToMsg.content; replyToMsg=null; }
   if(activeGroup){ payload.group_id=activeGroup.id; payload.receiver_id=null; }
   else { payload.receiver_id=activePartner.id; payload.group_id=null; }
   try{
@@ -821,15 +930,39 @@ async function loadStories(){
       for(const s of byUser.values()){
         const p=s.profiles||{}; const name=p.first_name||p.username||'?';
         const bg=p.avatar_url?`background-image:url(${p.avatar_url})`:`background:${p.color||colorFor(p.id||s.user_id)}`;
-        html+=`<div class="story-item" data-url="${s.media_url}" data-type="${s.type}"><div class="story-ring"><div class="avatar" style="width:100%;height:100%;border-radius:50%;${bg}">${p.avatar_url?'':(p.username||'?')[0].toUpperCase()}</div></div><span style="font-size:10px;">${escapeHtml(name)}</span></div>`;
+        html+=`<div class="story-item" data-url="${s.media_url}" data-type="${s.type}" data-name="${escapeHtml(name)}"><div class="story-ring"><div class="avatar" style="width:100%;height:100%;border-radius:50%;${bg}">${p.avatar_url?'':(p.username||'?')[0].toUpperCase()}</div></div><span style="font-size:10px;">${escapeHtml(name)}</span></div>`;
       }
     }
   }catch(e){}
   bar.innerHTML=html;
   document.getElementById('add-story-btn-bar')?.addEventListener('click',()=>document.getElementById('story-input').click());
+  bar.querySelectorAll('[data-url]').forEach(el=>el.addEventListener('click',()=>openStoryViewer(el.dataset.url,el.dataset.type,el.dataset.name)));
 }
 
+function openStoryViewer(url,type,name){
+  const viewer=document.getElementById('story-viewer');
+  const img=document.getElementById('story-image'),video=document.getElementById('story-video'),progress=document.getElementById('story-progress');
+  document.getElementById('story-user').textContent=name||'';
+  img.style.display='none'; video.style.display='none'; video.pause(); progress.style.width='0%';
+  if(type==='video'){ video.src=url; video.style.display='block'; video.play(); }
+  else{ img.src=url; img.style.display='block'; }
+  viewer.classList.add('active');
+  const duration=5000; const start=Date.now();
+  const timer=setInterval(()=>{ const p=Math.min(100,((Date.now()-start)/duration)*100); progress.style.width=p+'%'; if(p>=100){ clearInterval(timer); closeStoryViewer(); } },50);
+  viewer._timer=timer;
+}
+function closeStoryViewer(){ const v=document.getElementById('story-viewer'); if(v._timer) clearInterval(v._timer); document.getElementById('story-video').pause(); v.classList.remove('active'); }
+document.getElementById('story-close').addEventListener('click',closeStoryViewer);
+
 document.getElementById('add-story-btn-side').addEventListener('click',()=>document.getElementById('story-input').click());
+
+// Stickers
+const demoStickers=['https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f60a.png','https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f525.png','https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f44d.png','https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/2764.png'];
+document.getElementById('sticker-btn').addEventListener('click',()=>{
+  const panel=document.getElementById('sticker-panel');
+  panel.classList.toggle('show');
+  if(!panel.innerHTML){ demoStickers.forEach(url=>{ const img=document.createElement('img'); img.src=url; img.onclick=()=>{ sendMessage('sticker',url,'sticker'); panel.classList.remove('show'); }; panel.appendChild(img); }); }
+});
 
 // Bottom tabs
 document.querySelectorAll('.bottom-tab').forEach(tab=>{
@@ -850,23 +983,16 @@ function openSettings(){
   document.getElementById('set-wallpaper').value=myProfile.wallpaper||'default';
   document.getElementById('settings-modal').style.display='flex';
 }
-
 document.getElementById('save-profile-btn').addEventListener('click',async()=>{
   const u={first_name:document.getElementById('set-firstname').value.trim(),last_name:document.getElementById('set-lastname').value.trim(),username:document.getElementById('set-username').value.trim().toLowerCase(),wallpaper:document.getElementById('set-wallpaper').value};
   await sb.from('profiles').update(u).eq('id',myProfile.id);
   Object.assign(myProfile,u); updateMeUI();
   document.getElementById('settings-modal').style.display='none';
 });
-
-document.getElementById('enable-notifications-btn').addEventListener('click',()=>{
-  document.getElementById('notification-prompt-modal').style.display='flex';
-});
+document.getElementById('enable-notifications-btn').addEventListener('click',()=>{ document.getElementById('notification-prompt-modal').style.display='flex'; });
 document.getElementById('confirm-notifications-btn').addEventListener('click',async()=>{
   document.getElementById('notification-prompt-modal').style.display='none';
-  if('Notification' in window){
-    const p=await Notification.requestPermission();
-    if(p==='granted') alert('Уведомления включены!');
-  }
+  if('Notification' in window){ const p=await Notification.requestPermission(); if(p==='granted') alert('Уведомления включены!'); }
 });
 
 // Attach dropdown
@@ -892,9 +1018,7 @@ document.getElementById('attach-btn').addEventListener('click',e=>{
     });
     document.getElementById('composer').appendChild(d);
     d.classList.add('show');
-  } else {
-    dd.classList.toggle('show');
-  }
+  } else { dd.classList.toggle('show'); }
 });
 document.addEventListener('click',()=>{
   const dd=document.getElementById('attach-dropdown'); if(dd) dd.classList.remove('show');
@@ -902,10 +1026,7 @@ document.addEventListener('click',()=>{
 });
 
 // Plus dropdown
-document.getElementById('plus-btn').addEventListener('click',e=>{
-  e.stopPropagation();
-  document.getElementById('plus-dropdown').classList.toggle('show');
-});
+document.getElementById('plus-btn').addEventListener('click',e=>{ e.stopPropagation(); document.getElementById('plus-dropdown').classList.toggle('show'); });
 document.getElementById('plus-dropdown').addEventListener('click',e=>{
   e.stopPropagation();
   const item=e.target.closest('.plus-item');
@@ -918,8 +1039,7 @@ document.getElementById('plus-dropdown').addEventListener('click',e=>{
     const{data:group,error}=await sb.from('groups').insert({name,type,owner_id:myProfile.id,color:colorFor(name),anti_filter:false,rate_limit:true}).select().single();
     if(error){ alert(friendlyError(error)); return; }
     await sb.from('group_members').insert({group_id:group.id,user_id:myProfile.id,role:'admin'});
-    loadGroups();
-    openGroup({...group,myRole:'admin'});
+    loadGroups(); openGroup({...group,myRole:'admin'});
   })();
 });
 
@@ -927,17 +1047,10 @@ document.getElementById('plus-dropdown').addEventListener('click',e=>{
 document.getElementById('group-settings-btn').addEventListener('click',()=>{
   if(!activeGroup) return;
   const name=prompt('Название:',activeGroup.name);
-  if(name){
-    sb.from('groups').update({name}).eq('id',activeGroup.id).then(()=>{
-      activeGroup.name=name;
-      document.getElementById('chat-partner-name').textContent=name;
-      loadGroups();
-    });
-  }
+  if(name){ sb.from('groups').update({name}).eq('id',activeGroup.id).then(()=>{ activeGroup.name=name; document.getElementById('chat-partner-name').textContent=name; loadGroups(); }); }
 });
 
 // Circle recorder
-let circleStream,mediaRecorder,recordedChunks=[],isRecording=false,recordTimer,recordedBlob,flashOn=false;
 document.getElementById('circle-btn').addEventListener('click',async()=>{
   try{
     circleStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:480},height:{ideal:480}},audio:true});
@@ -950,25 +1063,11 @@ document.getElementById('circle-btn').addEventListener('click',async()=>{
     document.getElementById('circle-send').style.visibility='hidden';
   }catch(e){ alert('Нет доступа к камере'); }
 });
-// Long press for voice
 let longPressTimer;
-document.getElementById('circle-btn').addEventListener('mousedown',()=>{
-  longPressTimer=setTimeout(()=>{
-    document.getElementById('circle-btn').style.display='none';
-    document.getElementById('voice-btn-wrap').style.display='block';
-    const hint=document.createElement('div');
-    hint.className='voice-recording-hint'; hint.textContent='Запись...'; hint.id='voice-recording-hint';
-    document.getElementById('composer').appendChild(hint);
-  },500);
-});
+document.getElementById('circle-btn').addEventListener('mousedown',()=>{ longPressTimer=setTimeout(()=>{ document.getElementById('circle-btn').style.display='none'; document.getElementById('voice-btn-wrap').style.display='block'; },500); });
 document.getElementById('circle-btn').addEventListener('mouseup',()=>{ clearTimeout(longPressTimer); });
 document.getElementById('circle-btn').addEventListener('mouseleave',()=>{ clearTimeout(longPressTimer); });
-document.getElementById('circle-btn').addEventListener('touchstart',()=>{
-  longPressTimer=setTimeout(()=>{
-    document.getElementById('circle-btn').style.display='none';
-    document.getElementById('voice-btn-wrap').style.display='block';
-  },500);
-});
+document.getElementById('circle-btn').addEventListener('touchstart',()=>{ longPressTimer=setTimeout(()=>{ document.getElementById('circle-btn').style.display='none'; document.getElementById('voice-btn-wrap').style.display='block'; },500); });
 document.getElementById('circle-btn').addEventListener('touchend',()=>{ clearTimeout(longPressTimer); });
 
 document.getElementById('circle-rec-btn').addEventListener('click',()=>{
@@ -981,24 +1080,14 @@ document.getElementById('circle-rec-btn').addEventListener('click',()=>{
     document.getElementById('circle-rec-btn').style.background='transparent';
     document.getElementById('circle-rec-btn').style.border='4px solid var(--danger)';
     const start=Date.now();
-    recordTimer=setInterval(()=>{
-      const sec=Math.floor((Date.now()-start)/1000);
-      document.getElementById('circle-timer').textContent=`${Math.floor(sec/60)}:${(sec%60).toString().padStart(2,'0')}`;
-      if(sec>=60){ mediaRecorder.stop(); isRecording=false; clearInterval(recordTimer); }
-    },200);
+    recordTimer=setInterval(()=>{ const sec=Math.floor((Date.now()-start)/1000); document.getElementById('circle-timer').textContent=`${Math.floor(sec/60)}:${(sec%60).toString().padStart(2,'0')}`; if(sec>=60){ mediaRecorder.stop(); isRecording=false; clearInterval(recordTimer); } },200);
   }else{
     mediaRecorder.stop(); isRecording=false; clearInterval(recordTimer);
     document.getElementById('circle-rec-btn').style.background='var(--danger)';
     document.getElementById('circle-rec-btn').style.border='4px solid #fff';
   }
 });
-document.getElementById('flash-toggle').addEventListener('click',()=>{
-  flashOn=!flashOn;
-  if(circleStream){
-    const track=circleStream.getVideoTracks()[0];
-    if(track) track.applyConstraints({advanced:[{torch:flashOn}]}).catch(()=>{});
-  }
-});
+document.getElementById('flash-toggle').addEventListener('click',()=>{ flashOn=!flashOn; if(circleStream){ const track=circleStream.getVideoTracks()[0]; if(track) track.applyConstraints({advanced:[{torch:flashOn}]}).catch(()=>{}); } });
 document.getElementById('circle-send').addEventListener('click',async()=>{
   if(!recordedBlob) return;
   const path=`${myProfile.id}/circles/${Date.now()}.webm`;
@@ -1017,8 +1106,62 @@ function closeCircleRecorder(){
   document.getElementById('circle-recorder').classList.remove('active');
   document.getElementById('voice-btn-wrap').style.display='none';
   document.getElementById('circle-btn').style.display='flex';
-  const hint=document.getElementById('voice-recording-hint'); if(hint) hint.remove();
 }
+
+// WebRTC Calls
+function setupSignaling(){ signalingChannel=sb.channel(`call:${myProfile.id}`,{config:{broadcast:{self:false}}}).on('broadcast',{event:'signal'},({payload})=>handleSignal(payload)).subscribe(); }
+async function sendSignal(to,data){ const ch=sb.channel(`call:${to}`); await ch.subscribe(); await ch.send({type:'broadcast',event:'signal',payload:{...data,from:myProfile.id}}); setTimeout(()=>sb.removeChannel(ch),2000); }
+async function handleSignal(p){
+  if(p.type==='offer'){ pendingOffer=p; currentCallPartnerId=p.from; const partner=contacts.find(c=>c.id===p.from)||{username:'Пользователь'}; document.getElementById('incoming-name').textContent=partner.first_name||partner.username; document.getElementById('incoming-avatar').textContent=(partner.username||'?')[0].toUpperCase(); document.getElementById('incoming-call').classList.add('active'); }
+  else if(p.type==='answer'&&peerConnection){ await peerConnection.setRemoteDescription(new RTCSessionDescription(p.sdp)); document.getElementById('call-status').textContent='Соединено'; }
+  else if(p.type==='ice'&&peerConnection&&p.candidate){ try{ await peerConnection.addIceCandidate(new RTCIceCandidate(p.candidate)); }catch(e){} }
+  else if(p.type==='hangup'||p.type==='reject') hangupCall(false);
+}
+document.getElementById('accept-call').addEventListener('click',async()=>{
+  document.getElementById('incoming-call').classList.remove('active'); if(!pendingOffer) return;
+  isCaller=false; callType=pendingOffer.callType||'video';
+  await startPeerConnection();
+  await peerConnection.setRemoteDescription(new RTCSessionDescription(pendingOffer.sdp));
+  const answer=await peerConnection.createAnswer(); await peerConnection.setLocalDescription(answer);
+  await sendSignal(pendingOffer.from,{type:'answer',sdp:answer});
+  showCallScreen(pendingOffer.from); pendingOffer=null;
+});
+document.getElementById('reject-call').addEventListener('click',async()=>{ document.getElementById('incoming-call').classList.remove('active'); if(pendingOffer) await sendSignal(pendingOffer.from,{type:'reject'}); pendingOffer=null; });
+document.getElementById('video-btn').addEventListener('click',()=>startCall('video'));
+document.getElementById('call-btn').addEventListener('click',()=>startCall('audio'));
+async function startCall(type='video'){
+  if(!activePartner||activePartner.isBot){ alert('Выберите собеседника'); return; }
+  if(peerConnection){ alert('Звонок уже идёт'); return; }
+  callType=type; isCaller=true; currentCallPartnerId=activePartner.id;
+  await startPeerConnection(); showCallScreen(activePartner.id);
+  const offer=await peerConnection.createOffer(); await peerConnection.setLocalDescription(offer);
+  await sendSignal(activePartner.id,{type:'offer',sdp:offer,callType:type});
+  document.getElementById('call-status').textContent='Вызов...';
+}
+async function startPeerConnection(){
+  peerConnection=new RTCPeerConnection(ICE_SERVERS);
+  peerConnection.onicecandidate=async e=>{ if(e.candidate&&currentCallPartnerId) await sendSignal(currentCallPartnerId,{type:'ice',candidate:e.candidate}); };
+  peerConnection.ontrack=e=>{ document.getElementById('remote-video').srcObject=e.streams[0]; document.getElementById('call-status').textContent='Соединено'; };
+  peerConnection.onconnectionstatechange=()=>{ if(['disconnected','failed','closed'].includes(peerConnection.connectionState)) hangupCall(false); };
+  localStream=await navigator.mediaDevices.getUserMedia({audio:true,video:callType==='video'?{facingMode:'user',width:{ideal:1280},height:{ideal:720}}:false});
+  localStream.getTracks().forEach(t=>peerConnection.addTrack(t,localStream));
+  document.getElementById('local-video').srcObject=localStream;
+}
+function showCallScreen(pid){ const p=contacts.find(c=>c.id===pid)||activePartner||{username:'Собеседник'}; document.getElementById('call-partner-name').textContent=p.first_name||p.username; document.getElementById('call-screen').classList.add('active'); }
+function hangupCall(send=true){
+  if(send&&currentCallPartnerId) sendSignal(currentCallPartnerId,{type:'hangup'});
+  if(localStream){ localStream.getTracks().forEach(t=>t.stop()); localStream=null; }
+  if(peerConnection){ peerConnection.close(); peerConnection=null; }
+  document.getElementById('remote-video').srcObject=null;
+  document.getElementById('local-video').srcObject=null;
+  document.getElementById('call-screen').classList.remove('active');
+  document.getElementById('incoming-call').classList.remove('active');
+  currentCallPartnerId=null; pendingOffer=null;
+}
+document.getElementById('hangup-btn').addEventListener('click',()=>hangupCall(true));
+let micOn=true,camOn=true;
+document.getElementById('toggle-mic').addEventListener('click',()=>{ if(!localStream) return; micOn=!micOn; localStream.getAudioTracks().forEach(t=>t.enabled=micOn); });
+document.getElementById('toggle-cam').addEventListener('click',()=>{ if(!localStream) return; camOn=!camOn; localStream.getVideoTracks().forEach(t=>t.enabled=camOn); });
 
 // Realtime
 function subscribeRealtime(){
@@ -1037,8 +1180,7 @@ function subscribeRealtime(){
         showPushToast(s.first_name||s.username,msg.content||'Новое сообщение',msg.sender_id,false);
       }
       loadChats();
-    })
-    .subscribe();
+    }).subscribe();
 }
 
 // Auth
@@ -1090,15 +1232,10 @@ async function onAuthenticated(user){
   document.getElementById('auth-screen').style.display='none';
   document.getElementById('app-screen').style.display='flex';
   updateMeUI();
-  await loadChats();
-  await loadGroups();
-  await loadStories();
-  subscribeRealtime();
+  await loadChats(); await loadGroups(); await loadStories();
+  subscribeRealtime(); setupSignaling();
 }
-
-if(sb){
-  sb.auth.getSession().then(({data})=>{ if(data?.session) onAuthenticated(data.session.user); });
-}
+if(sb){ sb.auth.getSession().then(({data})=>{ if(data?.session) onAuthenticated(data.session.user); }); }
 </script>
 </body>
 </html>
