@@ -84,7 +84,6 @@
     .app-page { position: absolute; inset: 0; display: none; flex-direction: column; overflow: hidden; }
     .app-page.active { display: flex; }
 
-    /* Chats page */
     .chats-layout { display: flex; flex: 1; overflow: hidden; }
     .sidebar {
       background: var(--panel); border-right: 1px solid var(--line); display: flex;
@@ -246,7 +245,6 @@
     .sticker-panel.show { display: grid; }
     .sticker-panel img { width: 100%; cursor: pointer; border-radius: 8px; }
 
-    /* Calls page */
     .calls-list { flex: 1; overflow-y: auto; padding: 8px; }
     .call-item {
       display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: 14px;
@@ -257,7 +255,6 @@
     .call-name { font-size: 14px; font-weight: 600; }
     .call-meta { font-size: 12px; color: var(--muted); margin-top: 2px; }
 
-    /* Settings page */
     .settings-page { padding: 0; overflow-y: auto; }
     .settings-profile {
       display: flex; flex-direction: column; align-items: center; padding: 32px 20px 24px;
@@ -387,6 +384,7 @@
     }
     .back-btn { display: none; background: none; border: none; color: var(--text); font-size: 20px; cursor: pointer; padding: 4px 8px; }
     .hidden-input { display: none; }
+    .empty-state { padding: 28px; text-align: center; color: var(--muted); }
     ::-webkit-scrollbar { width: 4px; }
     ::-webkit-scrollbar-thumb { background: var(--line); border-radius: 4px; }
   </style>
@@ -420,7 +418,6 @@
 
 <div id="app-screen">
   <div class="app-pages">
-    <!-- Chats Page -->
     <div class="app-page active" id="page-chats">
       <div class="chats-layout">
         <div class="sidebar" id="sidebar">
@@ -445,7 +442,7 @@
             </div>
           </div>
           <div class="stories-bar" id="stories-bar"></div>
-          <div class="contacts" id="contacts-list"><div class="empty-state" style="padding:28px;text-align:center;color:var(--muted);">Загрузка...</div></div>
+          <div class="contacts" id="contacts-list"><div class="empty-state">Загрузка...</div></div>
         </div>
         <div class="chat-pane" id="chat-pane">
           <div id="no-chat-state" style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--muted);flex-direction:column;gap:8px;"><div class="display" style="font-size:18px;">Выберите чат</div></div>
@@ -482,15 +479,11 @@
       </div>
     </div>
 
-    <!-- Calls Page -->
     <div class="app-page" id="page-calls">
       <div style="padding:16px;background:var(--panel);border-bottom:1px solid var(--line);font-size:17px;font-weight:700;">Звонки</div>
-      <div class="calls-list" id="calls-list">
-        <div class="empty-state" style="padding:40px;text-align:center;color:var(--muted);">Нет недавних звонков</div>
-      </div>
+      <div class="calls-list" id="calls-list"><div class="empty-state">Нет недавних звонков</div></div>
     </div>
 
-    <!-- Settings Page -->
     <div class="app-page settings-page" id="page-settings">
       <div class="settings-profile">
         <div class="settings-avatar" id="settings-avatar" onclick="document.getElementById('avatar-upload').click()"><span id="settings-avatar-text"></span></div>
@@ -541,13 +534,13 @@
   </div>
 </div>
 
-<!-- Modals (same as before, kept for functionality) -->
-<div id="create-group-modal" class="modal-overlay" style="display:none;"><div class="modal"><button class="close-x" onclick="document.getElementById('create-group-modal').style.display='none'">×</button><h3>Создать группу</h3><div class="field"><label>Название</label><input id="group-name"></div><div class="field"><label>Описание</label><textarea id="group-desc" rows="2"></textarea></div><div class="field"><label>Поиск участников</label><input id="group-user-search" placeholder="Поиск..."></div><div class="user-select-list" id="group-user-list"></div><div style="font-size:12px;color:var(--muted);">Выбрано: <span id="group-selected-count">0</span></div><button class="btn-primary" id="create-group-confirm">Создать</button></div></div>
-<div id="create-channel-modal" class="modal-overlay" style="display:none;"><div class="modal"><button class="close-x" onclick="document.getElementById('create-channel-modal').style.display='none'">×</button><h3>Создать канал</h3><div class="field"><label>Название</label><input id="channel-name"></div><div class="field"><label>Описание</label><textarea id="channel-desc" rows="2"></textarea></div><div class="field"><label>Username</label><input id="channel-username" placeholder="channel_name"></div><div class="field"><label>Тип</label><select id="channel-type"><option value="public">Публичный</option><option value="private">Частный</option></select></div><div class="field"><label>Поиск подписчиков</label><input id="channel-user-search" placeholder="Поиск..."></div><div class="user-select-list" id="channel-user-list"></div><div style="font-size:12px;color:var(--muted);">Выбрано: <span id="channel-selected-count">0</span></div><button class="btn-primary" id="create-channel-confirm">Создать</button></div></div>
-<div id="invite-modal" class="modal-overlay" style="display:none;"><div class="modal"><button class="close-x" onclick="document.getElementById('invite-modal').style.display='none'">×</button><h3>Пригласить</h3><div class="field"><label>Поиск</label><input id="invite-user-search" placeholder="Поиск..."></div><div class="user-select-list" id="invite-user-list"></div><button class="btn-primary" id="invite-confirm">Пригласить</button></div></div>
-<div id="group-settings-modal" class="modal-overlay" style="display:none;"><div class="modal"><button class="close-x" onclick="document.getElementById('group-settings-modal').style.display='none'">×</button><h3>Настройки группы</h3><div class="field"><label>Название</label><input id="gs-name"></div><div class="field"><label>Описание</label><textarea id="gs-desc" rows="2"></textarea></div><div class="field"><label>Приглашения</label><select id="gs-invite"><option value="all">Все</option><option value="admin">Админы</option></select></div><div class="field"><label>Изменение инфо</label><select id="gs-edit"><option value="all">Все</option><option value="admin">Админы</option></select></div><button class="btn-primary" id="gs-save-btn">Сохранить</button></div></div>
-<div id="edit-profile-modal" class="modal-overlay" style="display:none;"><div class="modal"><button class="close-x" onclick="document.getElementById('edit-profile-modal').style.display='none'">×</button><h3>Профиль</h3><div class="field"><label>Имя</label><input id="ep-firstname"></div><div class="field"><label>Фамилия</label><input id="ep-lastname"></div><div class="field"><label>Username</label><input id="ep-username"></div><div class="field"><label>Обои</label><select id="ep-wallpaper"><option value="default">По умолчанию</option><option value="gradient1">Синий</option><option value="gradient2">Бирюзовый</option></select></div><button class="btn-primary" id="ep-save-btn">Сохранить</button></div></div>
-<div id="notification-prompt-modal" class="modal-overlay" style="display:none;"><div class="modal" style="text-align:center;"><h3>Включите уведомления</h3><p style="color:var(--muted);margin-bottom:16px;">Чтобы не пропускать важные сообщения.</p><button class="btn-primary" id="confirm-notifications-btn">Включить</button><button class="btn-secondary" style="margin-top:8px;" onclick="document.getElementById('notification-prompt-modal').style.display='none'">Позже</button></div></div>
+<!-- Modals -->
+<div id="create-group-modal" class="modal-overlay" style="display:none;"><div class="modal"><button class="close-x" onclick="this.closest('.modal-overlay').style.display='none'">×</button><h3>Создать группу</h3><div class="field"><label>Название</label><input id="group-name"></div><div class="field"><label>Описание</label><textarea id="group-desc" rows="2"></textarea></div><div class="field"><label>Поиск участников</label><input id="group-user-search" placeholder="Поиск..."></div><div class="user-select-list" id="group-user-list"></div><div style="font-size:12px;color:var(--muted);">Выбрано: <span id="group-selected-count">0</span></div><button class="btn-primary" id="create-group-confirm">Создать</button></div></div>
+<div id="create-channel-modal" class="modal-overlay" style="display:none;"><div class="modal"><button class="close-x" onclick="this.closest('.modal-overlay').style.display='none'">×</button><h3>Создать канал</h3><div class="field"><label>Название</label><input id="channel-name"></div><div class="field"><label>Описание</label><textarea id="channel-desc" rows="2"></textarea></div><div class="field"><label>Username</label><input id="channel-username" placeholder="channel_name"></div><div class="field"><label>Тип</label><select id="channel-type"><option value="public">Публичный</option><option value="private">Частный</option></select></div><div class="field"><label>Поиск подписчиков</label><input id="channel-user-search" placeholder="Поиск..."></div><div class="user-select-list" id="channel-user-list"></div><div style="font-size:12px;color:var(--muted);">Выбрано: <span id="channel-selected-count">0</span></div><button class="btn-primary" id="create-channel-confirm">Создать</button></div></div>
+<div id="invite-modal" class="modal-overlay" style="display:none;"><div class="modal"><button class="close-x" onclick="this.closest('.modal-overlay').style.display='none'">×</button><h3>Пригласить</h3><div class="field"><label>Поиск</label><input id="invite-user-search" placeholder="Поиск..."></div><div class="user-select-list" id="invite-user-list"></div><button class="btn-primary" id="invite-confirm">Пригласить</button></div></div>
+<div id="group-settings-modal" class="modal-overlay" style="display:none;"><div class="modal"><button class="close-x" onclick="this.closest('.modal-overlay').style.display='none'">×</button><h3>Настройки группы</h3><div class="field"><label>Название</label><input id="gs-name"></div><div class="field"><label>Описание</label><textarea id="gs-desc" rows="2"></textarea></div><div class="field"><label>Приглашения</label><select id="gs-invite"><option value="all">Все</option><option value="admin">Админы</option></select></div><div class="field"><label>Изменение инфо</label><select id="gs-edit"><option value="all">Все</option><option value="admin">Админы</option></select></div><button class="btn-primary" id="gs-save-btn">Сохранить</button></div></div>
+<div id="edit-profile-modal" class="modal-overlay" style="display:none;"><div class="modal"><button class="close-x" onclick="this.closest('.modal-overlay').style.display='none'">×</button><h3>Профиль</h3><div class="field"><label>Имя</label><input id="ep-firstname"></div><div class="field"><label>Фамилия</label><input id="ep-lastname"></div><div class="field"><label>Username</label><input id="ep-username"></div><div class="field"><label>Обои</label><select id="ep-wallpaper"><option value="default">По умолчанию</option><option value="gradient1">Синий</option><option value="gradient2">Бирюзовый</option></select></div><button class="btn-primary" id="ep-save-btn">Сохранить</button></div></div>
+<div id="notification-prompt-modal" class="modal-overlay" style="display:none;"><div class="modal" style="text-align:center;"><h3>Включите уведомления</h3><p style="color:var(--muted);margin-bottom:16px;">Чтобы не пропускать важные сообщения.</p><button class="btn-primary" id="confirm-notifications-btn">Включить</button><button class="btn-secondary" style="margin-top:8px;" onclick="this.closest('.modal-overlay').style.display='none'">Позже</button></div></div>
 <div id="circle-recorder"><div class="circle-preview-wrap"><video id="circle-preview" autoplay muted playsinline></video></div><div class="circle-timer" id="circle-timer">0:00</div><div class="circle-controls"><button class="icon-btn" id="flash-toggle" style="color:#fff;">⚡</button><button class="circle-rec-btn" id="circle-rec-btn"></button><button class="icon-btn" id="circle-send" style="width:48px;height:48px;border-radius:50%;background:var(--accent-a);color:#fff;visibility:hidden;"><svg viewBox="0 0 24 24"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg></button></div><button class="icon-btn" id="circle-cancel" style="position:absolute;top:20px;left:20px;color:#fff;">×</button></div>
 <div id="call-screen"><video id="remote-video" autoplay playsinline></video><video id="local-video" autoplay playsinline muted></video><div class="call-overlay"><div class="call-top"><div class="call-name" id="call-partner-name">...</div><div class="call-status" id="call-status">Соединение...</div></div><div class="call-controls"><button class="call-ctrl-btn" id="toggle-mic">🎤</button><button class="call-ctrl-btn" id="toggle-cam">📷</button><button class="call-ctrl-btn hangup" id="hangup-btn">📞</button></div></div></div>
 <div id="incoming-call"><div class="incoming-avatar" id="incoming-avatar">?</div><div class="incoming-name" id="incoming-name">Входящий звонок</div><div class="incoming-actions"><button class="incoming-reject" id="reject-call">✕</button><button class="incoming-accept" id="accept-call">✓</button></div></div>
@@ -558,24 +551,22 @@
 const SUPABASE_URL = "https://eshbyibuzvoztrsunvul.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVzaGJ5aWJ1enZvenRyc3VudnVsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU0MDk5MzUsImV4cCI6MjEwMDk4NTkzNX0.WVOd2qZ5RJlOrMPlfuIFJEymgfZjtGVB4TJgrDEFnXQ";
 let sb;
-try { sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY); } catch(e) { console.error(e); }
+try { sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY); console.log('Supabase ready'); } catch(e) { console.error(e); }
 
-let currentUser, myProfile, contacts=[], groups=[], activePartner=null, activeGroup=null, messagesChannel=null;
+let currentUser=null, myProfile=null, contacts=[], groups=[], activePartner=null, activeGroup=null, messagesChannel=null;
 let lastMessageTime=0, searchTimeout, replyToMsg=null;
 const ICE_SERVERS = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
 const palette = ['#4C7CF3','#2DD4BF','#F0708A','#F7B955','#9B7CF3','#4CD4B0'];
 const UNREAD_KEY = 'sl_unread';
 const STICKER_BOT_USERNAME = 'sticker_bot';
 const callHistory = [];
-
 let peerConnection=null, localStream=null, signalingChannel=null, currentCallPartnerId=null, isCaller=false, pendingOffer=null, callType='video';
 let circleStream,mediaRecorder,recordedChunks=[],isRecording=false,recordTimer,recordedBlob,flashOn=false;
 
 function colorFor(id){ let s=0; for(const c of String(id||'')) s+=c.charCodeAt(0); return palette[s%palette.length]; }
 function escapeHtml(s){ const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
-function friendlyError(e){ if(!e) return 'Ошибка'; let m=e.message||e.msg||''; if(m.includes('duplicate')) return 'Уже занято'; if(m.includes('RLS')) return 'Нет доступа'; return String(m).slice(0,80)||'Ошибка'; }
+function friendlyError(e){ if(!e) return 'Ошибка'; let m=e.message||e.msg||''; if(m.includes('duplicate')) return 'Уже занято'; return String(m).slice(0,80)||'Ошибка'; }
 function randomCode(n=8){ const c='abcdefghijklmnopqrstuvwxyz0123456789'; let r=''; for(let i=0;i<n;i++) r+=c[Math.floor(Math.random()*c.length)]; return r; }
-
 function getUnread(){ try{ return JSON.parse(localStorage.getItem(UNREAD_KEY)||'{}'); }catch(e){ return {}; } }
 function setUnread(id,c){ const u=getUnread(); if(c<=0) delete u[id]; else u[id]=c; localStorage.setItem(UNREAD_KEY,JSON.stringify(u)); }
 function incUnread(id){ const u=getUnread(); u[id]=(u[id]||0)+1; localStorage.setItem(UNREAD_KEY,JSON.stringify(u)); }
@@ -585,7 +576,7 @@ function switchPage(page){
   document.querySelectorAll('.app-page').forEach(p=>p.classList.remove('active'));
   document.getElementById('page-'+page).classList.add('active');
   document.querySelectorAll('.bottom-tab').forEach(t=>t.classList.remove('active'));
-  document.querySelector(`.bottom-tab[data-tab="${page}"]`).classList.add('active');
+  document.querySelector('.bottom-tab[data-tab="'+page+'"]').classList.add('active');
   if(page==='settings') updateSettingsUI();
   if(page==='calls') renderCallHistory();
 }
@@ -594,75 +585,388 @@ function updateAllUIs(){
   updateMeUI('me-avatar-chats','me-initial-chats','me-name-chats');
   updateSettingsUI();
 }
-
 function updateMeUI(avId,initId,nameId){
+  if(!myProfile) return;
   document.getElementById(nameId).textContent=myProfile.first_name?`${myProfile.first_name} ${myProfile.last_name||''}`:myProfile.username;
   document.getElementById(initId).textContent=(myProfile.username||'?')[0].toUpperCase();
   const av=document.getElementById(avId);
   if(myProfile.avatar_url){ av.style.backgroundImage=`url(${myProfile.avatar_url})`; av.innerHTML=''; }
   else { av.style.background=myProfile.color||colorFor(myProfile.id); av.innerHTML=`<span>${(myProfile.username||'?')[0].toUpperCase()}</span>`; }
 }
-
 function updateSettingsUI(){
+  if(!myProfile) return;
   document.getElementById('settings-display-name').textContent=myProfile.first_name?`${myProfile.first_name} ${myProfile.last_name||''}`:myProfile.username;
   document.getElementById('settings-display-username').textContent='@'+(myProfile.username||'user');
-  document.getElementById('settings-display-bio').textContent=myProfile.bio||'В сети';
+  document.getElementById('settings-display-bio').textContent='В сети';
   const av=document.getElementById('settings-avatar');
   if(myProfile.avatar_url){ av.style.backgroundImage=`url(${myProfile.avatar_url})`; document.getElementById('settings-avatar-text').textContent=''; }
   else { av.style.background=myProfile.color||colorFor(myProfile.id); document.getElementById('settings-avatar-text').textContent=(myProfile.username||'?')[0].toUpperCase(); }
   document.getElementById('wallpaper-value').textContent=myProfile.wallpaper==='gradient1'?'Синий':myProfile.wallpaper==='gradient2'?'Бирюзовый':'По умолчанию';
 }
-
 function renderCallHistory(){
   const list=document.getElementById('calls-list');
-  if(!callHistory.length){ list.innerHTML='<div class="empty-state" style="padding:40px;text-align:center;color:var(--muted);">Нет недавних звонков</div>'; return; }
+  if(!callHistory.length){ list.innerHTML='<div class="empty-state">Нет недавних звонков</div>'; return; }
   list.innerHTML=callHistory.map(c=>`
     <div class="call-item">
-      <div class="avatar" style="width:40px;height:40px;background:${c.color||colorFor(c.id)};">${(c.name||'?')[0]}</div>
-      <div class="call-info"><div class="call-name">${escapeHtml(c.name)}</div><div class="call-meta">${c.type==='video'?'Видеозвонок':'Аудиозвонок'} · ${c.date}</div></div>
+      <div class="avatar" style="width:40px;height:40px;background:${c.color||'#4C7CF3'};">${(c.name||'?')[0]}</div>
+      <div class="call-info"><div class="call-name">${escapeHtml(c.name)}</div><div class="call-meta">${c.type==='video'?'Видео':'Аудио'} · ${c.date}</div></div>
       <button class="icon-btn" onclick="startCall('${c.type}','${c.id}')"><svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2A19.8 19.8 0 0111.19 18a19.5 19.5 0 01-6-6A19.8 19.8 0 012.12 3.38 2 2 0 014.11 2h3a2 2 0 012 1.72c.13.96.36 1.9.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0122 16.92z"/></svg></button>
     </div>
   `).join('');
 }
 
-// Bottom tabs
-document.querySelectorAll('.bottom-tab').forEach(tab=>{
-  tab.addEventListener('click',()=>switchPage(tab.dataset.tab));
+async function loadChats(){
+  const list=document.getElementById('contacts-list');
+  list.innerHTML='<div class="empty-state">Загрузка чатов...</div>';
+  try{
+    let res=await sb.from('messages').select('sender_id,receiver_id,content,created_at,type,group_id')
+      .or(`sender_id.eq.${myProfile.id},receiver_id.eq.${myProfile.id}`).is('group_id',null)
+      .order('created_at',{ascending:false}).limit(300);
+    if(res.error){
+      res=await sb.from('messages').select('sender_id,receiver_id,content,created_at,type')
+        .or(`sender_id.eq.${myProfile.id},receiver_id.eq.${myProfile.id}`).order('created_at',{ascending:false}).limit(300);
+    }
+    const map=new Map();
+    for(const m of(res.data||[])){
+      if(m.group_id) continue;
+      const pid=m.sender_id===myProfile.id?m.receiver_id:m.sender_id;
+      if(!pid||map.has(pid)) continue;
+      map.set(pid,{lastMessage:m.content||(m.type==='image'?'Фото':m.type==='video'?'Видео':m.type==='file'?'Файл':''),lastAt:m.created_at});
+    }
+    const ids=[...map.keys()];
+    let profiles=[];
+    if(ids.length){ const{data}=await sb.from('profiles').select('*').in('id',ids); profiles=data||[]; }
+    contacts=[
+      {id:'sticker_bot',username:STICKER_BOT_USERNAME,first_name:'Sticker',last_name:'Bot',color:'#F7B955',isBot:true,lastMessage:'Отправь фото для стикера',lastAt:new Date().toISOString()},
+      ...profiles.map(p=>({...p,lastMessage:map.get(p.id)?.lastMessage||'',lastAt:map.get(p.id)?.lastAt}))
+    ].sort((a,b)=>new Date(b.lastAt||0)-new Date(a.lastAt||0));
+    renderContactsAndGroups();
+  }catch(e){ console.error('loadChats error:',e); list.innerHTML='<div class="empty-state">Ошибка загрузки чатов</div>'; }
+}
+
+async function loadGroups(){
+  try{
+    const{data}=await sb.from('group_members').select('group_id,role,groups(*)').eq('user_id',myProfile.id);
+    groups=(data||[]).map(m=>({...m.groups,myRole:m.role})).filter(g=>g&&g.id);
+  }catch(e){ groups=[]; console.warn('loadGroups error:',e); }
+  renderContactsAndGroups();
+}
+
+function renderContactsAndGroups(){
+  const list=document.getElementById('contacts-list');
+  const q=(document.getElementById('search-input')?.value||'').trim().toLowerCase();
+  let items=[];
+  const unread=getUnread();
+  const filteredGroups=q?groups.filter(g=>(g.name||'').toLowerCase().includes(q)):groups;
+  filteredGroups.forEach(g=>items.push({type:'group',data:g,unread:unread[g.id]||0}));
+  const filteredContacts=q?contacts.filter(p=>{
+    const n=((p.first_name||'')+' '+(p.last_name||'')+' '+(p.username||'')).toLowerCase();
+    return n.includes(q)||('@'+p.username).includes(q);
+  }):contacts;
+  filteredContacts.forEach(p=>items.push({type:'user',data:p,unread:p.isBot?0:(unread[p.id]||0)}));
+  if(!items.length){ list.innerHTML='<div class="empty-state">Нет чатов</div>'; return; }
+  items.sort((a,b)=>{ if(a.unread&&!b.unread) return -1; if(!a.unread&&b.unread) return 1; return new Date(b.data.lastAt||0)-new Date(a.data.lastAt||0); });
+  list.innerHTML='';
+  items.forEach(({type,data,unread})=>{
+    const row=document.createElement('div');
+    const isActive=(type==='user'&&activePartner?.id===data.id)||(type==='group'&&activeGroup?.id===data.id);
+    row.className='contact'+(isActive?' active':'');
+    row.style.position='relative'; row.style.overflow='hidden';
+    const avBg=data.avatar_url?`background-image:url(${data.avatar_url})`:`background:${data.color||colorFor(data.id)}`;
+    let name,badge='';
+    if(type==='group'){
+      name=data.name;
+      badge=data.type==='channel'?' <span style="font-size:10px;background:var(--accent-b);color:#fff;padding:2px 6px;border-radius:4px;">канал</span>':' <span style="font-size:10px;background:var(--mint);color:#0B1120;padding:2px 6px;border-radius:4px;">группа</span>';
+    } else {
+      name=data.first_name?`${data.first_name} ${data.last_name||''}`:data.username;
+      if(data.isBot) badge=' <span style="font-size:10px;background:var(--accent-a);color:#fff;padding:2px 6px;border-radius:6px;">BOT</span>';
+    }
+    const sub=type==='group'?(data.description||'Групповой чат').slice(0,40):(data.lastMessage||'@'+data.username);
+    row.innerHTML=`
+      <div style="display:flex;align-items:center;gap:10px;width:100%;padding:10px 12px;">
+        <div class="avatar" style="width:40px;height:40px;font-size:14px;${avBg}">${data.avatar_url?'':(name||'?')[0].toUpperCase()}</div>
+        <div style="min-width:0;flex:1;"><div class="contact-name">${escapeHtml(name)}${badge}</div><div class="contact-sub">${escapeHtml(sub)}</div></div>
+        ${unread>0?`<span class="unread-badge">${unread>99?'99+':unread}</span>`:''}
+      </div>
+      <div class="contact-delete">Удалить</div>
+    `;
+    row.addEventListener('click',()=>{ if(type==='group') openGroup(data); else openChat(data); });
+    let startX=0;
+    row.addEventListener('touchstart',e=>{ startX=e.touches[0].clientX; });
+    row.addEventListener('touchmove',e=>{ if(e.touches[0].clientX-startX<-30) row.classList.add('swiped'); else row.classList.remove('swiped'); });
+    row.querySelector('.contact-delete').addEventListener('click',e=>{
+      e.stopPropagation();
+      if(type==='group') sb.from('group_members').delete().eq('group_id',data.id).eq('user_id',myProfile.id).then(()=>{ loadGroups(); renderContactsAndGroups(); });
+      else sb.from('messages').delete().or(`and(sender_id.eq.${myProfile.id},receiver_id.eq.${data.id}),and(sender_id.eq.${data.id},receiver_id.eq.${myProfile.id})`).then(()=>{ loadChats(); });
+    });
+    list.appendChild(row);
+  });
+}
+
+document.getElementById('search-input')?.addEventListener('input',e=>{
+  clearTimeout(searchTimeout);
+  searchTimeout=setTimeout(()=>renderContactsAndGroups(),300);
 });
 
-// Settings interactions
-document.getElementById('settings-notifications').addEventListener('click',()=>{
-  document.getElementById('notification-prompt-modal').style.display='flex';
+async function openChat(partner){
+  activePartner=partner; activeGroup=null;
+  document.getElementById('no-chat-state').style.display='none';
+  document.getElementById('chat-active').style.display='flex';
+  document.getElementById('group-settings-btn').style.display='none';
+  document.getElementById('invite-btn').style.display='none';
+  document.getElementById('call-btn').style.display=partner.isBot?'none':'flex';
+  document.getElementById('video-btn').style.display=partner.isBot?'none':'flex';
+  document.getElementById('chat-partner-name').textContent=partner.first_name?`${partner.first_name} ${partner.last_name||''}`:partner.username;
+  document.getElementById('chat-partner-status').textContent=partner.isBot?'бот':'в сети';
+  const pav=document.getElementById('partner-avatar');
+  pav.style.background=partner.color||colorFor(partner.id);
+  if(partner.avatar_url){ pav.style.backgroundImage=`url(${partner.avatar_url})`; pav.innerHTML=''; }
+  else { pav.style.backgroundImage=''; pav.textContent=(partner.username||'?')[0].toUpperCase(); }
+  if(window.innerWidth<=768) document.getElementById('sidebar').classList.add('hidden');
+  clearUnread(partner.id);
+  renderContactsAndGroups();
+  await loadMessages();
+  scrollToBottom(true);
+}
+
+async function openGroup(group){
+  activeGroup=group; activePartner=null;
+  document.getElementById('no-chat-state').style.display='none';
+  document.getElementById('chat-active').style.display='flex';
+  const isAdmin=group.myRole==='admin'||group.owner_id===myProfile.id;
+  document.getElementById('group-settings-btn').style.display=isAdmin?'flex':'none';
+  document.getElementById('invite-btn').style.display=(group.invite_policy==='all'||isAdmin)?'flex':'none';
+  document.getElementById('call-btn').style.display='none';
+  document.getElementById('video-btn').style.display='none';
+  document.getElementById('chat-partner-name').textContent=group.name;
+  document.getElementById('chat-partner-status').textContent=group.type==='channel'?'канал':'группа';
+  const pav=document.getElementById('partner-avatar');
+  pav.style.background=group.color||colorFor(group.id); pav.style.backgroundImage=''; pav.textContent=(group.name||'G')[0].toUpperCase();
+  if(window.innerWidth<=768) document.getElementById('sidebar').classList.add('hidden');
+  clearUnread(group.id);
+  renderContactsAndGroups();
+  await loadGroupMessages();
+  scrollToBottom(true);
+}
+
+document.getElementById('back-btn').addEventListener('click',()=>document.getElementById('sidebar').classList.remove('hidden'));
+
+async function loadMessages(){
+  const list=document.getElementById('messages-list'); list.innerHTML='';
+  if(activePartner?.isBot){
+    const history=JSON.parse(localStorage.getItem('sticker_bot_chat')||'[]');
+    history.forEach(m=>renderMessage({...m,id:m.id||Math.random().toString(36)}));
+    if(!history.length) list.innerHTML='<div class="empty-state">Отправь фото чтобы создать стикер</div>';
+    return;
+  }
+  try{
+    let res=await sb.from('messages').select('*').or(`and(sender_id.eq.${myProfile.id},receiver_id.eq.${activePartner.id}),and(sender_id.eq.${activePartner.id},receiver_id.eq.${myProfile.id})`).is('group_id',null).order('created_at',{ascending:true});
+    if(res.error) return;
+    for(const msg of(res.data||[])) renderMessage(msg);
+  }catch(e){}
+}
+
+async function loadGroupMessages(){
+  const list=document.getElementById('messages-list'); list.innerHTML='';
+  try{
+    const{data}=await sb.from('messages').select('*,profiles:sender_id(username,first_name,avatar_url,color)').eq('group_id',activeGroup.id).order('created_at',{ascending:true}).limit(200);
+    for(const msg of(data||[])) renderMessage(msg,true);
+  }catch(e){}
+}
+
+function renderMessage(msg,isGroup=false){
+  if(document.querySelector(`.bubble-row[data-id="${msg.id}"]`)) return;
+  const list=document.getElementById('messages-list');
+  const mine=msg.sender_id===myProfile.id||msg.sender_id==='me';
+  const row=document.createElement('div');
+  row.className='bubble-row '+(mine?'me':'them');
+  row.dataset.id=msg.id;
+  const time=new Date(msg.created_at||Date.now()).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'});
+  let content='';
+  if(msg.type==='circle') content=`<div class="circle-msg"><video src="${msg.file_url}" playsinline loop muted></video></div>`;
+  else if(msg.type==='image') content=`<img src="${msg.file_url}" loading="lazy">`;
+  else if(msg.type==='video') content=`<video src="${msg.file_url}" controls></video>`;
+  else if(msg.type==='file') content=`<div class="file-card"><svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/></svg>${escapeHtml(msg.content||'Файл')}</div>`;
+  else if(msg.type==='sticker') content=`<img src="${msg.file_url}" style="width:120px;">`;
+  else content=escapeHtml(msg.content||'');
+  let replyHtml='';
+  if(msg.reply_to) replyHtml=`<div class="reply-preview">В ответ: ${escapeHtml((msg.reply_to_content||'').slice(0,50))}</div>`;
+  let senderLabel='';
+  if(isGroup&&!mine&&msg.profiles) senderLabel=`<div style="font-size:11px;color:var(--mint);margin-bottom:2px;">${escapeHtml(msg.profiles.first_name||msg.profiles.username||'')}</div>`;
+  row.innerHTML=`
+    <div class="bubble ${mine?'me':'them'}" data-id="${msg.id}">${senderLabel}${replyHtml}${content}<span class="bubble-time mono">${time}</span></div>
+    <div class="reply-btn" data-id="${msg.id}" title="Ответить"><svg viewBox="0 0 24 24" style="width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg></div>
+  `;
+  const circle=row.querySelector('.circle-msg');
+  if(circle){ const vid=circle.querySelector('video'); circle.addEventListener('click',()=>{ vid.paused?vid.play():vid.pause(); }); }
+  let startX=0;
+  row.addEventListener('touchstart',e=>{ startX=e.touches[0].clientX; });
+  row.addEventListener('touchmove',e=>{ if(e.touches[0].clientX-startX<-40) row.classList.add('swiped-left'); else row.classList.remove('swiped-left'); });
+  row.querySelector('.reply-btn').addEventListener('click',e=>{
+    e.stopPropagation(); replyToMsg=msg;
+    document.getElementById('message-input').placeholder='Ответ...'; document.getElementById('message-input').focus();
+    row.classList.remove('swiped-left');
+  });
+  list.appendChild(row);
+}
+
+function scrollToBottom(instant=false){
+  const list=document.getElementById('messages-list');
+  setTimeout(()=>{ if(instant) list.scrollTop=list.scrollHeight; else list.scrollTo({top:list.scrollHeight,behavior:'smooth'}); },100);
+}
+
+const msgList=document.getElementById('messages-list');
+const scrollDownBtn=document.getElementById('scroll-down-btn');
+if(msgList&&scrollDownBtn){
+  msgList.addEventListener('scroll',()=>{ scrollDownBtn.classList.toggle('visible',msgList.scrollHeight-msgList.scrollTop-msgList.clientHeight>200); });
+  scrollDownBtn.addEventListener('click',()=>scrollToBottom(true));
+}
+
+const input=document.getElementById('message-input'),sendBtn=document.getElementById('send-btn');
+if(input&&sendBtn){
+  input.addEventListener('input',()=>{ sendBtn.classList.toggle('visible',input.value.trim().length>0); input.style.height='auto'; input.style.height=Math.min(input.scrollHeight,120)+'px'; });
+}
+
+async function sendMessage(type='text',fileUrl=null,content=null){
+  const text=content??input?.value.trim();
+  if((!text&&type==='text')||(!activePartner&&!activeGroup)) return;
+  if(activeGroup&&activeGroup.type==='channel'&&activeGroup.owner_id!==myProfile.id){ alert('Только владелец может писать в канал'); return; }
+  if(activeGroup&&activeGroup.rate_limit!==false){ const now=Date.now(); if(now-lastMessageTime<10000) return; lastMessageTime=now; }
+  if(input){ input.value=''; sendBtn.classList.remove('visible'); input.style.height='auto'; input.placeholder='Сообщение...'; }
+  if(activePartner?.isBot){
+    if(type==='image'||type==='video'||(type==='file'&&fileUrl)){
+      const code='sticker_'+randomCode(8);
+      try{ await sb.from('stickers').insert({code,url:fileUrl||text,creator_id:myProfile.id}); }catch(e){}
+      const botReply={id:'bot_'+Date.now(),sender_id:'sticker_bot',content:`Стикер: ${code}`,type:'text',created_at:new Date().toISOString()};
+      const userMsg={id:'me_'+Date.now(),sender_id:'me',type,file_url:fileUrl,content:content||'файл',created_at:new Date().toISOString()};
+      const history=JSON.parse(localStorage.getItem('sticker_bot_chat')||'[]');
+      history.push(userMsg,botReply); localStorage.setItem('sticker_bot_chat',JSON.stringify(history.slice(-50)));
+      renderMessage(userMsg); renderMessage(botReply); scrollToBottom(); return;
+    }
+    const userMsg={id:'me_'+Date.now(),sender_id:'me',content:text,type:'text',created_at:new Date().toISOString()};
+    const botReply={id:'bot_'+Date.now(),sender_id:'sticker_bot',content:'Отправь фото чтобы создать стикер',type:'text',created_at:new Date().toISOString()};
+    const history=JSON.parse(localStorage.getItem('sticker_bot_chat')||'[]');
+    history.push(userMsg,botReply); localStorage.setItem('sticker_bot_chat',JSON.stringify(history.slice(-50)));
+    renderMessage(userMsg); renderMessage(botReply); scrollToBottom(); return;
+  }
+  const payload={sender_id:myProfile.id,content:text||'',type,file_url:fileUrl};
+  if(replyToMsg){ payload.reply_to=replyToMsg.id; payload.reply_to_content=replyToMsg.content; replyToMsg=null; }
+  if(activeGroup){ payload.group_id=activeGroup.id; payload.receiver_id=null; }
+  else { payload.receiver_id=activePartner.id; payload.group_id=null; }
+  try{
+    const{data,error}=await sb.from('messages').insert(payload).select().single();
+    if(error){ alert(friendlyError(error)); return; }
+    if(data){ renderMessage(data,!!activeGroup); scrollToBottom(); }
+    if(activeGroup) loadGroups(); else loadChats();
+  }catch(e){ alert(friendlyError(e)); }
+}
+if(sendBtn) sendBtn.addEventListener('click',()=>sendMessage());
+if(input) input.addEventListener('keydown',e=>{ if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); sendMessage(); } });
+
+async function uploadFile(file,bucket='files'){
+  const path=`${myProfile.id}/${Date.now()}_${file.name}`;
+  const{error}=await sb.storage.from(bucket).upload(path,file);
+  if(error){ const{error:e2}=await sb.storage.from('media').upload(path,file); if(e2) throw e2; return sb.storage.from('media').getPublicUrl(path).data.publicUrl; }
+  return sb.storage.from(bucket).getPublicUrl(path).data.publicUrl;
+}
+
+document.getElementById('photo-input')?.addEventListener('change',async e=>{
+  const f=e.target.files[0]; if(!f) return; e.target.value='';
+  try{ const url=await uploadFile(f); const t=f.type.startsWith('image/')?'image':f.type.startsWith('video/')?'video':'file'; await sendMessage(t,url,f.name); }catch(err){ alert(friendlyError(err)); }
 });
-document.getElementById('confirm-notifications-btn').addEventListener('click',async()=>{
+document.getElementById('file-input')?.addEventListener('change',async e=>{
+  const f=e.target.files[0]; if(!f) return; e.target.value='';
+  try{ const url=await uploadFile(f); await sendMessage('file',url,f.name); }catch(err){ alert(friendlyError(err)); }
+});
+document.getElementById('story-input')?.addEventListener('change',async e=>{
+  const f=e.target.files[0]; if(!f) return; e.target.value='';
+  try{
+    const isVideo=f.type.startsWith('video/'); const type=isVideo?'video':'image';
+    const path=`${myProfile.id}/${Date.now()}_${f.name}`;
+    const{error}=await sb.storage.from('stories').upload(path,f);
+    let url;
+    if(error){ const{error:e2}=await sb.storage.from('media').upload(path,f); if(e2) throw e2; url=sb.storage.from('media').getPublicUrl(path).data.publicUrl; }
+    else url=sb.storage.from('stories').getPublicUrl(path).data.publicUrl;
+    await sb.from('stories').insert({user_id:myProfile.id,media_url:url,type});
+    alert('История опубликована!'); loadStories();
+  }catch(err){ alert(friendlyError(err)); }
+});
+
+async function loadStories(){
+  const bar=document.getElementById('stories-bar');
+  if(!bar) return;
+  let html=`<div class="story-item" id="add-story-btn-bar"><div class="story-ring"><div class="avatar" style="background:var(--panel-hover);display:flex;align-items:center;justify-content:center;font-size:20px;width:100%;height:100%;border-radius:50%;">+</div></div><span style="font-size:10px;">Моя</span></div>`;
+  try{
+    const{data}=await sb.from('stories').select('*,profiles:user_id(username,first_name,avatar_url,color)').gt('expires_at',new Date().toISOString()).order('created_at',{ascending:false});
+    if(data?.length){
+      const byUser=new Map();
+      for(const s of data){ if(s.user_id===myProfile.id) continue; if(!byUser.has(s.user_id)) byUser.set(s.user_id,s); }
+      for(const s of byUser.values()){
+        const p=s.profiles||{}; const name=p.first_name||p.username||'?';
+        const bg=p.avatar_url?`background-image:url(${p.avatar_url})`:`background:${p.color||colorFor(p.id||s.user_id)}`;
+        html+=`<div class="story-item" data-url="${s.media_url}" data-type="${s.type}" data-name="${escapeHtml(name)}"><div class="story-ring"><div class="avatar" style="width:100%;height:100%;border-radius:50%;${bg}">${p.avatar_url?'':(p.username||'?')[0].toUpperCase()}</div></div><span style="font-size:10px;">${escapeHtml(name)}</span></div>`;
+      }
+    }
+  }catch(e){}
+  bar.innerHTML=html;
+  document.getElementById('add-story-btn-bar')?.addEventListener('click',()=>document.getElementById('story-input').click());
+  bar.querySelectorAll('[data-url]').forEach(el=>el.addEventListener('click',()=>openStoryViewer(el.dataset.url,el.dataset.type,el.dataset.name)));
+}
+
+function openStoryViewer(url,type,name){
+  const viewer=document.getElementById('story-viewer');
+  const img=document.getElementById('story-image'),video=document.getElementById('story-video'),progress=document.getElementById('story-progress');
+  document.getElementById('story-user').textContent=name||'';
+  img.style.display='none'; video.style.display='none'; video.pause(); progress.style.width='0%';
+  if(type==='video'){ video.src=url; video.style.display='block'; video.play(); }
+  else{ img.src=url; img.style.display='block'; }
+  viewer.classList.add('active');
+  const duration=5000; const start=Date.now();
+  const timer=setInterval(()=>{ const p=Math.min(100,((Date.now()-start)/duration)*100); progress.style.width=p+'%'; if(p>=100){ clearInterval(timer); closeStoryViewer(); } },50);
+  viewer._timer=timer;
+}
+function closeStoryViewer(){ const v=document.getElementById('story-viewer'); if(v._timer) clearInterval(v._timer); document.getElementById('story-video').pause(); v.classList.remove('active'); }
+document.getElementById('story-close')?.addEventListener('click',closeStoryViewer);
+
+const demoStickers=['https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f60a.png','https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f525.png','https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f44d.png','https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/2764.png'];
+document.getElementById('sticker-btn')?.addEventListener('click',()=>{
+  const panel=document.getElementById('sticker-panel');
+  panel.classList.toggle('show');
+  if(!panel.innerHTML){ demoStickers.forEach(url=>{ const img=document.createElement('img'); img.src=url; img.onclick=()=>{ sendMessage('sticker',url,'sticker'); panel.classList.remove('show'); }; panel.appendChild(img); }); }
+});
+
+document.querySelectorAll('.bottom-tab').forEach(tab=>{ tab.addEventListener('click',()=>switchPage(tab.dataset.tab)); });
+
+document.getElementById('settings-notifications')?.addEventListener('click',()=>{ document.getElementById('notification-prompt-modal').style.display='flex'; });
+document.getElementById('confirm-notifications-btn')?.addEventListener('click',async()=>{
   document.getElementById('notification-prompt-modal').style.display='none';
   if('Notification' in window){ await Notification.requestPermission(); alert('Уведомления включены!'); }
 });
-document.getElementById('settings-wallpaper-item').addEventListener('click',()=>{
+document.getElementById('settings-wallpaper-item')?.addEventListener('click',()=>{
   const opts=['default','gradient1','gradient2'];
   const idx=opts.indexOf(myProfile.wallpaper||'default');
   myProfile.wallpaper=opts[(idx+1)%3];
   sb.from('profiles').update({wallpaper:myProfile.wallpaper}).eq('id',myProfile.id).then(()=>updateSettingsUI());
 });
-document.getElementById('settings-edit-profile').addEventListener('click',()=>{
+document.getElementById('settings-edit-profile')?.addEventListener('click',()=>{
   document.getElementById('ep-firstname').value=myProfile.first_name||'';
   document.getElementById('ep-lastname').value=myProfile.last_name||'';
   document.getElementById('ep-username').value=myProfile.username||'';
   document.getElementById('ep-wallpaper').value=myProfile.wallpaper||'default';
   document.getElementById('edit-profile-modal').style.display='flex';
 });
-document.getElementById('ep-save-btn').addEventListener('click',async()=>{
+document.getElementById('ep-save-btn')?.addEventListener('click',async()=>{
   const u={first_name:document.getElementById('ep-firstname').value.trim(),last_name:document.getElementById('ep-lastname').value.trim(),username:document.getElementById('ep-username').value.trim().toLowerCase(),wallpaper:document.getElementById('ep-wallpaper').value};
   await sb.from('profiles').update(u).eq('id',myProfile.id);
   Object.assign(myProfile,u); updateAllUIs();
   document.getElementById('edit-profile-modal').style.display='none';
 });
-document.getElementById('settings-logout').addEventListener('click',async()=>{
+document.getElementById('settings-logout')?.addEventListener('click',async()=>{
   if(messagesChannel) sb.removeChannel(messagesChannel);
   if(signalingChannel) sb.removeChannel(signalingChannel);
   await sb.auth.signOut(); location.reload();
 });
-document.getElementById('avatar-upload').addEventListener('change',async e=>{
+document.getElementById('avatar-upload')?.addEventListener('change',async e=>{
   const f=e.target.files[0]; if(!f) return;
   const path=`${myProfile.id}/avatar.${f.name.split('.').pop()}`;
   await sb.storage.from('avatars').upload(path,f,{upsert:true});
@@ -671,9 +975,136 @@ document.getElementById('avatar-upload').addEventListener('change',async e=>{
   myProfile.avatar_url=data.publicUrl; updateAllUIs();
 });
 
-// Calls
+document.getElementById('plus-btn')?.addEventListener('click',e=>{ e.stopPropagation(); document.getElementById('plus-dropdown').classList.toggle('show'); });
+document.getElementById('plus-dropdown')?.addEventListener('click',e=>{
+  e.stopPropagation();
+  const item=e.target.closest('.plus-item');
+  if(!item) return;
+  document.getElementById('plus-dropdown').classList.remove('show');
+  if(item.dataset.action==='group') openCreateGroupModal();
+  else openCreateChannelModal();
+});
+document.addEventListener('click',()=>{ document.getElementById('plus-dropdown')?.classList.remove('show'); });
+
+let groupSelectedUsers=[], channelSelectedUsers=[], inviteSelectedUsers=[];
+async function openCreateGroupModal(){
+  document.getElementById('group-name').value=''; document.getElementById('group-desc').value='';
+  document.getElementById('group-user-search').value=''; groupSelectedUsers=[];
+  document.getElementById('group-selected-count').textContent='0';
+  document.getElementById('create-group-modal').style.display='flex';
+  renderUserSelect('group-user-list','group-user-search',groupSelectedUsers,()=>document.getElementById('group-selected-count').textContent=groupSelectedUsers.length);
+}
+async function openCreateChannelModal(){
+  document.getElementById('channel-name').value=''; document.getElementById('channel-desc').value='';
+  document.getElementById('channel-username').value=''; document.getElementById('channel-type').value='public';
+  document.getElementById('channel-user-search').value=''; channelSelectedUsers=[];
+  document.getElementById('channel-selected-count').textContent='0';
+  document.getElementById('create-channel-modal').style.display='flex';
+  renderUserSelect('channel-user-list','channel-user-search',channelSelectedUsers,()=>document.getElementById('channel-selected-count').textContent=channelSelectedUsers.length);
+}
+async function renderUserSelect(listId,searchId,selectedArr,updateFn){
+  const list=document.getElementById(listId);
+  const searchInput=document.getElementById(searchId);
+  const allUsers=contacts.filter(c=>!c.isBot&&c.id!==myProfile.id);
+  function render(q=''){
+    const filtered=q?allUsers.filter(u=>u.username.toLowerCase().includes(q)||(u.first_name||'').toLowerCase().includes(q)):allUsers;
+    list.innerHTML='';
+    filtered.forEach(u=>{
+      const sel=selectedArr.find(s=>s.id===u.id);
+      const div=document.createElement('div');
+      div.className='user-select-item'+(sel?' selected':'');
+      div.innerHTML=`<div class="check"></div><div class="avatar" style="width:32px;height:32px;font-size:12px;background:${u.color||colorFor(u.id)}">${(u.username||'?')[0].toUpperCase()}</div><div><div style="font-size:13px;">${escapeHtml(u.first_name||u.username)}</div><div style="font-size:11px;color:var(--muted);">@${escapeHtml(u.username)}</div></div>`;
+      div.addEventListener('click',()=>{ if(sel){ const i=selectedArr.findIndex(s=>s.id===u.id); if(i>=0) selectedArr.splice(i,1); } else selectedArr.push(u); updateFn(); render(q); });
+      list.appendChild(div);
+    });
+  }
+  render();
+  searchInput.addEventListener('input',()=>render(searchInput.value.trim()));
+}
+
+document.getElementById('create-group-confirm')?.addEventListener('click',async()=>{
+  const name=document.getElementById('group-name').value.trim();
+  if(!name){ alert('Введите название'); return; }
+  try{
+    const{data:group,error}=await sb.from('groups').insert({name,description:document.getElementById('group-desc').value.trim(),type:'group',owner_id:myProfile.id,color:colorFor(name),invite_policy:'all',edit_policy:'all'}).select().single();
+    if(error) throw error;
+    await sb.from('group_members').insert({group_id:group.id,user_id:myProfile.id,role:'admin'});
+    for(const u of groupSelectedUsers) await sb.from('group_members').insert({group_id:group.id,user_id:u.id,role:'member'});
+    document.getElementById('create-group-modal').style.display='none';
+    loadGroups(); openGroup({...group,myRole:'admin'});
+  }catch(e){ alert(friendlyError(e)); }
+});
+document.getElementById('create-channel-confirm')?.addEventListener('click',async()=>{
+  const name=document.getElementById('channel-name').value.trim();
+  if(!name){ alert('Введите название'); return; }
+  try{
+    const{data:channel,error}=await sb.from('groups').insert({name,description:document.getElementById('channel-desc').value.trim(),type:'channel',owner_id:myProfile.id,color:colorFor(name),channel_username:document.getElementById('channel-username').value.trim()||null,is_public:document.getElementById('channel-type').value==='public',invite_policy:'admin',edit_policy:'admin'}).select().single();
+    if(error) throw error;
+    await sb.from('group_members').insert({group_id:channel.id,user_id:myProfile.id,role:'admin'});
+    for(const u of channelSelectedUsers) await sb.from('group_members').insert({group_id:channel.id,user_id:u.id,role:'member'});
+    document.getElementById('create-channel-modal').style.display='none';
+    loadGroups(); openGroup({...channel,myRole:'admin'});
+  }catch(e){ alert(friendlyError(e)); }
+});
+
+document.getElementById('invite-btn')?.addEventListener('click',()=>{
+  if(!activeGroup) return;
+  inviteSelectedUsers=[];
+  document.getElementById('invite-user-search').value='';
+  document.getElementById('invite-modal').style.display='flex';
+  renderUserSelect('invite-user-list','invite-user-search',inviteSelectedUsers,()=>{});
+});
+document.getElementById('invite-confirm')?.addEventListener('click',async()=>{
+  for(const u of inviteSelectedUsers) await sb.from('group_members').insert({group_id:activeGroup.id,user_id:u.id,role:'member'});
+  document.getElementById('invite-modal').style.display='none';
+  alert('Пользователи приглашены!');
+});
+
+document.getElementById('group-settings-btn')?.addEventListener('click',()=>{
+  if(!activeGroup) return;
+  document.getElementById('gs-name').value=activeGroup.name||'';
+  document.getElementById('gs-desc').value=activeGroup.description||'';
+  document.getElementById('gs-invite').value=activeGroup.invite_policy||'all';
+  document.getElementById('gs-edit').value=activeGroup.edit_policy||'all';
+  document.getElementById('group-settings-modal').style.display='flex';
+});
+document.getElementById('gs-save-btn')?.addEventListener('click',async()=>{
+  const u={name:document.getElementById('gs-name').value.trim(),description:document.getElementById('gs-desc').value.trim(),invite_policy:document.getElementById('gs-invite').value,edit_policy:document.getElementById('gs-edit').value};
+  await sb.from('groups').update(u).eq('id',activeGroup.id);
+  Object.assign(activeGroup,u);
+  document.getElementById('chat-partner-name').textContent=activeGroup.name;
+  document.getElementById('group-settings-modal').style.display='none';
+  loadGroups();
+});
+
+document.getElementById('attach-btn')?.addEventListener('click',e=>{
+  e.stopPropagation();
+  const dd=document.getElementById('attach-dropdown');
+  if(!dd){
+    const d=document.createElement('div'); d.id='attach-dropdown'; d.className='plus-dropdown'; d.style.cssText='position:absolute;bottom:54px;left:0;';
+    d.innerHTML=`<div class="plus-item" data-type="photo">Фото или видео</div><div class="plus-item" data-type="file">Файл</div><div class="plus-item" data-type="story">История</div>`;
+    d.querySelectorAll('.plus-item').forEach(item=>{ item.addEventListener('click',ev=>{ ev.stopPropagation(); d.classList.remove('show'); if(item.dataset.type==='photo') document.getElementById('photo-input').click(); else if(item.dataset.type==='file') document.getElementById('file-input').click(); else document.getElementById('story-input').click(); }); });
+    document.getElementById('composer').appendChild(d); d.classList.add('show');
+  } else dd.classList.toggle('show');
+});
+
+function subscribeRealtime(){
+  if(messagesChannel) sb.removeChannel(messagesChannel);
+  messagesChannel=sb.channel('messages-realtime')
+    .on('postgres_changes',{event:'INSERT',schema:'public',table:'messages'},payload=>{
+      const msg=payload.new;
+      if(activeGroup&&msg.group_id===activeGroup.id){ renderMessage(msg,true); scrollToBottom(); loadGroups(); return; }
+      if(msg.receiver_id===myProfile.id||msg.sender_id===myProfile.id){
+        if(activePartner&&((msg.sender_id===myProfile.id&&msg.receiver_id===activePartner.id)||(msg.sender_id===activePartner.id&&msg.receiver_id===myProfile.id))){ renderMessage(msg); scrollToBottom(); clearUnread(activePartner.id); }
+        else if(msg.receiver_id===myProfile.id) incUnread(msg.sender_id);
+        loadChats();
+      }
+    }).subscribe();
+}
+
 async function startCall(type,pid){
-  if(!pid){ if(!activePartner||activePartner.isBot) return; pid=activePartner.id; }
+  if(!pid&&activePartner) pid=activePartner.id;
+  if(!pid) return;
   callType=type; isCaller=true; currentCallPartnerId=pid;
   await startPeerConnection();
   const p=contacts.find(c=>c.id===pid)||activePartner||{username:'user'};
@@ -707,8 +1138,8 @@ function hangupCall(send=true){
   document.getElementById('call-screen').classList.remove('active');
   document.getElementById('incoming-call').classList.remove('active');
 }
-document.getElementById('hangup-btn').addEventListener('click',()=>hangupCall(true));
-document.getElementById('accept-call').addEventListener('click',async()=>{
+document.getElementById('hangup-btn')?.addEventListener('click',()=>hangupCall(true));
+document.getElementById('accept-call')?.addEventListener('click',async()=>{
   document.getElementById('incoming-call').classList.remove('active');
   await startPeerConnection();
   await peerConnection.setRemoteDescription(new RTCSessionDescription(pendingOffer.sdp));
@@ -717,50 +1148,112 @@ document.getElementById('accept-call').addEventListener('click',async()=>{
   document.getElementById('call-screen').classList.add('active');
   pendingOffer=null;
 });
-document.getElementById('reject-call').addEventListener('click',()=>{ document.getElementById('incoming-call').classList.remove('active'); if(pendingOffer) sendSignal(pendingOffer.from,{type:'reject'}); });
+document.getElementById('reject-call')?.addEventListener('click',()=>{ document.getElementById('incoming-call').classList.remove('active'); if(pendingOffer) sendSignal(pendingOffer.from,{type:'reject'}); });
+document.getElementById('video-btn')?.addEventListener('click',()=>startCall('video'));
+document.getElementById('call-btn')?.addEventListener('click',()=>startCall('audio'));
 
-// Chat functions (abbreviated - same logic as previous)
-async function loadChats(){
+document.getElementById('circle-btn')?.addEventListener('click',async()=>{
   try{
-    let res=await sb.from('messages').select('sender_id,receiver_id,content,created_at,type,group_id').or(`sender_id.eq.${myProfile.id},receiver_id.eq.${myProfile.id}`).is('group_id',null).order('created_at',{ascending:false}).limit(300);
-    if(res.error) res=await sb.from('messages').select('sender_id,receiver_id,content,created_at,type').or(`sender_id.eq.${myProfile.id},receiver_id.eq.${myProfile.id}`).order('created_at',{ascending:false}).limit(300);
-    const map=new Map();
-    for(const m of(res.data||[])){ if(m.group_id) continue; const pid=m.sender_id===myProfile.id?m.receiver_id:m.sender_id; if(!pid||map.has(pid)) continue; map.set(pid,{lastMessage:m.content||'',lastAt:m.created_at}); }
-    const ids=[...map.keys()];
-    let profiles=[]; if(ids.length){ const{data}=await sb.from('profiles').select('*').in('id',ids); profiles=data||[]; }
-    contacts=[{id:'sticker_bot',username:STICKER_BOT_USERNAME,first_name:'Sticker',last_name:'Bot',color:'#F7B955',isBot:true,lastMessage:'Отправь фото',lastAt:new Date().toISOString()},...profiles.map(p=>({...p,lastMessage:map.get(p.id)?.lastMessage||'',lastAt:map.get(p.id)?.lastAt}))].sort((a,b)=>new Date(b.lastAt||0)-new Date(a.lastAt||0));
-    renderContacts();
-  }catch(e){}
+    circleStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'user',width:{ideal:480},height:{ideal:480}},audio:true});
+    document.getElementById('circle-preview').srcObject=circleStream;
+    document.getElementById('circle-recorder').classList.add('active');
+    isRecording=false; recordedChunks=[]; recordedBlob=null;
+    document.getElementById('circle-rec-btn').style.background='var(--danger)';
+    document.getElementById('circle-timer').textContent='0:00';
+    document.getElementById('circle-send').style.visibility='hidden';
+  }catch(e){ alert('Нет доступа к камере'); }
+});
+document.getElementById('circle-rec-btn')?.addEventListener('click',()=>{
+  if(!isRecording){
+    recordedChunks=[];
+    try{ mediaRecorder=new MediaRecorder(circleStream,{mimeType:'video/webm;codecs=vp9,opus'}); }catch(e){ mediaRecorder=new MediaRecorder(circleStream); }
+    mediaRecorder.ondataavailable=e=>{ if(e.data.size>0) recordedChunks.push(e.data); };
+    mediaRecorder.onstop=()=>{ recordedBlob=new Blob(recordedChunks,{type:'video/webm'}); document.getElementById('circle-send').style.visibility='visible'; };
+    mediaRecorder.start(100); isRecording=true;
+    document.getElementById('circle-rec-btn').style.background='transparent';
+    const start=Date.now();
+    recordTimer=setInterval(()=>{ const sec=Math.floor((Date.now()-start)/1000); document.getElementById('circle-timer').textContent=`${Math.floor(sec/60)}:${(sec%60).toString().padStart(2,'0')}`; if(sec>=60){ mediaRecorder.stop(); isRecording=false; clearInterval(recordTimer); } },200);
+  }else{ mediaRecorder.stop(); isRecording=false; clearInterval(recordTimer); document.getElementById('circle-rec-btn').style.background='var(--danger)'; }
+});
+document.getElementById('circle-send')?.addEventListener('click',async()=>{
+  if(!recordedBlob) return;
+  const path=`${myProfile.id}/circles/${Date.now()}.webm`;
+  let url;
+  const{error}=await sb.storage.from('media').upload(path,recordedBlob,{contentType:'video/webm'});
+  if(error){ const{error:e2}=await sb.storage.from('files').upload(path,recordedBlob,{contentType:'video/webm'}); if(e2) return; url=sb.storage.from('files').getPublicUrl(path).data.publicUrl; }
+  else url=sb.storage.from('media').getPublicUrl(path).data.publicUrl;
+  await sendMessage('circle',url,'кружок');
+  closeCircleRecorder();
+});
+document.getElementById('circle-cancel')?.addEventListener('click',closeCircleRecorder);
+function closeCircleRecorder(){
+  if(mediaRecorder&&mediaRecorder.state!=='inactive') mediaRecorder.stop();
+  if(circleStream){ circleStream.getTracks().forEach(t=>t.stop()); circleStream=null; }
+  document.getElementById('circle-preview').srcObject=null;
+  document.getElementById('circle-recorder').classList.remove('active');
 }
-async function loadGroups(){
-  try{ const{data}=await sb.from('group_members').select('group_id,role,groups(*)').eq('user_id',myProfile.id); groups=(data||[]).map(m=>({...m.groups,myRole:m.role})).filter(g=>g&&g.id); }catch(e){ groups=[]; }
-  renderContacts();
-}
-function renderContacts(){ /* same as before */ }
-async function openChat(partner){ /* same */ }
-async function openGroup(group){ /* same */ }
-async function sendMessage(type,fileUrl,content){ /* same */ }
 
-// Auth
 async function doLogin(){
-  const{data,error}=await sb.auth.signInWithPassword({email:document.getElementById('login-email').value.trim(),password:document.getElementById('login-password').value});
+  if(!sb) return;
+  const email=document.getElementById('login-email').value.trim();
+  const password=document.getElementById('login-password').value;
+  if(!email||!password){ document.getElementById('auth-msg').textContent='Введите email и пароль'; return; }
+  const{data,error}=await sb.auth.signInWithPassword({email,password});
   if(error){ document.getElementById('auth-msg').textContent=friendlyError(error); return; }
   if(data?.user) onAuthenticated(data.user);
 }
-async function doRegister(){ /* same */ }
+async function doRegister(){
+  if(!sb) return;
+  const first=document.getElementById('reg-firstname').value.trim();
+  const last=document.getElementById('reg-lastname').value.trim();
+  const username=document.getElementById('reg-username').value.trim().toLowerCase();
+  const birth=document.getElementById('reg-birth').value;
+  const email=document.getElementById('reg-email').value.trim();
+  const password=document.getElementById('reg-password').value;
+  if(!first||!last||!username||!birth||!email||!password){ document.getElementById('auth-msg').textContent='Заполните все поля'; return; }
+  if(password.length<6){ document.getElementById('auth-msg').textContent='Пароль минимум 6 символов'; return; }
+  const{data,error}=await sb.auth.signUp({email,password,options:{data:{username,first_name:first,last_name:last,birth_date:birth}}});
+  if(error){ document.getElementById('auth-msg').textContent=friendlyError(error); return; }
+  if(data.session?.user) onAuthenticated(data.session.user);
+  else{ const{data:ld}=await sb.auth.signInWithPassword({email,password}); if(ld?.user) onAuthenticated(ld.user); }
+}
+
 async function onAuthenticated(user){
   currentUser=user;
-  let profile; try{ const res=await sb.from('profiles').select('*').eq('id',user.id).maybeSingle(); profile=res.data; }catch(e){}
-  if(!profile){ const meta=user.user_metadata||{}; try{ const{data:created}=await sb.from('profiles').insert({id:user.id,username:meta.username||(user.email?user.email.split('@')[0]:'user'),first_name:meta.first_name||'',last_name:meta.last_name||'',color:colorFor(user.id)}).select().maybeSingle(); profile=created; }catch(e){} if(!profile) profile={id:user.id,username:meta.username||'user',first_name:'',last_name:'',color:colorFor(user.id)}; }
+  let profile;
+  try{ const res=await sb.from('profiles').select('*').eq('id',user.id).maybeSingle(); profile=res.data; }catch(e){}
+  if(!profile){
+    const meta=user.user_metadata||{};
+    try{ const{data:created}=await sb.from('profiles').insert({id:user.id,username:meta.username||(user.email?user.email.split('@')[0]:'user'),first_name:meta.first_name||'',last_name:meta.last_name||'',birth_date:meta.birth_date||null,color:colorFor(user.id)}).select().maybeSingle(); profile=created; }catch(e){}
+    if(!profile) profile={id:user.id,username:meta.username||'user',first_name:'',last_name:'',color:colorFor(user.id)};
+  }
   myProfile=profile;
-  document.getElementById('auth-screen').style.display='none'; document.getElementById('app-screen').style.display='flex';
-  updateAllUIs(); loadChats(); loadGroups(); loadStories(); subscribeRealtime(); setupSignaling();
+  document.getElementById('auth-screen').style.display='none';
+  document.getElementById('app-screen').style.display='flex';
+  updateAllUIs();
+  await loadChats();
+  await loadGroups();
+  await loadStories();
+  subscribeRealtime();
+  setupSignaling();
 }
-document.getElementById('login-btn').addEventListener('click',e=>{ e.preventDefault(); doLogin(); });
-document.getElementById('register-btn').addEventListener('click',e=>{ e.preventDefault(); doRegister(); });
-document.querySelectorAll('.tab').forEach(tab=>{ tab.addEventListener('click',()=>{ document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active')); tab.classList.add('active'); document.getElementById('login-form').style.display=tab.dataset.tab==='login'?'block':'none'; document.getElementById('register-form').style.display=tab.dataset.tab==='login'?'none':'block'; }); });
 
-if(sb){ sb.auth.getSession().then(({data})=>{ if(data?.session) onAuthenticated(data.session.user); }); }
+document.getElementById('login-btn')?.addEventListener('click',e=>{ e.preventDefault(); doLogin(); });
+document.getElementById('register-btn')?.addEventListener('click',e=>{ e.preventDefault(); doRegister(); });
+document.getElementById('login-password')?.addEventListener('keydown',e=>{ if(e.key==='Enter') doLogin(); });
+document.querySelectorAll('.tab').forEach(tab=>{
+  tab.addEventListener('click',()=>{
+    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+    tab.classList.add('active');
+    const isLogin=tab.dataset.tab==='login';
+    document.getElementById('login-form').style.display=isLogin?'block':'none';
+    document.getElementById('register-form').style.display=isLogin?'none':'block';
+  });
+});
+
+if(sb){
+  sb.auth.getSession().then(({data})=>{ if(data?.session) onAuthenticated(data.session.user); });
+}
 </script>
 </body>
 </html>
