@@ -35,14 +35,12 @@
     .mono { font-family: 'JetBrains Mono', monospace; }
     .display { font-family: 'Manrope', -apple-system, sans-serif; }
 
-    /* Запрет копирования */
-    .messages, .bubble, .contact, .chat-header, .sidebar, .composer textarea, input {
+    .messages, .bubble, .contact, .chat-header, .sidebar {
       -webkit-user-select: none;
       -moz-user-select: none;
       -ms-user-select: none;
       user-select: none;
       -webkit-touch-callout: none;
-      -webkit-tap-highlight-color: transparent;
     }
     .composer textarea, input {
       -webkit-user-select: text;
@@ -246,13 +244,15 @@
     }
     .circle-msg video { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; display: block; }
 
+    /* Sticker panel - уменьшенные стикеры */
     .sticker-panel {
       position: absolute; bottom: 70px; left: 0; right: 0; background: var(--panel);
-      border-top: 1px solid var(--line); max-height: 260px; overflow-y: auto; padding: 12px;
-      display: none; grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); gap: 8px; z-index: 20;
+      border-top: 1px solid var(--line); max-height: 220px; overflow-y: auto; padding: 8px;
+      display: none; grid-template-columns: repeat(auto-fill, minmax(56px, 1fr)); gap: 6px; z-index: 20;
     }
     .sticker-panel.show { display: grid; }
-    .sticker-panel img { width: 100%; cursor: pointer; border-radius: 8px; }
+    .sticker-panel img { width: 100%; max-width: 56px; cursor: pointer; border-radius: 8px; transition: transform 0.15s; margin: 0 auto; }
+    .sticker-panel img:hover { transform: scale(1.15); }
 
     .calls-list { flex: 1; overflow-y: auto; padding: 8px; }
     .call-item {
@@ -303,7 +303,6 @@
     .bottom-tab.active { color: var(--accent-a); }
     .bottom-tab svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 
-    /* Context Menu */
     .ctx-menu {
       position: fixed;
       background: var(--panel);
@@ -316,20 +315,10 @@
       display: none;
       animation: ctxFadeIn 0.15s ease;
     }
-    @keyframes ctxFadeIn {
-      from { opacity: 0; transform: scale(0.95); }
-      to { opacity: 1; transform: scale(1); }
-    }
+    @keyframes ctxFadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
     .ctx-item {
-      padding: 10px 14px;
-      border-radius: 10px;
-      font-size: 13px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      color: var(--text);
-      transition: background 0.15s;
+      padding: 10px 14px; border-radius: 10px; font-size: 13px; cursor: pointer;
+      display: flex; align-items: center; gap: 10px; color: var(--text); transition: background 0.15s;
     }
     .ctx-item:hover { background: var(--panel-hover); }
     .ctx-item.danger { color: var(--danger); }
@@ -440,7 +429,7 @@
                 <button class="icon-btn" id="video-btn"><svg viewBox="0 0 24 24"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg></button>
               </div>
             </div>
-            <div class="messages" id="messages-list" oncontextmenu="return false;" oncopy="return false;" oncut="return false;" onpaste="return false;"></div>
+            <div class="messages" id="messages-list" oncontextmenu="return false;"></div>
             <div class="sticker-panel" id="sticker-panel"></div>
             <button class="scroll-down-btn" id="scroll-down-btn" title="Вниз"><svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;"><path d="M6 9l6 6 6-6"/></svg></button>
             <div class="composer" id="composer">
@@ -504,13 +493,11 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
-// ============ SUPABASE INIT ============
 const SUPABASE_URL = "https://eshbyibuzvoztrsunvul.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVzaGJ5aWJ1enZvenRyc3VudnVsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU0MDk5MzUsImV4cCI6MjEwMDk4NTkzNX0.WVOd2qZ5RJlOrMPlfuIFJEymgfZjtGVB4TJgrDEFnXQ";
 let sb;
 try { sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY); } catch(e) { console.error(e); }
 
-// ============ GLOBAL STATE ============
 let currentUser=null, myProfile=null, contacts=[], groups=[], activePartner=null, activeGroup=null, messagesChannel=null;
 let lastMessageTime=0, searchTimeout, replyToMsg=null;
 const ICE_SERVERS = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
@@ -521,7 +508,6 @@ const callHistory = [];
 let peerConnection=null, localStream=null, signalingChannel=null, currentCallPartnerId=null, isCaller=false, pendingOffer=null, callType='video';
 let circleStream,mediaRecorder,recordedChunks=[],isRecording=false,recordTimer,recordedBlob;
 
-// ============ UTILITY FUNCTIONS ============
 function colorFor(id){ let s=0; for(const c of String(id||'')) s+=c.charCodeAt(0); return palette[s%palette.length]; }
 function escapeHtml(s){ const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
 function friendlyError(e){ if(!e) return 'Ошибка'; let m=e.message||e.msg||''; if(m.includes('duplicate')) return 'Уже занято'; return String(m).slice(0,80)||'Ошибка'; }
@@ -575,7 +561,6 @@ function renderCallHistory(){
   `).join('');
 }
 
-// ============ CONTEXT MENU ============
 function showContextMenu(e, msg){
   const menu = document.getElementById('ctx-menu');
   const mine = msg.sender_id === myProfile.id || msg.sender_id === 'me';
@@ -597,7 +582,6 @@ function showContextMenu(e, msg){
   menu.style.display = 'block';
   menu.style.left = Math.min(e.clientX || e.pageX, window.innerWidth - 200) + 'px';
   menu.style.top = Math.min(e.clientY || e.pageY, window.innerHeight - 150) + 'px';
-  
   menu.querySelectorAll('.ctx-item').forEach(item => {
     item.onclick = () => {
       menu.style.display = 'none';
@@ -608,10 +592,7 @@ function showContextMenu(e, msg){
         document.getElementById('message-input').focus();
       }
       if(act === 'copy'){
-        const text = msg.content || '';
-        navigator.clipboard.writeText(text).then(() => {
-          // Show brief toast
-        }).catch(() => {});
+        navigator.clipboard.writeText(msg.content || '').catch(()=>{});
       }
       if(act === 'delete'){
         if(msg.id && !String(msg.id).startsWith('me_') && !String(msg.id).startsWith('bot_')){
@@ -632,7 +613,6 @@ document.addEventListener('click', (e) => {
   }
 });
 
-// ============ DATA LOADING ============
 async function loadChats(){
   const list=document.getElementById('contacts-list');
   list.innerHTML='<div class="empty-state">Загрузка...</div>';
@@ -807,24 +787,11 @@ function renderMessage(msg,isGroup=false){
   row.innerHTML=`<div class="bubble ${mine?'me':'them'}" data-id="${msg.id}">${senderLabel}${replyHtml}${content}<span class="bubble-time mono">${time}</span></div><div class="reply-btn" data-id="${msg.id}"><svg viewBox="0 0 24 24" style="width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg></div>`;
   const circle=row.querySelector('.circle-msg');
   if(circle){ const vid=circle.querySelector('video'); circle.addEventListener('click',()=>{ vid.paused?vid.play():vid.pause(); }); }
-  
-  // Context menu on right click
-  row.querySelector('.bubble').addEventListener('contextmenu', e => {
-    e.preventDefault();
-    showContextMenu(e, msg);
-  });
-  
-  // Long press for mobile
+  row.querySelector('.bubble').addEventListener('contextmenu', e => { e.preventDefault(); showContextMenu(e, msg); });
   let pressTimer;
-  row.querySelector('.bubble').addEventListener('touchstart', e => {
-    pressTimer = setTimeout(() => {
-      showContextMenu(e.touches[0], msg);
-    }, 500);
-  });
+  row.querySelector('.bubble').addEventListener('touchstart', e => { pressTimer = setTimeout(() => showContextMenu(e.touches[0], msg), 500); });
   row.querySelector('.bubble').addEventListener('touchend', () => clearTimeout(pressTimer));
   row.querySelector('.bubble').addEventListener('touchmove', () => clearTimeout(pressTimer));
-  
-  // Swipe to reply
   let startX=0;
   row.addEventListener('touchstart',e=>{ startX=e.touches[0].clientX; });
   row.addEventListener('touchmove',e=>{ if(e.touches[0].clientX-startX<-40) row.classList.add('swiped-left'); else row.classList.remove('swiped-left'); });
@@ -835,10 +802,6 @@ function renderMessage(msg,isGroup=false){
   });
   list.appendChild(row);
 }
-
-// Prevent copy on messages
-document.getElementById('messages-list')?.addEventListener('copy', e => e.preventDefault());
-document.getElementById('messages-list')?.addEventListener('cut', e => e.preventDefault());
 
 function scrollToBottom(instant=false){
   const list=document.getElementById('messages-list');
@@ -957,11 +920,36 @@ async function loadStories(){
 }
 document.getElementById('story-close')?.addEventListener('click',()=>{ const v=document.getElementById('story-viewer'); if(v&&v._timer) clearInterval(v._timer); if(v) v.style.display='none'; });
 
-const demoStickers=['https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f60a.png','https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f525.png','https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f44d.png','https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/2764.png'];
+// ============ STICKERS ============
+const demoStickers = [
+  'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f60a.png',
+  'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f525.png',
+  'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f44d.png',
+  'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/2764.png',
+  'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f389.png',
+  'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f4a9.png',
+  'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f44f.png',
+  'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f64f.png',
+  'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f4af.png',
+  'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f92f.png',
+  'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f929.png',
+  'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1fae0.png',
+  'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1fae3.png',
+  'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1f972.png',
+  'https://cdn.jsdelivr.net/gh/twitter/twemoji@14.0.2/assets/72x72/1fae1.png'
+];
+
 document.getElementById('sticker-btn')?.addEventListener('click',()=>{
   const panel=document.getElementById('sticker-panel');
   panel.classList.toggle('show');
-  if(!panel.innerHTML){ demoStickers.forEach(url=>{ const img=document.createElement('img'); img.src=url; img.onclick=()=>{ sendMessage('sticker',url,'sticker'); panel.classList.remove('show'); }; panel.appendChild(img); }); }
+  if(!panel.innerHTML){ 
+    demoStickers.forEach(url=>{ 
+      const img=document.createElement('img'); 
+      img.src=url; 
+      img.onclick=()=>{ sendMessage('sticker',url,'sticker'); panel.classList.remove('show'); }; 
+      panel.appendChild(img); 
+    }); 
+  }
 });
 
 document.querySelectorAll('.bottom-tab').forEach(tab=>{ tab.addEventListener('click',()=>switchPage(tab.dataset.tab)); });
