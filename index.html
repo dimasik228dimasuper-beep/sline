@@ -419,13 +419,28 @@ const SUPABASE_URL = "https://gnfmibujvhmgiwfnwvjf.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImduZm1pYnVqdmhtZ2l3Zm53dmpmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU0Njg3MjEsImV4cCI6MjEwMTA0NDcyMX0.XttEZaAmTZ6Ce7e3Bwy7uk9r_-IHrsYViJjRtoS69g4";
 let sb;
 try { sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY); } catch(e) { console.error(e); }
+
+// ============ SAFE STORAGE (works even in sandboxed iframes) ============
+const _memStore = {};
+const storage = {
+  getItem(k) {
+    try { return localStorage.getItem(k); } catch(e) { return _memStore[k] ?? null; }
+  },
+  setItem(k, v) {
+    try { localStorage.setItem(k, v); } catch(e) { _memStore[k] = String(v); }
+  },
+  removeItem(k) {
+    try { localStorage.removeItem(k); } catch(e) { delete _memStore[k]; }
+  }
+};
+
 // ============ GLOBAL STATE ============
 let currentUser=null, myProfile=null, contacts=[], groups=[], activePartner=null, activeGroup=null, messagesChannel=null, signalingChannel=null;
 let lastMessageTime=0, searchTimeout, replyToMsg=null, editingMsgId=null, forwardMsg=null;
 let peerConnection=null, localStream=null, currentCallPartnerId=null, isCaller=false, pendingOffer=null, callType='video', callStartTime=null;
 let circleStream,mediaRecorder,recordedChunks=[],isRecording=false,recordTimer,recordedBlob;
-let currentTheme = localStorage.getItem('sl_theme') || 'dark';
-let customWallpapers = JSON.parse(localStorage.getItem('sl_custom_wallpapers') || '[]');
+let currentTheme = storage.getItem('sl_theme') || 'dark';
+let customWallpapers = JSON.parse(storage.getItem('sl_custom_wallpapers') || '[]');
 let verifyTimer = null;
 let currentStories = [], currentStoryIndex = 0, storyTimer = null;
 const ICE_SERVERS = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
@@ -438,9 +453,9 @@ function colorFor(id){ let s=0; for(const c of String(id||'')) s+=c.charCodeAt(0
 function escapeHtml(s){ const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
 function friendlyError(e){ if(!e) return 'Ошибка'; let m=e.message||e.msg||''; if(m.includes('duplicate')) return 'Уже занято'; return String(m).slice(0,80)||'Ошибка'; }
 function randomCode(n=8){ const c='abcdefghijklmnopqrstuvwxyz0123456789'; let r=''; for(let i=0;i<n;i++) r+=c[Math.floor(Math.random()*c.length)]; return r; }
-function getUnread(){ try{ return JSON.parse(localStorage.getItem(UNREAD_KEY)||'{}'); }catch(e){ return {}; } }
-function setUnread(id,c){ const u=getUnread(); if(c<=0) delete u[id]; else u[id]=c; localStorage.setItem(UNREAD_KEY,JSON.stringify(u)); }
-function incUnread(id){ const u=getUnread(); u[id]=(u[id]||0)+1; localStorage.setItem(UNREAD_KEY,JSON.stringify(u)); }
+function getUnread(){ try{ return JSON.parse(storage.getItem(UNREAD_KEY)||'{}'); }catch(e){ return {}; } }
+function setUnread(id,c){ const u=getUnread(); if(c<=0) delete u[id]; else u[id]=c; storage.setItem(UNREAD_KEY,JSON.stringify(u)); }
+function incUnread(id){ const u=getUnread(); u[id]=(u[id]||0)+1; storage.setItem(UNREAD_KEY,JSON.stringify(u)); }
 function clearUnread(id){ setUnread(id,0); }
 function updateURL(path){ try{ window.history.pushState({}, '', window.location.origin + path); }catch(e){} }
 function isURL(text){ return /^(https?:\/\/|www\.)[^\s]+$/i.test(text); }
@@ -479,8 +494,8 @@ document.getElementById('settings-avatar-text').textContent='';
 renderAvatarInto(av, myProfile.avatar_url, (myProfile.username||'?')[0].toUpperCase(), myProfile.color||colorFor(myProfile.id));
 const vs = document.getElementById('verify-status');
 if(vs){ vs.textContent = myProfile.email_verified ? 'Подтверждена' : 'Не подтверждена'; vs.style.color = myProfile.email_verified ? 'var(--mint)' : 'var(--muted)'; }
-document.getElementById('notifications-toggle')?.classList.toggle('on', localStorage.getItem('sl_notifications')!=='0');
-document.getElementById('power-saving-toggle')?.classList.toggle('on', localStorage.getItem('sl_power_saving')==='1');
+document.getElementById('notifications-toggle')?.classList.toggle('on', storage.getItem('sl_notifications')!=='0');
+document.getElementById('power-saving-toggle')?.classList.toggle('on', storage.getItem('sl_power_saving')==='1');
 }
 function renderCallHistory(){
 const list = document.getElementById('calls-list'); if(!list) return;
@@ -496,7 +511,7 @@ const builtInWallpapers = [
 ];
 function getAllWallpapers() { return [...builtInWallpapers, ...customWallpapers.map((url,i)=>({id:'custom_'+i,name:'Моё фото '+(i+1),css:'',imageUrl:url}))]; }
 function applyTheme(theme){
-currentTheme=theme; localStorage.setItem('sl_theme',theme); const root=document.documentElement;
+currentTheme=theme; storage.setItem('sl_theme',theme); const root=document.documentElement;
 if(theme==='light'){ root.style.setProperty('--bg','#F0F2F5'); root.style.setProperty('--panel','#FFFFFF'); root.style.setProperty('--panel-hover','#F0F0F0'); root.style.setProperty('--line','#D1D1D6'); root.style.setProperty('--text','#000000'); root.style.setProperty('--muted','#8E8E93'); root.style.setProperty('--accent-a','#007AFF'); root.style.setProperty('--accent-b','#5856D6'); root.style.setProperty('--mint','#34C759'); root.style.setProperty('--danger','#FF3B30'); root.style.setProperty('--verified','#007AFF'); root.style.setProperty('--input-bg','#FFFFFF'); }
 else if(theme==='midnight'){ root.style.setProperty('--bg','#0a0a1a'); root.style.setProperty('--panel','#12122a'); root.style.setProperty('--panel-hover','#1a1a3a'); root.style.setProperty('--line','#252550'); root.style.setProperty('--text','#e0e0f0'); root.style.setProperty('--muted','#8888aa'); root.style.setProperty('--accent-a','#7c4dff'); root.style.setProperty('--accent-b','#448aff'); root.style.setProperty('--mint','#69f0ae'); root.style.setProperty('--danger','#ff5252'); root.style.setProperty('--verified','#7c4dff'); root.style.setProperty('--input-bg','#0a0a1a'); }
 else { root.style.setProperty('--bg','#0B1120'); root.style.setProperty('--panel','#131B2E'); root.style.setProperty('--panel-hover','#1A2440'); root.style.setProperty('--line','#212C46'); root.style.setProperty('--text','#E7ECF5'); root.style.setProperty('--muted','#7C8AA5'); root.style.setProperty('--accent-a','#4C7CF3'); root.style.setProperty('--accent-b','#6D5DF6'); root.style.setProperty('--mint','#2DD4BF'); root.style.setProperty('--danger','#F0708A'); root.style.setProperty('--verified','#4C7CF3'); root.style.setProperty('--input-bg','#0E1626'); }
@@ -530,7 +545,7 @@ document.getElementById('add-custom-wallpaper')?.addEventListener('click',()=>do
 document.addEventListener('click', (e) => { const themeOpt = e.target.closest('.theme-option'); if(themeOpt){ applyTheme(themeOpt.dataset.theme); } });
 document.getElementById('custom-wallpaper-input')?.addEventListener('change', e => {
 const f=e.target.files[0]; if(!f) return; e.target.value='';
-const finish = (url)=>{ customWallpapers.push(url); localStorage.setItem('sl_custom_wallpapers',JSON.stringify(customWallpapers)); applyWallpaper('custom_'+(customWallpapers.length-1)); renderWallpaperGrid(); };
+const finish = (url)=>{ customWallpapers.push(url); storage.setItem('sl_custom_wallpapers',JSON.stringify(customWallpapers)); applyWallpaper('custom_'+(customWallpapers.length-1)); renderWallpaperGrid(); };
 if(f.type.startsWith('video/')){
 const probe = document.createElement('video'); probe.preload='metadata';
 probe.onloadedmetadata = ()=>{
@@ -810,7 +825,7 @@ activePartner = null; activeGroup = null;
 });
 async function loadMessages(){
 const list=document.getElementById('messages-list'); list.innerHTML='';
-if(activePartner?.isBot){ const history=JSON.parse(localStorage.getItem('sticker_bot_chat')||'[]'); history.forEach(m=>renderMessage({...m,id:m.id||Math.random().toString(36)})); if(!history.length) list.innerHTML='<div class="empty-state">Отправь фото чтобы создать стикер</div>'; return; }
+if(activePartner?.isBot){ const history=JSON.parse(storage.getItem('sticker_bot_chat')||'[]'); history.forEach(m=>renderMessage({...m,id:m.id||Math.random().toString(36)})); if(!history.length) list.innerHTML='<div class="empty-state">Отправь фото чтобы создать стикер</div>'; return; }
 try{ let res=await sb.from('messages').select('*').or(`and(sender_id.eq.${myProfile.id},receiver_id.eq.${activePartner.id}),and(sender_id.eq.${activePartner.id},receiver_id.eq.${myProfile.id})`).is('group_id',null).order('created_at',{ascending:true}); for(const msg of(res.data||[])) renderMessage(msg); }catch(e){}
 }
 async function loadGroupMessages(){
@@ -1448,12 +1463,19 @@ document.querySelectorAll('.bottom-tab').forEach(tab=>{ tab.addEventListener('cl
 // ============ AUTH ============
 async function doLogin(){
 if(!sb){ document.getElementById('auth-msg').textContent='Ошибка соединения'; return; }
-const email=document.getElementById('login-email').value.trim(),password=document.getElementById('login-password').value;
+const email=document.getElementById('login-email').value.trim().toLowerCase(),password=document.getElementById('login-password').value;
 if(!email||!password){ document.getElementById('auth-msg').textContent='Введите email и пароль'; return; }
 const btn=document.getElementById('login-btn'); btn.disabled=true; btn.textContent='Входим...'; document.getElementById('auth-msg').textContent='';
 try{
 const{data,error}=await sb.auth.signInWithPassword({email,password});
-if(error){ document.getElementById('auth-msg').textContent=error.message; btn.disabled=false; btn.textContent='Войти'; return; }
+if(error){
+  let msg = error.message || 'Ошибка';
+  if(/invalid login credentials/i.test(msg)) msg = 'Неверный email или пароль';
+  else if(/email not confirmed/i.test(msg)) msg = 'Подтвердите email (проверьте почту)';
+  else if(/too many requests/i.test(msg)) msg = 'Слишком много попыток, подождите';
+  document.getElementById('auth-msg').textContent = msg;
+  btn.disabled=false; btn.textContent='Войти'; return;
+}
 if(data?.user){ onAuthenticated(data.user); }
 }catch(e){ document.getElementById('auth-msg').textContent='Ошибка сети'; btn.disabled=false; btn.textContent='Войти'; }
 }
@@ -1576,15 +1598,15 @@ const iv=setInterval(()=>{ t--; timerEl.textContent=t; if(t<=0){ clearInterval(i
 }
 // ============ NOTIFICATIONS + POWER SAVING TOGGLES ============
 function applyNotificationsToggle(on){
-localStorage.setItem('sl_notifications', on?'1':'0');
+storage.setItem('sl_notifications', on?'1':'0');
 document.getElementById('notifications-toggle')?.classList.toggle('on', on);
 if(on && 'Notification' in window && Notification.permission==='default') Notification.requestPermission();
 }
-document.getElementById('notifications-toggle')?.addEventListener('click', ()=>{ applyNotificationsToggle(localStorage.getItem('sl_notifications')==='0'); });
-document.getElementById('settings-notifications')?.addEventListener('click', e=>{ if(e.target.closest('.toggle-switch')) return; applyNotificationsToggle(localStorage.getItem('sl_notifications')==='0'); });
+document.getElementById('notifications-toggle')?.addEventListener('click', ()=>{ applyNotificationsToggle(storage.getItem('sl_notifications')==='0'); });
+document.getElementById('settings-notifications')?.addEventListener('click', e=>{ if(e.target.closest('.toggle-switch')) return; applyNotificationsToggle(storage.getItem('sl_notifications')==='0'); });
 function applyPowerSaving(on){
 document.body.classList.toggle('power-saving', on);
-localStorage.setItem('sl_power_saving', on?'1':'0');
+storage.setItem('sl_power_saving', on?'1':'0');
 document.getElementById('power-saving-toggle')?.classList.toggle('on', on);
 if(on) document.querySelectorAll('video[autoplay]').forEach(v=>{ v.removeAttribute('autoplay'); v.pause(); });
 }
@@ -1641,8 +1663,8 @@ el.addEventListener('click', ()=>{ const p = newOnes.find(x=>x.id===el.dataset.u
 // ============ CHAT FOLDERS ============
 const FOLDERS_KEY = 'sl_folders';
 let activeFolder = 'Все';
-function getFolders(){ try{ return JSON.parse(localStorage.getItem(FOLDERS_KEY)||'{}'); }catch(e){ return {}; } }
-function saveFolders(f){ localStorage.setItem(FOLDERS_KEY, JSON.stringify(f)); }
+function getFolders(){ try{ return JSON.parse(storage.getItem(FOLDERS_KEY)||'{}'); }catch(e){ return {}; } }
+function saveFolders(f){ storage.setItem(FOLDERS_KEY, JSON.stringify(f)); }
 function renderFolderTabs(){
 const bar = document.getElementById('folder-tabs'); if(!bar) return;
 const folders = getFolders();
@@ -1728,14 +1750,14 @@ root.style.setProperty('--bg', theme.bg);
 root.style.setProperty('--panel', theme.panel);
 root.style.setProperty('--text', theme.text);
 if(theme.font) document.body.style.fontFamily = theme.font;
-localStorage.setItem('sl_active_custom_theme', JSON.stringify(theme));
+storage.setItem('sl_active_custom_theme', JSON.stringify(theme));
 }
-function getSavedThemes(){ try{ return JSON.parse(localStorage.getItem('sl_saved_themes')||'[]'); }catch(e){ return []; } }
+function getSavedThemes(){ try{ return JSON.parse(storage.getItem('sl_saved_themes')||'[]'); }catch(e){ return []; } }
 function saveCustomTheme(theme){
 const list = getSavedThemes();
 const idx = list.findIndex(t=>t.name===theme.name);
 if(idx>-1) list[idx]=theme; else list.push(theme);
-localStorage.setItem('sl_saved_themes', JSON.stringify(list));
+storage.setItem('sl_saved_themes', JSON.stringify(list));
 }
 function renderSavedThemes(){
 const el = document.getElementById('saved-themes-list'); if(!el) return;
