@@ -206,9 +206,6 @@
     .profile-tab.active { background: var(--accent-a); color: #fff; }
     .profile-tab-content { max-height: 200px; overflow-y: auto; }
 
-    .push-toast { position: fixed; top: 20px; right: 20px; background: var(--panel); border: 1px solid var(--accent-a); border-radius: 14px; padding: 14px 18px; z-index: 9999; max-width: 320px; box-shadow: 0 8px 32px rgba(0,0,0,0.5); animation: slideInRight 0.3s ease; cursor: pointer; }
-    @keyframes slideInRight { from { transform: translateX(120%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-
     @media(max-width:768px) { .sidebar { position: absolute; inset: 0; z-index: 50; width: 100%; min-width: 100%; } .sidebar.hidden { transform: translateX(-100%); } .back-btn { display: flex !important; } }
     .back-btn { display: none; background: none; border: none; color: var(--text); font-size: 20px; cursor: pointer; padding: 4px 8px; }
     .hidden-input { display: none; }
@@ -359,17 +356,17 @@
 <div id="circle-recorder" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.94);z-index:4000;flex-direction:column;align-items:center;justify-content:center;gap:24px;"><div style="width:min(300px,78vw);height:min(300px,78vw);border-radius:50%;overflow:hidden;border:4px solid rgba(255,255,255,.15);background:#111;"><video id="circle-preview" autoplay muted playsinline style="width:100%;height:100%;object-fit:cover;border-radius:50%;"></video></div><div id="circle-timer" style="font-size:18px;font-weight:600;color:#fff;">0:00</div><div style="display:flex;align-items:center;gap:32px;"><button id="circle-rec-btn" style="width:72px;height:72px;border-radius:50%;border:4px solid #fff;background:var(--danger);cursor:pointer;"></button><button id="circle-send" style="width:48px;height:48px;border-radius:50%;background:var(--accent-a);color:#fff;border:none;cursor:pointer;visibility:hidden;"><svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:none;stroke:#fff;stroke-width:2;"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg></button></div><button id="circle-cancel" style="position:absolute;top:20px;left:20px;color:#fff;background:none;border:1px solid rgba(255,255,255,.3);width:36px;height:36px;border-radius:10px;cursor:pointer;">×</button></div>
 <div id="call-screen" style="display:none;position:fixed;inset:0;background:#0a0e17;z-index:5000;flex-direction:column;"><video id="remote-video" autoplay playsinline style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#111;"></video><video id="local-video" autoplay playsinline muted style="position:absolute;bottom:120px;right:20px;width:120px;height:160px;object-fit:cover;border-radius:16px;border:2px solid rgba(255,255,255,.25);background:#222;z-index:10;"></video><div style="position:absolute;inset:0;display:flex;flex-direction:column;justify-content:space-between;padding:40px 20px;pointer-events:none;z-index:20;"><div style="text-align:center;"><div id="call-partner-name" style="font-size:22px;font-weight:700;"></div><div id="call-status" style="font-size:14px;color:rgba(255,255,255,.7);margin-top:6px;">Соединение...</div></div><div style="display:flex;justify-content:center;gap:20px;padding-bottom:20px;pointer-events:auto;"><button id="toggle-mic" style="width:60px;height:60px;border-radius:50%;border:none;background:rgba(255,255,255,.15);color:#fff;font-size:24px;cursor:pointer;"><svg viewBox="0 0 24 24" style="width:24px;height:24px;fill:none;stroke:#fff;stroke-width:2;"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/></svg></button><button id="toggle-cam" style="width:60px;height:60px;border-radius:50%;border:none;background:rgba(255,255,255,.15);color:#fff;font-size:24px;cursor:pointer;"><svg viewBox="0 0 24 24" style="width:24px;height:24px;fill:none;stroke:#fff;stroke-width:2;"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg></button><button id="hangup-btn" style="width:60px;height:60px;border-radius:50%;border:none;background:var(--danger);color:#fff;font-size:24px;cursor:pointer;"><svg viewBox="0 0 24 24" style="width:24px;height:24px;fill:none;stroke:#fff;stroke-width:2;"><path d="M22 16.92v3a2 2 0 01-2.18 2A19.8 19.8 0 0111.19 18a19.5 19.5 0 01-6-6A19.8 19.8 0 012.12 3.38 2 2 0 014.11 2h3a2 2 0 012 1.72c.13.96.36 1.9.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0122 16.92z"/></svg></button></div></div></div>
 <div id="incoming-call" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:5100;flex-direction:column;align-items:center;justify-content:center;gap:24px;"><div id="incoming-avatar" style="width:100px;height:100px;border-radius:50%;background:var(--accent-a);display:flex;align-items:center;justify-content:center;font-size:40px;font-weight:700;">?</div><div id="incoming-name" style="font-size:24px;font-weight:700;">Входящий звонок</div><div style="display:flex;gap:40px;"><button id="reject-call" style="width:70px;height:70px;border-radius:50%;border:none;background:var(--danger);color:#fff;font-size:28px;cursor:pointer;"><svg viewBox="0 0 24 24" style="width:32px;height:32px;fill:none;stroke:#fff;stroke-width:2;"><path d="M18 6L6 18M6 6l12 12"/></svg></button><button id="accept-call" style="width:70px;height:70px;border-radius:50%;border:none;background:#22c55e;color:#fff;font-size:28px;cursor:pointer;"><svg viewBox="0 0 24 24" style="width:32px;height:32px;fill:none;stroke:#fff;stroke-width:2;"><path d="M22 16.92v3a2 2 0 01-2.18 2A19.8 19.8 0 0111.19 18a19.5 19.5 0 01-6-6A19.8 19.8 0 012.12 3.38 2 2 0 014.11 2h3a2 2 0 012 1.72c.13.96.36 1.9.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0122 16.92z"/></svg></button></div></div>
-<div id="story-viewer" style="display:none;position:fixed;inset:0;background:#000;z-index:6000;flex-direction:column;"><div style="position:absolute;top:0;left:0;right:0;height:4px;background:rgba(255,255,255,.2);z-index:2;"><div id="story-progress" style="height:100%;width:0%;background:#fff;transition:width .1s linear;"></div></div><button id="story-close" style="position:absolute;top:16px;right:16px;z-index:3;background:none;border:none;color:#fff;font-size:28px;cursor:pointer;"><svg viewBox="0 0 24 24" style="width:24px;height:24px;fill:none;stroke:#fff;stroke-width:2;"><path d="M18 6L6 18M6 6l12 12"/></svg></button><div id="story-user" style="position:absolute;top:20px;left:16px;z-index:3;color:#fff;font-weight:600;font-size:14px;"></div><img id="story-image" style="display:none;width:100%;height:100%;object-fit:contain;"><video id="story-video" style="display:none;width:100%;height:100%;object-fit:contain;" playsinline></video></div>
+<div id="story-viewer" style="display:none;position:fixed;inset:0;background:#000;z-index:6000;flex-direction:column;"><div style="position:absolute;top:0;left:0;right:0;height:4px;background:rgba(255,255,255,.2);z-index:2;"><div id="story-progress" style="height:100%;width:0%;background:#fff;transition:width .1s linear;"></div></div><button id="story-close" style="position:absolute;top:16px;right:16px;z-index:3;background:none;border:none;color:#fff;font-size:28px;cursor:pointer;"><svg viewBox="0 0 24 24" style="width:24px;height:24px;fill:none;stroke:#fff;stroke-width:2;"><path d="M18 6L6 18M6 6l12 12"/></svg></button><div id="story-user" style="position:absolute;top:20px;left:16px;z-index:3;color:#fff;font-weight:600;font-size:14px;"></div><img id="story-image" style="display:none;width:100%;height:100%;object-fit:contain;" crossorigin="anonymous"><video id="story-video" style="display:none;width:100%;height:100%;object-fit:contain;" playsinline crossorigin="anonymous"></video></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
-// ============ SUPABASE ============
+// ============ SUPABASE INIT ============
 const SUPABASE_URL = "https://eshbyibuzvoztrsunvul.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVzaGJ5aWJ1enZvenRyc3VudnVsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU0MDk5MzUsImV4cCI6MjEwMDk4NTkzNX0.WVOd2qZ5RJlOrMPlfuIFJEymgfZjtGVB4TJgrDEFnXQ";
 let sb;
 try { sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY); console.log('Supabase ready'); } catch(e) { console.error(e); }
 
-// ============ STATE ============
+// ============ GLOBAL STATE ============
 let currentUser=null, myProfile=null, contacts=[], groups=[], activePartner=null, activeGroup=null, messagesChannel=null, signalingChannel=null;
 let lastMessageTime=0, searchTimeout, replyToMsg=null, editingMsgId=null, forwardMsg=null;
 let peerConnection=null, localStream=null, currentCallPartnerId=null, isCaller=false, pendingOffer=null, callType='video', callStartTime=null;
@@ -409,7 +406,7 @@ function switchPage(page){
   if(page === 'settings') { updateSettingsUI(); renderWallpaperGrid(); }
 }
 
-// ============ UI ============
+// ============ UI UPDATES ============
 function updateAllUIs(){ if(!myProfile) return; updateMeUI('me-avatar-chats','me-initial-chats','me-name-chats'); updateSettingsUI(); }
 function updateMeUI(avId,initId,nameId){
   if(!myProfile) return;
@@ -491,30 +488,50 @@ function showProfile(user){
   (async ()=>{ const stories=await loadUserStories(user.id); const tabContent=document.getElementById('profile-tab-content'); if(stories.length){ tabContent.innerHTML=stories.map((s,i)=>`<div style="display:flex;align-items:center;gap:8px;padding:8px;cursor:pointer;border-radius:8px;" onclick="openStoryViewer('${user.id}','${escapeHtml(name)}',${i})"><div class="story-ring"><div class="avatar" style="width:40px;height:40px;background:${user.color||colorFor(user.id)};">${(user.username||'?')[0]}</div></div><span style="font-size:12px;">История ${i+1}</span></div>`).join(''); } else tabContent.innerHTML='<div class="empty-state">Нет историй</div>'; })();
 }
 
-// ============ STORIES ============
-async function loadUserStories(userId){ try{ const{data}=await sb.from('stories').select('*').eq('user_id',userId).gt('expires_at',new Date().toISOString()).order('created_at',{ascending:true}); return data||[]; }catch(e){ return []; } }
+// ============ STORIES (FIXED) ============
+async function loadUserStories(userId){ 
+  try{ 
+    const{data}=await sb.from('stories').select('*').eq('user_id',userId).gt('expires_at',new Date().toISOString()).order('created_at',{ascending:true}); 
+    console.log('Stories for user', userId, data);
+    return data||[]; 
+  }catch(e){ console.error('loadUserStories error', e); return []; } 
+}
+
 async function loadStories(){
   const bar=document.getElementById('stories-bar'); if(!bar) return;
   let html=`<div class="story-item" id="add-story-btn-bar"><div class="story-ring"><div class="avatar" style="background:var(--panel-hover);display:flex;align-items:center;justify-content:center;font-size:20px;width:100%;height:100%;border-radius:50%;"><svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;"><path d="M12 5v14M5 12h14"/></svg></div></div><span style="font-size:10px;">Моя</span></div>`;
   try{
-    const{data}=await sb.from('stories').select('*,profiles:user_id(username,first_name,avatar_url,color)').gt('expires_at',new Date().toISOString()).order('created_at',{ascending:false});
-    if(data?.length){
+    const{data:stories}=await sb.from('stories').select('*, profiles:user_id(id, username, first_name, last_name, avatar_url, color)').gt('expires_at',new Date().toISOString()).order('created_at',{ascending:false});
+    console.log('All stories:', stories);
+    if(stories?.length){
       const byUser=new Map();
-      for(const s of data){ if(s.user_id===myProfile.id) continue; if(!byUser.has(s.user_id)) byUser.set(s.user_id,{profile:s.profiles,stories:[]}); byUser.get(s.user_id).stories.push(s); }
-      for(const [uid,obj] of byUser){
-        const p=obj.profiles||{}; const name=p.first_name||p.username||'Пользователь';
-        const bg=p.avatar_url?`background-image:url(${p.avatar_url})`:`background:${p.color||colorFor(uid)}`;
-        html+=`<div class="story-item" data-userid="${uid}" data-name="${escapeHtml(name)}"><div class="story-ring"><div class="avatar" style="width:100%;height:100%;border-radius:50%;${bg}">${p.avatar_url?'':(p.username||'?')[0].toUpperCase()}</div></div><span style="font-size:10px;">${escapeHtml(name)}</span></div>`;
+      for(const s of stories){ 
+        if(s.user_id===myProfile.id) continue; 
+        if(!byUser.has(s.user_id)) byUser.set(s.user_id, {profile: s.profiles, stories:[]});
+        byUser.get(s.user_id).stories.push(s); 
+      }
+      for(const [uid, obj] of byUser){
+        const p = obj.profiles || {};
+        // Исправлено: берём имя из профиля
+        const name = p.first_name || p.username || 'Пользователь';
+        const bg = p.avatar_url ? `background-image:url(${p.avatar_url})` : `background:${p.color||colorFor(uid)}`;
+        html += `<div class="story-item" data-userid="${uid}" data-name="${escapeHtml(name)}"><div class="story-ring"><div class="avatar" style="width:100%;height:100%;border-radius:50%;${bg}">${p.avatar_url?'':(p.username||'?')[0].toUpperCase()}</div></div><span style="font-size:10px;">${escapeHtml(name)}</span></div>`;
       }
     }
-  }catch(e){}
+  }catch(e){ console.error('loadStories error', e); }
   bar.innerHTML=html;
   document.getElementById('add-story-btn-bar')?.addEventListener('click',()=>document.getElementById('story-input').click());
-  bar.querySelectorAll('[data-userid]').forEach(el=>el.addEventListener('click',async function(){ openStoryViewer(this.dataset.userid, this.dataset.name, 0); }));
+  bar.querySelectorAll('[data-userid]').forEach(el=>el.addEventListener('click', async function(){
+    const userId = this.dataset.userid;
+    const name = this.dataset.name;
+    console.log('Opening stories for:', userId, name);
+    openStoryViewer(userId, name, 0);
+  }));
 }
 
 async function openStoryViewer(userId, name, startIndex){
   const stories = await loadUserStories(userId);
+  console.log('Stories to view:', stories);
   if(!stories.length) return;
   currentStories = stories;
   currentStoryIndex = startIndex || 0;
@@ -522,20 +539,55 @@ async function openStoryViewer(userId, name, startIndex){
   showCurrentStory();
   document.getElementById('story-viewer').style.display = 'flex';
 }
+
 function showCurrentStory(){
-  if(currentStoryIndex < 0 || currentStoryIndex >= currentStories.length){ document.getElementById('story-viewer').style.display='none'; if(storyTimer) clearInterval(storyTimer); return; }
+  if(currentStoryIndex < 0 || currentStoryIndex >= currentStories.length){ 
+    document.getElementById('story-viewer').style.display='none'; 
+    if(storyTimer) clearInterval(storyTimer); 
+    return; 
+  }
   const story = currentStories[currentStoryIndex];
   const img=document.getElementById('story-image'), video=document.getElementById('story-video');
   img.style.display='none'; video.style.display='none'; video.pause();
-  if(story.type==='video'){ video.src=story.url; video.style.display='block'; video.play(); }
-  else { img.src=story.url; img.style.display='block'; }
+  // Очищаем предыдущие src
+  img.src = ''; video.src = '';
+  if(story.type==='video'){ 
+    video.src=story.media_url; 
+    video.style.display='block'; 
+    video.load();
+    video.play().catch(e=>console.log('Video play error:', e));
+  }
+  else { 
+    img.src=story.media_url; 
+    img.style.display='block'; 
+    img.onerror = () => { console.error('Image load error:', story.media_url); };
+    img.onload = () => { console.log('Image loaded:', story.media_url); };
+  }
   document.getElementById('story-progress').style.width='0%';
   if(storyTimer) clearInterval(storyTimer);
   const start=Date.now();
-  storyTimer=setInterval(()=>{ const p=Math.min(100,((Date.now()-start)/5000)*100); document.getElementById('story-progress').style.width=p+'%'; if(p>=100){ clearInterval(storyTimer); currentStoryIndex++; showCurrentStory(); } },50);
+  storyTimer=setInterval(()=>{ 
+    const p=Math.min(100,((Date.now()-start)/5000)*100); 
+    document.getElementById('story-progress').style.width=p+'%'; 
+    if(p>=100){ clearInterval(storyTimer); currentStoryIndex++; showCurrentStory(); } 
+  },50);
 }
-document.getElementById('story-viewer')?.addEventListener('click',(e)=>{ const rect=document.getElementById('story-viewer').getBoundingClientRect(); const x=e.clientX-rect.left; if(x>rect.width/2) currentStoryIndex++; else currentStoryIndex--; if(storyTimer) clearInterval(storyTimer); showCurrentStory(); });
-document.getElementById('story-close')?.addEventListener('click',()=>{ if(storyTimer) clearInterval(storyTimer); document.getElementById('story-viewer').style.display='none'; });
+
+// Клик по просмотрщику историй
+document.getElementById('story-viewer')?.addEventListener('click',(e)=>{ 
+  if(e.target.closest('#story-close')) return;
+  const rect=document.getElementById('story-viewer').getBoundingClientRect(); 
+  const x=e.clientX-rect.left; 
+  if(x>rect.width/2) currentStoryIndex++; 
+  else currentStoryIndex--; 
+  if(storyTimer) clearInterval(storyTimer); 
+  showCurrentStory(); 
+});
+
+document.getElementById('story-close')?.addEventListener('click',()=>{ 
+  if(storyTimer) clearInterval(storyTimer); 
+  document.getElementById('story-viewer').style.display='none'; 
+});
 
 // ============ CONTEXT MENU & REACTIONS ============
 function showContextMenu(e, msg){
@@ -620,7 +672,6 @@ function renderMessage(msg,isGroup=false){
   let content=msg.type==='call'?`<div class="call-msg">${escapeHtml(msg.content||'Звонок')}</div>`:msg.type==='circle'?`<div class="circle-msg"><video src="${msg.file_url}" playsinline loop muted></video></div>`:msg.type==='image'?`<img src="${msg.file_url}" loading="lazy">`:msg.type==='video'?`<video src="${msg.file_url}" controls></video>`:msg.type==='file'?`<div class="file-card"><svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/></svg>${escapeHtml(msg.content||'Файл')}</div>`:msg.type==='sticker'?`<img src="${msg.file_url}" style="width:120px;" class="sticker-animated">`:linkifyText(escapeHtml(msg.content||''));
   let senderLabel=''; if(isGroup&&!mine&&msg.profiles) senderLabel=`<div style="font-size:11px;color:var(--mint);">${escapeHtml(msg.profiles.first_name||msg.profiles.username||'')}</div>`;
   row.innerHTML=`<div class="bubble ${mine?'me':'them'}" data-id="${msg.id}">${senderLabel}${content}<span class="bubble-time mono">${time}</span></div>`;
-  // Context menu & reactions
   row.querySelector('.bubble').addEventListener('contextmenu',e=>{ e.preventDefault(); showContextMenu(e,msg); });
   let pressTimer; row.querySelector('.bubble').addEventListener('touchstart',e=>{ pressTimer=setTimeout(()=>showContextMenu(e.touches[0],msg),500); }); row.querySelector('.bubble').addEventListener('touchend',()=>clearTimeout(pressTimer));
   let lastTap=0; row.querySelector('.bubble').addEventListener('click',(e)=>{ const now=Date.now(); if(now-lastTap<400) showReactionPicker(e,msg); lastTap=now; });
