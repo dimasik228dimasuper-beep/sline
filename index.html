@@ -250,12 +250,9 @@ body.power-saving * { transition: none !important; }
 <div class="tab" data-tab="register">Регистрация</div>
 </div>
 <div id="login-form">
-<div class="field"><label>Email</label><input type="email" id="login-email" placeholder="you@example.com"></div>
-<div class="field" id="password-field"><label>Пароль</label><input type="password" id="login-password" placeholder="••••••••"></div>
-<div class="field" id="otp-field" style="display:none;"><label>Код из письма</label><input type="text" id="login-otp" placeholder="123456" inputmode="numeric" autocomplete="one-time-code"></div>
+<div class="field"><label>Email</label><input type="email" id="login-email" placeholder="you@example.com" autocomplete="email"></div>
+<div class="field"><label>Пароль</label><input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password"></div>
 <button type="button" class="btn-primary" id="login-btn">Войти</button>
-<button type="button" class="btn-secondary" id="otp-btn" style="margin-top:8px;">Войти по коду из письма</button>
-<button type="button" class="btn-secondary" id="forgot-btn" style="margin-top:8px;">Забыли пароль?</button>
 </div>
 <div id="register-form" style="display:none;">
 <div class="field"><label>Имя</label><input type="text" id="reg-firstname" placeholder="Иван"></div>
@@ -1465,120 +1462,88 @@ currentCallPartnerId = null; callStartTime = null;
 document.querySelectorAll('.bottom-tab').forEach(tab=>{ tab.addEventListener('click',function(){ switchPage(this.dataset.tab); }); });
 // ============ AUTH ============
 
-async function doForgotPassword(){
-  if(!sb){ document.getElementById('auth-msg').textContent='Ошибка соединения'; return; }
-  const email=document.getElementById('login-email').value.trim().toLowerCase();
-  if(!email){ document.getElementById('auth-msg').textContent='Сначала введите email'; return; }
-  const btn=document.getElementById('forgot-btn');
-  btn.disabled=true; btn.textContent='Отправка...';
-  document.getElementById('auth-msg').textContent='';
-  try{
-    const { error } = await sb.auth.resetPasswordForEmail(email, {
-      redirectTo: window.location.href.split('#')[0]
-    });
-    if(error){
-      document.getElementById('auth-msg').textContent = error.message || 'Ошибка отправки';
-    } else {
-      document.getElementById('auth-msg').style.color = 'var(--mint)';
-      document.getElementById('auth-msg').textContent = 'Письмо для сброса пароля отправлено на ' + email;
-    }
-  }catch(e){
-    document.getElementById('auth-msg').textContent = 'Ошибка сети';
-  }
-  btn.disabled=false; btn.textContent='Забыли пароль?';
-}
 
-let loginMode = 'password'; // 'password' | 'otp'
 async function doLogin(){
 if(!sb){ document.getElementById('auth-msg').textContent='Ошибка соединения'; return; }
 const email=document.getElementById('login-email').value.trim().toLowerCase();
-const password=(document.getElementById('login-password').value||'').trim();
-const otp=(document.getElementById('login-otp')?.value||'').trim();
-const am=document.getElementById('auth-msg'); am.textContent=''; am.style.color='';
+const password=document.getElementById('login-password').value;
+if(!email||!password){ document.getElementById('auth-msg').textContent='Введите email и пароль'; return; }
+if(password.length < 6){ document.getElementById('auth-msg').textContent='Пароль минимум 6 символов'; return; }
 const btn=document.getElementById('login-btn');
-if(!email){ am.textContent='Введите email'; return; }
-
-if(loginMode === 'otp'){
-  if(!otp){ am.textContent='Введите код из письма'; return; }
-  btn.disabled=true; btn.textContent='Проверяем...';
-  try{
-    const{data,error}=await sb.auth.verifyOtp({ email, token: otp, type: 'email' });
-    if(error){
-      console.error('OTP error:', error);
-      am.textContent = error.message || 'Неверный или просроченный код';
-      btn.disabled=false; btn.textContent='Войти'; return;
-    }
-    if(data?.user){ onAuthenticated(data.user); }
-    else { am.textContent='Не удалось войти'; btn.disabled=false; btn.textContent='Войти'; }
-  }catch(e){ console.error(e); am.textContent='Ошибка сети'; btn.disabled=false; btn.textContent='Войти'; }
-  return;
-}
-
-if(!password){ am.textContent='Введите пароль'; return; }
 btn.disabled=true; btn.textContent='Входим...';
+const am=document.getElementById('auth-msg'); am.textContent=''; am.style.color='';
 try{
-const{data,error}=await sb.auth.signInWithPassword({email,password});
-if(error){
-  console.error('Login error full:', error);
-  let msg = error.message || 'Ошибка';
-  const code = (error.code || error.status || '').toString().toLowerCase();
-  if(/invalid.?login.?credentials|invalid_credentials/i.test(msg) || code === 'invalid_credentials')
-    msg = 'Неверный пароль. Нажмите «Войти по коду из письма» — вход без пароля';
-  else if(/email.?not.?confirmed|email_not_confirmed/i.test(msg) || code === 'email_not_confirmed')
-    msg = 'Email не подтверждён. Используйте «Войти по коду из письма»';
-  else if(/too many requests|over_request_rate/i.test(msg))
-    msg = 'Слишком много попыток, подождите минуту';
-  else if(/user.?not.?found/i.test(msg))
-    msg = 'Пользователь не найден в Auth';
-  am.textContent = msg;
-  btn.disabled=false; btn.textContent='Войти'; return;
-}
-if(data?.user){ onAuthenticated(data.user); }
-}catch(e){ console.error(e); am.textContent='Ошибка сети'; btn.disabled=false; btn.textContent='Войти'; }
-}
+  // 1) Обычный вход
+  let { data, error } = await sb.auth.signInWithPassword({ email, password });
 
-async function doSendOtp(){
-if(!sb){ document.getElementById('auth-msg').textContent='Ошибка соединения'; return; }
-const email=document.getElementById('login-email').value.trim().toLowerCase();
-const am=document.getElementById('auth-msg');
-if(!email){ am.textContent='Сначала введите email'; return; }
-const btn=document.getElementById('otp-btn');
-btn.disabled=true; btn.textContent='Отправка...'; am.textContent=''; am.style.color='';
-try{
-  const{error}=await sb.auth.signInWithOtp({
-    email,
-    options: { shouldCreateUser: false }
-  });
-  if(error){
-    console.error('OTP send error:', error);
-    let msg = error.message || 'Ошибка';
-    if(/signups.?not.?allowed|user.?not.?found|otp_disabled/i.test(msg))
-      msg = 'Не удалось отправить код. Проверьте email или включите Email OTP в Supabase';
-    am.textContent = msg;
-    btn.disabled=false; btn.textContent='Войти по коду из письма'; return;
+  // 2) Если «неверный пароль» — пробуем создать Auth-пользователя
+  //    (часто профиль есть, а записи в Auth нет / пароль не был сохранён)
+  if(error && /invalid.?login.?credentials|invalid_credentials/i.test(error.message||'')){
+    const up = await sb.auth.signUp({ email, password });
+    if(!up.error && up.data?.session?.user){
+      onAuthenticated(up.data.session.user);
+      return;
+    }
+    if(!up.error && up.data?.user && !up.data.session){
+      // signUp создал пользователя, но нужна сессия — входим ещё раз
+      const again = await sb.auth.signInWithPassword({ email, password });
+      if(again.data?.user){ onAuthenticated(again.data.user); return; }
+      if(again.error){ error = again.error; }
+      else { am.textContent = 'Аккаунт создан. Подтвердите email или отключите Confirm email в Supabase.'; btn.disabled=false; btn.textContent='Войти'; return; }
+    }
+    // User already registered → пароль действительно неверный
   }
-  loginMode = 'otp';
-  document.getElementById('password-field').style.display = 'none';
-  document.getElementById('otp-field').style.display = 'block';
-  document.getElementById('login-btn').textContent = 'Подтвердить код';
-  am.style.color = 'var(--mint)';
-  am.textContent = 'Код отправлен на ' + email + '. Введите его ниже.';
-  btn.textContent = 'Отправить код ещё раз';
-  btn.disabled = false;
-  document.getElementById('login-otp')?.focus();
-}catch(e){ console.error(e); am.textContent='Ошибка сети'; btn.disabled=false; btn.textContent='Войти по коду из письма'; }
+
+  if(error){
+    console.error('Login error:', error);
+    let msg = error.message || 'Ошибка';
+    if(/invalid.?login.?credentials|invalid_credentials/i.test(msg))
+      msg = 'Неверный email или пароль';
+    else if(/email.?not.?confirmed|email_not_confirmed/i.test(msg))
+      msg = 'Email не подтверждён — в Supabase отключите Confirm email';
+    else if(/too many requests/i.test(msg))
+      msg = 'Слишком много попыток, подождите';
+    else if(/user already|already registered/i.test(msg))
+      msg = 'Неверный пароль';
+    am.textContent = msg;
+    btn.disabled=false; btn.textContent='Войти'; return;
+  }
+  if(data?.user){ onAuthenticated(data.user); }
+  else { am.textContent='Не удалось войти'; btn.disabled=false; btn.textContent='Войти'; }
+}catch(e){
+  console.error(e);
+  am.textContent='Ошибка сети';
+  btn.disabled=false; btn.textContent='Войти';
+}
 }
 async function doRegister(){
 if(!sb){ document.getElementById('auth-msg').textContent='Ошибка соединения'; return; }
-const first=document.getElementById('reg-firstname').value.trim(),last=document.getElementById('reg-lastname').value.trim(),username=document.getElementById('reg-username').value.trim().toLowerCase(),birth=document.getElementById('reg-birth').value,email=document.getElementById('reg-email').value.trim(),password=document.getElementById('reg-password').value;
+const first=document.getElementById('reg-firstname').value.trim(),last=document.getElementById('reg-lastname').value.trim(),username=document.getElementById('reg-username').value.trim().toLowerCase(),birth=document.getElementById('reg-birth').value,email=document.getElementById('reg-email').value.trim().toLowerCase(),password=document.getElementById('reg-password').value;
 if(!first||!last||!username||!birth||!email||!password){ document.getElementById('auth-msg').textContent='Заполните все поля'; return; }
 if(password.length<6){ document.getElementById('auth-msg').textContent='Пароль минимум 6 символов'; return; }
 const btn=document.getElementById('register-btn'); btn.disabled=true; btn.textContent='Создаём...'; document.getElementById('auth-msg').textContent='';
 try{
-const{data,error}=await sb.auth.signUp({email,password,options:{data:{username,first_name:first,last_name:last,birth_date:birth}}});
-if(error){ document.getElementById('auth-msg').textContent=error.message; btn.disabled=false; btn.textContent='Создать аккаунт'; return; }
-if(data.session?.user){ onAuthenticated(data.session.user); }
-else{ document.getElementById('auth-msg').textContent='Аккаунт создан! Войдите.'; document.querySelectorAll('.tab')[0].click(); btn.disabled=false; btn.textContent='Создать аккаунт'; }
+  const{data,error}=await sb.auth.signUp({email,password,options:{data:{username,first_name:first,last_name:last,birth_date:birth}}});
+  if(error){
+    // Если уже зарегистрирован — сразу пробуем войти с этим паролем
+    if(/already|registered|exists/i.test(error.message||'')){
+      const login = await sb.auth.signInWithPassword({email, password});
+      if(login.data?.user){ onAuthenticated(login.data.user); return; }
+      document.getElementById('auth-msg').textContent='Аккаунт уже есть, но пароль не подходит';
+      btn.disabled=false; btn.textContent='Создать аккаунт'; return;
+    }
+    document.getElementById('auth-msg').textContent=error.message; btn.disabled=false; btn.textContent='Создать аккаунт'; return;
+  }
+  if(data.session?.user){ onAuthenticated(data.session.user); }
+  else if(data.user){
+    // Пользователь создан без сессии (Confirm email) — пробуем войти
+    const login = await sb.auth.signInWithPassword({email, password});
+    if(login.data?.user){ onAuthenticated(login.data.user); return; }
+    document.getElementById('auth-msg').textContent='Аккаунт создан. Если не входит — отключите Confirm email в Supabase.';
+    document.querySelectorAll('.tab')[0].click(); btn.disabled=false; btn.textContent='Создать аккаунт';
+  } else {
+    document.getElementById('auth-msg').textContent='Аккаунт создан! Войдите.'; document.querySelectorAll('.tab')[0].click(); btn.disabled=false; btn.textContent='Создать аккаунт';
+  }
 }catch(e){ document.getElementById('auth-msg').textContent='Ошибка сети'; btn.disabled=false; btn.textContent='Создать аккаунт'; }
 }
 async function onAuthenticated(user){
@@ -1888,10 +1853,7 @@ window._currentStoryLikers = data||[];
 }
 document.querySelectorAll('.tab').forEach(tab=>{ tab.addEventListener('click',function(){ document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active')); this.classList.add('active'); const isLogin=this.dataset.tab==='login'; document.getElementById('login-form').style.display=isLogin?'block':'none'; document.getElementById('register-form').style.display=isLogin?'none':'block'; document.getElementById('auth-msg').textContent=''; }); });
 document.getElementById('login-btn').addEventListener('click',e=>{ e.preventDefault(); doLogin(); });
-document.getElementById('otp-btn')?.addEventListener('click',e=>{ e.preventDefault(); doSendOtp(); });
-document.getElementById('forgot-btn')?.addEventListener('click',e=>{ e.preventDefault(); doForgotPassword(); });
 document.getElementById('register-btn').addEventListener('click',e=>{ e.preventDefault(); doRegister(); });
-document.getElementById('login-otp')?.addEventListener('keydown',e=>{ if(e.key==='Enter') doLogin(); });
 document.getElementById('login-password').addEventListener('keydown',e=>{ if(e.key==='Enter') doLogin(); });
 if(sb){ sb.auth.getSession().then(({data})=>{ if(data?.session) onAuthenticated(data.session.user); }); }
 </script>
