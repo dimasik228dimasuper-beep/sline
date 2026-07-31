@@ -253,6 +253,7 @@ body.power-saving * { transition: none !important; }
 <div class="field"><label>Email</label><input type="email" id="login-email" placeholder="you@example.com"></div>
 <div class="field"><label>Пароль</label><input type="password" id="login-password" placeholder="••••••••"></div>
 <button type="button" class="btn-primary" id="login-btn">Войти</button>
+<button type="button" class="btn-secondary" id="forgot-btn" style="margin-top:8px;">Забыли пароль?</button>
 </div>
 <div id="register-form" style="display:none;">
 <div class="field"><label>Имя</label><input type="text" id="reg-firstname" placeholder="Иван"></div>
@@ -1461,18 +1462,49 @@ currentCallPartnerId = null; callStartTime = null;
 // ============ BOTTOM TABS ============
 document.querySelectorAll('.bottom-tab').forEach(tab=>{ tab.addEventListener('click',function(){ switchPage(this.dataset.tab); }); });
 // ============ AUTH ============
+
+async function doForgotPassword(){
+  if(!sb){ document.getElementById('auth-msg').textContent='Ошибка соединения'; return; }
+  const email=document.getElementById('login-email').value.trim().toLowerCase();
+  if(!email){ document.getElementById('auth-msg').textContent='Сначала введите email'; return; }
+  const btn=document.getElementById('forgot-btn');
+  btn.disabled=true; btn.textContent='Отправка...';
+  document.getElementById('auth-msg').textContent='';
+  try{
+    const { error } = await sb.auth.resetPasswordForEmail(email, {
+      redirectTo: window.location.href.split('#')[0]
+    });
+    if(error){
+      document.getElementById('auth-msg').textContent = error.message || 'Ошибка отправки';
+    } else {
+      document.getElementById('auth-msg').style.color = 'var(--mint)';
+      document.getElementById('auth-msg').textContent = 'Письмо для сброса пароля отправлено на ' + email;
+    }
+  }catch(e){
+    document.getElementById('auth-msg').textContent = 'Ошибка сети';
+  }
+  btn.disabled=false; btn.textContent='Забыли пароль?';
+}
+
 async function doLogin(){
 if(!sb){ document.getElementById('auth-msg').textContent='Ошибка соединения'; return; }
 const email=document.getElementById('login-email').value.trim().toLowerCase(),password=document.getElementById('login-password').value;
 if(!email||!password){ document.getElementById('auth-msg').textContent='Введите email и пароль'; return; }
-const btn=document.getElementById('login-btn'); btn.disabled=true; btn.textContent='Входим...'; document.getElementById('auth-msg').textContent='';
+const btn=document.getElementById('login-btn'); btn.disabled=true; btn.textContent='Входим...'; const am=document.getElementById('auth-msg'); am.textContent=''; am.style.color='';
 try{
 const{data,error}=await sb.auth.signInWithPassword({email,password});
 if(error){
+  console.error('Login error full:', error);
   let msg = error.message || 'Ошибка';
-  if(/invalid login credentials/i.test(msg)) msg = 'Неверный email или пароль';
-  else if(/email not confirmed/i.test(msg)) msg = 'Подтвердите email (проверьте почту)';
-  else if(/too many requests/i.test(msg)) msg = 'Слишком много попыток, подождите';
+  const code = (error.code || error.status || '').toString().toLowerCase();
+  if(/invalid.?login.?credentials|invalid_credentials/i.test(msg) || code === 'invalid_credentials')
+    msg = 'Неверный email или пароль. Если аккаунт есть — нажмите «Забыли пароль?»';
+  else if(/email.?not.?confirmed|email_not_confirmed/i.test(msg) || code === 'email_not_confirmed')
+    msg = 'Email не подтверждён. Проверьте почту или отключите Confirm email в Supabase';
+  else if(/too many requests|over_request_rate/i.test(msg))
+    msg = 'Слишком много попыток, подождите минуту';
+  else if(/user.?not.?found/i.test(msg))
+    msg = 'Пользователь не найден в Auth (только в profiles недостаточно)';
   document.getElementById('auth-msg').textContent = msg;
   btn.disabled=false; btn.textContent='Войти'; return;
 }
@@ -1799,6 +1831,7 @@ window._currentStoryLikers = data||[];
 }
 document.querySelectorAll('.tab').forEach(tab=>{ tab.addEventListener('click',function(){ document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active')); this.classList.add('active'); const isLogin=this.dataset.tab==='login'; document.getElementById('login-form').style.display=isLogin?'block':'none'; document.getElementById('register-form').style.display=isLogin?'none':'block'; document.getElementById('auth-msg').textContent=''; }); });
 document.getElementById('login-btn').addEventListener('click',e=>{ e.preventDefault(); doLogin(); });
+document.getElementById('forgot-btn')?.addEventListener('click',e=>{ e.preventDefault(); doForgotPassword(); });
 document.getElementById('register-btn').addEventListener('click',e=>{ e.preventDefault(); doRegister(); });
 document.getElementById('login-password').addEventListener('keydown',e=>{ if(e.key==='Enter') doLogin(); });
 if(sb){ sb.auth.getSession().then(({data})=>{ if(data?.session) onAuthenticated(data.session.user); }); }
