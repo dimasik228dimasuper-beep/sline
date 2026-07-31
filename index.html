@@ -415,8 +415,8 @@ body.power-saving * { transition: none !important; }
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ============ SUPABASE INIT ============
-const SUPABASE_URL = "https://gnfmibujvhmgiwfnwvjf.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImduZm1pYnVqdmhtZ2l3Zm53dmpmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU0Njg3MjEsImV4cCI6MjEwMTA0NDcyMX0.XttEZaAmTZ6Ce7e3Bwy7uk9r_-IHrsYViJjRtoS69g4";
+const SUPABASE_URL = "https://eshbyibuzvoztrsunvul.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVzaGJ5aWJ1enZvenRyc3VudnVsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU0MDk5MzUsImV4cCI6MjEwMDk4NTkzNX0.WVOd2qZ5RJlOrMPlfuIFJEymgfZjtGVB4TJgrDEFnXQ";
 let sb;
 try { sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY); } catch(e) { console.error(e); }
 
@@ -1465,55 +1465,51 @@ document.querySelectorAll('.bottom-tab').forEach(tab=>{ tab.addEventListener('cl
 
 async function doLogin(){
 if(!sb){ document.getElementById('auth-msg').textContent='Ошибка соединения'; return; }
-const email=document.getElementById('login-email').value.trim().toLowerCase();
-const password=document.getElementById('login-password').value;
-if(!email||!password){ document.getElementById('auth-msg').textContent='Введите email и пароль'; return; }
-if(password.length < 6){ document.getElementById('auth-msg').textContent='Пароль минимум 6 символов'; return; }
-const btn=document.getElementById('login-btn');
-btn.disabled=true; btn.textContent='Входим...';
-const am=document.getElementById('auth-msg'); am.textContent=''; am.style.color='';
-try{
-  // 1) Обычный вход
+const email = document.getElementById('login-email').value.trim().toLowerCase();
+const password = document.getElementById('login-password').value;
+if(!email || !password){ document.getElementById('auth-msg').textContent='Введите email и пароль'; return; }
+const btn = document.getElementById('login-btn');
+btn.disabled = true; btn.textContent = 'Входим...';
+const am = document.getElementById('auth-msg'); am.textContent = ''; am.style.color = '';
+try {
   let { data, error } = await sb.auth.signInWithPassword({ email, password });
 
-  // 2) Если «неверный пароль» — пробуем создать Auth-пользователя
-  //    (часто профиль есть, а записи в Auth нет / пароль не был сохранён)
-  if(error && /invalid.?login.?credentials|invalid_credentials/i.test(error.message||'')){
+  // Если пользователя нет в Auth — создаём и входим
+  if (error) {
     const up = await sb.auth.signUp({ email, password });
-    if(!up.error && up.data?.session?.user){
+    if (!up.error && up.data?.session?.user) {
       onAuthenticated(up.data.session.user);
       return;
     }
-    if(!up.error && up.data?.user && !up.data.session){
-      // signUp создал пользователя, но нужна сессия — входим ещё раз
+    if (!up.error && up.data?.user) {
       const again = await sb.auth.signInWithPassword({ email, password });
-      if(again.data?.user){ onAuthenticated(again.data.user); return; }
-      if(again.error){ error = again.error; }
-      else { am.textContent = 'Аккаунт создан. Подтвердите email или отключите Confirm email в Supabase.'; btn.disabled=false; btn.textContent='Войти'; return; }
+      if (again.data?.user) { onAuthenticated(again.data.user); return; }
+      error = again.error || error;
+      if (again.error && /email.?not.?confirmed|invalid.?login/i.test(again.error.message||'')) {
+        am.textContent = 'Отключите Confirm email: Authentication → Providers → Email';
+        btn.disabled = false; btn.textContent = 'Войти'; return;
+      }
     }
-    // User already registered → пароль действительно неверный
+    if (up.error && /already|registered|exists/i.test(up.error.message||'')) {
+      am.textContent = 'Неверный пароль';
+      btn.disabled = false; btn.textContent = 'Войти'; return;
+    }
   }
 
-  if(error){
-    console.error('Login error:', error);
+  if (error) {
+    console.error(error);
     let msg = error.message || 'Ошибка';
-    if(/invalid.?login.?credentials|invalid_credentials/i.test(msg))
-      msg = 'Неверный email или пароль';
-    else if(/email.?not.?confirmed|email_not_confirmed/i.test(msg))
-      msg = 'Email не подтверждён — в Supabase отключите Confirm email';
-    else if(/too many requests/i.test(msg))
-      msg = 'Слишком много попыток, подождите';
-    else if(/user already|already registered/i.test(msg))
-      msg = 'Неверный пароль';
+    if (/invalid.?login.?credentials/i.test(msg)) msg = 'Неверный email или пароль';
+    else if (/email.?not.?confirmed/i.test(msg)) msg = 'Отключите Confirm email в Supabase';
     am.textContent = msg;
-    btn.disabled=false; btn.textContent='Войти'; return;
+    btn.disabled = false; btn.textContent = 'Войти'; return;
   }
-  if(data?.user){ onAuthenticated(data.user); }
-  else { am.textContent='Не удалось войти'; btn.disabled=false; btn.textContent='Войти'; }
-}catch(e){
+  if (data?.user) onAuthenticated(data.user);
+  else { am.textContent = 'Не удалось войти'; btn.disabled = false; btn.textContent = 'Войти'; }
+} catch (e) {
   console.error(e);
-  am.textContent='Ошибка сети';
-  btn.disabled=false; btn.textContent='Войти';
+  am.textContent = 'Ошибка сети';
+  btn.disabled = false; btn.textContent = 'Войти';
 }
 }
 async function doRegister(){
