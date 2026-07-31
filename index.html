@@ -486,16 +486,28 @@ async function loadStories(){
     ? `<div class="story-item" id="add-story-btn-bar"><div class="story-ring"><div class="avatar" style="width:100%;height:100%;border-radius:50%;${myAvBg}">${myProfile.avatar_url?'':(myProfile.username||'?')[0].toUpperCase()}</div></div><span style="font-size:10px;">Моя</span></div>`
     : `<div class="story-item" id="add-story-btn-bar"><div class="story-ring"><div class="avatar" style="background:var(--panel-hover);display:flex;align-items:center;justify-content:center;font-size:20px;width:100%;height:100%;border-radius:50%;"><svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;"><path d="M12 5v14M5 12h14"/></svg></div></div><span style="font-size:10px;">Моя</span></div>`;
   try{
-    const{data:stories}=await sb.from('stories').select('*, profiles:user_id(id, username, first_name, last_name, avatar_url, color)').gt('expires_at',new Date().toISOString()).order('created_at',{ascending:false});
+    // Fetch stories and profiles as two separate queries instead of a nested
+    // join — an embedded profiles:user_id(...) select comes back empty for
+    // other users whenever RLS on `profiles` restricts SELECT to the owner's
+    // own row, which is exactly what caused every story to show "Пользователь".
+    const{data:stories,error:storiesErr}=await sb.from('stories').select('id,user_id,media_url,type,created_at,expires_at').gt('expires_at',new Date().toISOString()).order('created_at',{ascending:false});
+    if(storiesErr){ console.error('loadStories stories error', storiesErr); }
     if(stories?.length){
       const byUser=new Map();
       for(const s of stories){ 
         if(s.user_id===myProfile.id) continue; 
-        if(!byUser.has(s.user_id)) byUser.set(s.user_id, {profile: s.profiles, stories:[]}); 
-        byUser.get(s.user_id).stories.push(s); 
+        if(!byUser.has(s.user_id)) byUser.set(s.user_id, []); 
+        byUser.get(s.user_id).push(s); 
       }
-      for(const [uid, obj] of byUser){
-        const p = obj.profiles || {};
+      const userIds=[...byUser.keys()];
+      let profilesById={};
+      if(userIds.length){
+        const{data:profs,error:profsErr}=await sb.from('profiles').select('id,username,first_name,last_name,avatar_url,color').in('id',userIds);
+        if(profsErr){ console.error('loadStories profiles error', profsErr); }
+        for(const p of (profs||[])) profilesById[p.id]=p;
+      }
+      for(const [uid] of byUser){
+        const p = profilesById[uid] || {};
         const name = p.first_name || p.username || 'Пользователь';
         const bg = p.avatar_url ? `background-image:url(${p.avatar_url})` : `background:${p.color||colorFor(uid)}`;
         const initial = p.avatar_url ? '' : (p.username||'?')[0].toUpperCase();
@@ -892,29 +904,32 @@ document.getElementById('video-btn').addEventListener('click', ()=>{
   if(!activePartner){ alert('Видеозвонки доступны только в личных чатах'); return; }
   startCall('video', activePartner.id);
 });
+function ensureCallScreen(){
+  let callScreen = document.getElementById('call-screen');
+  if(callScreen) return callScreen;
+  const div = document.createElement('div'); div.id = 'call-screen';
+  div.style.cssText = 'display:none;position:fixed;inset:0;background:#0a0e17;z-index:5000;flex-direction:column;';
+  div.innerHTML = `<video id="remote-video" autoplay playsinline style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#111;"></video><video id="local-video" autoplay playsinline muted style="position:absolute;bottom:120px;right:20px;width:120px;height:160px;object-fit:cover;border-radius:16px;border:2px solid rgba(255,255,255,.25);background:#222;z-index:10;"></video><div style="position:absolute;inset:0;display:flex;flex-direction:column;justify-content:space-between;padding:40px 20px;pointer-events:none;z-index:20;"><div style="text-align:center;"><div id="call-partner-name" style="font-size:22px;font-weight:700;"></div><div id="call-status" style="font-size:14px;color:rgba(255,255,255,.7);margin-top:6px;">Соединение...</div></div><div style="display:flex;justify-content:center;gap:20px;padding-bottom:20px;pointer-events:auto;"><button id="mute-btn" style="width:52px;height:52px;border-radius:50%;border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.1);color:#fff;cursor:pointer;"><svg viewBox="0 0 24 24" style="width:22px;height:22px;fill:none;stroke:#fff;stroke-width:2;"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4"/></svg></button><button id="hangup-btn" style="width:60px;height:60px;border-radius:50%;border:none;background:var(--danger);color:#fff;font-size:24px;cursor:pointer;"><svg viewBox="0 0 24 24" style="width:24px;height:24px;fill:none;stroke:#fff;stroke-width:2;"><path d="M22 16.92v3a2 2 0 01-2.18 2A19.8 19.8 0 0111.19 18a19.5 19.5 0 01-6-6A19.8 19.8 0 012.12 3.38 2 2 0 014.11 2h3a2 2 0 012 1.72c.13.96.36 1.9.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0122 16.92z"/></svg></button></div></div>`;
+  document.body.appendChild(div);
+  document.getElementById('hangup-btn').addEventListener('click',()=>hangupCall(true));
+  document.getElementById('mute-btn').addEventListener('click',()=>{
+    if(!localStream) return;
+    localStream.getAudioTracks().forEach(t=>t.enabled=!t.enabled);
+    const muted = !localStream.getAudioTracks()[0]?.enabled;
+    document.getElementById('mute-btn').style.background = muted ? 'var(--danger)' : 'rgba(255,255,255,.1)';
+  });
+  return div;
+}
 async function startCall(type, pid){
   if(!pid && activePartner) pid = activePartner.id;
   if(!pid){ alert('Выберите собеседника'); return; }
   if(peerConnection){ alert('Звонок уже идёт'); return; }
   callType = type; isCaller = true; currentCallPartnerId = pid; callStartTime = Date.now();
   try{
+    ensureCallScreen();
     await startPeerConnection();
     const p = contacts.find(c=>c.id===pid) || activePartner || {username:'user'};
     document.getElementById('call-partner-name').textContent = p.first_name || p.username;
-    const callScreen = document.getElementById('call-screen');
-    if(!callScreen){
-      const div = document.createElement('div'); div.id = 'call-screen';
-      div.style.cssText = 'display:none;position:fixed;inset:0;background:#0a0e17;z-index:5000;flex-direction:column;';
-      div.innerHTML = `<video id="remote-video" autoplay playsinline style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#111;"></video><video id="local-video" autoplay playsinline muted style="position:absolute;bottom:120px;right:20px;width:120px;height:160px;object-fit:cover;border-radius:16px;border:2px solid rgba(255,255,255,.25);background:#222;z-index:10;"></video><div style="position:absolute;inset:0;display:flex;flex-direction:column;justify-content:space-between;padding:40px 20px;pointer-events:none;z-index:20;"><div style="text-align:center;"><div id="call-partner-name" style="font-size:22px;font-weight:700;"></div><div id="call-status" style="font-size:14px;color:rgba(255,255,255,.7);margin-top:6px;">Соединение...</div></div><div style="display:flex;justify-content:center;gap:20px;padding-bottom:20px;pointer-events:auto;"><button id="mute-btn" style="width:52px;height:52px;border-radius:50%;border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.1);color:#fff;cursor:pointer;"><svg viewBox="0 0 24 24" style="width:22px;height:22px;fill:none;stroke:#fff;stroke-width:2;"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4"/></svg></button><button id="hangup-btn" style="width:60px;height:60px;border-radius:50%;border:none;background:var(--danger);color:#fff;font-size:24px;cursor:pointer;"><svg viewBox="0 0 24 24" style="width:24px;height:24px;fill:none;stroke:#fff;stroke-width:2;"><path d="M22 16.92v3a2 2 0 01-2.18 2A19.8 19.8 0 0111.19 18a19.5 19.5 0 01-6-6A19.8 19.8 0 012.12 3.38 2 2 0 014.11 2h3a2 2 0 012 1.72c.13.96.36 1.9.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0122 16.92z"/></svg></button></div></div>`;
-      document.body.appendChild(div);
-      document.getElementById('hangup-btn').addEventListener('click',()=>hangupCall(true));
-      document.getElementById('mute-btn').addEventListener('click',()=>{
-        if(!localStream) return;
-        localStream.getAudioTracks().forEach(t=>t.enabled=!t.enabled);
-        const muted = !localStream.getAudioTracks()[0]?.enabled;
-        document.getElementById('mute-btn').style.background = muted ? 'var(--danger)' : 'rgba(255,255,255,.1)';
-      });
-    }
     document.getElementById('call-screen').style.display = 'flex';
     const offer = await peerConnection.createOffer(); await peerConnection.setLocalDescription(offer);
     await sendSignal(pid, {type:'offer', sdp:offer, callType:type});
@@ -938,7 +953,7 @@ function handleSignal(p){
   if(p.type==='offer'){ pendingOffer=p; currentCallPartnerId=p.from; callType = p.callType||'video';
     const inc = document.getElementById('incoming-call');
     if(!inc){ const d=document.createElement('div'); d.id='incoming-call'; d.style.cssText='display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:5100;flex-direction:column;align-items:center;justify-content:center;gap:24px;'; d.innerHTML=`<div id="incoming-avatar" style="width:100px;height:100px;border-radius:50%;background:var(--accent-a);display:flex;align-items:center;justify-content:center;font-size:40px;font-weight:700;">?</div><div id="incoming-name" style="font-size:24px;font-weight:700;">Входящий звонок</div><div style="display:flex;gap:40px;"><button id="reject-call" style="width:70px;height:70px;border-radius:50%;border:none;background:var(--danger);color:#fff;font-size:28px;cursor:pointer;"><svg viewBox="0 0 24 24" style="width:32px;height:32px;fill:none;stroke:#fff;stroke-width:2;"><path d="M18 6L6 18M6 6l12 12"/></svg></button><button id="accept-call" style="width:70px;height:70px;border-radius:50%;border:none;background:#22c55e;color:#fff;font-size:28px;cursor:pointer;"><svg viewBox="0 0 24 24" style="width:32px;height:32px;fill:none;stroke:#fff;stroke-width:2;"><path d="M22 16.92v3a2 2 0 01-2.18 2A19.8 19.8 0 0111.19 18a19.5 19.5 0 01-6-6A19.8 19.8 0 012.12 3.38 2 2 0 014.11 2h3a2 2 0 012 1.72c.13.96.36 1.9.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0122 16.92z"/></svg></button></div>`; document.body.appendChild(d);
-      document.getElementById('accept-call').addEventListener('click',async()=>{ document.getElementById('incoming-call').style.display='none'; await startPeerConnection(); await peerConnection.setRemoteDescription(new RTCSessionDescription(pendingOffer.sdp)); const answer=await peerConnection.createAnswer(); await peerConnection.setLocalDescription(answer); await sendSignal(pendingOffer.from,{type:'answer',sdp:answer}); document.getElementById('call-screen').style.display='flex'; pendingOffer=null; });
+      document.getElementById('accept-call').addEventListener('click',async()=>{ document.getElementById('incoming-call').style.display='none'; ensureCallScreen(); try{ await startPeerConnection(); }catch(err){ alert('Ошибка доступа к камере/микрофону: '+err.message); return; } await peerConnection.setRemoteDescription(new RTCSessionDescription(pendingOffer.sdp)); const answer=await peerConnection.createAnswer(); await peerConnection.setLocalDescription(answer); await sendSignal(pendingOffer.from,{type:'answer',sdp:answer}); document.getElementById('call-partner-name').textContent = document.getElementById('incoming-name').textContent; document.getElementById('call-screen').style.display='flex'; pendingOffer=null; });
       document.getElementById('reject-call').addEventListener('click',()=>{ document.getElementById('incoming-call').style.display='none'; if(pendingOffer){ sendSignal(pendingOffer.from,{type:'hangup'}); pendingOffer=null; } });
     }
     const partner = contacts.find(c=>c.id===p.from);
