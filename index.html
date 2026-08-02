@@ -43,6 +43,10 @@ input,textarea{user-select:text!important;-webkit-user-select:text!important}
 .app-page.active{display:flex}
 .chats-layout{display:flex;flex:1;overflow:hidden}
 .sidebar{background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;width:320px;min-width:320px;height:100%;transition:transform .3s}
+.sidebar-scroll{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;-webkit-overflow-scrolling:touch}
+.stories-bar{-webkit-overflow-scrolling:touch;scrollbar-width:thin}
+.folder-tabs{-webkit-overflow-scrolling:touch}
+.contacts{flex:1;overflow-y:auto;padding:6px;min-height:0;-webkit-overflow-scrolling:touch}
 .sidebar-header{padding:12px 16px;border-bottom:1px solid var(--line);flex-shrink:0;position:relative;z-index:40}
 .me-row{display:flex;align-items:center;gap:10px;margin-bottom:10px}
 .avatar{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;color:#fff;background:var(--accent-a);flex-shrink:0;background-size:cover;background-position:center;cursor:pointer}
@@ -1244,7 +1248,32 @@ async function sendMessage(type='text', fileUrl=null, content=null){
   try{
     const {data,error}=await sb.from('messages').insert(payload).select().single();
     if(error){ alert(friendlyError(error)); return; }
-    if(data){ renderMessage(data, !!activeGroup); scrollToBottom(); }
+    if(data){
+      renderMessage(data, !!activeGroup);
+      scrollToBottom();
+      // Broadcast so peer gets it instantly even if postgres_changes lag/RLS
+      try{
+        const peerId = activeGroup ? null : activePartner?.id;
+        if(peerId && peerId !== myProfile.id){
+          const ch = sb.channel('inbox-'+peerId);
+          ch.subscribe(st=>{
+            if(st==='SUBSCRIBED'){
+              ch.send({type:'broadcast', event:'new_msg', payload:data});
+              setTimeout(()=>sb.removeChannel(ch), 1200);
+            }
+          });
+        }
+        if(activeGroup){
+          const ch = sb.channel('gmsg-'+activeGroup.id);
+          ch.subscribe(st=>{
+            if(st==='SUBSCRIBED'){
+              ch.send({type:'broadcast', event:'new_msg', payload:data});
+              setTimeout(()=>sb.removeChannel(ch), 1200);
+            }
+          });
+        }
+      }catch(e){}
+    }
     if(activeGroup) loadGroups(); else loadChats();
   }catch(e){ alert(friendlyError(e)); }
 }
@@ -1541,16 +1570,94 @@ document.getElementById('settings-logout').onclick=async()=>{ if(await customCon
 
 // ========== REALTIME ==========
 function subscribeRealtime(){
-  if(messagesChannel) sb.removeChannel(messagesChannel);
-  messagesChannel=sb.channel('msg').on('postgres_changes',{event:'INSERT',schema:'public',table:'messages'}, payload=>{
-    const msg=payload.new;
-    if(activeGroup&&msg.group_id===activeGroup.id){ renderMessage(msg,true); scrollToBottom(); return; }
-    if(msg.receiver_id===myProfile.id||msg.sender_id===myProfile.id){
-      if(activePartner&&((msg.sender_id===myProfile.id&&msg.receiver_id===activePartner.id)||(msg.sender_id===activePartner.id&&msg.receiver_id===myProfile.id))){ renderMessage(msg); scrollToBottom(); clearUnread(activePartner.id); }
-      else if(msg.receiver_id===myProfile.id){ incUnread(msg.sender_id); notifyIncomingMessage(msg); }
-      loadChats();
+  if(messagesChannel) try{ sb.removeChannel(messagesChannel); }catch(e){}
+  messagesChannel = sb.channel('msg-'+myProfile.id+'-'+Date.now())
+    .on('postgres_changes',{event:'INSERT',schema:'public',table:'messages'}, payload=>{
+      const msg = payload.new;
+      if(!msg || !myProfile) return;
+      handleIncomingMessage(msg);
+    })
+    .on('postgres_changes',{event:'UPDATE',schema:'public',table:'messages'}, payload=>{
+      const msg = payload.new;
+      if(!msg) return;
+      const row = document.querySelector(`.bubble-row[data-id="${msg.id}"]`);
+      if(row){
+        const isGroup = !!msg.group_id;
+        row.remove();
+        messageStore.delete(String(msg.id));
+        renderMessage(msg, isGroup);
+      }
+    })
+    .on('postgres_changes',{event:'DELETE',schema:'public',table:'messages'}, payload=>{
+      const old = payload.old;
+      if(old?.id){
+        document.querySelector(`.bubble-row[data-id="${old.id}"]`)?.remove();
+        messageStore.delete(String(old.id));
+      }
+    })
+    .subscribe(status=>{
+      if(status==='SUBSCRIBED') console.log('[SL] realtime messages subscribed');
+    });
+  // Instant inbox via broadcast (works even if postgres realtime publication is off)
+  try{
+    const inbox = sb.channel('inbox-'+myProfile.id)
+      .on('broadcast', {event:'new_msg'}, ({payload})=>{
+        if(payload) handleIncomingMessage(payload);
+      })
+      .subscribe();
+    // keep reference so it isn't GC'd
+    window._slInbox = inbox;
+  }catch(e){}
+}
+// Join group message broadcast when opening group
+const _origOpenGroupForBroadcast = openGroup;
+openGroup = async function(group){
+  await _origOpenGroupForBroadcast(group);
+  try{
+    if(window._slGroupCh){ try{ sb.removeChannel(window._slGroupCh); }catch(e){} }
+    window._slGroupCh = sb.channel('gmsg-'+group.id)
+      .on('broadcast', {event:'new_msg'}, ({payload})=>{
+        if(payload) handleIncomingMessage(payload);
+      })
+      .subscribe();
+  }catch(e){}
+};
+function handleIncomingMessage(msg){
+  // Group chat open
+  if(msg.group_id){
+    if(activeGroup && msg.group_id === activeGroup.id){
+      renderMessage(msg, true);
+      scrollToBottom();
+      if(msg.sender_id !== myProfile.id) clearUnread(activeGroup.id);
+    } else if(msg.sender_id !== myProfile.id){
+      incUnread(msg.group_id);
+      notifyIncomingMessage(msg);
     }
-  }).subscribe();
+    loadGroups();
+    return;
+  }
+  // Direct chat
+  const involvesMe = msg.receiver_id === myProfile.id || msg.sender_id === myProfile.id;
+  if(!involvesMe) return;
+  const partnerId = msg.sender_id === myProfile.id ? msg.receiver_id : msg.sender_id;
+  const isActive = activePartner && (
+    (msg.sender_id === myProfile.id && msg.receiver_id === activePartner.id) ||
+    (msg.sender_id === activePartner.id && msg.receiver_id === myProfile.id) ||
+    (activePartner.id === myProfile.id && msg.sender_id === myProfile.id && msg.receiver_id === myProfile.id)
+  );
+  if(isActive){
+    renderMessage(msg);
+    scrollToBottom();
+    if(msg.sender_id !== myProfile.id){
+      clearUnread(activePartner.id);
+      sendReadReceipt(activePartner.id);
+    }
+  } else if(msg.receiver_id === myProfile.id && msg.sender_id !== myProfile.id){
+    incUnread(msg.sender_id);
+    notifyIncomingMessage(msg);
+  }
+  // Refresh list (debounced-ish)
+  loadChats();
 }
 function setupPresence(){
   if(presenceChannel) sb.removeChannel(presenceChannel);
@@ -2156,31 +2263,64 @@ function verifiedBadgeIf(email){ return (email && VERIFIED_EMAILS.includes(Strin
 
 // ---------- More stickers ----------
 function mkSmile(bg,mouth){return "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='45' fill='%23"+bg+"'/%3E%3Ccircle cx='35' cy='40' r='6' fill='%23333'/%3E%3Ccircle cx='65' cy='40' r='6' fill='%23333'/%3E%3Cpath d='"+mouth+"' stroke='%23333' stroke-width='4' fill='none' stroke-linecap='round'/%3E%3C/svg%3E";}
+function mkFace(bg, eyes, mouth){return "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='45' fill='%23"+bg+"'/%3E"+eyes+mouth+"%3C/svg%3E";}
 const STICKER_PACKS = {
   smiles: { name: 'Смайлы', stickers: [
     mkSmile('FFD93D','M30 60 Q50 80 70 60'), mkSmile('FF6B6B','M30 70 Q50 50 70 70'),
     mkSmile('6BCB77','M40 65 h20'), mkSmile('4D96FF','M35 65 L65 65'),
     mkSmile('C77DFF','M30 55 Q50 75 70 55'), mkSmile('FFB562','M35 62 Q50 70 65 62'),
-    mkSmile('5FD3BC','M32 58 Q50 45 68 58'), mkSmile('FF9BD2','M30 62 Q50 82 70 62')
+    mkSmile('5FD3BC','M32 58 Q50 45 68 58'), mkSmile('FF9BD2','M30 62 Q50 82 70 62'),
+    mkSmile('FF8C42','M28 58 Q50 85 72 58'), mkSmile('7BED9F','M30 68 Q50 55 70 68'),
+    mkSmile('70A1FF','M32 60 Q50 78 68 60'), mkSmile('FFA502','M30 62 Q50 88 70 62')
   ]},
   animals: { name: 'Животные', stickers: [
     "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='55' r='35' fill='%23FF9F43'/%3E%3Ccircle cx='30' cy='30' r='12' fill='%23FF9F43'/%3E%3Ccircle cx='70' cy='30' r='12' fill='%23FF9F43'/%3E%3Ccircle cx='38' cy='50' r='5' fill='%23333'/%3E%3Ccircle cx='62' cy='50' r='5' fill='%23333'/%3E%3Cellipse cx='50' cy='65' rx='8' ry='5' fill='%23333'/%3E%3C/svg%3E",
     "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cellipse cx='50' cy='55' rx='35' ry='30' fill='%23A55EEA'/%3E%3Ccircle cx='35' cy='45' r='6' fill='%23333'/%3E%3Ccircle cx='65' cy='45' r='6' fill='%23333'/%3E%3Cellipse cx='50' cy='65' rx='10' ry='6' fill='%23333'/%3E%3C/svg%3E",
     "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='55' r='32' fill='%23F8C471'/%3E%3Cpath d='M25 35 L35 15 L45 35Z' fill='%23F8C471'/%3E%3Cpath d='M55 35 L65 15 L75 35Z' fill='%23F8C471'/%3E%3Ccircle cx='38' cy='52' r='5' fill='%23333'/%3E%3Ccircle cx='62' cy='52' r='5' fill='%23333'/%3E%3Cellipse cx='50' cy='68' rx='6' ry='4' fill='%23333'/%3E%3C/svg%3E",
-    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='55' r='33' fill='%23AAB7B8'/%3E%3Cpath d='M20 40 Q10 20 30 25Z' fill='%23AAB7B8'/%3E%3Cpath d='M80 40 Q90 20 70 25Z' fill='%23AAB7B8'/%3E%3Ccircle cx='38' cy='50' r='5' fill='%23333'/%3E%3Ccircle cx='62' cy='50' r='5' fill='%23333'/%3E%3Cellipse cx='50' cy='66' rx='9' ry='5' fill='%23FF9BD2'/%3E%3C/svg%3E"
+    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='55' r='33' fill='%23AAB7B8'/%3E%3Cpath d='M20 40 Q10 20 30 25Z' fill='%23AAB7B8'/%3E%3Cpath d='M80 40 Q90 20 70 25Z' fill='%23AAB7B8'/%3E%3Ccircle cx='38' cy='50' r='5' fill='%23333'/%3E%3Ccircle cx='62' cy='50' r='5' fill='%23333'/%3E%3Cellipse cx='50' cy='66' rx='9' ry='5' fill='%23FF9BD2'/%3E%3C/svg%3E",
+    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cellipse cx='50' cy='58' rx='36' ry='28' fill='%23F5D76E'/%3E%3Ccircle cx='36' cy='50' r='5' fill='%23333'/%3E%3Ccircle cx='64' cy='50' r='5' fill='%23333'/%3E%3Cellipse cx='50' cy='68' rx='7' ry='4' fill='%23333'/%3E%3Ccircle cx='22' cy='40' r='10' fill='%23F5D76E'/%3E%3Ccircle cx='78' cy='40' r='10' fill='%23F5D76E'/%3E%3C/svg%3E",
+    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='55' r='34' fill='%23E74C3C'/%3E%3Ccircle cx='38' cy='48' r='5' fill='%23333'/%3E%3Ccircle cx='62' cy='48' r='5' fill='%23333'/%3E%3Cellipse cx='50' cy='66' rx='8' ry='5' fill='%23333'/%3E%3Cpath d='M30 28 Q50 10 70 28' stroke='%23C0392B' stroke-width='6' fill='none'/%3E%3C/svg%3E",
+    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cellipse cx='50' cy='60' rx='30' ry='25' fill='%23FFF'/%3E%3Ccircle cx='50' cy='40' r='22' fill='%23FFF'/%3E%3Ccircle cx='42' cy='38' r='4' fill='%23333'/%3E%3Ccircle cx='58' cy='38' r='4' fill='%23333'/%3E%3Cellipse cx='50' cy='48' rx='5' ry='3' fill='%23FF9BD2'/%3E%3C/svg%3E",
+    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cellipse cx='50' cy='55' rx='32' ry='28' fill='%235D6D7E'/%3E%3Ccircle cx='40' cy='48' r='5' fill='%23F1C40F'/%3E%3Ccircle cx='60' cy='48' r='5' fill='%23F1C40F'/%3E%3Cpath d='M40 65 Q50 72 60 65' stroke='%23F1C40F' stroke-width='3' fill='none'/%3E%3C/svg%3E"
   ]},
   hearts: { name: 'Сердечки', stickers: [
     "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M50 85 L20 50 Q10 30 30 25 Q45 20 50 35 Q55 20 70 25 Q90 30 80 50 Z' fill='%23FF6B6B'/%3E%3C/svg%3E",
     "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M50 85 L20 50 Q10 30 30 25 Q45 20 50 35 Q55 20 70 25 Q90 30 80 50 Z' fill='%23FF9FF5'/%3E%3C/svg%3E",
     "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M50 85 L20 50 Q10 30 30 25 Q45 20 50 35 Q55 20 70 25 Q90 30 80 50 Z' fill='%234C7CF3'/%3E%3C/svg%3E",
-    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M50 85 L20 50 Q10 30 30 25 Q45 20 50 35 Q55 20 70 25 Q90 30 80 50 Z' fill='%232DD4BF'/%3E%3C/svg%3E"
+    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M50 85 L20 50 Q10 30 30 25 Q45 20 50 35 Q55 20 70 25 Q90 30 80 50 Z' fill='%232DD4BF'/%3E%3C/svg%3E",
+    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M50 85 L20 50 Q10 30 30 25 Q45 20 50 35 Q55 20 70 25 Q90 30 80 50 Z' fill='%23F7B955'/%3E%3C/svg%3E",
+    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M50 85 L20 50 Q10 30 30 25 Q45 20 50 35 Q55 20 70 25 Q90 30 80 50 Z' fill='%239B7CF3'/%3E%3C/svg%3E",
+    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M50 80 L25 52 Q15 35 32 30 Q45 25 50 38 Q55 25 68 30 Q85 35 75 52 Z' fill='%23E74C3C'/%3E%3Cpath d='M50 80 L30 55 Q22 42 35 38 Q45 35 50 45 Q55 35 65 38 Q78 42 70 55 Z' fill='%23FF8A80' opacity='.7'/%3E%3C/svg%3E",
+    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M50 85 L20 50 Q10 30 30 25 Q45 20 50 35 Q55 20 70 25 Q90 30 80 50 Z' fill='%23FF1744'/%3E%3Ccircle cx='38' cy='40' r='6' fill='%23fff' opacity='.5'/%3E%3C/svg%3E"
   ]},
   gestures: { name: 'Жесты', stickers: [
     "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='45' fill='%23FFD93D'/%3E%3Cpath d='M30 45c0-15 40-15 40 0v10c0 15-40 15-40 0z' fill='%23fff'/%3E%3C/svg%3E",
     "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect x='30' y='20' width='16' height='45' rx='8' fill='%23FFD9A0'/%3E%3Ccircle cx='38' cy='70' r='22' fill='%23FFD9A0'/%3E%3C/svg%3E",
-    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='45' fill='%236BCB77'/%3E%3Cpath d='M30 45 L70 45 M50 25 L50 65' stroke='%23fff' stroke-width='8' stroke-linecap='round'/%3E%3C/svg%3E"
+    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='45' fill='%236BCB77'/%3E%3Cpath d='M30 45 L70 45 M50 25 L50 65' stroke='%23fff' stroke-width='8' stroke-linecap='round'/%3E%3C/svg%3E",
+    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='45' fill='%234C7CF3'/%3E%3Cpath d='M32 50 L45 63 L70 38' stroke='%23fff' stroke-width='8' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E",
+    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='45' fill='%23F0708A'/%3E%3Cpath d='M35 35 L65 65 M65 35 L35 65' stroke='%23fff' stroke-width='8' stroke-linecap='round'/%3E%3C/svg%3E",
+    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='45' fill='%239B7CF3'/%3E%3Cpath d='M30 55 Q50 75 70 55' stroke='%23fff' stroke-width='6' fill='none' stroke-linecap='round'/%3E%3Ccircle cx='38' cy='42' r='5' fill='%23fff'/%3E%3Ccircle cx='62' cy='42' r='5' fill='%23fff'/%3E%3C/svg%3E",
+    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='45' fill='%232DD4BF'/%3E%3Cpath d='M40 40 L50 55 L70 30' stroke='%23fff' stroke-width='7' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E",
+    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='45' fill='%23F7B955'/%3E%3Cpath d='M35 60 Q50 40 65 60' stroke='%23fff' stroke-width='6' fill='none'/%3E%3Ccircle cx='38' cy='42' r='4' fill='%23fff'/%3E%3Ccircle cx='62' cy='42' r='4' fill='%23fff'/%3E%3C/svg%3E"
+  ]},
+  food: { name: 'Еда', stickers: [
+    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='55' r='30' fill='%23FF6B6B'/%3E%3Cpath d='M50 25 L55 45 L50 40 L45 45 Z' fill='%232ECC71'/%3E%3C/svg%3E",
+    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cellipse cx='50' cy='60' rx='28' ry='18' fill='%23F5D76E'/%3E%3Cpath d='M30 55 Q50 30 70 55' fill='%23E67E22'/%3E%3Ccircle cx='42' cy='58' r='3' fill='%23fff'/%3E%3Ccircle cx='55' cy='62' r='2' fill='%23fff'/%3E%3C/svg%3E",
+    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect x='28' y='40' width='44' height='35' rx='8' fill='%23E74C3C'/%3E%3Cpath d='M28 48 h44' stroke='%23fff' stroke-width='4'/%3E%3Cpath d='M50 30 v10' stroke='%23F1C40F' stroke-width='4'/%3E%3C/svg%3E",
+    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cellipse cx='50' cy='55' rx='32' ry='28' fill='%23F39C12'/%3E%3Cpath d='M25 50 Q50 70 75 50' fill='%23E67E22'/%3E%3Ccircle cx='40' cy='48' r='4' fill='%23fff'/%3E%3C/svg%3E",
+    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='28' fill='%23FFEAA7'/%3E%3Cpath d='M35 45 Q50 60 65 45' stroke='%23D35400' stroke-width='3' fill='none'/%3E%3Ccircle cx='40' cy='42' r='3' fill='%23333'/%3E%3Ccircle cx='60' cy='42' r='3' fill='%23333'/%3E%3C/svg%3E",
+    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M50 20 L70 75 L30 75 Z' fill='%232ECC71'/%3E%3Ccircle cx='50' cy='55' r='8' fill='%23fff' opacity='.3'/%3E%3C/svg%3E"
+  ]},
+  weather: { name: 'Погода', stickers: [
+    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='22' fill='%23F7B955'/%3E%3Cpath d='M50 15 v10 M50 75 v10 M15 50 h10 M75 50 h10 M28 28 l7 7 M65 65 l7 7 M28 72 l7-7 M65 35 l7-7' stroke='%23F7B955' stroke-width='4' stroke-linecap='round'/%3E%3C/svg%3E",
+    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cellipse cx='50' cy='55' rx='30' ry='18' fill='%23BDC3C7'/%3E%3Cellipse cx='40' cy='48' rx='16' ry='12' fill='%23ECF0F1'/%3E%3Cellipse cx='62' cy='50' rx='14' ry='10' fill='%23ECF0F1'/%3E%3C/svg%3E",
+    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cellipse cx='50' cy='45' rx='28' ry='16' fill='%237F8C8D'/%3E%3Cpath d='M40 60 l-4 20 M50 62 l0 22 M60 60 l4 20' stroke='%234C7CF3' stroke-width='4' stroke-linecap='round'/%3E%3C/svg%3E",
+    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M50 15 L55 40 L80 40 L60 55 L68 80 L50 65 L32 80 L40 55 L20 40 L45 40 Z' fill='%23F1C40F'/%3E%3C/svg%3E",
+    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='55' r='20' fill='%23ECF0F1'/%3E%3Ccircle cx='58' cy='48' r='16' fill='%23F7B955'/%3E%3C/svg%3E",
+    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M30 70 Q50 30 70 70' stroke='%23fff' stroke-width='8' fill='none' stroke-linecap='round'/%3E%3Ccircle cx='50' cy='28' r='10' fill='%23ECF0F1'/%3E%3C/svg%3E"
   ]}
 };
+
 let activeStickerPack = 'smiles';
 
 // ---------- PIN keypad for setting new PIN ----------
@@ -2602,7 +2742,7 @@ document.getElementById('settings-notifications').onclick=async()=>{
 };
 
 // ---------- WebRTC Calls (voice + video) via Supabase Realtime signaling ----------
-const RTC_CONFIG={iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'}]};
+const RTC_CONFIG={iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'},{urls:'stun:stun2.l.google.com:19302'},{urls:'stun:stun.cloudflare.com:3478'}]};
 let callChannel=null, myCallSignalChannel=null, pc=null, localStream=null;
 let currentCall=null; // {peerId, peerName, peerColor, video, state}
 function initCallSystem(){
@@ -2631,7 +2771,28 @@ async function startCall(partner, withVideo){
   pc=new RTCPeerConnection(RTC_CONFIG);
   localStream.getTracks().forEach(t=>pc.addTrack(t, localStream));
   pc.onicecandidate=e=>{ if(e.candidate) sendSignal(partner.id,'ice',{from:myProfile.id, candidate:e.candidate}); };
-  pc.ontrack=e=>{ const rv=document.getElementById('call-remote-video'); rv.srcObject=e.streams[0]; if(withVideo){ rv.style.display='block'; } document.getElementById('call-status-text').textContent='Соединено'; currentCall.state='active'; };
+  pc.ontrack=e=>{
+    const rv=document.getElementById('call-remote-video');
+    if(!rv) return;
+    const stream = e.streams && e.streams[0] ? e.streams[0] : new MediaStream([e.track]);
+    rv.srcObject = stream;
+    rv.muted = false;
+    rv.volume = 1;
+    rv.autoplay = true;
+    rv.playsInline = true;
+    if(withVideo || (currentCall && currentCall.video)) rv.style.display='block';
+    else rv.style.display='block'; // keep element in tree for audio even in voice call; CSS can hide visual
+    if(!(withVideo || (currentCall && currentCall.video))){
+      rv.style.opacity='0'; rv.style.pointerEvents='none'; rv.style.width='1px'; rv.style.height='1px';
+    } else {
+      rv.style.opacity='1'; rv.style.pointerEvents='auto'; rv.style.width=''; rv.style.height='';
+    }
+    const tryPlay = ()=> rv.play().catch(()=>{});
+    tryPlay();
+    setTimeout(tryPlay, 200);
+    document.getElementById('call-status-text').textContent='Соединено';
+    if(currentCall) currentCall.state='active';
+  };
   const offer=await pc.createOffer();
   await pc.setLocalDescription(offer);
   sendSignal(partner.id,'offer',{from:myProfile.id, name:myProfile.first_name||myProfile.username, color:myProfile.color||colorFor(myProfile.id), avatar:myProfile.avatar_url, video:withVideo, sdp:offer});
@@ -2656,7 +2817,28 @@ async function acceptCall(){
   pc=new RTCPeerConnection(RTC_CONFIG);
   localStream.getTracks().forEach(t=>pc.addTrack(t, localStream));
   pc.onicecandidate=e=>{ if(e.candidate) sendSignal(pendingOffer.from,'ice',{from:myProfile.id, candidate:e.candidate}); };
-  pc.ontrack=e=>{ const rv=document.getElementById('call-remote-video'); rv.srcObject=e.streams[0]; if(withVideo) rv.style.display='block'; document.getElementById('call-status-text').textContent='Соединено'; currentCall.state='active'; };
+  pc.ontrack=e=>{
+    const rv=document.getElementById('call-remote-video');
+    if(!rv) return;
+    const stream = e.streams && e.streams[0] ? e.streams[0] : new MediaStream([e.track]);
+    rv.srcObject = stream;
+    rv.muted = false;
+    rv.volume = 1;
+    rv.autoplay = true;
+    rv.playsInline = true;
+    if(withVideo || (currentCall && currentCall.video)) rv.style.display='block';
+    else rv.style.display='block'; // keep element in tree for audio even in voice call; CSS can hide visual
+    if(!(withVideo || (currentCall && currentCall.video))){
+      rv.style.opacity='0'; rv.style.pointerEvents='none'; rv.style.width='1px'; rv.style.height='1px';
+    } else {
+      rv.style.opacity='1'; rv.style.pointerEvents='auto'; rv.style.width=''; rv.style.height='';
+    }
+    const tryPlay = ()=> rv.play().catch(()=>{});
+    tryPlay();
+    setTimeout(tryPlay, 200);
+    document.getElementById('call-status-text').textContent='Соединено';
+    if(currentCall) currentCall.state='active';
+  };
   await pc.setRemoteDescription(new RTCSessionDescription(pendingOffer.sdp));
   const answer=await pc.createAnswer();
   await pc.setLocalDescription(answer);
@@ -2675,8 +2857,18 @@ async function handleRemoteIce(payload){
 function declineCall(){ if(pendingOffer) sendSignal(pendingOffer.from,'hangup',{}); endCall(false); }
 function setupLocalVideo(){
   const lv=document.getElementById('call-local-video');
-  if(currentCall?.video && localStream){ lv.srcObject=localStream; lv.style.display='block'; }
-  else lv.style.display='none';
+  if(!lv) return;
+  if(currentCall?.video && localStream){
+    lv.srcObject=localStream;
+    lv.muted=true;
+    lv.autoplay=true;
+    lv.playsInline=true;
+    lv.style.display='block';
+    lv.play().catch(()=>{});
+  } else {
+    lv.style.display='none';
+    lv.srcObject=null;
+  }
 }
 function showCallUI(){
   document.getElementById('call-overlay').classList.add('show');
@@ -2713,10 +2905,14 @@ function endCall(){
   localStream?.getTracks().forEach(t=>t.stop());
   pc=null; localStream=null; pendingOffer=null; currentCall=null;
   document.getElementById('call-overlay').classList.remove('show');
-  document.getElementById('call-remote-video').style.display='none';
-  document.getElementById('call-remote-video').srcObject=null;
-  document.getElementById('call-local-video').style.display='none';
-  document.getElementById('call-local-video').srcObject=null;
+  const rv=document.getElementById('call-remote-video');
+  if(rv){
+    rv.style.display='none';
+    rv.srcObject=null;
+    rv.style.opacity=''; rv.style.pointerEvents=''; rv.style.width=''; rv.style.height='';
+  }
+  const lv=document.getElementById('call-local-video');
+  if(lv){ lv.style.display='none'; lv.srcObject=null; }
 }
 document.getElementById('call-btn').onclick=()=>{ if(activePartner) startCall(activePartner, false); };
 document.getElementById('video-call-btn').onclick=()=>{ if(activePartner) startCall(activePartner, true); };
