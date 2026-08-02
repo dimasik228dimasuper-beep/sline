@@ -1765,7 +1765,7 @@ document.getElementById('settings-gifts').onclick=()=>{
     const q=ov.querySelector('#gf-target').value.trim().replace('@','');
     if(!q){ showToast('Укажите получателя'); return; }
     let user=null;
-    try{ const {data}=await sb.from('profiles').select('*').or(`username.ilike.%${q}%,email.ilike.%${q}%`).limit(1); user=data&&data[0]; }catch(e){}
+    try{ const {data,error}=await searchProfilesSafe(q, null, 1, ['username','email']); if(error) console.warn('gift search error:', error); user=data&&data[0]; }catch(e){}
     if(!user){ showToast('Пользователь не найден'); return; }
     try{
       await sb.from('messages').insert({sender_id:myProfile.id, receiver_id:user.id, group_id:null, content:'gift:'+selected, type:'gift', file_url:selected});
@@ -2002,6 +2002,24 @@ function pickContactsForStory(){
   });
 }
 
+// ---------- Robust profile search (auto-drops DB columns that don't exist, e.g. no "phone" column) ----------
+async function searchProfilesSafe(q, excludeId, limit, fields){
+  fields = fields || ['username','email','phone','first_name','last_name'];
+  let attempt = [...fields];
+  for(let guard=0; guard<fields.length+1; guard++){
+    if(!attempt.length) return {data:[], error:null};
+    const orStr = attempt.map(f=>`${f}.ilike.%${q}%`).join(',');
+    let query = sb.from('profiles').select('*').or(orStr).limit(limit||10);
+    if(excludeId) query = query.neq('id', excludeId);
+    const {data, error} = await query;
+    if(!error) return {data, error:null};
+    const m = (error.message||'').match(/column [\w.]*\.?(\w+) does not exist/i);
+    if(m && attempt.includes(m[1])){ attempt = attempt.filter(f=>f!==m[1]); continue; }
+    return {data:null, error};
+  }
+  return {data:[], error:null};
+}
+
 // ---------- Verified badge ----------
 const VERIFIED_EMAILS=['admin@mail.ru','dimasik.228.dima.super@gmail.com'];
 const verifiedSvg='<span class="verified-badge" title="Подтверждённый аккаунт"><svg viewBox="0 0 24 24" fill="#4C7CF3" stroke="#fff" stroke-width="1"><path d="M12 2l2.4 1.4 2.7-.5 1.4 2.4 2.4 1.4-.5 2.7.5 2.7-2.4 1.4-1.4 2.4-2.7-.5L12 22l-2.4-1.4-2.7.5-1.4-2.4-2.4-1.4.5-2.7-.5-2.7 2.4-1.4 1.4-2.4 2.7.5z"/><path d="M8.5 12l2.3 2.3L16 9" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>';
@@ -2209,7 +2227,7 @@ document.querySelector('[data-action="contact"]').onclick=async()=>{
   inp.oninput=debounce(async()=>{
     const q=inp.value.trim(); const box=document.getElementById('ac-suggest');
     if(q.length<2){ box.style.display='none'; return; }
-    const {data,error}=await sb.from('profiles').select('id,username,first_name,email,phone').or(`username.ilike.%${q}%,email.ilike.%${q}%,phone.ilike.%${q}%`).neq('id',myProfile.id).limit(6);
+    const {data,error}=await searchProfilesSafe(q, myProfile.id, 6);
     if(error){ console.warn('profiles search error:', error); document.getElementById('ac-msg').textContent=friendlyProfileSearchError(error); box.style.display='none'; return; }
     if(!data?.length){ box.style.display='none'; return; }
     box.innerHTML=data.map(p=>`<div class="suggest-item" data-q="${p.email||p.username||p.phone}"><div><b>${escapeHtml(p.first_name||p.username)}</b><div style="font-size:11px;color:var(--muted)">${escapeHtml(p.email||p.phone||'@'+p.username)}</div></div></div>`).join('');
@@ -2221,9 +2239,7 @@ document.querySelector('[data-action="contact"]').onclick=async()=>{
     const q=raw.replace('@','').replace(/\s/g,'');
     let user=null; let lastError=null;
     try{
-      const {data,error}=await sb.from('profiles').select('*')
-        .or(`username.ilike.%${q}%,email.ilike.%${q}%,phone.ilike.%${q}%`)
-        .neq('id',myProfile.id).limit(1);
+      const {data,error}=await searchProfilesSafe(q, myProfile.id, 1);
       if(error){ lastError=error; console.warn('profiles search error:', error); }
       user=data && data[0];
     }catch(e){ lastError=e; console.warn('profiles search exception:', e); }
@@ -2580,9 +2596,8 @@ async function appendGlobalSearchResults(list, q){
   if(query.length<2 || !myProfile) return;
   let data=null;
   try{
-    const res=await sb.from('profiles').select('*')
-      .or(`username.ilike.%${query}%,email.ilike.%${query}%,phone.ilike.%${query}%,first_name.ilike.%${query}%,last_name.ilike.%${query}%`)
-      .neq('id',myProfile.id).limit(12);
+    const res=await searchProfilesSafe(query, myProfile.id, 12);
+    if(res.error){ console.warn('global search error:', res.error); return; }
     data=res.data;
   }catch(e){ return; }
   if((document.getElementById('search-input')?.value||'').trim()!==q) return; // stale response, query changed
