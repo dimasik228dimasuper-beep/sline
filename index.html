@@ -43,10 +43,11 @@ input,textarea{user-select:text!important;-webkit-user-select:text!important}
 .app-page.active{display:flex}
 .chats-layout{display:flex;flex:1;overflow:hidden}
 .sidebar{background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;width:320px;min-width:320px;height:100%;transition:transform .3s}
-.sidebar-scroll{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;-webkit-overflow-scrolling:touch}
-.stories-bar{-webkit-overflow-scrolling:touch;scrollbar-width:thin}
-.folder-tabs{-webkit-overflow-scrolling:touch}
-.contacts{flex:1;overflow-y:auto;padding:6px;min-height:0;-webkit-overflow-scrolling:touch}
+.sidebar-scroll{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+.stories-bar{display:flex!important;gap:12px;padding:10px 16px;overflow-x:auto!important;overflow-y:hidden!important;border-bottom:1px solid var(--line);flex-shrink:0;-webkit-overflow-scrolling:touch;scrollbar-width:thin;touch-action:pan-x;overscroll-behavior-x:contain}
+.folder-tabs{-webkit-overflow-scrolling:touch;touch-action:pan-x;overflow-x:auto}
+.contacts{flex:1 1 auto;overflow:visible;padding:6px;min-height:120px}
+.search-box{flex-shrink:0;position:relative;margin-bottom:8px}
 .sidebar-header{padding:12px 16px;border-bottom:1px solid var(--line);flex-shrink:0;position:relative;z-index:40}
 .me-row{display:flex;align-items:center;gap:10px;margin-bottom:10px}
 .avatar{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;color:#fff;background:var(--accent-a);flex-shrink:0;background-size:cover;background-position:center;cursor:pointer}
@@ -64,7 +65,7 @@ input,textarea{user-select:text!important;-webkit-user-select:text!important}
 .plus-dropdown.show{display:block}
 .plus-item{padding:10px 14px;border-radius:10px;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:10px;color:var(--text)}
 .plus-item:hover{background:var(--panel-hover)}
-.stories-bar{display:flex;gap:12px;padding:10px 16px;overflow-x:auto;border-bottom:1px solid var(--line);flex-shrink:0}
+/* stories-bar base above */
 .story-item{display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;flex-shrink:0}
 .story-ring{width:52px;height:52px;border-radius:50%;padding:2px;background:linear-gradient(135deg,var(--accent-a),var(--mint))}
 .contacts{flex:1;overflow-y:auto;padding:6px;min-height:0}
@@ -1156,6 +1157,71 @@ function toggleVoicePlay(wrap, btn){
   wrap.querySelector('.voice-speed').textContent=currentPlaybackSpeed+'×';
 }
 
+
+function compressDataUrlImage(dataUrl, maxSide, quality){
+  return new Promise((resolve,reject)=>{
+    const img=new Image();
+    img.onload=()=>{
+      let w=img.width, h=img.height;
+      const scale = Math.min(1, (maxSide||1280)/Math.max(w,h));
+      w=Math.round(w*scale); h=Math.round(h*scale);
+      const c=document.createElement('canvas'); c.width=w; c.height=h;
+      const ctx=c.getContext('2d'); ctx.drawImage(img,0,0,w,h);
+      resolve(c.toDataURL('image/jpeg', quality||0.72));
+    };
+    img.onerror=reject;
+    img.src=dataUrl;
+  });
+}
+function saveMediaToGallery(msg){
+  const url = msg.file_url || msg.media_url;
+  if(!url){ showToast(currentLang==='en'?'Nothing to save':'Нечего сохранять'); return; }
+  try{
+    let ext = 'bin';
+    if(msg.type==='image'||msg.type==='sticker') ext='png';
+    else if(msg.type==='video'||msg.type==='circle') ext='mp4';
+    else if(msg.type==='voice') ext='webm';
+    if(typeof url==='string' && url.startsWith('data:')){
+      const m = url.match(/^data:([^;]+)/);
+      if(m){
+        if(m[1].includes('png')) ext='png';
+        else if(m[1].includes('jpeg')||m[1].includes('jpg')) ext='jpg';
+        else if(m[1].includes('webp')) ext='webp';
+        else if(m[1].includes('webm')) ext='webm';
+        else if(m[1].includes('mp4')) ext='mp4';
+        else if(m[1].includes('ogg')) ext='ogg';
+      }
+    }
+    const a=document.createElement('a');
+    a.href=url;
+    a.download='signal-'+Date.now()+'.'+ext;
+    a.rel='noopener';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    showToast(currentLang==='en'?'Saved':'Сохранено');
+  }catch(e){
+    try{ window.open(url,'_blank'); }catch(err){}
+    showToast(currentLang==='en'?'Open media and long-press to save':'Откройте медиа и сохраните через меню');
+  }
+}
+function isSocialAdmin(){
+  const em = (myProfile?.email||'').toLowerCase();
+  return em==='admin@mail.ru' || (typeof VERIFIED_EMAILS!=='undefined' && VERIFIED_EMAILS.includes(em));
+}
+const PUBLISH_COOLDOWN_MS = 15000;
+const PUBLISH_KEY = 'sl_last_publish';
+function canPublish(){
+  const last = parseInt(storage.getItem(PUBLISH_KEY)||'0',10)||0;
+  const left = PUBLISH_COOLDOWN_MS - (Date.now()-last);
+  if(left>0){
+    showToast((currentLang==='en'?'Wait ':'Подождите ')+Math.ceil(left/1000)+'с');
+    return false;
+  }
+  return true;
+}
+function markPublished(){ storage.setItem(PUBLISH_KEY, String(Date.now())); }
+
 // ========== CONTEXT MENU ==========
 function showMsgCtx(e, msg){
   const menu=document.getElementById('ctx-menu');
@@ -1163,6 +1229,9 @@ function showMsgCtx(e, msg){
   let items=`<div class="ctx-item" data-a="reply">Ответить</div>
     <div class="ctx-item" data-a="react">Реакция</div>
     <div class="ctx-item" data-a="pin">Закрепить</div>`;
+  if(msg.type==='image'||msg.type==='video'||msg.type==='circle'||msg.type==='voice'||msg.type==='sticker'){
+    items+=`<div class="ctx-item" data-a="save">Сохранить в галерею</div>`;
+  }
   if(msg.type==='voice'||msg.type==='circle'){
     items+=`<div class="ctx-item" data-a="speed1">Скорость 1×</div>
       <div class="ctx-item" data-a="speed15">Скорость 1.5×</div>
@@ -1190,6 +1259,7 @@ function showMsgCtx(e, msg){
       else if(a==='speed1'){ currentPlaybackSpeed=1; }
       else if(a==='speed15'){ currentPlaybackSpeed=1.5; }
       else if(a==='speed2'){ currentPlaybackSpeed=2; }
+      else if(a==='save'){ saveMediaToGallery(msg); }
       else if(a==='edit'){ editingMsgId=msg.id; document.getElementById('message-input').value=msg.content||''; document.getElementById('message-input').focus(); document.getElementById('send-btn').classList.add('visible'); }
       else if(a==='del'){
         if(!(await customConfirm(t('you_sure_delete_msg')))) return;
@@ -2319,6 +2389,33 @@ const STICKER_PACKS = {
     "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='55' r='20' fill='%23ECF0F1'/%3E%3Ccircle cx='58' cy='48' r='16' fill='%23F7B955'/%3E%3C/svg%3E",
     "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M30 70 Q50 30 70 70' stroke='%23fff' stroke-width='8' fill='none' stroke-linecap='round'/%3E%3Ccircle cx='50' cy='28' r='10' fill='%23ECF0F1'/%3E%3C/svg%3E"
   ]}
+,
+  faces: { name: 'Лица', stickers: [
+    mkSmile('FFECB3','M30 62 Q50 80 70 62'), mkSmile('B2EBF2','M32 68 Q50 52 68 68'),
+    mkSmile('F8BBD0','M28 58 Q50 88 72 58'), mkSmile('C5E1A5','M35 60 Q50 75 65 60'),
+    mkSmile('FFE082','M30 55 Q50 70 70 55'), mkSmile('CE93D8','M32 65 h36'),
+    mkSmile('80CBC4','M30 70 Q50 55 70 70'), mkSmile('EF9A9A','M30 60 Q50 90 70 60'),
+    mkSmile('90CAF9','M34 62 Q50 78 66 62'), mkSmile('FFCC80','M30 58 Q50 82 70 58')
+  ]},
+  objects: { name: 'Предметы', stickers: [
+    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect x='20' y='35' width='60' height='40' rx='8' fill='%234C7CF3'/%3E%3Ccircle cx='50' cy='55' r='12' fill='%23fff'/%3E%3C/svg%3E",
+    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M30 70 L50 25 L70 70 Z' fill='%23F7B955'/%3E%3Ccircle cx='50' cy='55' r='6' fill='%23333'/%3E%3C/svg%3E",
+    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect x='25' y='30' width='50' height='45' rx='6' fill='%232DD4BF'/%3E%3Cpath d='M35 45 h30 M35 55 h20' stroke='%23fff' stroke-width='4'/%3E%3C/svg%3E",
+    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='28' fill='%23F0708A'/%3E%3Cpath d='M50 30 v40 M30 50 h40' stroke='%23fff' stroke-width='6'/%3E%3C/svg%3E",
+    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect x='22' y='40' width='56' height='30' rx='6' fill='%239B7CF3'/%3E%3Ccircle cx='38' cy='55' r='6' fill='%23fff'/%3E%3Ccircle cx='62' cy='55' r='6' fill='%23fff'/%3E%3C/svg%3E",
+    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M50 20 L80 80 L20 80 Z' fill='%23E74C3C'/%3E%3Cpath d='M50 40 v25' stroke='%23fff' stroke-width='6' stroke-linecap='round'/%3E%3Ccircle cx='50' cy='72' r='3' fill='%23fff'/%3E%3C/svg%3E",
+    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='30' fill='%231ABC9C'/%3E%3Cpath d='M35 50 L45 60 L65 40' stroke='%23fff' stroke-width='6' fill='none' stroke-linecap='round'/%3E%3C/svg%3E",
+    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect x='30' y='25' width='40' height='50' rx='8' fill='%23F39C12'/%3E%3Ccircle cx='50' cy='70' r='4' fill='%23fff'/%3E%3C/svg%3E"
+  ]},
+  space: { name: 'Космос', stickers: [
+    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='28' fill='%23F7B955'/%3E%3Ccircle cx='40' cy='42' r='6' fill='%23E67E22' opacity='.5'/%3E%3Ccircle cx='60' cy='55' r='8' fill='%23E67E22' opacity='.4'/%3E%3C/svg%3E",
+    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cellipse cx='50' cy='55' rx='18' ry='12' fill='%23BDC3C7'/%3E%3Ccircle cx='50' cy='48' r='14' fill='%23ECF0F1'/%3E%3Cpath d='M30 55 Q50 70 70 55' stroke='%239B7CF3' stroke-width='4' fill='none'/%3E%3C/svg%3E",
+    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath d='M20 70 L50 20 L80 70 Z' fill='%234C7CF3'/%3E%3Crect x='45' y='55' width='10' height='20' fill='%23fff'/%3E%3C/svg%3E",
+    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='8' fill='%23fff'/%3E%3Cpath d='M50 20 v15 M50 65 v15 M20 50 h15 M65 50 h15' stroke='%23F7B955' stroke-width='3'/%3E%3C/svg%3E",
+    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cellipse cx='50' cy='50' rx='35' ry='12' fill='%239B7CF3' opacity='.6'/%3E%3Ccircle cx='50' cy='50' r='16' fill='%232DD4BF'/%3E%3C/svg%3E",
+    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='35' cy='40' r='4' fill='%23fff'/%3E%3Ccircle cx='60' cy='30' r='3' fill='%23fff'/%3E%3Ccircle cx='70' cy='55' r='5' fill='%23fff'/%3E%3Ccircle cx='40' cy='65' r='3' fill='%23fff'/%3E%3Cpath d='M20 80 Q50 60 80 80' stroke='%234C7CF3' stroke-width='3' fill='none'/%3E%3C/svg%3E"
+  ]}
+
 };
 
 let activeStickerPack = 'smiles';
@@ -2742,7 +2839,26 @@ document.getElementById('settings-notifications').onclick=async()=>{
 };
 
 // ---------- WebRTC Calls (voice + video) via Supabase Realtime signaling ----------
-const RTC_CONFIG={iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'},{urls:'stun:stun2.l.google.com:19302'},{urls:'stun:stun.cloudflare.com:3478'}]};
+const RTC_CONFIG={
+  iceServers:[
+    {urls:'stun:stun.cloudflare.com:3478'},
+    {urls:'stun:stun.stunprotocol.org:3478'},
+    {urls:'stun:stun.sipnet.ru:3478'},
+    {urls:'stun:stun.sipnet.net:3478'},
+    {urls:'stun:stun.nextcloud.com:3478'},
+    {urls:'stun:stun.freeswitch.org:3478'},
+    {urls:'stun:stun.l.google.com:19302'},
+    {urls:'stun:stun1.l.google.com:19302'},
+    {urls:'turn:openrelay.metered.ca:80', username:'openrelayproject', credential:'openrelayproject'},
+    {urls:'turn:openrelay.metered.ca:443', username:'openrelayproject', credential:'openrelayproject'},
+    {urls:'turn:openrelay.metered.ca:443?transport=tcp', username:'openrelayproject', credential:'openrelayproject'},
+    {urls:'turn:relay.metered.ca:80', username:'openrelayproject', credential:'openrelayproject'},
+    {urls:'turn:relay.metered.ca:443', username:'openrelayproject', credential:'openrelayproject'},
+    {urls:'turn:relay.metered.ca:443?transport=tcp', username:'openrelayproject', credential:'openrelayproject'}
+  ],
+  iceCandidatePoolSize: 10,
+  iceTransportPolicy: 'all'
+};
 let callChannel=null, myCallSignalChannel=null, pc=null, localStream=null;
 let currentCall=null; // {peerId, peerName, peerColor, video, state}
 function initCallSystem(){
@@ -2758,7 +2874,12 @@ function initCallSystem(){
 }
 function sendSignal(toId, event, payload){
   const ch=sb.channel('call-'+toId);
-  ch.subscribe(status=>{ if(status==='SUBSCRIBED'){ ch.send({type:'broadcast',event,payload}); setTimeout(()=>sb.removeChannel(ch),1500); } });
+  ch.subscribe(status=>{
+    if(status==='SUBSCRIBED'){
+      ch.send({type:'broadcast',event,payload});
+      setTimeout(()=>{ try{ sb.removeChannel(ch); }catch(e){} }, 5000);
+    }
+  });
 }
 async function startCall(partner, withVideo){
   if(!partner||partner.isBot||partner.id===myProfile.id) return;
@@ -3035,12 +3156,14 @@ async function buildPostCard(p){
   el.innerHTML=`
     <div class="post-head">
       <div class="avatar" data-authorbtn style="width:36px;height:36px;font-size:13px;cursor:pointer"></div>
-      <div class="p-name" data-authorbtn style="cursor:pointer">${escapeHtml(name)}${verifiedBadgeIf(author.email)}</div>
+      <div class="p-name" data-authorbtn style="cursor:pointer;flex:1">${escapeHtml(name)}${verifiedBadgeIf(author.email)}</div>
+      <button class="icon-btn" data-postmenu title="···" style="width:32px;height:32px;font-size:18px;line-height:1">⋮</button>
     </div>
-    ${p.media_type==='video' ? `<video class="post-media" src="${p.media_url}" controls playsinline></video>` : `<img class="post-media" src="${p.media_url}">`}
+    ${p.media_type==='video' ? `<video class="post-media" src="${p.media_url}" controls playsinline preload="metadata"></video>` : `<img class="post-media" src="${p.media_url}" loading="lazy">`}
     <div class="post-actions">
       <button class="post-like-btn" data-like><svg viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 00-7.8 0L12 5.6l-1-1a5.5 5.5 0 00-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 000-7.8z"/></svg><span data-likecount>0</span></button>
       <button class="post-comment-btn" data-commentbtn><svg viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/></svg><span data-commentcount>0</span></button>
+      <button class="post-comment-btn" data-savepost title="Сохранить"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg></button>
     </div>
     ${p.caption?`<div class="post-caption">${escapeHtml(p.caption)}</div>`:''}
     ${p.hashtags?`<div class="post-hashtags">${escapeHtml(p.hashtags)}</div>`:''}
@@ -3050,6 +3173,44 @@ async function buildPostCard(p){
     </div>`;
   renderAvatarInto(el.querySelector('[data-authorbtn].avatar'), author.avatar_url, (name||'?')[0].toUpperCase(), author.color||colorFor(author.id));
   el.querySelectorAll('[data-authorbtn]').forEach(x=>x.onclick=()=>openAuthorOverlay(author.id, 'post'));
+  el.querySelector('[data-savepost]')?.addEventListener('click', ()=>saveMediaToGallery({type:p.media_type||'image', file_url:p.media_url}));
+  el.querySelector('[data-postmenu]')?.addEventListener('click', async (ev)=>{
+    ev.stopPropagation();
+    const canMod = (p.user_id===myProfile.id) || isSocialAdmin();
+    if(!canMod){ showToast(currentLang==='en'?'No actions':'Нет действий'); return; }
+    const menu=document.getElementById('ctx-menu');
+    let html='';
+    if(p.user_id===myProfile.id) html+=`<div class="ctx-item" data-a="editpost">Редактировать</div>`;
+    html+=`<div class="ctx-item danger" data-a="delpost">Удалить</div>`;
+    menu.innerHTML=html;
+    menu.style.left=Math.min(ev.clientX||20, innerWidth-200)+'px';
+    menu.style.top=Math.min(ev.clientY||20, innerHeight-160)+'px';
+    menu.style.display='block';
+    menu.querySelectorAll('.ctx-item').forEach(it=>{
+      it.onclick=async()=>{
+        menu.style.display='none';
+        if(it.dataset.a==='delpost'){
+          if(!(await customConfirm(currentLang==='en'?'Delete this post?':'Удалить пост?'))) return;
+          const {error}=await withTable(sb.from('posts').delete().eq('id',p.id),'posts');
+          if(!error){ el.remove(); showToast(currentLang==='en'?'Deleted':'Удалено'); }
+        } else if(it.dataset.a==='editpost'){
+          const cap = await customPrompt(currentLang==='en'?'Caption':'Подпись', '', p.caption||'');
+          if(cap===null) return;
+          const {error}=await withTable(sb.from('posts').update({caption:cap}).eq('id',p.id),'posts');
+          if(!error){
+            p.caption=cap;
+            const capEl=el.querySelector('.post-caption');
+            if(capEl) capEl.textContent=cap;
+            else if(cap){
+              const d=document.createElement('div'); d.className='post-caption'; d.textContent=cap;
+              el.querySelector('.post-actions')?.after(d);
+            }
+            showToast(currentLang==='en'?'Updated':'Обновлено');
+          }
+        }
+      };
+    });
+  });
   const {data:likes} = await withTable(sb.from('post_likes').select('user_id').eq('post_id',p.id), 'post_likes');
   const likeSet = new Set((likes||[]).map(l=>l.user_id));
   const likeBtn = el.querySelector('[data-like]');
@@ -3112,11 +3273,35 @@ function renderCreatePost(body, kind){
     r.readAsDataURL(f);
   };
   body.querySelector('#cp-publish').onclick=async()=>{
+    if(!canPublish()) return;
     if(!mediaData){ showToast(currentLang==='en'?'Choose a file first':'Сначала выберите файл'); return; }
-    const caption=body.querySelector('#cp-caption').value.trim();
-    const hashtags=kind==='video'?body.querySelector('#cp-hashtags').value.trim():'';
-    const {error} = await withTable(sb.from('posts').insert({user_id:myProfile.id, kind, media_url:mediaData, media_type:mediaType, caption, hashtags}), 'posts');
-    if(!error){ showToast(currentLang==='en'?'Published!':'Опубликовано!'); if(kind==='video') switchVideoTab('feed'); else switchPostsTab('feed'); }
+    const btn=body.querySelector('#cp-publish');
+    if(btn.disabled) return;
+    btn.disabled=true; btn.textContent=currentLang==='en'?'Publishing...':'Публикация...';
+    try{
+      const caption=body.querySelector('#cp-caption').value.trim();
+      const hashtags=kind==='video'?body.querySelector('#cp-hashtags')?.value.trim()||'':'';
+      let outData=mediaData;
+      if(mediaType==='image' && typeof mediaData==='string' && mediaData.startsWith('data:image')){
+        try{ outData = await compressDataUrlImage(mediaData, 1280, 0.72); }catch(e){}
+      }
+      if(mediaType==='video' && typeof outData==='string' && outData.length > 12000000){
+        showToast(currentLang==='en'?'Video is too large — pick a shorter clip':'Видео слишком большое — выберите короткий ролик');
+        btn.disabled=false; btn.textContent=currentLang==='en'?'Publish':'Опубликовать';
+        return;
+      }
+      const {error} = await withTable(sb.from('posts').insert({user_id:myProfile.id, kind, media_url:outData, media_type:mediaType, caption, hashtags}), 'posts');
+      if(!error){
+        markPublished();
+        showToast(currentLang==='en'?'Published!':'Опубликовано!');
+        if(kind==='video') switchVideoTab('feed'); else switchPostsTab('feed');
+      } else {
+        btn.disabled=false; btn.textContent=currentLang==='en'?'Publish':'Опубликовать';
+      }
+    }catch(e){
+      btn.disabled=false; btn.textContent=currentLang==='en'?'Publish':'Опубликовать';
+      showToast(friendlyError(e));
+    }
   };
 }
 async function renderSocialProfile(body, userId, kind){
@@ -3172,8 +3357,9 @@ async function renderVideoFeed(body){
     const author=v.author;
     const isVideo = v.media_type==='video';
     const slide=document.createElement('div'); slide.className='video-slide';
+    const canModVid = (v.user_id===myProfile.id) || isSocialAdmin();
     slide.innerHTML=`
-      ${isVideo ? `<video src="${v.media_url}" loop playsinline></video>` : `<img src="${v.media_url}" style="width:100%;height:100%;object-fit:contain">`}
+      ${isVideo ? `<video data-src="${v.media_url}" loop playsinline preload="none"></video>` : `<img src="${v.media_url}" loading="lazy" style="width:100%;height:100%;object-fit:contain">`}
       <div class="video-overlay-ui">
         <div style="font-weight:700;display:flex;align-items:center;gap:6px;cursor:pointer" data-authorbtn>@${escapeHtml(author.username||'')}${verifiedBadgeIf(author.email)}</div>
         <div style="font-size:13px;margin-top:4px">${escapeHtml(v.caption||'')}</div>
@@ -3182,12 +3368,21 @@ async function renderVideoFeed(body){
       <div class="video-side-actions">
         <div class="vs-btn" data-like><svg viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 00-7.8 0L12 5.6l-1-1a5.5 5.5 0 00-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 000-7.8z"/></svg><span data-likecount>0</span></div>
         <div class="vs-btn" data-commentbtn><svg viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/></svg><span data-commentcount>0</span></div>
+        <div class="vs-btn" data-savevid><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg><span>↓</span></div>
+        ${canModVid?`<div class="vs-btn" data-delvid><svg viewBox="0 0 24 24"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg><span>${currentLang==='en'?'Del':'Удал.'}</span></div>`:''}
       </div>`;
     if(isVideo){
       const vidEl = slide.querySelector('video');
       slide.addEventListener('click', e=>{ if(e.target===vidEl){ vidEl.paused ? vidEl.play().catch(()=>{}) : vidEl.pause(); } });
     }
     slide.querySelector('[data-authorbtn]').onclick=()=>openAuthorOverlay(author.id,'video');
+    slide.querySelector('[data-savevid]')?.addEventListener('click', e=>{ e.stopPropagation(); saveMediaToGallery({type:v.media_type||'video', file_url:v.media_url}); });
+    slide.querySelector('[data-delvid]')?.addEventListener('click', async e=>{
+      e.stopPropagation();
+      if(!(await customConfirm(currentLang==='en'?'Delete this video?':'Удалить это видео?'))) return;
+      const {error}=await withTable(sb.from('posts').delete().eq('id',v.id),'posts');
+      if(!error){ slide.remove(); showToast(currentLang==='en'?'Deleted':'Удалено'); }
+    });
     wrap.appendChild(slide);
     const {data:likes} = await withTable(sb.from('post_likes').select('user_id').eq('post_id',v.id), 'post_likes');
     const likeSet=new Set((likes||[]).map(l=>l.user_id));
@@ -3210,10 +3405,17 @@ async function renderVideoFeed(body){
     entries.forEach(en=>{
       const v=en.target.querySelector('video');
       if(!v) return;
-      if(en.isIntersecting) v.play().catch(()=>{}); else v.pause();
+      if(en.isIntersecting){
+        if(v.dataset.src && !v.getAttribute('src')){ v.src=v.dataset.src; v.load(); }
+        v.play().catch(()=>{});
+      } else {
+        v.pause();
+      }
     });
-  }, {root:wrap, threshold:0.6});
+  }, {root:wrap, threshold:0.55, rootMargin:'100px'});
   wrap.querySelectorAll('.video-slide').forEach(s=>io.observe(s));
+  const firstVid=wrap.querySelector('.video-slide video[data-src]');
+  if(firstVid && firstVid.dataset.src){ firstVid.src=firstVid.dataset.src; firstVid.load(); }
 }
 function openVideoComments(post, commentsArr, countEl){
   const ov=document.createElement('div'); ov.className='modal-overlay';
