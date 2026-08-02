@@ -2209,7 +2209,8 @@ document.querySelector('[data-action="contact"]').onclick=async()=>{
   inp.oninput=debounce(async()=>{
     const q=inp.value.trim(); const box=document.getElementById('ac-suggest');
     if(q.length<2){ box.style.display='none'; return; }
-    const {data}=await sb.from('profiles').select('id,username,first_name,email,phone').or(`username.ilike.%${q}%,email.ilike.%${q}%,phone.ilike.%${q}%`).neq('id',myProfile.id).limit(6);
+    const {data,error}=await sb.from('profiles').select('id,username,first_name,email,phone').or(`username.ilike.%${q}%,email.ilike.%${q}%,phone.ilike.%${q}%`).neq('id',myProfile.id).limit(6);
+    if(error){ console.warn('profiles search error:', error); document.getElementById('ac-msg').textContent=friendlyProfileSearchError(error); box.style.display='none'; return; }
     if(!data?.length){ box.style.display='none'; return; }
     box.innerHTML=data.map(p=>`<div class="suggest-item" data-q="${p.email||p.username||p.phone}"><div><b>${escapeHtml(p.first_name||p.username)}</b><div style="font-size:11px;color:var(--muted)">${escapeHtml(p.email||p.phone||'@'+p.username)}</div></div></div>`).join('');
     box.style.display='block';
@@ -2218,17 +2219,25 @@ document.querySelector('[data-action="contact"]').onclick=async()=>{
   document.getElementById('ac-go').onclick=async()=>{
     const raw=inp.value.trim(); if(!raw) return;
     const q=raw.replace('@','').replace(/\s/g,'');
-    let user=null;
+    let user=null; let lastError=null;
     try{
-      const {data}=await sb.from('profiles').select('*')
+      const {data,error}=await sb.from('profiles').select('*')
         .or(`username.ilike.%${q}%,email.ilike.%${q}%,phone.ilike.%${q}%`)
         .neq('id',myProfile.id).limit(1);
+      if(error){ lastError=error; console.warn('profiles search error:', error); }
       user=data && data[0];
-    }catch(e){}
-    if(!user){ document.getElementById('ac-msg').textContent='Не найден'; return; }
+    }catch(e){ lastError=e; console.warn('profiles search exception:', e); }
+    if(!user){ document.getElementById('ac-msg').textContent = lastError ? friendlyProfileSearchError(lastError) : 'Не найден'; return; }
     ov.remove(); openChat(user);
   };
 };
+function friendlyProfileSearchError(error){
+  const msg=(error?.message||'').toLowerCase();
+  if(msg.includes('permission') || msg.includes('policy') || msg.includes('rls') || error?.code==='42501'){
+    return 'База данных блокирует чтение чужих профилей (RLS). Нужно добавить policy на SELECT в таблице profiles в Supabase.';
+  }
+  return 'Ошибка поиска: '+(error?.message||'неизвестная ошибка').slice(0,120);
+}
 document.querySelector('[data-action="group"]').onclick=async()=>{
   document.getElementById('plus-dropdown').classList.remove('show');
   await showOwl('group','Создайте группу для общения с несколькими друзьями сразу! Придумайте название и продолжайте.');
