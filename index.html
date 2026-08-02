@@ -119,7 +119,8 @@ input,textarea{user-select:text!important;-webkit-user-select:text!important}
 /* Telegram-like circle recorder */
 .circle-record-overlay{position:fixed;inset:0;background:radial-gradient(ellipse at center,#1a1035 0%,#0a0a12 70%);z-index:4000;display:none;align-items:center;justify-content:center;flex-direction:column;gap:0;padding:20px 16px calc(24px + var(--safe-bottom))}
 .circle-preview-wrap{width:min(72vw,300px);height:min(72vw,300px);border-radius:50%;overflow:hidden;position:relative;background:#000;box-shadow:0 0 0 3px rgba(255,255,255,.12),0 0 60px rgba(109,93,246,.35)}
-.circle-preview-wrap video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1);border-radius:50%}
+.circle-preview-wrap video{width:100%;height:100%;object-fit:cover;transform:none;border-radius:50%}
+.circle-preview-wrap video.mirrored{transform:scaleX(-1)}
 .circle-progress-ring{position:absolute;inset:-6px;pointer-events:none}
 .circle-progress-ring svg{width:100%;height:100%;transform:rotate(-90deg)}
 .circle-progress-ring circle{fill:none;stroke:rgba(255,255,255,.2);stroke-width:4}
@@ -1509,6 +1510,7 @@ async function beginRecording(){
       </div>`;
     const vid=document.getElementById('clp');
     vid.srcObject=circleStream;
+    vid.classList.toggle('mirrored', circleFacing==='user');
     vid.play().catch(()=>{});
     document.getElementById('cpt').onclick=()=>togglePauseRecording();
   } else {
@@ -1554,7 +1556,12 @@ function renderRecActions(){
     try{
       circleStream?.getTracks().forEach(t=>t.stop());
       circleStream = await navigator.mediaDevices.getUserMedia({video:{facingMode:circleFacing,width:{ideal:480},height:{ideal:480}}, audio:true});
-      const v=document.getElementById('clp'); if(v){ v.srcObject=circleStream; v.play().catch(()=>{}); }
+      const v=document.getElementById('clp');
+      if(v){
+        v.srcObject=circleStream;
+        v.classList.toggle('mirrored', circleFacing==='user');
+        v.play().catch(()=>{});
+      }
       // swap tracks into recorder is hard mid-record — restart chunks with new stream is complex; just update preview
       if(mediaRecorder && mediaRecorder.state==='recording'){
         try{ mediaRecorder.stop(); }catch(e){}
