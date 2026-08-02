@@ -411,7 +411,43 @@ body.theme-light{
 .video-side-actions span{font-size:11px;font-weight:700}
 
 .follow-btn{padding:8px 22px;border-radius:10px;border:none;font-weight:700;font-size:13px;cursor:pointer;background:linear-gradient(135deg,var(--accent-a),var(--accent-b));color:#fff}
+
 .follow-btn.following{background:var(--panel-hover);color:var(--text);border:1px solid var(--line)}
+
+
+/* Tab click animation */
+.bottom-tab{transition:color .2s, transform .2s}
+.bottom-tab.tab-pop{animation:tabPop .35s ease}
+@keyframes tabPop{0%{transform:scale(1)}40%{transform:scale(1.18)}100%{transform:scale(1)}}
+.bottom-tab svg{transition:transform .25s}
+.bottom-tab.tab-pop svg{animation:tabIconSpin .4s ease}
+@keyframes tabIconSpin{0%{transform:rotate(0) scale(1)}50%{transform:rotate(-12deg) scale(1.2)}100%{transform:rotate(0) scale(1)}}
+
+/* Fullscreen profile sheet */
+.profile-sheet{position:fixed;inset:0;z-index:9200;background:var(--bg);display:flex;flex-direction:column;overflow:hidden}
+.profile-sheet-top{padding:12px 16px;display:flex;align-items:center;gap:10px;background:var(--panel);border-bottom:1px solid var(--line);flex-shrink:0}
+.profile-sheet-body{flex:1;overflow-y:auto;padding:20px 16px 40px}
+.profile-sheet-actions{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:18px 0}
+.profile-action{display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 8px;border-radius:14px;background:var(--panel);border:1px solid var(--line);cursor:pointer;color:var(--text);font-size:11px;font-weight:600}
+.profile-action svg{width:24px;height:24px;stroke:var(--accent-a);fill:none;stroke-width:2}
+.profile-action:active{transform:scale(.96)}
+.qr-box{background:#fff;padding:16px;border-radius:16px;display:inline-block}
+.qr-box img,.qr-box canvas{display:block;width:200px;height:200px}
+.device-row{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--line)}
+.role-badge{font-size:10px;padding:2px 8px;border-radius:999px;background:var(--accent-a);color:#fff;font-weight:700}
+.role-badge.mod{background:var(--mint);color:#0B1120}
+.role-badge.member{background:var(--line);color:var(--muted)}
+
+/* Photo editor */
+.pe-overlay{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9800;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:12px;gap:10px}
+.pe-canvas-wrap{max-width:100%;max-height:55vh;overflow:auto;border-radius:12px;background:#111}
+.pe-canvas-wrap canvas{display:block;max-width:100%;height:auto;cursor:crosshair}
+.pe-tools{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;max-width:420px}
+.pe-tools button{padding:8px 12px;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:var(--text);font-size:13px;font-weight:600;cursor:pointer}
+.pe-tools button.active{background:var(--accent-a);border-color:var(--accent-a);color:#fff}
+.pe-actions{display:flex;gap:10px;width:100%;max-width:420px}
+.pe-actions .btn-primary,.pe-actions .btn-secondary{flex:1}
+
 </style>
 </head>
 <body oncontextmenu="return false;">
@@ -592,7 +628,7 @@ body.theme-light{
   <div class="bottom-tabs">
     <div class="bottom-tab active" data-tab="chats"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg><span data-i18n="tab_chats">Чаты</span></div>
     <div class="bottom-tab" data-tab="calls"><svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2A19.8 19.8 0 0111.19 18a19.5 19.5 0 01-6-6A19.8 19.8 0 012.12 3.38 2 2 0 014.11 2h3a2 2 0 012 1.72c.13.96.36 1.9.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0122 16.92z"/></svg><span data-i18n="tab_calls">Звонки</span></div>
-    <div class="bottom-tab" data-tab="settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg><span data-i18n="tab_settings">Настройки</span></div>
+    <div class="bottom-tab" data-tab="settings"><svg viewBox="0 0 24 24"><path d="M12 15a3 3 0 100-6 3 3 0 000 6z"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg><span data-i18n="tab_settings">Настройки</span></div>
   </div>
 </div>
 
@@ -934,7 +970,12 @@ function renderContactsAndGroups(){
       </div>
     </div>`;
     renderAvatarInto(row.querySelector('.avatar'), data.avatar_url, (name||'?')[0].toUpperCase(), data.color||colorFor(data.id));
+    row.dataset.cid=data.id; row.dataset.ctype=type;
     row.onclick=()=>{ if(type==='group') openGroup(data); else openChat(data); };
+    const av=row.querySelector('.avatar');
+    if(av && type==='user'){
+      av.onclick=(e)=>{ e.stopPropagation(); openFullProfile(data); };
+    }
     // long press / context for archive
     let pressT;
     row.addEventListener('touchstart',e=>{ pressT=setTimeout(()=>showChatCtx(e.touches[0],type,data),500); });
@@ -1676,22 +1717,43 @@ document.addEventListener('keydown', e=>{ if((e.ctrlKey||e.metaKey)&&e.key==='f'
 // ========== STORIES + REPLY ==========
 async function loadStories(){
   const bar=document.getElementById('stories-bar'); if(!bar||!myProfile) return;
-  let html=`<div class="story-item" id="add-story-btn-bar"><div class="story-ring"><div class="avatar" style="width:100%;height:100%;border-radius:50%;background:var(--panel-hover);display:flex;align-items:center;justify-content:center">+</div></div><span style="font-size:10px">Моя</span></div>`;
+  let html='';
   try{
-    const {data:stories}=await sb.from('stories').select('id,user_id,media_url,type').gt('expires_at',new Date().toISOString()).order('created_at',{ascending:false});
-    if(stories?.length){
-      const byUser=new Map();
-      for(const s of stories){ if(s.user_id===myProfile.id) continue; if(!byUser.has(s.user_id)) byUser.set(s.user_id,[]); byUser.get(s.user_id).push(s); }
-      const ids=[...byUser.keys()];
-      let profs={};
-      if(ids.length){ const {data}=await sb.from('profiles').select('id,username,first_name,avatar_url,color').in('id',ids); (data||[]).forEach(p=>profs[p.id]=p); }
-      for(const [uid] of byUser){
-        const p=profs[uid]||{}; const name=p.first_name||p.username||'?';
-        html+=`<div class="story-item" data-uid="${uid}" data-name="${escapeHtml(name)}"><div class="story-ring"><div class="avatar" style="width:100%;height:100%;border-radius:50%;background:${p.color||colorFor(uid)}"></div></div><span style="font-size:10px">${escapeHtml(name)}</span></div>`;
-      }
+    const {data:stories,error}=await sb.from('stories').select('id,user_id,media_url,type,expires_at,created_at').gt('expires_at',new Date().toISOString()).order('created_at',{ascending:false});
+    if(error) console.warn('stories load', error);
+    const list=stories||[];
+    const myStories=list.filter(s=>s.user_id===myProfile.id);
+    const byUser=new Map();
+    for(const s of list){
+      if(s.user_id===myProfile.id) continue;
+      if(!byUser.has(s.user_id)) byUser.set(s.user_id,[]);
+      byUser.get(s.user_id).push(s);
     }
-  }catch(e){}
-  bar.innerHTML=html;
+    // Always show "add" + own ring if published
+    html+=`<div class="story-item" id="add-story-btn-bar"><div class="story-ring" style="background:var(--line)"><div class="avatar" style="width:100%;height:100%;border-radius:50%;background:var(--panel-hover);display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700">+</div></div><span style="font-size:10px">${myStories.length?'Добавить':'Моя'}</span></div>`;
+    if(myStories.length){
+      html+=`<div class="story-item" data-uid="${myProfile.id}" data-name="${escapeHtml(myProfile.first_name||'Моя')}"><div class="story-ring"><div class="avatar" id="my-story-av" style="width:100%;height:100%;border-radius:50%"></div></div><span style="font-size:10px">Моя</span></div>`;
+    }
+    const ids=[...byUser.keys()];
+    let profs={};
+    if(ids.length){ const {data}=await sb.from('profiles').select('id,username,first_name,avatar_url,color').in('id',ids); (data||[]).forEach(p=>profs[p.id]=p); }
+    for(const [uid] of byUser){
+      const p=profs[uid]||{}; const name=p.first_name||p.username||'?';
+      html+=`<div class="story-item" data-uid="${uid}" data-name="${escapeHtml(name)}"><div class="story-ring"><div class="avatar" data-av="${uid}" style="width:100%;height:100%;border-radius:50%;background:${p.color||colorFor(uid)}"></div></div><span style="font-size:10px">${escapeHtml(name)}</span></div>`;
+    }
+    bar.innerHTML=html;
+    if(myStories.length){
+      renderAvatarInto(document.getElementById('my-story-av'), myProfile.avatar_url, (myProfile.username||'?')[0].toUpperCase(), myProfile.color||colorFor(myProfile.id));
+    }
+    for(const [uid] of byUser){
+      const p=profs[uid]||{};
+      const el=bar.querySelector(`[data-av="${uid}"]`);
+      if(el) renderAvatarInto(el, p.avatar_url, (p.username||'?')[0].toUpperCase(), p.color||colorFor(uid));
+    }
+  }catch(e){
+    console.warn(e);
+    bar.innerHTML=`<div class="story-item" id="add-story-btn-bar"><div class="story-ring"><div class="avatar" style="width:100%;height:100%;border-radius:50%;background:var(--panel-hover);display:flex;align-items:center;justify-content:center">+</div></div><span style="font-size:10px">Моя</span></div>`;
+  }
   document.getElementById('add-story-btn-bar')?.addEventListener('click',()=>document.getElementById('story-input').click());
   bar.querySelectorAll('[data-uid]').forEach(el=>el.onclick=()=>openStoryViewer(el.dataset.uid, el.dataset.name));
 }
@@ -2404,10 +2466,12 @@ document.getElementById('story-input').onchange=function(e){
     r.onload=async ev=>{
       try{
         const mType = f.type.startsWith('video/')?'video':'image';
-        await sb.from('stories').insert({user_id:myProfile.id, media_url:ev.target.result, type:mType, expires_at:new Date(Date.now()+86400000).toISOString()});
+        const ins=await sb.from('stories').insert({user_id:myProfile.id, media_url:ev.target.result, type:mType, expires_at:new Date(Date.now()+86400000).toISOString()}).select();
+        if(ins.error){ showToast(friendlyError(ins.error)); return; }
         storage.setItem('sl_story_audience_'+myProfile.id, JSON.stringify(audience));
-        loadStories(); showToast('История опубликована');
-        crossPostStory(ev.target.result, mType);
+        await loadStories();
+        showToast('История опубликована');
+        try{ crossPostStory(ev.target.result, mType); }catch(e){}
       }catch(err){ showToast(friendlyError(err)); }
     };
     r.readAsDataURL(f);
@@ -3138,30 +3202,15 @@ function notifyIncomingCall(name){
 
 document.getElementById('settings-notifications').onclick=async()=>{
   const on=storage.getItem(NOTIF_PREF_KEY)==='1';
-  const ntfyOn=storage.getItem('sl_ntfy_fallback')==='1';
   const ov=document.createElement('div'); ov.className='modal-overlay';
-  ov.innerHTML=`<div class="modal" style="max-width:460px">
+  ov.innerHTML=`<div class="modal" style="max-width:420px">
     <button class="close-x" id="nt-x">×</button>
     <h3>${currentLang==='en'?'Notifications & calls':'Уведомления и звонки'}</h3>
     <div class="settings-item" style="padding-left:0">
-      <span class="item-text">${currentLang==='en'?'Enable alerts (browser only — no apps)':'Включить оповещения (только браузер — без приложений)'}</span>
+      <span class="item-text">${currentLang==='en'?'Enable alerts':'Включить оповещения'}</span>
       <div class="toggle-switch ${on?'on':''}" id="nt-tg"></div>
     </div>
-    <div style="font-size:13px;line-height:1.55;margin-top:12px;padding:12px;background:var(--input-bg);border-radius:12px;border:1px solid var(--line);color:var(--muted)">
-      <b style="color:var(--text)">${currentLang==='en'?'Other users download NOTHING':'Другим пользователям НИЧЕГО скачивать не нужно'}</b>
-      <ol style="margin:8px 0 0 18px;padding:0">
-        <li style="margin-bottom:6px">${currentLang==='en'?'They open Signal Line and allow notifications once.':'Они открывают Signal Line и один раз разрешают уведомления.'}</li>
-        <li style="margin-bottom:6px">${currentLang==='en'?'On iPhone: Share → Add to Home Screen (required for push when closed).':'На iPhone: «Поделиться» → «На экран Домой» (нужно для push при закрытом Safari).'}</li>
-        <li style="margin-bottom:6px">${currentLang==='en'?'On Android Chrome: menu → Install app (recommended).':'В Chrome на Android: меню → «Установить приложение» (рекомендуется).'}</li>
-        <li>${currentLang==='en'?'You (admin) deploy one free Supabase Edge Function once — see button below.':'Вы (админ) один раз деплоите бесплатную Supabase Edge Function — кнопка ниже.'}</li>
-      </ol>
-    </div>
-    <button class="btn-secondary" id="nt-show-fn" style="margin-top:10px">${currentLang==='en'?'Show free Edge Function code (admin)':'Код бесплатной Edge Function (админ)'}</button>
-    <div class="settings-item" style="padding-left:0;margin-top:8px">
-      <span class="item-text" style="font-size:12px;color:var(--muted)">${currentLang==='en'?'Optional: ntfy app fallback':'Опционально: запасной канал ntfy (приложение)'}</span>
-      <div class="toggle-switch ${ntfyOn?'on':''}" id="nt-ntfy"></div>
-    </div>
-    <button class="btn-primary" id="nt-test" style="margin-top:10px">${currentLang==='en'?'Test notification':'Тест уведомления'}</button>
+    <button class="btn-primary" id="nt-test" style="margin-top:14px">${currentLang==='en'?'Test notification':'Тест уведомления'}</button>
   </div>`;
   document.body.appendChild(ov);
   ov.querySelector('#nt-x').onclick=()=>ov.remove();
@@ -3170,86 +3219,12 @@ document.getElementById('settings-notifications').onclick=async()=>{
     if(!cur){ const ok=await requestNotifPermission(); this.classList.toggle('on',ok); }
     else { storage.setItem(NOTIF_PREF_KEY,'0'); this.classList.remove('on'); stopRingtone(); }
   };
-  ov.querySelector('#nt-ntfy').onclick=function(){
-    const cur=storage.getItem('sl_ntfy_fallback')==='1';
-    storage.setItem('sl_ntfy_fallback', cur?'0':'1');
-    this.classList.toggle('on', !cur);
-  };
   ov.querySelector('#nt-test').onclick=async()=>{
     if(!myProfile) return;
     await requestNotifPermission();
     showLocalNotification('Signal Line', currentLang==='en'?'Local test':'Локальный тест', {vibrate:[200,100,200]});
-    await sendWebPushToUser(myProfile.id, 'Signal Line', currentLang==='en'?'Push test (needs Edge Function)':'Тест push (нужна Edge Function)', {tag:'sl-test'});
+    await sendWebPushToUser(myProfile.id, 'Signal Line', currentLang==='en'?'Push test':'Тест push', {tag:'sl-test'});
     showToast(currentLang==='en'?'Test sent':'Тест отправлен');
-  };
-  ov.querySelector('#nt-show-fn').onclick=()=>{
-    const code = `// Supabase Dashboard → Edge Functions → Create function "push-notify"
-// FREE tier is enough. Set secrets: VAPID_PUBLIC, VAPID_PRIVATE, VAPID_SUBJECT=mailto:admin@example.com
-
-import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import webpush from "npm:web-push@3.6.7";
-
-const VAPID_PUBLIC = Deno.env.get("VAPID_PUBLIC")!;
-const VAPID_PRIVATE = Deno.env.get("VAPID_PRIVATE")!;
-const VAPID_SUBJECT = Deno.env.get("VAPID_SUBJECT") || "mailto:admin@example.com";
-webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC, VAPID_PRIVATE);
-
-serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response(null, { headers: cors() });
-  try {
-    const { user_id, title, body, tag, urgent } = await req.json();
-    const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
-    let subs: any[] = [];
-    const { data } = await sb.from("push_subscriptions").select("*").eq("user_id", user_id);
-    if (data?.length) subs = data;
-    else {
-      const { data: p } = await sb.from("profiles").select("push_sub").eq("id", user_id).maybeSingle();
-      if (p?.push_sub) subs = [{ endpoint: p.push_sub.endpoint, p256dh: p.push_sub.keys?.p256dh, auth: p.push_sub.keys?.auth }];
-    }
-    const payload = JSON.stringify({ title: title || "Signal Line", body: body || "", tag: tag || "sl", urgent: !!urgent });
-    await Promise.allSettled(subs.map((s) => webpush.sendNotification(
-      { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
-      payload,
-      { urgency: urgent ? "high" : "normal", TTL: 60 }
-    )));
-    return new Response(JSON.stringify({ ok: true, sent: subs.length }), { headers: { ...cors(), "Content-Type": "application/json" } });
-  } catch (e) {
-    return new Response(JSON.stringify({ error: String(e) }), { status: 500, headers: { ...cors(), "Content-Type": "application/json" } });
-  }
-});
-function cors() {
-  return { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, apikey, content-type" };
-}
-
-/* SQL once in Supabase SQL Editor:
-create table if not exists push_subscriptions (
-  endpoint text primary key,
-  user_id uuid references profiles(id) on delete cascade,
-  p256dh text,
-  auth text,
-  updated_at timestamptz default now()
-);
-alter table push_subscriptions enable row level security;
-create policy "users manage own push" on push_subscriptions
-  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
-
-VAPID keys for secrets:
-VAPID_PUBLIC=BKA5MB6Sk96yrNI2hLGBczAyxvi9bJue9LPbOMGK1aLyvcTuvB0FPccBdN0Y9kD94QIluG-3oUkhv66x0umJe4s
-VAPID_PRIVATE=wb3eAKOWIuzSEQ1qlayhAANEKr3dgxgXzNT-MNYkn0Y
-*/
-`;
-    const box=document.createElement('div'); box.className='modal-overlay';
-    box.innerHTML=`<div class="modal" style="max-width:520px"><button class="close-x" id="fn-x">×</button>
-      <h3>Edge Function push-notify</h3>
-      <p style="font-size:12px;color:var(--muted);margin-bottom:8px">Бесплатный тариф Supabase. Пользователи ничего не ставят — только разрешают уведомления в браузере.</p>
-      <textarea id="fn-code" style="width:100%;height:220px;font-size:11px;font-family:monospace;background:var(--input-bg);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:10px">${code.replace(/</g,'&lt;')}</textarea>
-      <button class="btn-primary" id="fn-copy" style="margin-top:10px">Скопировать</button></div>`;
-    document.body.appendChild(box);
-    box.querySelector('#fn-x').onclick=()=>box.remove();
-    box.querySelector('#fn-copy').onclick=()=>{
-      try{ navigator.clipboard.writeText(code); showToast(t('copied')); }catch(e){}
-    };
   };
 };
 
@@ -3466,6 +3441,10 @@ async function acceptCall(){
   wirePeerConnection(pendingOffer.from, withVideo);
   try{
     await pc.setRemoteDescription(new RTCSessionDescription(pendingOffer.sdp));
+    if(typeof _pendingIceCandidates!=='undefined'){
+      const queued=[..._pendingIceCandidates]; _pendingIceCandidates=[];
+      for(const c of queued){ try{ await pc.addIceCandidate(new RTCIceCandidate(c)); }catch(e){} }
+    }
     const answer=await pc.createAnswer();
     await pc.setLocalDescription(answer);
     sendSignal(pendingOffer.from,'answer',{from:myProfile.id, sdp: pc.localDescription});
@@ -3474,13 +3453,28 @@ async function acceptCall(){
     renderCallActions();
   }catch(e){ console.error(e); showToast('Ошибка ответа на звонок'); endCall(false); }
 }
+let _pendingIceCandidates=[];
 async function handleAnswer(payload){
   if(!pc) return;
-  await pc.setRemoteDescription(new RTCSessionDescription(payload.sdp));
+  try{
+    const sdp = payload.sdp?.type ? payload.sdp : payload.sdp;
+    await pc.setRemoteDescription(new RTCSessionDescription(sdp));
+    // flush ICE that arrived early
+    const queued=[..._pendingIceCandidates]; _pendingIceCandidates=[];
+    for(const c of queued){
+      try{ await pc.addIceCandidate(new RTCIceCandidate(c)); }catch(e){}
+    }
+  }catch(e){ console.error('handleAnswer', e); }
 }
 async function handleRemoteIce(payload){
-  if(!pc) return;
-  try{ await pc.addIceCandidate(new RTCIceCandidate(payload.candidate)); }catch(e){}
+  if(!pc || !payload?.candidate) return;
+  try{
+    if(!pc.remoteDescription){
+      _pendingIceCandidates.push(payload.candidate);
+      return;
+    }
+    await pc.addIceCandidate(new RTCIceCandidate(payload.candidate));
+  }catch(e){ console.warn('ice', e); }
 }
 function declineCall(){ if(pendingOffer) sendSignal(pendingOffer.from,'hangup',{}); endCall(false); }
 function setupLocalVideo(){
@@ -3956,6 +3950,588 @@ async function crossPostStory(mediaUrl, mediaType){
     await sb.from('posts').insert({user_id:myProfile.id, kind:'video', media_url:mediaUrl, media_type:mediaType, caption:'', hashtags:'', from_story:true});
   }catch(e){ /* social tables not set up yet — safe to ignore */ }
 }
+
+
+// ========== FEATURES: drafts, screen share, photo editor ==========
+const DRAFT_KEY='sl_drafts';
+function draftChatId(){
+  if(activePartner) return 'u:'+activePartner.id;
+  if(activeGroup) return 'g:'+activeGroup.id;
+  return null;
+}
+function getDrafts(){ try{ return JSON.parse(storage.getItem(DRAFT_KEY)||'{}'); }catch(e){ return {}; } }
+function setDrafts(o){ storage.setItem(DRAFT_KEY, JSON.stringify(o)); }
+function saveDraftNow(){
+  const id=draftChatId(); if(!id) return;
+  const ta=document.getElementById('message-input'); if(!ta) return;
+  const v=ta.value;
+  const d=getDrafts();
+  if(v && v.trim()) d[id]=v; else delete d[id];
+  setDrafts(d);
+}
+function loadDraftForCurrent(){
+  const id=draftChatId(); if(!id) return;
+  const ta=document.getElementById('message-input'); if(!ta) return;
+  const d=getDrafts();
+  if(d[id]!=null){
+    ta.value=d[id];
+    ta.style.height='auto'; ta.style.height=Math.min(ta.scrollHeight,120)+'px';
+    document.getElementById('send-btn')?.classList.toggle('visible', ta.value.trim().length>0);
+  } else if(!editingMsgId){
+    // keep as is if editing
+  }
+}
+function clearDraftForCurrent(){
+  const id=draftChatId(); if(!id) return;
+  const d=getDrafts(); delete d[id]; setDrafts(d);
+}
+// autosave draft while typing
+(function(){
+  const ta=document.getElementById('message-input');
+  if(!ta) return;
+  let tmr;
+  ta.addEventListener('input', ()=>{
+    clearTimeout(tmr);
+    tmr=setTimeout(saveDraftNow, 250);
+  });
+})();
+// restore draft when opening chat/group
+const _draftOpenChat = openChat;
+openChat = async function(partner){
+  saveDraftNow(); // save previous chat draft
+  await _draftOpenChat(partner);
+  // after open, restore this chat's draft (unless PIN lock)
+  setTimeout(()=>{
+    if(document.getElementById('chat-lock')?.style.display==='flex') return;
+    const ta=document.getElementById('message-input');
+    if(ta && !editingMsgId){ ta.value=''; }
+    loadDraftForCurrent();
+  }, 30);
+};
+const _draftOpenGroup = openGroup;
+openGroup = async function(group){
+  saveDraftNow();
+  await _draftOpenGroup(group);
+  setTimeout(()=>{
+    const ta=document.getElementById('message-input');
+    if(ta && !editingMsgId){ ta.value=''; }
+    loadDraftForCurrent();
+  }, 30);
+};
+// clear draft after successful text send
+const _draftSend = sendMessage;
+sendMessage = async function(type='text', fileUrl=null, content=null){
+  const wasText = (type==='text'||type===undefined) && !fileUrl;
+  const result = await _draftSend(type, fileUrl, content);
+  if(wasText) clearDraftForCurrent();
+  return result;
+};
+// save draft when leaving chat
+const _backBtn = document.getElementById('back-btn');
+if(_backBtn){
+  const prev = _backBtn.onclick;
+  _backBtn.onclick = function(e){
+    saveDraftNow();
+    if(typeof prev==='function') return prev.call(this, e);
+  };
+}
+
+// ----- Screen share in calls -----
+let screenStream=null, cameraVideoTrack=null;
+async function toggleScreenShare(){
+  if(!pc || !currentCall) return;
+  if(screenStream){
+    // stop share → restore camera if any
+    screenStream.getTracks().forEach(t=>t.stop());
+    screenStream=null;
+    const sender = pc.getSenders().find(s=>s.track && s.track.kind==='video');
+    if(sender && cameraVideoTrack){
+      try{ await sender.replaceTrack(cameraVideoTrack); }catch(e){}
+      if(localStream){
+        localStream.getVideoTracks().forEach(t=>{ try{ localStream.removeTrack(t); }catch(e){} });
+        localStream.addTrack(cameraVideoTrack);
+      }
+      setupLocalVideo();
+    } else if(sender){
+      try{ await sender.replaceTrack(null); }catch(e){}
+    }
+    const btn=document.getElementById('cc-screen');
+    if(btn) btn.classList.remove('on');
+    showToast(currentLang==='en'?'Screen share stopped':'Демонстрация экрана остановлена');
+    return;
+  }
+  try{
+    screenStream = await navigator.mediaDevices.getDisplayMedia({ video:true, audio:false });
+  }catch(e){ showToast(currentLang==='en'?'Screen share cancelled':'Демонстрация отменена'); return; }
+  const screenTrack = screenStream.getVideoTracks()[0];
+  if(!screenTrack) return;
+  // remember camera track
+  const cam = localStream?.getVideoTracks()?.[0];
+  if(cam) cameraVideoTrack = cam;
+  const sender = pc.getSenders().find(s=>s.track && s.track.kind==='video');
+  if(sender){
+    try{ await sender.replaceTrack(screenTrack); }catch(e){ console.warn(e); }
+  } else {
+    try{ pc.addTrack(screenTrack, screenStream); }catch(e){}
+  }
+  // show screen in local preview
+  const lv=document.getElementById('call-local-video');
+  if(lv){ lv.srcObject=screenStream; lv.muted=true; lv.style.display='block'; lv.play().catch(()=>{}); }
+  screenTrack.onended = ()=>{ if(screenStream) toggleScreenShare(); };
+  const btn=document.getElementById('cc-screen');
+  if(btn) btn.classList.add('on');
+  showToast(currentLang==='en'?'Sharing screen':'Демонстрация экрана');
+}
+// patch renderCallActions to add screen button when in active call
+const _origRenderCallActions = renderCallActions;
+renderCallActions = function(){
+  _origRenderCallActions();
+  if(!currentCall || currentCall.state==='incoming') return;
+  const wrap=document.getElementById('call-actions');
+  if(!wrap || document.getElementById('cc-screen')) return;
+  const btn=document.createElement('button');
+  btn.className='call-btn-round mute'+(screenStream?' on':'');
+  btn.id='cc-screen';
+  btn.title=currentLang==='en'?'Share screen':'Демонстрация экрана';
+  btn.innerHTML=`<svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>`;
+  btn.onclick=()=>toggleScreenShare();
+  // insert before hangup
+  const hang=wrap.querySelector('#cc-hangup');
+  if(hang) wrap.insertBefore(btn, hang); else wrap.appendChild(btn);
+};
+// cleanup screen on endCall
+const _endCallScreen = endCall;
+endCall = function(){
+  try{
+    if(screenStream){ screenStream.getTracks().forEach(t=>t.stop()); screenStream=null; }
+    cameraVideoTrack=null;
+  }catch(e){}
+  return _endCallScreen.apply(this, arguments);
+};
+
+// ----- Photo editor before send -----
+function openPhotoEditor(dataUrl){
+  return new Promise(resolve=>{
+    const ov=document.createElement('div'); ov.className='pe-overlay';
+    ov.innerHTML=`<div class="pe-canvas-wrap"><canvas id="pe-canvas"></canvas></div>
+      <div class="pe-tools">
+        <button type="button" data-pe="draw" class="active">Кисть</button>
+        <button type="button" data-pe="text">Текст</button>
+        <button type="button" data-pe="sticker">😀</button>
+        <button type="button" data-pe="rotate">↻</button>
+        <button type="button" data-pe="clear">Сброс</button>
+      </div>
+      <div class="pe-actions">
+        <button type="button" class="btn-secondary" id="pe-cancel">Отмена</button>
+        <button type="button" class="btn-primary" id="pe-send">Отправить</button>
+      </div>`;
+    document.body.appendChild(ov);
+    const canvas=ov.querySelector('#pe-canvas');
+    const ctx=canvas.getContext('2d');
+    const img=new Image();
+    let mode='draw', drawing=false, original=dataUrl;
+    let stickers=['😀','🔥','❤️','👍','⭐','🎉','😎','💯'];
+    img.onload=()=>{
+      const maxW=Math.min(innerWidth-24, 900);
+      const maxH=innerHeight*0.55;
+      let w=img.width, h=img.height;
+      const sc=Math.min(maxW/w, maxH/h, 1);
+      canvas.width=Math.round(w*sc); canvas.height=Math.round(h*sc);
+      ctx.drawImage(img,0,0,canvas.width,canvas.height);
+    };
+    img.src=dataUrl;
+    function redrawBase(){
+      const i=new Image();
+      i.onload=()=>{ ctx.clearRect(0,0,canvas.width,canvas.height); ctx.drawImage(i,0,0,canvas.width,canvas.height); };
+      i.src=original;
+    }
+    ov.querySelectorAll('[data-pe]').forEach(b=>{
+      b.onclick=()=>{
+        const m=b.dataset.pe;
+        if(m==='rotate'){
+          const tmp=document.createElement('canvas');
+          tmp.width=canvas.height; tmp.height=canvas.width;
+          const tctx=tmp.getContext('2d');
+          tctx.translate(tmp.width/2, tmp.height/2);
+          tctx.rotate(Math.PI/2);
+          tctx.drawImage(canvas, -canvas.width/2, -canvas.height/2);
+          canvas.width=tmp.width; canvas.height=tmp.height;
+          ctx.drawImage(tmp,0,0);
+          original=canvas.toDataURL('image/jpeg',0.92);
+          return;
+        }
+        if(m==='clear'){ redrawBase(); return; }
+        if(m==='sticker'){
+          mode='sticker';
+          ov.querySelectorAll('[data-pe]').forEach(x=>x.classList.remove('active'));
+          b.classList.add('active');
+          return;
+        }
+        if(m==='text'){
+          mode='text';
+          ov.querySelectorAll('[data-pe]').forEach(x=>x.classList.remove('active'));
+          b.classList.add('active');
+          return;
+        }
+        mode=m;
+        ov.querySelectorAll('[data-pe]').forEach(x=>x.classList.remove('active'));
+        b.classList.add('active');
+      };
+    });
+    function pos(e){
+      const r=canvas.getBoundingClientRect();
+      const clientX=(e.touches?e.touches[0].clientX:e.clientX);
+      const clientY=(e.touches?e.touches[0].clientY:e.clientY);
+      return { x:(clientX-r.left)*(canvas.width/r.width), y:(clientY-r.top)*(canvas.height/r.height) };
+    }
+    canvas.addEventListener('mousedown', e=>{
+      const p=pos(e);
+      if(mode==='text'){
+        const t=prompt(currentLang==='en'?'Text:':'Текст:','');
+        if(t){ ctx.font='bold '+Math.max(18, canvas.width/18)+'px sans-serif'; ctx.fillStyle='#fff'; ctx.strokeStyle='#000'; ctx.lineWidth=3; ctx.strokeText(t,p.x,p.y); ctx.fillText(t,p.x,p.y); }
+        return;
+      }
+      if(mode==='sticker'){
+        const em=stickers[Math.floor(Math.random()*stickers.length)];
+        ctx.font=Math.max(32, canvas.width/10)+'px sans-serif';
+        ctx.fillText(em, p.x-20, p.y+10);
+        return;
+      }
+      drawing=true; ctx.beginPath(); ctx.moveTo(p.x,p.y);
+      ctx.strokeStyle='#4C7CF3'; ctx.lineWidth=Math.max(3, canvas.width/200); ctx.lineCap='round';
+    });
+    canvas.addEventListener('mousemove', e=>{
+      if(!drawing||mode!=='draw') return;
+      const p=pos(e); ctx.lineTo(p.x,p.y); ctx.stroke();
+    });
+    const stop=()=>{ drawing=false; };
+    canvas.addEventListener('mouseup', stop);
+    canvas.addEventListener('mouseleave', stop);
+    canvas.addEventListener('touchstart', e=>{ e.preventDefault(); canvas.dispatchEvent(new MouseEvent('mousedown',{clientX:e.touches[0].clientX,clientY:e.touches[0].clientY})); }, {passive:false});
+    canvas.addEventListener('touchmove', e=>{ e.preventDefault(); if(!drawing) return; const p=pos(e); ctx.lineTo(p.x,p.y); ctx.stroke(); }, {passive:false});
+    canvas.addEventListener('touchend', stop);
+    ov.querySelector('#pe-cancel').onclick=()=>{ ov.remove(); resolve(null); };
+    ov.querySelector('#pe-send').onclick=()=>{
+      const out=canvas.toDataURL('image/jpeg',0.9);
+      ov.remove(); resolve(out);
+    };
+  });
+}
+// intercept photo-input for images → editor; videos send as before
+document.getElementById('photo-input').onchange=function(e){
+  const f=e.target.files[0]; if(!f) return; e.target.value='';
+  if(f.type.startsWith('video/')){
+    const r=new FileReader(); r.onload=ev=>sendMessage('video', ev.target.result, ''); r.readAsDataURL(f); return;
+  }
+  if(!f.type.startsWith('image/')) return;
+  const r=new FileReader();
+  r.onload=async ev=>{
+    const edited=await openPhotoEditor(ev.target.result);
+    if(edited) sendMessage('image', edited, '');
+  };
+  r.readAsDataURL(f);
+};
+
+
+
+// ========== FULLSCREEN PROFILE / QR / DEVICES / ROLES / TAB ANIM / CALL AUDIO FIX ==========
+(function improveRemoteAudio(){
+  const _att = typeof attachRemoteTrack==='function' ? attachRemoteTrack : null;
+  if(!_att) return;
+  window.attachRemoteTrack = function(track){
+    _att(track);
+    const rv=document.getElementById('call-remote-video');
+    if(!rv) return;
+    rv.muted=false; rv.volume=1;
+    const tryPlay=()=>rv.play().catch(()=>{});
+    tryPlay(); setTimeout(tryPlay,100); setTimeout(tryPlay,500);
+    // Dedicated audio element backup (some mobile browsers need it)
+    let au=document.getElementById('call-remote-audio');
+    if(!au){
+      au=document.createElement('audio');
+      au.id='call-remote-audio';
+      au.autoplay=true;
+      au.setAttribute('playsinline','');
+      document.body.appendChild(au);
+    }
+    if(remoteMediaStream){
+      au.srcObject=remoteMediaStream;
+      au.muted=false; au.volume=1;
+      au.play().catch(()=>{});
+    }
+  };
+})();
+
+// Tab click animation
+document.querySelectorAll('.bottom-tab').forEach(t=>{
+  t.addEventListener('click', function(){
+    this.classList.remove('tab-pop');
+    void this.offsetWidth;
+    this.classList.add('tab-pop');
+    setTimeout(()=>this.classList.remove('tab-pop'), 400);
+  });
+});
+
+// Fullscreen profile when tapping avatar / contact
+async function openFullProfile(profileLike){
+  let p=profileLike;
+  try{ const {data}=await sb.from('profiles').select('*').eq('id',profileLike.id).maybeSingle(); if(data) p=data; }catch(e){}
+  const isMe = p.id===myProfile?.id;
+  const name=p.first_name?`${p.first_name} ${p.last_name||''}`:(p.username||'');
+  const sheet=document.createElement('div');
+  sheet.className='profile-sheet';
+  sheet.innerHTML=`
+    <div class="profile-sheet-top">
+      <button class="icon-btn" id="ps-back"><svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg></button>
+      <div style="font-weight:800;font-size:16px;flex:1">Профиль</div>
+    </div>
+    <div class="profile-sheet-body">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:8px;margin-bottom:8px">
+        <div class="avatar" id="ps-av" style="width:96px;height:96px;font-size:36px"></div>
+        <div style="font-weight:800;font-size:20px">${escapeHtml(name)}${verifiedBadgeIf(p.email)}</div>
+        <div style="color:var(--muted);font-size:14px">@${escapeHtml(p.username||'')}</div>
+        <div style="color:var(--mint);font-size:12px" id="ps-online"></div>
+      </div>
+      ${!isMe?`<div class="profile-sheet-actions">
+        <div class="profile-action" data-a="msg"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>Чат</div>
+        <div class="profile-action" data-a="search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>Поиск</div>
+        <div class="profile-action" data-a="media"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>Медиа</div>
+        <div class="profile-action" data-a="call"><svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2A19.8 19.8 0 0111.19 18a19.5 19.5 0 01-6-6A19.8 19.8 0 012.12 3.38 2 2 0 014.11 2h3a2 2 0 012 1.72c.13.96.36 1.9.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0122 16.92z"/></svg>Звонок</div>
+        <div class="profile-action" data-a="video"><svg viewBox="0 0 24 24"><rect x="2" y="6" width="14" height="12" rx="2"/><path d="M16 10l6-4v12l-6-4"/></svg>Видео</div>
+        <div class="profile-action" data-a="mute"><svg viewBox="0 0 24 24"><path d="M11 5L6 9H2v6h4l5 4V5z"/></svg>Звук</div>
+      </div>`:''}
+      <div class="uinfo-row"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px;color:var(--muted)"><path d="M4 4h16v16H4z"/><path d="M22 6l-10 7L2 6"/></svg>
+        <div><div class="uinfo-label">Email</div><div class="uinfo-val">${p.hide_email?'скрыт':escapeHtml(p.email||'—')}</div></div></div>
+      <div class="uinfo-row"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px;color:var(--muted)"><path d="M22 16.92v3a2 2 0 01-2.18 2A19.8 19.8 0 0111.19 18a19.5 19.5 0 01-6-6A19.8 19.8 0 012.12 3.38 2 2 0 014.11 2h3a2 2 0 012 1.72c.13.96.36 1.9.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0122 16.92z"/></svg>
+        <div><div class="uinfo-label">Телефон</div><div class="uinfo-val">${p.hide_phone?'скрыт':escapeHtml(p.phone||'—')}</div></div></div>
+      <div id="ps-gifts"></div>
+    </div>`;
+  document.body.appendChild(sheet);
+  renderAvatarInto(sheet.querySelector('#ps-av'), p.avatar_url, (p.username||'?')[0].toUpperCase(), p.color||colorFor(p.id));
+  const onEl=sheet.querySelector('#ps-online');
+  if(onEl) onEl.textContent = onlineUsers.has(p.id) ? (currentLang==='en'?'online':'в сети') : (currentLang==='en'?'offline':'не в сети');
+  sheet.querySelector('#ps-back').onclick=()=>sheet.remove();
+  sheet.querySelectorAll('[data-a]').forEach(btn=>{
+    btn.onclick=async()=>{
+      const a=btn.dataset.a;
+      sheet.remove();
+      ensureInContacts(p);
+      if(a==='msg'){ switchPage('chats'); openChat(p); }
+      else if(a==='call'){ switchPage('chats'); await openChat(p); startCall(p,false); }
+      else if(a==='video'){ switchPage('chats'); await openChat(p); startCall(p,true); }
+      else if(a==='search'){ switchPage('chats'); await openChat(p); document.getElementById('chat-search-btn')?.click(); }
+      else if(a==='media'){ switchPage('chats'); await openChat(p); document.getElementById('media-btn')?.click(); }
+      else if(a==='mute'){
+        // quiet chat toggle
+        const key='sl_quiet';
+        let q=[]; try{q=JSON.parse(storage.getItem(key)||'[]');}catch(e){}
+        if(q.includes(p.id)){ q=q.filter(x=>x!==p.id); showToast('Звук включён'); }
+        else { q.push(p.id); showToast('Чат без звука'); }
+        storage.setItem(key, JSON.stringify(q));
+      }
+    };
+  });
+  try{
+    const {data:gifts}=await sb.from('messages').select('file_url').eq('type','gift').eq('receiver_id',p.id);
+    if(gifts?.length) sheet.querySelector('#ps-gifts').innerHTML=`<div class="uinfo-label" style="margin-top:12px">Подарки (${gifts.length})</div><div class="gift-grid">${gifts.map(g=>`<div class="gift-opt">${giftSvgFor(g.file_url)}</div>`).join('')}</div>`;
+  }catch(e){}
+}
+// Override openUserInfo + partner avatar + contact avatars
+openUserInfo = openFullProfile;
+document.getElementById('partner-avatar').onclick=()=>{ if(activePartner) openFullProfile(activePartner); };
+
+// Tap contact avatar opens full profile (event delegation)
+document.getElementById('contacts-list')?.addEventListener('click', e=>{
+  const av=e.target.closest('.contact .avatar');
+  if(!av) return;
+  const row=av.closest('.contact');
+  if(!row) return;
+  // find user from contacts by name is hard — use data attribute: set on render
+}, true);
+
+// Patch renderContacts to add data-id and avatar click
+const _rcag = renderContactsAndGroups;
+renderContactsAndGroups = function(){
+  _rcag();
+  document.querySelectorAll('#contacts-list .contact').forEach((row,i)=>{
+    // try match by order is fragile — re-bind via stored items not available
+  });
+};
+
+// QR code in settings
+function showMyQr(){
+  if(!myProfile) return;
+  const link = `${location.origin}${location.pathname}#/user/@${myProfile.username||myProfile.id}`;
+  const ov=document.createElement('div'); ov.className='modal-overlay';
+  // use free QR API
+  const qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=220x220&data='+encodeURIComponent(link);
+  ov.innerHTML=`<div class="modal" style="text-align:center">
+    <button class="close-x" id="qr-x">×</button>
+    <h3>Мой QR-код</h3>
+    <div class="qr-box" style="margin:12px auto"><img src="${qrUrl}" alt="QR" width="220" height="220"></div>
+    <p style="font-size:12px;color:var(--muted);word-break:break-all;margin:8px 0">${escapeHtml(link)}</p>
+    <button class="btn-primary" id="qr-copy">Скопировать ссылку</button>
+  </div>`;
+  document.body.appendChild(ov);
+  ov.querySelector('#qr-x').onclick=()=>ov.remove();
+  ov.querySelector('#qr-copy').onclick=()=>{ try{ navigator.clipboard.writeText(link); showToast(t('copied')); }catch(e){} };
+}
+// Add QR entry under my link
+document.getElementById('settings-my-link')?.addEventListener('click', function(e){
+  // keep existing link behavior, also offer QR via long-press alternative — add separate item if missing
+});
+// Inject settings item for QR if not present
+(function(){
+  const linkItem=document.getElementById('settings-my-link');
+  if(!linkItem || document.getElementById('settings-my-qr')) return;
+  const qr=document.createElement('div');
+  qr.className='settings-item';
+  qr.id='settings-my-qr';
+  qr.innerHTML=`<svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM18 14h3v3h-3zM14 18h3v3h-3zM18 18h3v3"/></svg><span class="item-text">Мой QR-код</span>`;
+  linkItem.parentNode.insertBefore(qr, linkItem.nextSibling);
+  qr.onclick=showMyQr;
+})();
+
+// Devices (security #22)
+const DEVICE_KEY='sl_device_id';
+function getDeviceId(){
+  let id=storage.getItem(DEVICE_KEY);
+  if(!id){ id='dev_'+Math.random().toString(36).slice(2)+Date.now().toString(36); storage.setItem(DEVICE_KEY,id); }
+  return id;
+}
+async function registerDeviceSession(){
+  if(!myProfile||!sb) return;
+  const dev={
+    id: getDeviceId(),
+    label: (navigator.userAgent||'Browser').slice(0,80),
+    platform: navigator.platform||'',
+    last_seen: new Date().toISOString()
+  };
+  try{
+    let devices=[];
+    const {data}=await sb.from('profiles').select('devices').eq('id',myProfile.id).maybeSingle();
+    devices = Array.isArray(data?.devices) ? data.devices : [];
+    devices = devices.filter(d=>d.id!==dev.id);
+    devices.unshift(dev);
+    devices=devices.slice(0,10);
+    await sb.from('profiles').update({devices}).eq('id',myProfile.id);
+  }catch(e){ /* column may not exist — store local only */ 
+    storage.setItem('sl_devices_local', JSON.stringify([dev]));
+  }
+}
+document.getElementById('settings-devices').onclick=async()=>{
+  let devices=[];
+  try{
+    const {data}=await sb.from('profiles').select('devices').eq('id',myProfile.id).maybeSingle();
+    devices=Array.isArray(data?.devices)?data.devices:[];
+  }catch(e){}
+  if(!devices.length){
+    try{ devices=JSON.parse(storage.getItem('sl_devices_local')||'[]'); }catch(e){}
+  }
+  const cur=getDeviceId();
+  const ov=document.createElement('div'); ov.className='modal-overlay';
+  ov.innerHTML=`<div class="modal"><button class="close-x" id="dv-x">×</button>
+    <h3>Устройства</h3>
+    <div id="dv-list">${devices.length?devices.map(d=>`
+      <div class="device-row">
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:600;font-size:13px">${escapeHtml(d.label||'Устройство')}${d.id===cur?' · это устройство':''}</div>
+          <div style="font-size:11px;color:var(--muted)">${escapeHtml(d.platform||'')} · ${d.last_seen?new Date(d.last_seen).toLocaleString():''}</div>
+        </div>
+      </div>`).join(''):'<div class="empty-state">Нет данных об устройствах</div>'}
+    </div>
+    <button class="btn-primary" id="dv-logout-all" style="margin-top:12px;background:var(--danger)">Выйти везде</button>
+    <p style="font-size:11px;color:var(--muted);margin-top:8px">«Выйти везде» завершает все сессии аккаунта. На других устройствах нужно войти снова.</p>
+  </div>`;
+  document.body.appendChild(ov);
+  ov.querySelector('#dv-x').onclick=()=>ov.remove();
+  ov.querySelector('#dv-logout-all').onclick=async()=>{
+    if(!(await customConfirm(currentLang==='en'?'Sign out on all devices?':'Выйти на всех устройствах?'))) return;
+    try{
+      // Supabase global sign out
+      await sb.auth.signOut({scope:'global'});
+    }catch(e){
+      try{ await sb.auth.signOut(); }catch(e2){}
+    }
+    try{ await sb.from('profiles').update({devices:[]}).eq('id',myProfile.id); }catch(e){}
+    storage.removeItem(DEVICE_KEY);
+    location.reload();
+  };
+};
+
+// Register device after auth
+const _authDev = onAuthenticated;
+onAuthenticated = async function(user){
+  await _authDev(user);
+  try{ await registerDeviceSession(); }catch(e){}
+};
+
+// Group roles (#10) — extend group settings
+const _gsBtn = document.getElementById('group-settings-btn');
+if(_gsBtn){
+  const prevGs = _gsBtn.onclick;
+  _gsBtn.onclick = async function(){
+    if(typeof prevGs==='function') await prevGs.call(this);
+    // After modal opens, inject members/roles panel
+    setTimeout(async()=>{
+      const modal=document.getElementById('gs-modal');
+      if(!modal||!activeGroup) return;
+      const box=modal.querySelector('.modal');
+      if(!box || box.querySelector('#gs-roles')) return;
+      const isAdmin=activeGroup.myRole==='admin'||activeGroup.owner_id===myProfile.id;
+      const wrap=document.createElement('div');
+      wrap.id='gs-roles';
+      wrap.innerHTML=`<div class="settings-section-title" style="padding:12px 0 4px">Участники и роли</div><div id="gs-members-list" class="empty-state">Загрузка...</div>`;
+      box.appendChild(wrap);
+      try{
+        const {data:mems}=await sb.from('group_members').select('user_id,role,profiles:user_id(id,username,first_name)').eq('group_id',activeGroup.id);
+        const list=wrap.querySelector('#gs-members-list');
+        if(!mems?.length){ list.textContent='Нет участников'; return; }
+        list.className='';
+        list.innerHTML=mems.map(m=>{
+          const name=m.profiles?.first_name||m.profiles?.username||m.user_id;
+          const role=m.role||'member';
+          const badge=role==='admin'?'admin':role==='moderator'?'mod':'member';
+          const label=role==='admin'?'Админ':role==='moderator'?'Модер':'Участник';
+          return `<div class="device-row" data-uid="${m.user_id}">
+            <div style="flex:1"><b>${escapeHtml(name)}</b> <span class="role-badge ${badge}">${label}</span></div>
+            ${isAdmin&&m.user_id!==myProfile.id?`<select data-role-uid="${m.user_id}" style="background:var(--input-bg);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:4px 6px;font-size:12px">
+              <option value="member" ${role==='member'?'selected':''}>Участник</option>
+              <option value="moderator" ${role==='moderator'?'selected':''}>Модер</option>
+              <option value="admin" ${role==='admin'?'selected':''}>Админ</option>
+            </select>`:''}
+          </div>`;
+        }).join('');
+        list.querySelectorAll('select[data-role-uid]').forEach(sel=>{
+          sel.onchange=async()=>{
+            const uid=sel.dataset.roleUid;
+            const role=sel.value;
+            try{
+              await sb.from('group_members').update({role}).eq('group_id',activeGroup.id).eq('user_id',uid);
+              showToast('Роль обновлена');
+            }catch(e){ showToast(friendlyError(e)); }
+          };
+        });
+      }catch(e){
+        wrap.querySelector('#gs-members-list').textContent='Не удалось загрузить';
+      }
+    }, 100);
+  };
+}
+
+// Quiet chats skip notification sound
+const _nim = notifyIncomingMessage;
+notifyIncomingMessage = function(msg){
+  try{
+    const q=JSON.parse(storage.getItem('sl_quiet')||'[]');
+    if(q.includes(msg.sender_id)) return; // silent
+  }catch(e){}
+  return _nim(msg);
+};
+
+
+document.getElementById('me-avatar-chats')?.addEventListener('click',()=>{ if(myProfile) openFullProfile(myProfile); });
+document.getElementById('settings-avatar')?.addEventListener('click',()=>{ if(myProfile) openFullProfile(myProfile); });
 
 updateCircleIcon();
 if(sb) sb.auth.getSession().then(({data})=>{ if(data?.session) onAuthenticated(data.session.user); });
