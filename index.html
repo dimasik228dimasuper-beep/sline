@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
 <meta name="theme-color" content="#0B1120" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%234C7CF3'/%3E%3Cstop offset='1' stop-color='%236D5DF6'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='100' height='100' rx='22' fill='url(%23g)'/%3E%3Ctext x='50' y='68' text-anchor='middle' font-size='52' fill='white' font-family='Arial,sans-serif' font-weight='bold'%3ES%3C/text%3E%3C/svg%3E" />
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%234C7CF3'/%3E%3Ctext x='50' y='68' text-anchor='middle' font-size='52' fill='white' font-family='Arial,sans-serif' font-weight='bold'%3ES%3C/text%3E%3C/svg%3E" />
 <link rel="manifest" href="data:application/json,{'name':'Signal Line','short_name':'Signal','start_url':'.','display':'standalone','background_color':'#0B1120','theme_color':'#0B1120','icons':[{'src':'data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 100 100\'%3E%3Crect width=\'100\' height=\'100\' rx=\'20\' fill=\'%234C7CF3\'/%3E%3Ctext x=\'50\' y=\'68\' text-anchor=\'middle\' font-size=\'50\' fill=\'white\' font-family=\'sans-serif\' font-weight=\'bold\'%3ES%3C/text%3E%3C/svg%3E','sizes':'any','type':'image/svg+xml'}]}" />
 <title>Signal Line</title>
 <style>
@@ -282,6 +284,13 @@ body.theme-light{
 @keyframes owlBob{0%,100%{transform:translateY(0) rotate(-3deg)}50%{transform:translateY(-8px) rotate(3deg)}}
 .owl-text{font-size:14px;line-height:1.5;margin:14px 0 18px;color:var(--text)}
 .owl-input-wrap{display:none;margin-bottom:14px}
+.owl-demo{position:relative;height:96px;background:var(--input-bg);border:1px solid var(--line);border-radius:14px;overflow:hidden;margin:14px 0}
+.owl-demo-row{position:absolute;left:10px;right:10px;height:24px;border-radius:8px;background:var(--panel-hover);display:flex;align-items:center;padding:0 8px;gap:8px;opacity:0;animation:owlRowIn 2.4s ease-in-out infinite}
+.owl-demo-row .d-avatar{width:16px;height:16px;border-radius:50%;flex-shrink:0}
+.owl-demo-row .d-line{height:6px;border-radius:3px;background:var(--line);flex:1}
+.owl-demo-owl{position:absolute;font-size:22px;left:8px;animation:owlFly 2.4s ease-in-out infinite}
+@keyframes owlRowIn{0%{opacity:0;transform:translateX(-6px)}15%{opacity:1;transform:translateX(0)}70%{opacity:1}100%{opacity:0}}
+@keyframes owlFly{0%{transform:translate(0,0) rotate(0)}25%{transform:translate(6px,26px) rotate(6deg)}50%{transform:translate(2px,52px) rotate(-4deg)}75%{transform:translate(8px,20px) rotate(4deg)}100%{transform:translate(0,0) rotate(0)}}
 
 /* ===== Calls ===== */
 .call-overlay{position:fixed;inset:0;background:linear-gradient(160deg,#0B1120,#131B2E);z-index:9700;display:none;flex-direction:column;align-items:center;justify-content:center;gap:18px;color:#fff}
@@ -306,40 +315,40 @@ body.theme-light{
 <div id="auth-screen">
   <div class="auth-card">
     <div class="brand"><div class="brand-mark">S</div><div class="brand-name">Signal Line</div></div>
-    <div class="auth-sub">Современный мессенджер</div>
+    <div class="auth-sub" data-i18n="auth_sub">Современный мессенджер</div>
     <div class="tabs">
-      <div class="tab active" data-tab="login">Вход</div>
-      <div class="tab" data-tab="register">Регистрация</div>
+      <div class="tab active" data-tab="login" data-i18n="auth_login_tab">Вход</div>
+      <div class="tab" data-tab="register" data-i18n="auth_register_tab">Регистрация</div>
     </div>
     <div class="tabs" id="method-tabs" style="margin-bottom:16px">
-      <div class="tab active" data-method="email">Почта</div>
-      <div class="tab" data-method="phone">Телефон</div>
+      <div class="tab active" data-method="email" data-i18n="auth_method_email">Почта</div>
+      <div class="tab" data-method="phone" data-i18n="auth_method_phone">Телефон</div>
     </div>
     <div id="login-form">
       <div id="login-email-fields">
-        <div class="field"><label>Email</label><input type="email" id="login-email" placeholder="you@example.com"></div>
-        <div class="field"><label>Пароль</label><input type="password" id="login-password" placeholder="••••••••"></div>
+        <div class="field"><label data-i18n="field_email">Email</label><input type="email" id="login-email" placeholder="you@example.com"></div>
+        <div class="field"><label data-i18n="field_password">Пароль</label><input type="password" id="login-password" placeholder="••••••••"></div>
       </div>
       <div id="login-phone-fields" style="display:none">
-        <div class="field"><label>Телефон</label><input type="tel" id="login-phone" placeholder="+79001234567"></div>
-        <div class="field"><label>Пароль</label><input type="password" id="login-phone-password" placeholder="••••••••"></div>
+        <div class="field"><label data-i18n="field_phone">Телефон</label><input type="tel" id="login-phone" placeholder="+79001234567"></div>
+        <div class="field"><label data-i18n="field_password">Пароль</label><input type="password" id="login-phone-password" placeholder="••••••••"></div>
       </div>
-      <button type="button" class="btn-primary" id="login-btn">Войти</button>
+      <button type="button" class="btn-primary" id="login-btn" data-i18n="auth_login_btn">Войти</button>
     </div>
     <div id="register-form" style="display:none">
-      <div class="field"><label>Имя</label><input type="text" id="reg-firstname" placeholder="Иван"></div>
-      <div class="field"><label>Фамилия</label><input type="text" id="reg-lastname" placeholder="Иванов"></div>
-      <div class="field"><label>Имя пользователя</label><input type="text" id="reg-username" placeholder="ivanov"></div>
-      <div class="field"><label>Дата рождения</label><input type="date" id="reg-birth"></div>
+      <div class="field"><label data-i18n="field_firstname">Имя</label><input type="text" id="reg-firstname" placeholder="Иван"></div>
+      <div class="field"><label data-i18n="field_lastname">Фамилия</label><input type="text" id="reg-lastname" placeholder="Иванов"></div>
+      <div class="field"><label data-i18n="field_username">Имя пользователя</label><input type="text" id="reg-username" placeholder="ivanov"></div>
+      <div class="field"><label data-i18n="field_birth">Дата рождения</label><input type="date" id="reg-birth"></div>
       <div id="reg-email-fields">
-        <div class="field"><label>Email</label><input type="email" id="reg-email" placeholder="you@example.com"></div>
-        <div class="field"><label>Пароль</label><input type="password" id="reg-password" placeholder="Минимум 6 символов"></div>
+        <div class="field"><label data-i18n="field_email">Email</label><input type="email" id="reg-email" placeholder="you@example.com"></div>
+        <div class="field"><label data-i18n="field_password">Пароль</label><input type="password" id="reg-password" placeholder="Минимум 6 символов" data-i18n-placeholder="field_password_min"></div>
       </div>
       <div id="reg-phone-fields" style="display:none">
-        <div class="field"><label>Телефон</label><input type="tel" id="reg-phone" placeholder="+79001234567"></div>
-        <div class="field"><label>Пароль</label><input type="password" id="reg-phone-password" placeholder="Минимум 6 символов"></div>
+        <div class="field"><label data-i18n="field_phone">Телефон</label><input type="tel" id="reg-phone" placeholder="+79001234567"></div>
+        <div class="field"><label data-i18n="field_password">Пароль</label><input type="password" id="reg-phone-password" placeholder="Минимум 6 символов" data-i18n-placeholder="field_password_min"></div>
       </div>
-      <button type="button" class="btn-primary" id="register-btn">Создать аккаунт</button>
+      <button type="button" class="btn-primary" id="register-btn" data-i18n="auth_register_btn">Создать аккаунт</button>
     </div>
     <div class="auth-msg" id="auth-msg"></div>
   </div>
@@ -370,18 +379,18 @@ body.theme-light{
           <div class="sidebar-scroll" id="sidebar-scroll">
             <div class="search-box" style="margin:10px 16px 8px">
               <span class="search-icon"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg></span>
-              <input type="text" id="search-input" placeholder="Поиск...">
+              <input type="text" id="search-input" placeholder="Поиск..." data-i18n-placeholder="ph_search">
             </div>
             <div class="stories-bar" id="stories-bar"></div>
             <div class="folder-tabs" id="folder-tabs"></div>
-            <div class="contacts" id="contacts-list"><div class="empty-state">Загрузка...</div></div>
+            <div class="contacts" id="contacts-list"><div class="empty-state" data-i18n="loading">Загрузка...</div></div>
           </div>
         </div>
         <div class="chat-pane" id="chat-pane">
-          <div id="no-chat-state" style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--muted);flex-direction:column;gap:8px"><div style="font-size:18px">Выберите чат</div></div>
+          <div id="no-chat-state" style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--muted);flex-direction:column;gap:8px"><div style="font-size:18px" data-i18n="choose_chat">Выберите чат</div></div>
           <div id="chat-active" style="display:none;flex-direction:column;flex:1;min-height:0;overflow:hidden;position:relative">
             <div class="search-in-chat" id="search-in-chat">
-              <input type="text" id="chat-search-input" placeholder="Поиск в чате...">
+              <input type="text" id="chat-search-input" placeholder="Поиск в чате..." data-i18n-placeholder="ph_search_chat">
               <button class="icon-btn" id="chat-search-close">✕</button>
             </div>
             <div class="chat-header">
@@ -389,12 +398,12 @@ body.theme-light{
               <div class="avatar" id="partner-avatar" style="width:38px;height:38px;font-size:14px"></div>
               <div style="min-width:0;flex:1"><div class="chat-title" id="chat-partner-name"></div><div id="chat-partner-status" class="chat-status">в сети</div></div>
               <div class="chat-actions">
-                <button class="icon-btn" id="chat-search-btn" title="Поиск"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg></button>
-                <button class="icon-btn" id="media-btn" title="Медиа"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg></button>
-                <button class="icon-btn" id="invite-btn" style="display:none" title="Пригласить"><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4-4v2"/><circle cx="8.5" cy="7" r="4"/><path d="M20 8v6M23 11h-6"/></svg></button>
-                <button class="icon-btn" id="group-settings-btn" style="display:none" title="Настройки"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2"/></svg></button>
-                <button class="icon-btn" id="video-call-btn" title="Видеозвонок"><svg viewBox="0 0 24 24"><rect x="2" y="6" width="14" height="12" rx="2"/><path d="M16 10l6-4v12l-6-4"/></svg></button>
-                <button class="icon-btn" id="call-btn" title="Звонок"><svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2A19.8 19.8 0 0111.19 18a19.5 19.5 0 01-6-6A19.8 19.8 0 012.12 3.38 2 2 0 014.11 2h3a2 2 0 012 1.72c.13.96.36 1.9.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0122 16.92z"/></svg></button>
+                <button class="icon-btn" id="chat-search-btn" title="Поиск" data-i18n-title="tt_search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg></button>
+                <button class="icon-btn" id="media-btn" title="Медиа" data-i18n-title="tt_media"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg></button>
+                <button class="icon-btn" id="invite-btn" style="display:none" title="Пригласить" data-i18n-title="tt_invite"><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4-4v2"/><circle cx="8.5" cy="7" r="4"/><path d="M20 8v6M23 11h-6"/></svg></button>
+                <button class="icon-btn" id="group-settings-btn" style="display:none" title="Настройки" data-i18n-title="tt_settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2"/></svg></button>
+                <button class="icon-btn" id="video-call-btn" title="Видеозвонок" data-i18n-title="tt_videocall"><svg viewBox="0 0 24 24"><rect x="2" y="6" width="14" height="12" rx="2"/><path d="M16 10l6-4v12l-6-4"/></svg></button>
+                <button class="icon-btn" id="call-btn" title="Звонок" data-i18n-title="tt_call"><svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2A19.8 19.8 0 0111.19 18a19.5 19.5 0 01-6-6A19.8 19.8 0 012.12 3.38 2 2 0 014.11 2h3a2 2 0 012 1.72c.13.96.36 1.9.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0122 16.92z"/></svg></button>
               </div>
             </div>
             <div class="pinned-bar" id="pinned-bar"><span style="flex:1" id="pinned-text"></span><button class="icon-btn" id="unpin-btn" style="width:28px;height:28px">✕</button></div>
@@ -409,14 +418,14 @@ body.theme-light{
             </div>
             <div class="composer" id="composer">
               <div class="composer-actions">
-                <button class="icon-btn" id="attach-btn" title="Прикрепить"><svg viewBox="0 0 24 24"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg></button>
-                <button class="icon-btn" id="sticker-btn" title="Стикеры"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01"/></svg></button>
-                <button class="icon-btn" id="circle-btn" title="Кружок / Голос"><svg viewBox="0 0 24 24" id="circle-btn-icon"><circle cx="12" cy="12" r="10"/></svg></button>
+                <button class="icon-btn" id="attach-btn" title="Прикрепить" data-i18n-title="tt_attach"><svg viewBox="0 0 24 24"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg></button>
+                <button class="icon-btn" id="sticker-btn" title="Стикеры" data-i18n-title="tt_stickers"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01"/></svg></button>
+                <button class="icon-btn" id="circle-btn" title="Кружок / Голос" data-i18n-title="tt_circle"><svg viewBox="0 0 24 24" id="circle-btn-icon"><circle cx="12" cy="12" r="10"/></svg></button>
                 <input type="file" class="hidden-input" id="photo-input" accept="image/*,video/*">
                 <input type="file" class="hidden-input" id="file-input" accept="*/*">
                 <input type="file" class="hidden-input" id="story-input" accept="image/*,video/*">
               </div>
-              <textarea id="message-input" rows="1" placeholder="Сообщение..."></textarea>
+              <textarea id="message-input" rows="1" placeholder="Сообщение..." data-i18n-placeholder="ph_message"></textarea>
               <button class="send-btn" id="send-btn"><svg viewBox="0 0 24 24"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg></button>
             </div>
             <div id="chat-lock" class="lock-overlay" style="display:none">
@@ -432,8 +441,8 @@ body.theme-light{
       </div>
     </div>
     <div class="app-page" id="page-calls">
-      <div style="padding:16px;background:var(--panel);border-bottom:1px solid var(--line);font-size:17px;font-weight:700">Звонки</div>
-      <div id="calls-list" style="flex:1;overflow-y:auto;padding:8px"><div class="empty-state">Нет звонков</div></div>
+      <div style="padding:16px;background:var(--panel);border-bottom:1px solid var(--line);font-size:17px;font-weight:700" data-i18n="calls_title">Звонки</div>
+      <div id="calls-list" style="flex:1;overflow-y:auto;padding:8px"><div class="empty-state" data-i18n="no_calls">Нет звонков</div></div>
     </div>
     <div class="app-page settings-page" id="page-settings">
       <div class="settings-profile">
@@ -442,32 +451,32 @@ body.theme-light{
         <div class="settings-username" id="settings-display-username"></div>
       </div>
       <div class="settings-section">
-        <div class="settings-section-title">Аккаунт</div>
-        <div class="settings-item" id="settings-edit-profile"><svg viewBox="0 0 24 24"><path d="M20 14.66V20a2 2 0 01-2 2H4a2 2 0 01-2-2V6a2 2 0 012-2h5.34"/><path d="M18 2l4 4-10 10H8v-4L18 2z"/></svg><span class="item-text">Изменить профиль</span></div>
-        <div class="settings-item" id="settings-favorites"><svg viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg><span class="item-text">Избранное</span></div>
-        <div class="settings-item" id="settings-devices"><svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg><span class="item-text">Устройства</span></div>
-        <div class="settings-item" id="settings-pin-lock"><svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg><span class="item-text">Защита чатов (PIN)</span></div>
-        <div class="settings-item" id="settings-my-link"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg><span class="item-text">Моя ссылка</span></div>
+        <div class="settings-section-title" data-i18n="sec_account">Аккаунт</div>
+        <div class="settings-item" id="settings-edit-profile"><svg viewBox="0 0 24 24"><path d="M20 14.66V20a2 2 0 01-2 2H4a2 2 0 01-2-2V6a2 2 0 012-2h5.34"/><path d="M18 2l4 4-10 10H8v-4L18 2z"/></svg><span class="item-text" data-i18n="it_edit_profile">Изменить профиль</span></div>
+        <div class="settings-item" id="settings-favorites"><svg viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg><span class="item-text" data-i18n="it_favorites">Избранное</span></div>
+        <div class="settings-item" id="settings-devices"><svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg><span class="item-text" data-i18n="it_devices">Устройства</span></div>
+        <div class="settings-item" id="settings-pin-lock"><svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg><span class="item-text" data-i18n="it_pinlock">Защита чатов (PIN)</span></div>
+        <div class="settings-item" id="settings-my-link"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg><span class="item-text" data-i18n="it_mylink">Моя ссылка</span></div>
       </div>
       <div class="settings-section">
-        <div class="settings-section-title">Оформление</div>
-        <div class="settings-item" id="settings-wallpaper"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg><span class="item-text">Настроить обои</span></div>
-        <div class="settings-item" id="settings-emoji-status"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01"/></svg><span class="item-text">Эмодзи статус</span></div>
-        <div class="settings-item" id="settings-emoji-avatar"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9 10h.01M15 10h.01M8 15c1 1 2 1.5 4 1.5s3-.5 4-1.5"/></svg><span class="item-text">Эмодзи аватар</span></div>
+        <div class="settings-section-title" data-i18n="sec_appearance">Оформление</div>
+        <div class="settings-item" id="settings-wallpaper"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg><span class="item-text" data-i18n="it_wallpaper">Настроить обои</span></div>
+        <div class="settings-item" id="settings-emoji-status"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01"/></svg><span class="item-text" data-i18n="it_emojistatus">Эмодзи статус</span></div>
+        <div class="settings-item" id="settings-emoji-avatar"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9 10h.01M15 10h.01M8 15c1 1 2 1.5 4 1.5s3-.5 4-1.5"/></svg><span class="item-text" data-i18n="it_emojiavatar">Эмодзи аватар</span></div>
         <div class="settings-item" id="settings-language"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 010 20M12 2a15 15 0 000 20"/></svg><span class="item-text" id="settings-language-label">Язык</span></div>
       </div>
       <div class="settings-section">
-        <div class="settings-section-title">Приватность</div>
-        <div class="settings-item" id="settings-anonymity"><svg viewBox="0 0 24 24"><path d="M17.94 17.94A10.94 10.94 0 0112 20c-7 0-11-8-11-8a21.6 21.6 0 015.06-6.06M9.9 4.24A10.4 10.4 0 0112 4c7 0 11 8 11 8a21.6 21.6 0 01-2.94 4.24M14.12 14.12a3 3 0 11-4.24-4.24"/><path d="M1 1l22 22"/></svg><span class="item-text">Анонимность</span></div>
-        <div class="settings-item" id="settings-notifications"><svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 00-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg><span class="item-text">Уведомления</span></div>
+        <div class="settings-section-title" data-i18n="sec_privacy">Приватность</div>
+        <div class="settings-item" id="settings-anonymity"><svg viewBox="0 0 24 24"><path d="M17.94 17.94A10.94 10.94 0 0112 20c-7 0-11-8-11-8a21.6 21.6 0 015.06-6.06M9.9 4.24A10.4 10.4 0 0112 4c7 0 11 8 11 8a21.6 21.6 0 01-2.94 4.24M14.12 14.12a3 3 0 11-4.24-4.24"/><path d="M1 1l22 22"/></svg><span class="item-text" data-i18n="it_anonymity">Анонимность</span></div>
+        <div class="settings-item" id="settings-notifications"><svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 00-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg><span class="item-text" data-i18n="it_notifications">Уведомления</span></div>
       </div>
       <div class="settings-section">
-        <div class="settings-section-title">Подарки</div>
-        <div class="settings-item" id="settings-gifts"><svg viewBox="0 0 24 24"><rect x="3" y="8" width="18" height="13" rx="1"/><path d="M12 8v13M3 12h18"/><path d="M12 8c-1.5 0-3-1-3-2.5S10 3 12 5c0-2 1.5-3.5 3-2.5S13.5 8 12 8z"/></svg><span class="item-text">Подарки</span></div>
+        <div class="settings-section-title" data-i18n="sec_gifts">Подарки</div>
+        <div class="settings-item" id="settings-gifts"><svg viewBox="0 0 24 24"><rect x="3" y="8" width="18" height="13" rx="1"/><path d="M12 8v13M3 12h18"/><path d="M12 8c-1.5 0-3-1-3-2.5S10 3 12 5c0-2 1.5-3.5 3-2.5S13.5 8 12 8z"/></svg><span class="item-text" data-i18n="it_gifts">Подарки</span></div>
       </div>
       <div class="settings-section">
-        <div class="settings-section-title">Выход</div>
-        <div class="settings-item danger" id="settings-logout"><svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg><span class="item-text">Выйти</span></div>
+        <div class="settings-section-title" data-i18n="sec_logout">Выход</div>
+        <div class="settings-item danger" id="settings-logout"><svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg><span class="item-text" data-i18n="it_logout">Выйти</span></div>
       </div>
       <input type="file" class="hidden-input" id="avatar-upload" accept="image/*">
     </div>
@@ -736,14 +745,14 @@ function renderContactsAndGroups(){
     items=items.filter(it=>ids.has(it.data.id));
   }
   items.sort((a,b)=> (b.unread?1:0)-(a.unread?1:0) || new Date(b.data.lastAt||0)-new Date(a.data.lastAt||0));
-  if(!items.length){ list.innerHTML=`<div class="empty-state">${showArchive?'Архив пуст':'Нет чатов'}</div>`; return; }
+  if(!items.length){ list.innerHTML=`<div class="empty-state">${showArchive?t('empty_archive'):t('no_chats')}</div>`; return; }
   list.innerHTML='';
   items.forEach(({type,data,unread:u})=>{
     const row=document.createElement('div');
     const isActive=(type==='user'&&activePartner?.id===data.id)||(type==='group'&&activeGroup?.id===data.id);
     row.className='contact'+(isActive?' active':'');
     const isSelf=data.id===myProfile?.id;
-    const name=type==='group'?data.name:(isSelf?'Избранное':(data.first_name?`${data.first_name} ${data.last_name||''}`:data.username));
+    const name=type==='group'?data.name:(isSelf?t('it_favorites'):(data.first_name?`${data.first_name} ${data.last_name||''}`:data.username));
     const sub=type==='group'?(data.description||'Группа'):(data.lastMessage||'@'+data.username);
     const online=onlineUsers.has(data.id);
     row.innerHTML=`<div style="display:flex;align-items:center;gap:10px;width:100%;padding:10px 12px">
@@ -784,7 +793,7 @@ function showChatCtx(e, type, data){
         if(l.includes(data.id)) l=l.filter(id=>id!==data.id); else l.push(data.id);
         setLocked(l); alert(l.includes(data.id)?'Чат защищён PIN':'Защита снята');
       } else if(it.dataset.a==='del'){
-        if(!(await customConfirm('Удалить чат?'))) return;
+        if(!(await customConfirm(t('you_sure_delete_chat')))) return;
         try{
           if(type==='group') await sb.from('group_members').delete().eq('group_id',data.id).eq('user_id',myProfile.id);
           else await sb.from('messages').delete().or(`and(sender_id.eq.${myProfile.id},receiver_id.eq.${data.id}),and(sender_id.eq.${data.id},receiver_id.eq.${myProfile.id})`);
@@ -809,7 +818,7 @@ async function openChat(partner){
   document.getElementById('no-chat-state').style.display='none';
   document.getElementById('chat-active').style.display='flex';
   const isSelf=partner.id===myProfile.id;
-  document.getElementById('chat-partner-name').innerHTML=(isSelf?'Избранное':escapeHtml(partner.first_name?`${partner.first_name} ${partner.last_name||''}`:partner.username))+verifiedBadgeIf(partner.email);
+  document.getElementById('chat-partner-name').innerHTML=(isSelf?t('it_favorites'):escapeHtml(partner.first_name?`${partner.first_name} ${partner.last_name||''}`:partner.username))+verifiedBadgeIf(partner.email);
   updatePartnerStatus();
   renderAvatarInto(document.getElementById('partner-avatar'), partner.avatar_url, (partner.username||'?')[0].toUpperCase(), partner.color||colorFor(partner.id));
   if(innerWidth<=768) document.getElementById('sidebar').classList.add('hidden');
@@ -892,9 +901,9 @@ function buildPinKeypad(){
 
 function updatePartnerStatus(){
   const el=document.getElementById('chat-partner-status');
-  if(!activePartner||activePartner.isBot){ el.textContent=activePartner?.isBot?'бот':''; return; }
-  if(activePartner.id===myProfile.id){ el.textContent='заметки'; return; }
-  el.textContent=onlineUsers.has(activePartner.id)?'в сети':'не в сети';
+  if(!activePartner||activePartner.isBot){ el.textContent=activePartner?.isBot?t('bot'):''; return; }
+  if(activePartner.id===myProfile.id){ el.textContent=t('notes'); return; }
+  el.textContent=onlineUsers.has(activePartner.id)?t('online'):t('offline');
   el.className='chat-status'+(onlineUsers.has(activePartner.id)?'':' offline');
 }
 
@@ -1066,7 +1075,7 @@ function showMsgCtx(e, msg){
       else if(a==='speed2'){ currentPlaybackSpeed=2; }
       else if(a==='edit'){ editingMsgId=msg.id; document.getElementById('message-input').value=msg.content||''; document.getElementById('message-input').focus(); document.getElementById('send-btn').classList.add('visible'); }
       else if(a==='del'){
-        if(!(await customConfirm('Удалить сообщение?'))) return;
+        if(!(await customConfirm(t('you_sure_delete_msg')))) return;
         sb.from('messages').delete().eq('id',msg.id).then(()=>document.querySelector(`.bubble-row[data-id="${msg.id}"]`)?.remove());
       }
     };
@@ -1386,7 +1395,7 @@ document.getElementById('photo-input').onchange=function(e){ const f=e.target.fi
 document.getElementById('file-input').onchange=function(e){ const f=e.target.files[0]; if(!f) return; e.target.value=''; const r=new FileReader(); r.onload=ev=>sendMessage('file',ev.target.result,f.name); r.readAsDataURL(f); };
 
 // ========== SETTINGS ==========
-document.getElementById('settings-favorites').onclick=()=>{ switchPage('chats'); openChat({id:myProfile.id, username:myProfile.username, first_name:'Избранное', color:myProfile.color, avatar_url:myProfile.avatar_url}); };
+document.getElementById('settings-favorites').onclick=()=>{ switchPage('chats'); openChat({id:myProfile.id, username:myProfile.username, first_name:t('it_favorites'), color:myProfile.color, avatar_url:myProfile.avatar_url}); };
 document.getElementById('settings-my-link').onclick=()=>{
   const link=`${location.origin}/user/@${myProfile.username}`;
   showInfoDialog('Моя ссылка', link);
@@ -1415,7 +1424,7 @@ document.getElementById('avatar-upload').onchange=function(e){
   const r=new FileReader(); r.onload=async ev=>{ myProfile.avatar_url=ev.target.result; updateAllUIs(); try{ await sb.from('profiles').update({avatar_url:ev.target.result}).eq('id',myProfile.id); }catch(e){} };
   r.readAsDataURL(f);
 };
-document.getElementById('settings-logout').onclick=async()=>{ if(await customConfirm('Выйти из аккаунта?')){ try{ await sb.auth.signOut(); }catch(e){} location.reload(); } };
+document.getElementById('settings-logout').onclick=async()=>{ if(await customConfirm(t('you_sure_logout'))){ try{ await sb.auth.signOut(); }catch(e){} location.reload(); } };
 
 // ========== REALTIME ==========
 function subscribeRealtime(){
@@ -1443,7 +1452,7 @@ function setupPresence(){
 function setupTyping(){
   if(typingChannel) sb.removeChannel(typingChannel);
   typingChannel=sb.channel('typing')
-    .on('broadcast',{event:'typing'},({payload})=>{ if(payload.to===myProfile.id&&activePartner?.id===payload.from){ const el=document.getElementById('chat-partner-status'); el.textContent='печатает…'; el.className='chat-status typing'; } })
+    .on('broadcast',{event:'typing'},({payload})=>{ if(payload.to===myProfile.id&&activePartner?.id===payload.from){ const el=document.getElementById('chat-partner-status'); el.textContent=t('typing'); el.className='chat-status typing'; } })
     .on('broadcast',{event:'stop_typing'},({payload})=>{ if(payload.to===myProfile.id&&activePartner?.id===payload.from) updatePartnerStatus(); })
     .subscribe();
 }
@@ -1515,7 +1524,7 @@ function showInfoDialog(title, text){
   document.body.appendChild(ov);
   ov.querySelector('#cd-close').onclick=()=>ov.remove();
   ov.querySelector('#cd-copy').onclick=()=>{
-    try{ navigator.clipboard.writeText(text); showToast('Скопировано'); }catch(e){}
+    try{ navigator.clipboard.writeText(text); showToast(t('copied')); }catch(e){}
     ov.remove();
   };
 }
@@ -2167,10 +2176,16 @@ function markOwlSeen(key){ try{ const a=JSON.parse(storage.getItem(OWL_SEEN_KEY)
 function showOwl(key, text, opts={}){
   return new Promise(resolve=>{
     if(owlSeen(key)){ resolve(true); return; }
+    const rowColors=['4C7CF3','2DD4BF','F0708A','F7B955','9B7CF3'];
+    const demoRows=Array.from({length:4},(_,i)=>{
+      const w=40+Math.floor(Math.random()*40);
+      return `<div class="owl-demo-row" style="top:${i*24}px;animation-delay:${i*0.5}s"><span class="d-avatar" style="background:#${rowColors[i%rowColors.length]}"></span><span class="d-line" style="max-width:${w}%"></span></div>`;
+    }).join('');
     const ov=document.createElement('div'); ov.className='owl-overlay';
     ov.innerHTML=`<div class="owl-card">
       <div class="owl-emoji">🦉</div>
       <div class="owl-text">${escapeHtml(text)}</div>
+      <div class="owl-demo">${demoRows}<span class="owl-demo-owl">🦉</span></div>
       <button class="btn-primary" id="owl-continue">Продолжить</button>
     </div>`;
     document.body.appendChild(ov);
@@ -2284,19 +2299,76 @@ document.getElementById('comment-send')?.addEventListener('click', ()=>{
 
 // ---------- i18n ----------
 const I18N={
-  ru:{tab_chats:'Чаты',tab_calls:'Звонки',tab_settings:'Настройки'},
-  en:{tab_chats:'Chats',tab_calls:'Calls',tab_settings:'Settings'}
+  ru:{
+    tab_chats:'Чаты',tab_calls:'Звонки',tab_settings:'Настройки',
+    auth_sub:'Современный мессенджер', auth_login_tab:'Вход', auth_register_tab:'Регистрация',
+    auth_method_email:'Почта', auth_method_phone:'Телефон',
+    field_email:'Email', field_password:'Пароль', field_phone:'Телефон',
+    field_firstname:'Имя', field_lastname:'Фамилия', field_username:'Имя пользователя', field_birth:'Дата рождения',
+    field_password_min:'Минимум 6 символов',
+    auth_login_btn:'Войти', auth_register_btn:'Создать аккаунт',
+    ph_search:'Поиск...', ph_search_chat:'Поиск в чате...', ph_message:'Сообщение...',
+    loading:'Загрузка...', choose_chat:'Выберите чат', no_chats:'Нет чатов', empty_archive:'Архив пуст',
+    calls_title:'Звонки', no_calls:'Нет звонков',
+    tt_search:'Поиск', tt_media:'Медиа', tt_invite:'Пригласить', tt_settings:'Настройки', tt_videocall:'Видеозвонок', tt_call:'Звонок',
+    tt_attach:'Прикрепить', tt_stickers:'Стикеры', tt_circle:'Кружок / Голос',
+    sec_account:'Аккаунт', it_edit_profile:'Изменить профиль', it_favorites:'Избранное', it_devices:'Устройства',
+    it_pinlock:'Защита чатов (PIN)', it_mylink:'Моя ссылка',
+    sec_appearance:'Оформление', it_wallpaper:'Настроить обои', it_emojistatus:'Эмодзи статус', it_emojiavatar:'Эмодзи аватар',
+    sec_privacy:'Приватность', it_anonymity:'Анонимность', it_notifications:'Уведомления',
+    sec_gifts:'Подарки', it_gifts:'Подарки', sec_logout:'Выход', it_logout:'Выйти',
+    online:'в сети', offline:'не в сети', typing:'печатает…', notes:'заметки', bot:'бот',
+    you_sure_delete_chat:'Удалить чат?', you_sure_delete_msg:'Удалить сообщение?', you_sure_logout:'Выйти из аккаунта?',
+    copied:'Скопировано', not_found:'Не найден', added:'Добавлен',
+  },
+  en:{
+    tab_chats:'Chats', tab_calls:'Calls', tab_settings:'Settings',
+    auth_sub:'Modern messenger', auth_login_tab:'Log in', auth_register_tab:'Sign up',
+    auth_method_email:'Email', auth_method_phone:'Phone',
+    field_email:'Email', field_password:'Password', field_phone:'Phone',
+    field_firstname:'First name', field_lastname:'Last name', field_username:'Username', field_birth:'Date of birth',
+    field_password_min:'Minimum 6 characters',
+    auth_login_btn:'Log in', auth_register_btn:'Create account',
+    ph_search:'Search...', ph_search_chat:'Search in chat...', ph_message:'Message...',
+    loading:'Loading...', choose_chat:'Select a chat', no_chats:'No chats', empty_archive:'Archive is empty',
+    calls_title:'Calls', no_calls:'No calls',
+    tt_search:'Search', tt_media:'Media', tt_invite:'Invite', tt_settings:'Settings', tt_videocall:'Video call', tt_call:'Call',
+    tt_attach:'Attach', tt_stickers:'Stickers', tt_circle:'Circle / Voice',
+    sec_account:'Account', it_edit_profile:'Edit profile', it_favorites:'Favorites', it_devices:'Devices',
+    it_pinlock:'Chat lock (PIN)', it_mylink:'My link',
+    sec_appearance:'Appearance', it_wallpaper:'Set wallpaper', it_emojistatus:'Emoji status', it_emojiavatar:'Emoji avatar',
+    sec_privacy:'Privacy', it_anonymity:'Anonymity', it_notifications:'Notifications',
+    sec_gifts:'Gifts', it_gifts:'Gifts', sec_logout:'Sign out', it_logout:'Log out',
+    online:'online', offline:'offline', typing:'typing…', notes:'notes', bot:'bot',
+    you_sure_delete_chat:'Delete this chat?', you_sure_delete_msg:'Delete this message?', you_sure_logout:'Sign out of your account?',
+    copied:'Copied', not_found:'Not found', added:'Added',
+  }
 };
 const LANG_KEY='sl_lang';
 let currentLang='ru';
 function detectLang(){ const saved=storage.getItem(LANG_KEY); if(saved) return saved; const nav=(navigator.language||'ru').slice(0,2); return nav==='en'?'en':'ru'; }
+function t(key){ return (I18N[currentLang]&&I18N[currentLang][key]) || (I18N.ru[key]) || key; }
 function applyI18n(){
   currentLang=detectLang();
+  document.documentElement.lang = currentLang;
   document.querySelectorAll('[data-i18n]').forEach(el=>{
     const k=el.dataset.i18n; if(I18N[currentLang]?.[k]) el.textContent=I18N[currentLang][k];
   });
+  document.querySelectorAll('[data-i18n-placeholder]').forEach(el=>{
+    const k=el.dataset.i18nPlaceholder; if(I18N[currentLang]?.[k]) el.setAttribute('placeholder', I18N[currentLang][k]);
+  });
+  document.querySelectorAll('[data-i18n-title]').forEach(el=>{
+    const k=el.dataset.i18nTitle; if(I18N[currentLang]?.[k]) el.setAttribute('title', I18N[currentLang][k]);
+  });
   const lbl=document.getElementById('settings-language-label');
-  if(lbl) lbl.textContent = currentLang==='en' ? 'Language' : 'Язык';
+  if(lbl) lbl.textContent = t('it_pinlock')&&currentLang==='en' ? 'Language' : (currentLang==='en'?'Language':'Язык');
+  // re-render dynamic bits that carry text baked in at render time
+  try{
+    const emptyList=document.querySelector('#contacts-list .empty-state');
+    if(emptyList) renderContactsAndGroups();
+    if(activePartner) updatePartnerStatus();
+    document.getElementById('message-input').placeholder = document.activeElement?.id==='message-input' ? document.getElementById('message-input').placeholder : t('ph_message');
+  }catch(e){}
 }
 function initI18n(){ applyI18n(); }
 document.getElementById('settings-language').onclick=()=>{
@@ -2492,6 +2564,45 @@ function endCall(){
 }
 document.getElementById('call-btn').onclick=()=>{ if(activePartner) startCall(activePartner, false); };
 document.getElementById('video-call-btn').onclick=()=>{ if(activePartner) startCall(activePartner, true); };
+
+// ---------- Sidebar search: also find NEW users (not just existing contacts) ----------
+async function appendGlobalSearchResults(list, q){
+  const query=q.trim();
+  if(query.length<2 || !myProfile) return;
+  let data=null;
+  try{
+    const res=await sb.from('profiles').select('*')
+      .or(`username.ilike.%${query}%,email.ilike.%${query}%,phone.ilike.%${query}%,first_name.ilike.%${query}%,last_name.ilike.%${query}%`)
+      .neq('id',myProfile.id).limit(12);
+    data=res.data;
+  }catch(e){ return; }
+  if((document.getElementById('search-input')?.value||'').trim()!==q) return; // stale response, query changed
+  const knownIds=new Set(contacts.map(c=>c.id));
+  const fresh=(data||[]).filter(p=>!knownIds.has(p.id));
+  if(!fresh.length) return;
+  const header=document.createElement('div');
+  header.style.cssText='margin:12px 12px 4px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:1px';
+  header.textContent = currentLang==='en' ? 'New people' : 'Новые пользователи';
+  list.appendChild(header);
+  fresh.forEach(p=>{
+    const row=document.createElement('div'); row.className='contact';
+    const name=p.first_name?`${p.first_name} ${p.last_name||''}`:p.username;
+    row.innerHTML=`<div style="display:flex;align-items:center;gap:10px;width:100%;padding:10px 12px">
+      <div class="avatar" style="width:40px;height:40px;font-size:14px"></div>
+      <div style="min-width:0;flex:1"><div class="contact-name">${escapeHtml(name)}${verifiedBadgeIf(p.email)}</div>
+      <div class="contact-sub">@${escapeHtml(p.username||'')}</div></div></div>`;
+    renderAvatarInto(row.querySelector('.avatar'), p.avatar_url, (name||'?')[0].toUpperCase(), p.color||colorFor(p.id));
+    row.onclick=()=>openChat(p);
+    list.appendChild(row);
+  });
+}
+const _origRenderContactsAndGroups = renderContactsAndGroups;
+renderContactsAndGroups = function(){
+  _origRenderContactsAndGroups();
+  const list=document.getElementById('contacts-list');
+  const q=(document.getElementById('search-input')?.value||'');
+  if(list && q.trim().length>=2) appendGlobalSearchResults(list, q);
+};
 
 updateCircleIcon();
 if(sb) sb.auth.getSession().then(({data})=>{ if(data?.session) onAuthenticated(data.session.user); });
