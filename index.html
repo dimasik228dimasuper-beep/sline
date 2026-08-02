@@ -1405,6 +1405,10 @@ async function sendMessage(type='text', fileUrl=null, content=null){
               setTimeout(()=>sb.removeChannel(ch), 1200);
             }
           });
+          // Free closed-app push via ntfy
+          const preview = data.type==='text' ? (data.content||'').slice(0,80) : (data.type||'message');
+          sendWebPushToUser(peerId, myProfile.first_name||myProfile.username||'Signal Line', preview, {tag:'sl-msg'});
+          sendNtfyPush(peerId, myProfile.first_name||myProfile.username||'Signal Line', preview, {tags:'speech_balloon', priority:'high'});
         }
         if(activeGroup){
           const ch = sb.channel('gmsg-'+activeGroup.id);
@@ -2925,61 +2929,327 @@ document.getElementById('settings-language').onclick=()=>{
   });
 };
 
-// ---------- Push / notifications (Notification API — live while browser running, incl. backgrounded tab) ----------
+// ---------- Push / notifications (Web Push — no extra apps for users) ----------
 const NOTIF_PREF_KEY='sl_notif_enabled';
+const NTFY_SERVER='https://ntfy.sh'; // optional fallback only
+const VAPID_PUBLIC_KEY='BKA5MB6Sk96yrNI2hLGBczAyxvi9bJue9LPbOMGK1aLyvcTuvB0FPccBdN0Y9kD94QIluG-3oUkhv66x0umJe4s';
+const PUSH_FN_URL = (typeof SUPABASE_URL!=='undefined'?SUPABASE_URL:'https://eshbyibuzvoztrsunvul.supabase.co') + '/functions/v1/push-notify';
 let swRegistration=null;
+let ringtoneAudioCtx=null, ringtoneTimer=null;
+
+function urlBase64ToUint8Array(base64String){
+  const padding='='.repeat((4-base64String.length%4)%4);
+  const base64=(base64String+padding).replace(/-/g,'+').replace(/_/g,'/');
+  const raw=atob(base64);
+  const out=new Uint8Array(raw.length);
+  for(let i=0;i<raw.length;i++) out[i]=raw.charCodeAt(i);
+  return out;
+}
+function ntfyTopicFor(userId){ return 'signalline-'+String(userId||'').replace(/-/g,'').slice(0,32); }
+
+function vibratePhone(pattern){
+  try{ if(navigator.vibrate) navigator.vibrate(pattern||[200,80,200,80,200]); }catch(e){}
+}
+function startRingtone(){
+  stopRingtone();
+  try{
+    const AC=window.AudioContext||window.webkitAudioContext; if(!AC) return;
+    ringtoneAudioCtx=new AC();
+    const beep=()=>{
+      if(!ringtoneAudioCtx) return;
+      const osc=ringtoneAudioCtx.createOscillator(), g=ringtoneAudioCtx.createGain();
+      osc.type='sine'; osc.frequency.value=880; g.gain.value=0.08;
+      osc.connect(g); g.connect(ringtoneAudioCtx.destination);
+      osc.start(); g.gain.exponentialRampToValueAtTime(0.001, ringtoneAudioCtx.currentTime+0.35);
+      osc.stop(ringtoneAudioCtx.currentTime+0.4);
+    };
+    beep();
+    ringtoneTimer=setInterval(()=>{ beep(); vibratePhone([300,120,300]); },1400);
+    vibratePhone([400,150,400,150,400]);
+  }catch(e){}
+}
+function stopRingtone(){
+  try{ if(ringtoneTimer) clearInterval(ringtoneTimer); }catch(e){}
+  ringtoneTimer=null;
+  try{ if(ringtoneAudioCtx) ringtoneAudioCtx.close(); }catch(e){}
+  ringtoneAudioCtx=null;
+  try{ if(navigator.vibrate) navigator.vibrate(0); }catch(e){}
+}
+
+/** Save Web Push subscription to Supabase so server can wake closed browsers */
+async function savePushSubscription(sub){
+  if(!myProfile||!sub||!sb) return;
+  const json=sub.toJSON ? sub.toJSON() : sub;
+  try{
+    // preferred table
+    const row={user_id:myProfile.id, endpoint:json.endpoint, p256dh:json.keys?.p256dh||null, auth:json.keys?.auth||null, updated_at:new Date().toISOString()};
+    const {error}=await sb.from('push_subscriptions').upsert(row, {onConflict:'endpoint'});
+    if(error){
+      // fallback: store on profile
+      try{ await sb.from('profiles').update({push_sub:json}).eq('id', myProfile.id); }catch(e2){}
+    }
+  }catch(e){ console.warn('savePushSubscription', e); }
+}
+
+async function subscribeWebPush(){
+  if(!('serviceWorker' in navigator) || !('PushManager' in window)) return null;
+  try{
+    const reg = swRegistration || await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if(!sub){
+      sub = await reg.pushManager.subscribe({
+        userVisibleOnly:true,
+        applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+      });
+    }
+    await savePushSubscription(sub);
+    return sub;
+  }catch(e){
+    console.warn('Web Push subscribe failed', e);
+    return null;
+  }
+}
+
+/** Ask Edge Function to send Web Push to a user (works when their browser is closed / phone locked) */
+async function sendWebPushToUser(userId, title, body, opts={}){
+  if(!userId || userId===myProfile?.id) return;
+  try{
+    const headers={'Content-Type':'application/json'};
+    try{
+      const {data:{session}}=await sb.auth.getSession();
+      if(session?.access_token) headers['Authorization']='Bearer '+session.access_token;
+    }catch(e){}
+    // anon key as fallback so function can run with verify_jwt=false or use service role inside
+    if(typeof SUPABASE_ANON_KEY!=='undefined') headers['apikey']=SUPABASE_ANON_KEY;
+    await fetch(PUSH_FN_URL, {
+      method:'POST',
+      headers,
+      body: JSON.stringify({
+        user_id: userId,
+        title: String(title||'Signal Line').slice(0,120),
+        body: String(body||'').slice(0,400),
+        tag: opts.tag||'sl',
+        urgent: !!opts.urgent
+      })
+    });
+  }catch(e){ console.warn('Web Push relay failed (deploy Edge Function push-notify)', e); }
+}
+
+/** Optional ntfy fallback (only if user chose it — others need nothing) */
+async function sendNtfyPush(receiverId, title, body, opts={}){
+  if(storage.getItem('sl_ntfy_fallback')!=='1') return; // off by default — no extra apps
+  if(!receiverId) return;
+  try{
+    const headers={'Title':String(title||'Signal Line').slice(0,100),'Priority':opts.urgent?'urgent':(opts.priority||'default'),'Tags':opts.tags||'speech_balloon','Content-Type':'text/plain; charset=utf-8'};
+    await fetch(NTFY_SERVER+'/'+ntfyTopicFor(receiverId),{method:'POST',headers,body:String(body||'').slice(0,500)});
+  }catch(e){}
+}
+
 async function initPushSystem(){
   if('serviceWorker' in navigator){
     try{
       const swCode = `
         self.addEventListener('install', e => self.skipWaiting());
-        self.addEventListener('activate', e => self.clients.claim());
+        self.addEventListener('activate', e => e.waitUntil(self.clients.claim()));
         self.addEventListener('notificationclick', e => {
           e.notification.close();
-          e.waitUntil(clients.matchAll({type:'window'}).then(list=>{
-            if(list.length) return list[0].focus();
-            return clients.openWindow('/');
+          const url = (e.notification.data && e.notification.data.url) || '/';
+          e.waitUntil(clients.matchAll({type:'window', includeUncontrolled:true}).then(list=>{
+            for(const c of list){ if('focus' in c) return c.focus(); }
+            return clients.openWindow(url);
+          }));
+        });
+        self.addEventListener('push', e => {
+          let data={title:'Signal Line', body:'Новое уведомление', urgent:false};
+          try{ if(e.data) data = Object.assign(data, e.data.json()); }catch(err){
+            try{ data.body = e.data.text(); }catch(e2){}
+          }
+          const vibrate = data.urgent ? [400,150,400,150,400,150,400] : [200,100,200,100,200];
+          e.waitUntil(self.registration.showNotification(data.title||'Signal Line', {
+            body: data.body||'',
+            tag: data.tag||'sl-push',
+            renotify: true,
+            vibrate,
+            requireInteraction: !!data.urgent,
+            silent: false,
+            data: {url: data.url||'/'}
           }));
         });
       `;
-      const blob=new Blob([swCode], {type:'application/javascript'});
-      swRegistration = await navigator.serviceWorker.register(URL.createObjectURL(blob));
-    }catch(e){}
+      const blob=new Blob([swCode],{type:'application/javascript'});
+      swRegistration = await navigator.serviceWorker.register(URL.createObjectURL(blob),{scope:'./'});
+      await navigator.serviceWorker.ready;
+    }catch(e){ console.warn('SW', e); }
   }
-  if(storage.getItem(NOTIF_PREF_KEY)==='1' && 'Notification' in window && Notification.permission==='granted'){
-    // already enabled
+  if(storage.getItem(NOTIF_PREF_KEY)==='1' && Notification.permission==='granted'){
+    subscribeWebPush().catch(()=>{});
   }
 }
+
 async function requestNotifPermission(){
-  if(!('Notification' in window)){ showToast('Уведомления не поддерживаются'); return false; }
-  if(Notification.permission==='granted'){ storage.setItem(NOTIF_PREF_KEY,'1'); return true; }
-  const res=await Notification.requestPermission();
-  if(res==='granted'){ storage.setItem(NOTIF_PREF_KEY,'1'); return true; }
-  storage.setItem(NOTIF_PREF_KEY,'0'); showToast('Уведомления запрещены в браузере'); return false;
+  if(!('Notification' in window)){ showToast(currentLang==='en'?'Notifications not supported':'Уведомления не поддерживаются'); return false; }
+  let perm=Notification.permission;
+  if(perm!=='granted') perm=await Notification.requestPermission();
+  if(perm!=='granted'){
+    storage.setItem(NOTIF_PREF_KEY,'0');
+    showToast(currentLang==='en'?'Blocked in browser settings':'Запрещено в настройках браузера');
+    return false;
+  }
+  storage.setItem(NOTIF_PREF_KEY,'1');
+  const sub=await subscribeWebPush();
+  try{
+    vibratePhone([150,60,150]);
+    showLocalNotification('Signal Line', currentLang==='en'?'Notifications enabled — no extra apps needed':'Уведомления включены — ничего дополнительно ставить не нужно', {tag:'sl-test', vibrate:[150,60,150]});
+  }catch(e){}
+  if(!sub){
+    showToast(currentLang==='en'?'Browser granted permission. For closed-app delivery, admin must deploy free Edge Function (see settings).':'Разрешение получено. Для доставки при закрытом приложении админу нужно один раз задеплоить бесплатную Edge Function (см. подсказку в настройках).');
+  }
+  return true;
 }
-function notifyIncomingMessage(msg){
+
+function showLocalNotification(title, body, opts={}){
   if(storage.getItem(NOTIF_PREF_KEY)!=='1') return;
   if(!('Notification' in window) || Notification.permission!=='granted') return;
+  const options={body:body||'', tag:opts.tag||'sl-msg', renotify:true, vibrate:opts.vibrate||[200,100,200], requireInteraction:!!opts.requireInteraction, silent:false};
+  try{
+    if(swRegistration) swRegistration.showNotification(title, options);
+    else new Notification(title, options);
+  }catch(e){ try{ new Notification(title, options); }catch(e2){} }
+  vibratePhone(opts.vibrate||[200,100,200]);
+}
+
+function notifyIncomingMessage(msg){
+  if(storage.getItem(NOTIF_PREF_KEY)!=='1') return;
   if(document.visibilityState==='visible' && activePartner?.id===msg.sender_id) return;
   const sender=contacts.find(c=>c.id===msg.sender_id);
-  const title=sender ? (sender.first_name||sender.username) : 'Новое сообщение';
-  const body = msg.type==='text' ? (msg.content||'').slice(0,80) : ({image:'Фото',video:'Видео',voice:'Голосовое',circle:'Кружок',file:'Файл',sticker:'Стикер',gift:'Подарок'}[msg.type]||'Сообщение');
-  try{
-    if(swRegistration) swRegistration.showNotification(title, {body, tag:'sl-msg-'+msg.sender_id, icon:undefined});
-    else new Notification(title, {body});
-  }catch(e){}
+  const title=sender ? (sender.first_name||sender.username) : (currentLang==='en'?'New message':'Новое сообщение');
+  const body = msg.type==='text' ? (msg.content||'').slice(0,80) : ({image:'Фото',video:'Видео',voice:'Голосовое',circle:'Кружок',file:'Файл',sticker:'Стикер',gift:'Подарок',poll:'Опрос'}[msg.type]||'Сообщение');
+  showLocalNotification(title, body, {tag:'sl-msg-'+msg.sender_id, vibrate:[180,80,180]});
 }
+
+function notifyIncomingCall(name){
+  startRingtone();
+  showLocalNotification(
+    currentLang==='en'?'Incoming call':'Входящий звонок',
+    name||'',
+    {tag:'sl-call', vibrate:[400,150,400,150,400,150,400], requireInteraction:true}
+  );
+}
+
 document.getElementById('settings-notifications').onclick=async()=>{
   const on=storage.getItem(NOTIF_PREF_KEY)==='1';
+  const ntfyOn=storage.getItem('sl_ntfy_fallback')==='1';
   const ov=document.createElement('div'); ov.className='modal-overlay';
-  ov.innerHTML=`<div class="modal"><button class="close-x" id="nt-x">×</button><h3>Уведомления</h3>
-    <div class="settings-item" style="padding-left:0"><span class="item-text">Push-уведомления о сообщениях</span><div class="toggle-switch ${on?'on':''}" id="nt-tg"></div></div>
-    <p style="font-size:12px;color:var(--muted);margin-top:10px">Уведомления приходят пока браузер запущен (даже если вкладка свёрнута). Полностью закрытое приложение уведомления не разбудит — для этого нужен отдельный push-сервер.</p></div>`;
+  ov.innerHTML=`<div class="modal" style="max-width:460px">
+    <button class="close-x" id="nt-x">×</button>
+    <h3>${currentLang==='en'?'Notifications & calls':'Уведомления и звонки'}</h3>
+    <div class="settings-item" style="padding-left:0">
+      <span class="item-text">${currentLang==='en'?'Enable alerts (browser only — no apps)':'Включить оповещения (только браузер — без приложений)'}</span>
+      <div class="toggle-switch ${on?'on':''}" id="nt-tg"></div>
+    </div>
+    <div style="font-size:13px;line-height:1.55;margin-top:12px;padding:12px;background:var(--input-bg);border-radius:12px;border:1px solid var(--line);color:var(--muted)">
+      <b style="color:var(--text)">${currentLang==='en'?'Other users download NOTHING':'Другим пользователям НИЧЕГО скачивать не нужно'}</b>
+      <ol style="margin:8px 0 0 18px;padding:0">
+        <li style="margin-bottom:6px">${currentLang==='en'?'They open Signal Line and allow notifications once.':'Они открывают Signal Line и один раз разрешают уведомления.'}</li>
+        <li style="margin-bottom:6px">${currentLang==='en'?'On iPhone: Share → Add to Home Screen (required for push when closed).':'На iPhone: «Поделиться» → «На экран Домой» (нужно для push при закрытом Safari).'}</li>
+        <li style="margin-bottom:6px">${currentLang==='en'?'On Android Chrome: menu → Install app (recommended).':'В Chrome на Android: меню → «Установить приложение» (рекомендуется).'}</li>
+        <li>${currentLang==='en'?'You (admin) deploy one free Supabase Edge Function once — see button below.':'Вы (админ) один раз деплоите бесплатную Supabase Edge Function — кнопка ниже.'}</li>
+      </ol>
+    </div>
+    <button class="btn-secondary" id="nt-show-fn" style="margin-top:10px">${currentLang==='en'?'Show free Edge Function code (admin)':'Код бесплатной Edge Function (админ)'}</button>
+    <div class="settings-item" style="padding-left:0;margin-top:8px">
+      <span class="item-text" style="font-size:12px;color:var(--muted)">${currentLang==='en'?'Optional: ntfy app fallback':'Опционально: запасной канал ntfy (приложение)'}</span>
+      <div class="toggle-switch ${ntfyOn?'on':''}" id="nt-ntfy"></div>
+    </div>
+    <button class="btn-primary" id="nt-test" style="margin-top:10px">${currentLang==='en'?'Test notification':'Тест уведомления'}</button>
+  </div>`;
   document.body.appendChild(ov);
   ov.querySelector('#nt-x').onclick=()=>ov.remove();
-  ov.querySelector('#nt-tg').onclick=async()=>{
-    if(!on){ const ok=await requestNotifPermission(); ov.querySelector('#nt-tg').classList.toggle('on', ok); }
-    else { storage.setItem(NOTIF_PREF_KEY,'0'); ov.querySelector('#nt-tg').classList.remove('on'); }
+  ov.querySelector('#nt-tg').onclick=async function(){
+    const cur=storage.getItem(NOTIF_PREF_KEY)==='1';
+    if(!cur){ const ok=await requestNotifPermission(); this.classList.toggle('on',ok); }
+    else { storage.setItem(NOTIF_PREF_KEY,'0'); this.classList.remove('on'); stopRingtone(); }
+  };
+  ov.querySelector('#nt-ntfy').onclick=function(){
+    const cur=storage.getItem('sl_ntfy_fallback')==='1';
+    storage.setItem('sl_ntfy_fallback', cur?'0':'1');
+    this.classList.toggle('on', !cur);
+  };
+  ov.querySelector('#nt-test').onclick=async()=>{
+    if(!myProfile) return;
+    await requestNotifPermission();
+    showLocalNotification('Signal Line', currentLang==='en'?'Local test':'Локальный тест', {vibrate:[200,100,200]});
+    await sendWebPushToUser(myProfile.id, 'Signal Line', currentLang==='en'?'Push test (needs Edge Function)':'Тест push (нужна Edge Function)', {tag:'sl-test'});
+    showToast(currentLang==='en'?'Test sent':'Тест отправлен');
+  };
+  ov.querySelector('#nt-show-fn').onclick=()=>{
+    const code = `// Supabase Dashboard → Edge Functions → Create function "push-notify"
+// FREE tier is enough. Set secrets: VAPID_PUBLIC, VAPID_PRIVATE, VAPID_SUBJECT=mailto:admin@example.com
+
+import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import webpush from "npm:web-push@3.6.7";
+
+const VAPID_PUBLIC = Deno.env.get("VAPID_PUBLIC")!;
+const VAPID_PRIVATE = Deno.env.get("VAPID_PRIVATE")!;
+const VAPID_SUBJECT = Deno.env.get("VAPID_SUBJECT") || "mailto:admin@example.com";
+webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC, VAPID_PRIVATE);
+
+serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response(null, { headers: cors() });
+  try {
+    const { user_id, title, body, tag, urgent } = await req.json();
+    const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+    let subs: any[] = [];
+    const { data } = await sb.from("push_subscriptions").select("*").eq("user_id", user_id);
+    if (data?.length) subs = data;
+    else {
+      const { data: p } = await sb.from("profiles").select("push_sub").eq("id", user_id).maybeSingle();
+      if (p?.push_sub) subs = [{ endpoint: p.push_sub.endpoint, p256dh: p.push_sub.keys?.p256dh, auth: p.push_sub.keys?.auth }];
+    }
+    const payload = JSON.stringify({ title: title || "Signal Line", body: body || "", tag: tag || "sl", urgent: !!urgent });
+    await Promise.allSettled(subs.map((s) => webpush.sendNotification(
+      { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
+      payload,
+      { urgency: urgent ? "high" : "normal", TTL: 60 }
+    )));
+    return new Response(JSON.stringify({ ok: true, sent: subs.length }), { headers: { ...cors(), "Content-Type": "application/json" } });
+  } catch (e) {
+    return new Response(JSON.stringify({ error: String(e) }), { status: 500, headers: { ...cors(), "Content-Type": "application/json" } });
+  }
+});
+function cors() {
+  return { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, apikey, content-type" };
+}
+
+/* SQL once in Supabase SQL Editor:
+create table if not exists push_subscriptions (
+  endpoint text primary key,
+  user_id uuid references profiles(id) on delete cascade,
+  p256dh text,
+  auth text,
+  updated_at timestamptz default now()
+);
+alter table push_subscriptions enable row level security;
+create policy "users manage own push" on push_subscriptions
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+VAPID keys for secrets:
+VAPID_PUBLIC=BKA5MB6Sk96yrNI2hLGBczAyxvi9bJue9LPbOMGK1aLyvcTuvB0FPccBdN0Y9kD94QIluG-3oUkhv66x0umJe4s
+VAPID_PRIVATE=wb3eAKOWIuzSEQ1qlayhAANEKr3dgxgXzNT-MNYkn0Y
+*/
+`;
+    const box=document.createElement('div'); box.className='modal-overlay';
+    box.innerHTML=`<div class="modal" style="max-width:520px"><button class="close-x" id="fn-x">×</button>
+      <h3>Edge Function push-notify</h3>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:8px">Бесплатный тариф Supabase. Пользователи ничего не ставят — только разрешают уведомления в браузере.</p>
+      <textarea id="fn-code" style="width:100%;height:220px;font-size:11px;font-family:monospace;background:var(--input-bg);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:10px">${code.replace(/</g,'&lt;')}</textarea>
+      <button class="btn-primary" id="fn-copy" style="margin-top:10px">Скопировать</button></div>`;
+    document.body.appendChild(box);
+    box.querySelector('#fn-x').onclick=()=>box.remove();
+    box.querySelector('#fn-copy').onclick=()=>{
+      try{ navigator.clipboard.writeText(code); showToast(t('copied')); }catch(e){}
+    };
   };
 };
 
@@ -3168,6 +3438,9 @@ async function startCall(partner, withVideo){
       sdp: pc.localDescription
     });
     document.getElementById('call-status-text').textContent='Вызов...';
+  // Free push so peer's phone rings even if Signal Line is closed (ntfy)
+  sendWebPushToUser(partner.id, currentLang==='en'?'Incoming call':'Входящий звонок', (myProfile.first_name||myProfile.username||'Signal Line'), {urgent:true, tag:'sl-call'});
+  sendNtfyPush(partner.id, currentLang==='en'?'Incoming call':'Входящий звонок', (myProfile.first_name||myProfile.username||'Signal Line'), {urgent:true, force:true, tags:'telephone_receiver,vibrating_phone'});
   }catch(e){ console.error(e); showToast('Ошибка звонка'); endCall(false); }
 }
 let pendingOffer=null;
@@ -3197,6 +3470,7 @@ async function acceptCall(){
     await pc.setLocalDescription(answer);
     sendSignal(pendingOffer.from,'answer',{from:myProfile.id, sdp: pc.localDescription});
     currentCall.state='active';
+  try{ stopRingtone(); }catch(e){}
     renderCallActions();
   }catch(e){ console.error(e); showToast('Ошибка ответа на звонок'); endCall(false); }
 }
@@ -3249,12 +3523,10 @@ function renderCallActions(){
     };
   }
 }
-function notifyIncomingCall(name){
-  if(storage.getItem(NOTIF_PREF_KEY)==='1' && 'Notification' in window && Notification.permission==='granted' && document.visibilityState!=='visible'){
-    try{ new Notification('Входящий звонок', {body:name}); }catch(e){}
-  }
-}
+/* notifyIncomingCall defined above */
+
 function endCall(){
+  try{ stopRingtone(); }catch(e){}
   try{ cleanupCallChannels(); }catch(e){}
   try{ pc?.close(); }catch(e){}
   localStream?.getTracks().forEach(t=>t.stop());
