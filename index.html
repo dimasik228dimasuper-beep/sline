@@ -43,10 +43,11 @@ input,textarea{user-select:text!important;-webkit-user-select:text!important}
 .app-page.active{display:flex}
 .chats-layout{display:flex;flex:1;overflow:hidden}
 .sidebar{background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;width:320px;min-width:320px;height:100%;transition:transform .3s}
-.sidebar-scroll{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;display:flex;flex-direction:column;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
-.stories-bar{display:flex!important;gap:12px;padding:10px 16px;overflow-x:auto!important;overflow-y:hidden!important;border-bottom:1px solid var(--line);flex-shrink:0;-webkit-overflow-scrolling:touch;scrollbar-width:thin;touch-action:pan-x;overscroll-behavior-x:contain}
-.folder-tabs{-webkit-overflow-scrolling:touch;touch-action:pan-x;overflow-x:auto}
-.contacts{flex:1 1 auto;overflow:visible;padding:6px;min-height:120px}
+.sidebar-scroll{flex:1;min-height:0;overflow-y:auto!important;overflow-x:hidden;display:block;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;touch-action:pan-y}
+.sidebar-scroll .search-box{position:relative;margin:10px 16px 8px}
+.sidebar-scroll .stories-bar{display:flex!important;gap:12px;padding:10px 16px;overflow-x:auto!important;overflow-y:hidden!important;border-bottom:1px solid var(--line);-webkit-overflow-scrolling:touch;scrollbar-width:thin;touch-action:pan-x;overscroll-behavior-x:contain}
+.sidebar-scroll .folder-tabs{display:flex;gap:6px;padding:8px 12px;overflow-x:auto;border-bottom:1px solid var(--line);-webkit-overflow-scrolling:touch;touch-action:pan-x}
+.sidebar-scroll .contacts{overflow:visible!important;padding:6px 6px 28px;min-height:0;height:auto!important;flex:none!important}
 .search-box{flex-shrink:0;position:relative;margin-bottom:8px}
 .sidebar-header{padding:12px 16px;border-bottom:1px solid var(--line);flex-shrink:0;position:relative;z-index:40}
 .me-row{display:flex;align-items:center;gap:10px;margin-bottom:10px}
@@ -68,7 +69,7 @@ input,textarea{user-select:text!important;-webkit-user-select:text!important}
 /* stories-bar base above */
 .story-item{display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;flex-shrink:0}
 .story-ring{width:52px;height:52px;border-radius:50%;padding:2px;background:linear-gradient(135deg,var(--accent-a),var(--mint))}
-.contacts{flex:1;overflow-y:auto;padding:6px;min-height:0}
+.contacts{flex:none;overflow:visible;padding:6px 6px 24px;min-height:0}
 .contact{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:14px;cursor:pointer;position:relative;overflow:hidden;transition:background .15s}
 .contact:hover,.contact.active{background:var(--panel-hover)}
 .contact.active{box-shadow:inset 3px 0 0 var(--accent-a)}
@@ -101,8 +102,34 @@ input,textarea{user-select:text!important;-webkit-user-select:text!important}
 .bubble-time{font-size:10px;opacity:.65;margin-top:4px;display:flex;align-items:center;gap:4px}
 .bubble img,.bubble video{max-width:100%;border-radius:12px;margin-top:4px;display:block;cursor:pointer}
 .reply-quote{border-left:2px solid rgba(255,255,255,.5);padding-left:6px;font-size:12px;opacity:.8;margin-bottom:4px;white-space:pre-wrap}
-.circle-msg{width:180px;height:180px;border-radius:50%;overflow:hidden;position:relative;background:#000;border:2px solid rgba(255,255,255,.18);cursor:pointer;box-shadow:0 4px 20px rgba(0,0,0,.35)}
+.circle-msg{width:220px;height:220px;border-radius:50%;overflow:hidden;position:relative;background:#111;border:2.5px solid rgba(120,140,255,.55);cursor:pointer;box-shadow:0 6px 28px rgba(0,0,0,.45);flex-shrink:0}
 .circle-msg video{width:100%;height:100%;object-fit:cover;border-radius:50%;display:block}
+.circle-msg .circle-mute{position:absolute;right:14px;bottom:18px;width:28px;height:28px;border-radius:50%;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:2;pointer-events:none}
+.circle-msg .circle-mute svg{width:14px;height:14px;fill:#fff;stroke:none}
+.circle-msg .circle-dur{position:absolute;left:14px;bottom:18px;font-size:12px;font-weight:700;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.7);z-index:2;pointer-events:none}
+.circle-play-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.2);border-radius:50%;z-index:1}
+.bubble.me .circle-msg{border-color:rgba(255,255,255,.35)}
+.bubble.them .circle-msg{border-color:rgba(76,124,243,.55)}
+/* Telegram-like circle recorder */
+.circle-record-overlay{position:fixed;inset:0;background:radial-gradient(ellipse at center,#1a1035 0%,#0a0a12 70%);z-index:4000;display:none;align-items:center;justify-content:center;flex-direction:column;gap:0;padding:20px 16px calc(24px + var(--safe-bottom))}
+.circle-preview-wrap{width:min(72vw,300px);height:min(72vw,300px);border-radius:50%;overflow:hidden;position:relative;background:#000;box-shadow:0 0 0 3px rgba(255,255,255,.12),0 0 60px rgba(109,93,246,.35)}
+.circle-preview-wrap video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1);border-radius:50%}
+.circle-progress-ring{position:absolute;inset:-6px;pointer-events:none}
+.circle-progress-ring svg{width:100%;height:100%;transform:rotate(-90deg)}
+.circle-progress-ring circle{fill:none;stroke:rgba(255,255,255,.2);stroke-width:4}
+.circle-progress-ring circle.prog{stroke:#4C7CF3;stroke-linecap:round;transition:stroke-dashoffset .2s linear}
+.rec-timer{color:#fff;font-size:14px;font-weight:700;font-family:monospace;display:flex;align-items:center;gap:8px;margin-top:18px}
+/* superseded */
+.rec-actions{display:flex;gap:18px;align-items:center;margin-top:22px;justify-content:center;flex-wrap:wrap}
+.rec-btn{width:52px;height:52px;border-radius:50%;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#fff;background:rgba(255,255,255,.12);backdrop-filter:blur(8px)}
+.rec-btn svg{width:22px;height:22px;fill:none;stroke:#fff;stroke-width:2}
+.rec-btn.send{background:linear-gradient(135deg,#4C7CF3,#6D5DF6);width:64px;height:64px;box-shadow:0 8px 24px rgba(76,124,243,.45)}
+.rec-btn.cancel{background:rgba(255,255,255,.1)}
+.rec-btn.stop{background:rgba(255,255,255,.12)}
+.rec-hint{color:rgba(255,255,255,.55);font-size:12px;margin-top:10px}
+.rec-bottom-row{display:flex;align-items:center;justify-content:space-between;width:min(90vw,340px);margin-top:auto;padding-top:16px}
+.rec-side-btns{display:flex;gap:12px}
+
 .voice-bubble{display:flex;align-items:center;gap:10px;min-width:200px}
 .voice-play-btn{width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,.2);border:none;color:inherit;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0}
 .voice-play-btn svg{width:16px;height:16px;fill:currentColor}
@@ -137,19 +164,19 @@ input,textarea{user-select:text!important;-webkit-user-select:text!important}
 .empty-state{padding:28px;text-align:center;color:var(--muted)}
 ::-webkit-scrollbar{width:4px}
 ::-webkit-scrollbar-thumb{background:var(--line);border-radius:4px}
-.circle-record-overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:4000;display:none;align-items:center;justify-content:center;flex-direction:column;gap:20px}
-.circle-preview-wrap{width:220px;height:220px;border-radius:50%;overflow:hidden;position:relative;border:3px solid var(--accent-a);box-shadow:0 0 40px rgba(76,124,243,.4)}
-.circle-preview-wrap video{width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
-.rec-timer{color:#fff;font-size:15px;font-weight:700;font-family:monospace;display:flex;align-items:center;gap:8px}
+/* superseded */
+/* superseded */
+/* superseded */
+/* superseded */
 .rec-dot{width:10px;height:10px;border-radius:50%;background:var(--danger);animation:pulse 1s infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
-.rec-actions{display:flex;gap:24px;align-items:center}
-.rec-btn{width:56px;height:56px;border-radius:50%;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#fff}
-.rec-btn svg{width:24px;height:24px;fill:none;stroke:#fff;stroke-width:2}
-.rec-btn.stop{background:var(--danger)}
-.rec-btn.send{background:#22c55e;width:64px;height:64px}
-.rec-btn.cancel{background:var(--panel-hover);border:1px solid var(--line)}
-.rec-hint{color:rgba(255,255,255,.6);font-size:12px}
+/* superseded */
+/* superseded */
+/* superseded */
+/* superseded */
+/* superseded */
+/* superseded */
+/* superseded */
 .voice-record-bars{display:flex;align-items:center;justify-content:center;gap:3px;height:60px}
 .voice-bar{width:4px;background:var(--mint);border-radius:2px;animation:voiceBar .6s ease-in-out infinite}
 @keyframes voiceBar{0%,100%{height:10px}50%{height:40px}}
@@ -300,11 +327,11 @@ body.theme-light{
 /* ===== Calls ===== */
 .call-overlay{position:fixed;inset:0;background:linear-gradient(160deg,#0B1120,#131B2E);z-index:9700;display:none;flex-direction:column;align-items:center;justify-content:center;gap:18px;color:#fff}
 .call-overlay.show{display:flex}
-.call-avatar-big{width:110px;height:110px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:40px;font-weight:700;color:#fff;background-size:cover;background-position:center}
-.call-name{font-size:20px;font-weight:700}
-.call-status-text{color:var(--muted);font-size:13px}
-.call-remote-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#000;display:none}
-.call-local-video{position:absolute;bottom:110px;right:16px;width:100px;height:140px;border-radius:16px;object-fit:cover;background:#000;border:2px solid rgba(255,255,255,.25);display:none;z-index:2}
+.call-avatar-big{width:110px;height:110px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:40px;font-weight:700;color:#fff;background-size:cover;background-position:center;position:relative;z-index:3}
+.call-name{font-size:20px;font-weight:700;position:relative;z-index:3}
+.call-status-text{color:var(--muted);font-size:13px;position:relative;z-index:3}
+.call-remote-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#000;display:none;z-index:1}
+.call-local-video{position:absolute;bottom:110px;right:16px;width:100px;height:140px;border-radius:16px;object-fit:cover;background:#000;border:2px solid rgba(255,255,255,.25);display:none;z-index:5}
 .call-actions{display:flex;gap:22px;align-items:center;z-index:3}
 .call-btn-round{width:60px;height:60px;border-radius:50%;border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#fff}
 .call-btn-round svg{width:24px;height:24px;fill:none;stroke:#fff;stroke-width:2}
@@ -586,7 +613,7 @@ body.theme-light{
 <div id="pip-trash"><svg viewBox="0 0 24 24" style="width:28px;height:28px;fill:none;stroke:#fff;stroke-width:2"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg></div>
 <div class="call-overlay" id="call-overlay">
   <div class="call-ring-pulse" id="call-pulse"></div>
-  <video class="call-remote-video" id="call-remote-video" autoplay playsinline></video>
+  <video class="call-remote-video" id="call-remote-video" autoplay playsinline webkit-playsinline></video>
   <video class="call-local-video" id="call-local-video" autoplay playsinline muted></video>
   <div class="call-avatar-big" id="call-avatar-big"></div>
   <div class="call-name" id="call-name"></div>
@@ -1047,9 +1074,12 @@ async function loadGroupMessages(){
 // ========== RENDER MESSAGE ==========
 function buildMessageBody(msg, replyHtml, bodyText){
   if(msg.type==='circle'){
-    return `<div class="circle-msg" data-src="${msg.file_url}"><video src="${msg.file_url}" playsinline loop muted></video>
-      <div class="circle-play-overlay" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.25);border-radius:50%">
-        <svg viewBox="0 0 24 24" style="width:34px;height:34px;fill:#fff"><path d="M8 5v14l11-7z"/></svg></div></div>`;
+    return `<div class="circle-msg" data-src="${msg.file_url}">
+      <video src="${msg.file_url}" playsinline loop muted></video>
+      <div class="circle-play-overlay"><svg viewBox="0 0 24 24" style="width:36px;height:36px;fill:#fff"><path d="M8 5v14l11-7z"/></svg></div>
+      <div class="circle-mute"><svg viewBox="0 0 24 24"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M23 9l-6 6M17 9l6 6" stroke="#fff" stroke-width="2" fill="none"/></svg></div>
+      <div class="circle-dur">0:00</div>
+    </div>`;
   }
   if(msg.type==='voice'){
     return `<div class="voice-bubble" data-mid="${msg.id}" data-src="${msg.file_url}">
@@ -1090,12 +1120,26 @@ function renderMessage(msg, isGroup=false){
   // Circle play/pause
   const circle=row.querySelector('.circle-msg');
   if(circle){
+    const v=circle.querySelector('video');
+    const ov=circle.querySelector('.circle-play-overlay');
+    const durEl=circle.querySelector('.circle-dur');
+    const muteEl=circle.querySelector('.circle-mute');
+    const fmt=s=>{ s=Math.max(0,Math.floor(s||0)); return Math.floor(s/60)+':'+String(s%60).padStart(2,'0'); };
+    v.addEventListener('loadedmetadata',()=>{ if(durEl) durEl.textContent=fmt(v.duration); });
+    v.addEventListener('timeupdate',()=>{ if(durEl && !v.paused) durEl.textContent=fmt(v.currentTime); });
     circle.onclick=e=>{
       e.stopPropagation();
-      const v=circle.querySelector('video');
-      const ov=circle.querySelector('.circle-play-overlay');
-      if(v.paused){ v.muted=false; v.play(); if(ov) ov.style.display='none'; v.onended=()=>{if(ov)ov.style.display='flex';}; }
-      else { v.pause(); if(ov) ov.style.display='flex'; }
+      if(v.paused){
+        // pause other circles
+        document.querySelectorAll('.circle-msg video').forEach(x=>{ if(x!==v){ x.pause(); const p=x.closest('.circle-msg'); const o=p?.querySelector('.circle-play-overlay'); if(o) o.style.display='flex'; }});
+        v.muted=false; v.volume=1; v.play().catch(()=>{});
+        if(ov) ov.style.display='none';
+        if(muteEl) muteEl.innerHTML='<svg viewBox="0 0 24 24"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M19.07 4.93a10 10 0 010 14.14M15.54 8.46a5 5 0 010 7.07" stroke="#fff" stroke-width="2" fill="none"/></svg>';
+        v.onended=()=>{ if(ov) ov.style.display='flex'; if(durEl) durEl.textContent=fmt(v.duration); };
+      } else {
+        v.pause(); if(ov) ov.style.display='flex';
+        if(muteEl) muteEl.innerHTML='<svg viewBox="0 0 24 24"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M23 9l-6 6M17 9l6 6" stroke="#fff" stroke-width="2" fill="none"/></svg>';
+      }
     };
   }
 
@@ -1411,39 +1455,89 @@ circleBtn.addEventListener('pointerup', ()=>{
 });
 circleBtn.addEventListener('pointerleave', ()=>clearTimeout(longPressTimer));
 
+let circleFacing='user';
 async function beginRecording(){
   if(isRecording||(!activePartner&&!activeGroup)) return;
   recSeconds=0; recIsPaused=false; recordedChunks=[];
   try{
-    const c=recordMode==='circle'?{video:{facingMode:'user',width:240,height:240},audio:true}:{audio:true};
+    const c=recordMode==='circle'
+      ? {video:{facingMode:circleFacing, width:{ideal:480}, height:{ideal:480}}, audio:true}
+      : {audio:true};
     circleStream=await navigator.mediaDevices.getUserMedia(c);
-  }catch(e){ alert('Нет доступа к камере/микрофону'); return; }
+  }catch(e){ showToast('Нет доступа к камере/микрофону'); return; }
   isRecording=true;
   const ov=document.getElementById('circle-record-overlay');
   const wrap=document.getElementById('circle-preview-container');
+  const maxSec = 60;
   if(recordMode==='circle'){
-    wrap.innerHTML=`<div class="circle-preview-wrap" id="cpt"><video id="clp" autoplay muted playsinline></video></div>`;
-    document.getElementById('clp').srcObject=circleStream;
+    const R=48, C=2*Math.PI*R;
+    wrap.innerHTML=`
+      <div class="circle-preview-wrap" id="cpt">
+        <video id="clp" autoplay muted playsinline></video>
+        <div class="circle-progress-ring"><svg viewBox="0 0 100 100">
+          <circle cx="50" cy="50" r="${R}"></circle>
+          <circle class="prog" id="cprog" cx="50" cy="50" r="${R}" stroke-dasharray="${C}" stroke-dashoffset="${C}"></circle>
+        </svg></div>
+      </div>`;
+    const vid=document.getElementById('clp');
+    vid.srcObject=circleStream;
+    vid.play().catch(()=>{});
     document.getElementById('cpt').onclick=()=>togglePauseRecording();
   } else {
     wrap.innerHTML=`<div class="voice-record-bars">${Array.from({length:16},(_,i)=>`<div class="voice-bar" style="animation-delay:${i*0.05}s"></div>`).join('')}</div>`;
   }
-  document.getElementById('rec-hint').textContent=recordMode==='circle'?'Тап — пауза':'Запись голоса...';
-  renderRecActions(); document.getElementById('rec-timer-text').textContent='0:00';
+  document.getElementById('rec-hint').textContent=recordMode==='circle'?'':'Запись голоса...';
+  renderRecActions();
+  document.getElementById('rec-timer-text').textContent='0:00';
   ov.style.display='flex';
-  mediaRecorder=new MediaRecorder(circleStream,{mimeType:recordMode==='circle'?'video/webm':'audio/webm'});
-  mediaRecorder.ondataavailable=e=>{ if(e.data.size>0) recordedChunks.push(e.data); };
-  mediaRecorder.start(200);
-  recTickInterval=setInterval(()=>{ if(recIsPaused) return; recSeconds++; document.getElementById('rec-timer-text').textContent=Math.floor(recSeconds/60)+':'+String(recSeconds%60).padStart(2,'0'); if(recSeconds>=90) finishRecording(); },1000);
+  let mime = recordMode==='circle' ? 'video/webm;codecs=vp8,opus' : 'audio/webm';
+  if(!MediaRecorder.isTypeSupported(mime)) mime = recordMode==='circle' ? 'video/webm' : 'audio/webm';
+  try{ mediaRecorder=new MediaRecorder(circleStream,{mimeType:mime, videoBitsPerSecond:800000}); }
+  catch(e){ mediaRecorder=new MediaRecorder(circleStream); }
+  mediaRecorder.ondataavailable=e=>{ if(e.data&&e.data.size>0) recordedChunks.push(e.data); };
+  mediaRecorder.start(250);
+  const Ccirc = 2*Math.PI*48;
+  recTickInterval=setInterval(()=>{
+    if(recIsPaused) return;
+    recSeconds++;
+    const t=document.getElementById('rec-timer-text');
+    if(t) t.textContent=Math.floor(recSeconds/60)+':'+String(recSeconds%60).padStart(2,'0');
+    const prog=document.getElementById('cprog');
+    if(prog){ prog.style.strokeDashoffset = String(Ccirc * (1 - Math.min(1, recSeconds/maxSec))); }
+    if(recSeconds>=maxSec) finishRecording();
+  },1000);
 }
 function renderRecActions(){
+  const isCircle = recordMode==='circle';
   document.getElementById('rec-actions').innerHTML=`
-    <button class="rec-btn cancel" id="rcancel"><svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
-    <button class="rec-btn stop" id="rpause">${recIsPaused?'▶':'⏸'}</button>
-    <button class="rec-btn stop" id="rstop"><svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12"/></svg></button>`;
+    <div class="rec-side-btns">
+      ${isCircle?`<button class="rec-btn" id="rflip" title="Камера"><svg viewBox="0 0 24 24"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 014-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 01-4 4H3"/></svg></button>`:''}
+      <button class="rec-btn cancel" id="rcancel"><svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+    </div>
+    <button class="rec-btn stop" id="rpause">${recIsPaused
+      ? '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z" fill="#fff" stroke="none"/></svg>'
+      : '<svg viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" fill="#fff" stroke="none"/><rect x="14" y="5" width="4" height="14" fill="#fff" stroke="none"/></svg>'}</button>
+    <button class="rec-btn send" id="rsend"><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>`;
   document.getElementById('rcancel').onclick=cancelRecording;
   document.getElementById('rpause').onclick=togglePauseRecording;
-  document.getElementById('rstop').onclick=finishRecording;
+  document.getElementById('rsend').onclick=finishRecording;
+  document.getElementById('rflip')?.addEventListener('click', async ()=>{
+    circleFacing = circleFacing==='user' ? 'environment' : 'user';
+    try{
+      circleStream?.getTracks().forEach(t=>t.stop());
+      circleStream = await navigator.mediaDevices.getUserMedia({video:{facingMode:circleFacing,width:{ideal:480},height:{ideal:480}}, audio:true});
+      const v=document.getElementById('clp'); if(v){ v.srcObject=circleStream; v.play().catch(()=>{}); }
+      // swap tracks into recorder is hard mid-record — restart chunks with new stream is complex; just update preview
+      if(mediaRecorder && mediaRecorder.state==='recording'){
+        try{ mediaRecorder.stop(); }catch(e){}
+        recordedChunks=[];
+        let mime='video/webm';
+        try{ mediaRecorder=new MediaRecorder(circleStream,{mimeType:mime}); }catch(e){ mediaRecorder=new MediaRecorder(circleStream); }
+        mediaRecorder.ondataavailable=e=>{ if(e.data&&e.data.size>0) recordedChunks.push(e.data); };
+        mediaRecorder.start(250);
+      }
+    }catch(e){ showToast('Не удалось переключить камеру'); }
+  });
 }
 function togglePauseRecording(){
   if(!mediaRecorder||mediaRecorder.state==='inactive') return;
@@ -2842,22 +2936,26 @@ document.getElementById('settings-notifications').onclick=async()=>{
 const RTC_CONFIG={
   iceServers:[
     {urls:'stun:stun.cloudflare.com:3478'},
-    {urls:'stun:stun.stunprotocol.org:3478'},
     {urls:'stun:stun.sipnet.ru:3478'},
     {urls:'stun:stun.sipnet.net:3478'},
+    {urls:'stun:stun.stunprotocol.org:3478'},
     {urls:'stun:stun.nextcloud.com:3478'},
-    {urls:'stun:stun.freeswitch.org:3478'},
     {urls:'stun:stun.l.google.com:19302'},
-    {urls:'stun:stun1.l.google.com:19302'},
+    // TURN over UDP + TCP + TLS (critical for RU NAT/firewall)
     {urls:'turn:openrelay.metered.ca:80', username:'openrelayproject', credential:'openrelayproject'},
     {urls:'turn:openrelay.metered.ca:443', username:'openrelayproject', credential:'openrelayproject'},
     {urls:'turn:openrelay.metered.ca:443?transport=tcp', username:'openrelayproject', credential:'openrelayproject'},
+    {urls:'turns:openrelay.metered.ca:443', username:'openrelayproject', credential:'openrelayproject'},
     {urls:'turn:relay.metered.ca:80', username:'openrelayproject', credential:'openrelayproject'},
     {urls:'turn:relay.metered.ca:443', username:'openrelayproject', credential:'openrelayproject'},
-    {urls:'turn:relay.metered.ca:443?transport=tcp', username:'openrelayproject', credential:'openrelayproject'}
+    {urls:'turn:relay.metered.ca:443?transport=tcp', username:'openrelayproject', credential:'openrelayproject'},
+    {urls:'turn:a.relay.metered.ca:80', username:'openrelayproject', credential:'openrelayproject'},
+    {urls:'turn:a.relay.metered.ca:443?transport=tcp', username:'openrelayproject', credential:'openrelayproject'}
   ],
-  iceCandidatePoolSize: 10,
-  iceTransportPolicy: 'all'
+  iceCandidatePoolSize: 16,
+  iceTransportPolicy: 'all',
+  bundlePolicy: 'max-bundle',
+  rtcpMuxPolicy: 'require'
 };
 let callChannel=null, myCallSignalChannel=null, pc=null, localStream=null;
 let currentCall=null; // {peerId, peerName, peerColor, video, state}
@@ -2881,91 +2979,149 @@ function sendSignal(toId, event, payload){
     }
   });
 }
+
+let remoteMediaStream = null;
+function attachRemoteTrack(track){
+  const rv=document.getElementById('call-remote-video');
+  if(!rv) return;
+  if(!remoteMediaStream) remoteMediaStream = new MediaStream();
+  // replace same-kind track if already present
+  remoteMediaStream.getTracks().filter(t=>t.kind===track.kind).forEach(t=>{ remoteMediaStream.removeTrack(t); });
+  remoteMediaStream.addTrack(track);
+  rv.srcObject = remoteMediaStream;
+  rv.muted = false;
+  rv.volume = 1;
+  rv.autoplay = true;
+  rv.playsInline = true;
+  rv.setAttribute('playsinline','');
+  rv.setAttribute('webkit-playsinline','');
+  const hasVideo = remoteMediaStream.getVideoTracks().some(t=>t.enabled && t.readyState!=='ended');
+  const wantVideo = !!(currentCall && currentCall.video);
+  if(wantVideo || hasVideo){
+    rv.style.display='block';
+    rv.style.opacity='1';
+    rv.style.pointerEvents='auto';
+    rv.style.width=''; rv.style.height='';
+    rv.style.objectFit='cover';
+    // hide avatar when we have remote video
+    const av=document.getElementById('call-avatar-big');
+    if(av) av.style.display='none';
+    const pulse=document.getElementById('call-pulse');
+    if(pulse) pulse.style.display='none';
+  } else {
+    // voice only — keep element for audio
+    rv.style.display='block';
+    rv.style.opacity='0';
+    rv.style.pointerEvents='none';
+    rv.style.width='1px'; rv.style.height='1px';
+  }
+  const tryPlay=()=>rv.play().catch(err=>console.warn('remote play', err));
+  tryPlay();
+  setTimeout(tryPlay, 100);
+  setTimeout(tryPlay, 500);
+  document.getElementById('call-status-text').textContent='Соединено';
+  if(currentCall) currentCall.state='active';
+}
+function wirePeerConnection(peerId, withVideo){
+  pc = new RTCPeerConnection(RTC_CONFIG);
+  remoteMediaStream = null;
+  // Prefer addTrack from local stream
+  if(localStream){
+    localStream.getTracks().forEach(t=>{
+      try{ pc.addTrack(t, localStream); }catch(e){ console.warn(e); }
+    });
+  }
+  // Ensure recv direction
+  try{
+    const hasAudioSender = pc.getTransceivers().some(tr=>tr.receiver?.track?.kind==='audio' || tr.sender?.track?.kind==='audio');
+    if(!hasAudioSender) pc.addTransceiver('audio', {direction:'sendrecv'});
+    if(withVideo){
+      const hasVid = pc.getTransceivers().some(tr=>tr.receiver?.track?.kind==='video' || tr.sender?.track?.kind==='video');
+      if(!hasVid) pc.addTransceiver('video', {direction:'sendrecv'});
+    }
+  }catch(e){}
+
+  pc.onicecandidate = e=>{
+    if(e.candidate) sendSignal(peerId, 'ice', {from: myProfile.id, candidate: e.candidate});
+  };
+  pc.ontrack = e=>{
+    console.log('[call] ontrack', e.track.kind, e.track.id);
+    attachRemoteTrack(e.track);
+  };
+  pc.onconnectionstatechange = ()=>{
+    console.log('[call] connectionState', pc.connectionState);
+    const st=document.getElementById('call-status-text');
+    if(!st) return;
+    if(pc.connectionState==='connected'){ st.textContent='Соединено'; if(currentCall) currentCall.state='active'; }
+    else if(pc.connectionState==='connecting') st.textContent='Соединение...';
+    else if(pc.connectionState==='failed'){ st.textContent='Ошибка связи'; showToast('Не удалось установить соединение'); }
+    else if(pc.connectionState==='disconnected') st.textContent='Переподключение...';
+  };
+  pc.oniceconnectionstatechange = ()=>{
+    console.log('[call] ice', pc.iceConnectionState);
+    if(pc.iceConnectionState==='failed'){
+      try{ pc.restartIce(); }catch(e){}
+    }
+  };
+  return pc;
+}
 async function startCall(partner, withVideo){
   if(!partner||partner.isBot||partner.id===myProfile.id) return;
+  if(currentCall){ showToast('Уже в звонке'); return; }
   currentCall={peerId:partner.id, peerName:partner.first_name||partner.username, peerColor:partner.color||colorFor(partner.id), peerAvatar:partner.avatar_url, video:withVideo, state:'calling'};
   showCallUI();
+  document.getElementById('call-avatar-big').style.display='flex';
   try{
-    localStream=await navigator.mediaDevices.getUserMedia({audio:true, video:withVideo?{width:320,height:240}:false});
+    localStream=await navigator.mediaDevices.getUserMedia({
+      audio:{echoCancellation:true, noiseSuppression:true, autoGainControl:true},
+      video: withVideo ? {width:{ideal:640}, height:{ideal:480}, facingMode:'user'} : false
+    });
   }catch(e){ showToast('Нет доступа к камере/микрофону'); endCall(false); return; }
   setupLocalVideo();
-  pc=new RTCPeerConnection(RTC_CONFIG);
-  localStream.getTracks().forEach(t=>pc.addTrack(t, localStream));
-  pc.onicecandidate=e=>{ if(e.candidate) sendSignal(partner.id,'ice',{from:myProfile.id, candidate:e.candidate}); };
-  pc.ontrack=e=>{
-    const rv=document.getElementById('call-remote-video');
-    if(!rv) return;
-    const stream = e.streams && e.streams[0] ? e.streams[0] : new MediaStream([e.track]);
-    rv.srcObject = stream;
-    rv.muted = false;
-    rv.volume = 1;
-    rv.autoplay = true;
-    rv.playsInline = true;
-    if(withVideo || (currentCall && currentCall.video)) rv.style.display='block';
-    else rv.style.display='block'; // keep element in tree for audio even in voice call; CSS can hide visual
-    if(!(withVideo || (currentCall && currentCall.video))){
-      rv.style.opacity='0'; rv.style.pointerEvents='none'; rv.style.width='1px'; rv.style.height='1px';
-    } else {
-      rv.style.opacity='1'; rv.style.pointerEvents='auto'; rv.style.width=''; rv.style.height='';
-    }
-    const tryPlay = ()=> rv.play().catch(()=>{});
-    tryPlay();
-    setTimeout(tryPlay, 200);
-    document.getElementById('call-status-text').textContent='Соединено';
-    if(currentCall) currentCall.state='active';
-  };
-  const offer=await pc.createOffer();
-  await pc.setLocalDescription(offer);
-  sendSignal(partner.id,'offer',{from:myProfile.id, name:myProfile.first_name||myProfile.username, color:myProfile.color||colorFor(myProfile.id), avatar:myProfile.avatar_url, video:withVideo, sdp:offer});
-  document.getElementById('call-status-text').textContent='Вызов...';
+  wirePeerConnection(partner.id, withVideo);
+  try{
+    const offer=await pc.createOffer({offerToReceiveAudio:true, offerToReceiveVideo:!!withVideo});
+    await pc.setLocalDescription(offer);
+    sendSignal(partner.id,'offer',{
+      from:myProfile.id,
+      name:myProfile.first_name||myProfile.username,
+      color:myProfile.color||colorFor(myProfile.id),
+      avatar:myProfile.avatar_url,
+      video:withVideo,
+      sdp: pc.localDescription
+    });
+    document.getElementById('call-status-text').textContent='Вызов...';
+  }catch(e){ console.error(e); showToast('Ошибка звонка'); endCall(false); }
 }
 let pendingOffer=null;
 function handleIncomingOffer(payload){
-  if(currentCall){ sendSignal(payload.from,'hangup',{}); return; } // busy
+  if(currentCall){ sendSignal(payload.from,'hangup',{}); return; }
   pendingOffer=payload;
   currentCall={peerId:payload.from, peerName:payload.name||'Пользователь', peerColor:payload.color||colorFor(payload.from), peerAvatar:payload.avatar, video:payload.video, state:'incoming'};
   showCallUI();
+  document.getElementById('call-avatar-big').style.display='flex';
   document.getElementById('call-status-text').textContent=payload.video?'Входящий видеозвонок':'Входящий звонок';
   notifyIncomingCall(currentCall.peerName);
 }
 async function acceptCall(){
   if(!pendingOffer) return;
-  const withVideo=pendingOffer.video;
+  const withVideo=!!pendingOffer.video;
   try{
-    localStream=await navigator.mediaDevices.getUserMedia({audio:true, video:withVideo?{width:320,height:240}:false});
+    localStream=await navigator.mediaDevices.getUserMedia({
+      audio:{echoCancellation:true, noiseSuppression:true, autoGainControl:true},
+      video: withVideo ? {width:{ideal:640}, height:{ideal:480}, facingMode:'user'} : false
+    });
   }catch(e){ showToast('Нет доступа к камере/микрофону'); declineCall(); return; }
   setupLocalVideo();
-  pc=new RTCPeerConnection(RTC_CONFIG);
-  localStream.getTracks().forEach(t=>pc.addTrack(t, localStream));
-  pc.onicecandidate=e=>{ if(e.candidate) sendSignal(pendingOffer.from,'ice',{from:myProfile.id, candidate:e.candidate}); };
-  pc.ontrack=e=>{
-    const rv=document.getElementById('call-remote-video');
-    if(!rv) return;
-    const stream = e.streams && e.streams[0] ? e.streams[0] : new MediaStream([e.track]);
-    rv.srcObject = stream;
-    rv.muted = false;
-    rv.volume = 1;
-    rv.autoplay = true;
-    rv.playsInline = true;
-    if(withVideo || (currentCall && currentCall.video)) rv.style.display='block';
-    else rv.style.display='block'; // keep element in tree for audio even in voice call; CSS can hide visual
-    if(!(withVideo || (currentCall && currentCall.video))){
-      rv.style.opacity='0'; rv.style.pointerEvents='none'; rv.style.width='1px'; rv.style.height='1px';
-    } else {
-      rv.style.opacity='1'; rv.style.pointerEvents='auto'; rv.style.width=''; rv.style.height='';
-    }
-    const tryPlay = ()=> rv.play().catch(()=>{});
-    tryPlay();
-    setTimeout(tryPlay, 200);
-    document.getElementById('call-status-text').textContent='Соединено';
-    if(currentCall) currentCall.state='active';
-  };
-  await pc.setRemoteDescription(new RTCSessionDescription(pendingOffer.sdp));
-  const answer=await pc.createAnswer();
-  await pc.setLocalDescription(answer);
-  sendSignal(pendingOffer.from,'answer',{from:myProfile.id, sdp:answer});
-  currentCall.state='active';
-  renderCallActions();
+  wirePeerConnection(pendingOffer.from, withVideo);
+  try{
+    await pc.setRemoteDescription(new RTCSessionDescription(pendingOffer.sdp));
+    const answer=await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+    sendSignal(pendingOffer.from,'answer',{from:myProfile.id, sdp: pc.localDescription});
+    currentCall.state='active';
+    renderCallActions();
+  }catch(e){ console.error(e); showToast('Ошибка ответа на звонок'); endCall(false); }
 }
 async function handleAnswer(payload){
   if(!pc) return;
@@ -3024,7 +3180,8 @@ function notifyIncomingCall(name){
 function endCall(){
   try{ pc?.close(); }catch(e){}
   localStream?.getTracks().forEach(t=>t.stop());
-  pc=null; localStream=null; pendingOffer=null; currentCall=null;
+  remoteMediaStream?.getTracks().forEach(t=>{ try{t.stop();}catch(e){} });
+  pc=null; localStream=null; remoteMediaStream=null; pendingOffer=null; currentCall=null;
   document.getElementById('call-overlay').classList.remove('show');
   const rv=document.getElementById('call-remote-video');
   if(rv){
@@ -3034,6 +3191,10 @@ function endCall(){
   }
   const lv=document.getElementById('call-local-video');
   if(lv){ lv.style.display='none'; lv.srcObject=null; }
+  const av=document.getElementById('call-avatar-big');
+  if(av) av.style.display='flex';
+  const pulse=document.getElementById('call-pulse');
+  if(pulse) pulse.style.display='';
 }
 document.getElementById('call-btn').onclick=()=>{ if(activePartner) startCall(activePartner, false); };
 document.getElementById('video-call-btn').onclick=()=>{ if(activePartner) startCall(activePartner, true); };
