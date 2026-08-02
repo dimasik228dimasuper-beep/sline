@@ -448,6 +448,149 @@ body.theme-light{
 .pe-actions{display:flex;gap:10px;width:100%;max-width:420px}
 .pe-actions .btn-primary,.pe-actions .btn-secondary{flex:1}
 
+
+/* ========== ALL UI ANIMATIONS ========== */
+body{transition:background-color .35s ease,color .35s ease}
+body.theme-light,body{transition:background-color .35s ease}
+
+/* Contacts list */
+.contact{animation:contactIn .28s cubic-bezier(.2,.8,.2,1) both}
+.contact:nth-child(1){animation-delay:.02s}
+.contact:nth-child(2){animation-delay:.04s}
+.contact:nth-child(3){animation-delay:.06s}
+.contact:nth-child(4){animation-delay:.08s}
+.contact:nth-child(5){animation-delay:.1s}
+.contact:nth-child(n+6){animation-delay:.12s}
+@keyframes contactIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
+.contact.removing{animation:contactOut .28s ease forwards;pointer-events:none}
+@keyframes contactOut{to{opacity:0;transform:translateX(-40px);height:0;padding:0;margin:0}}
+
+/* Unread badge pulse */
+.unread-badge{animation:badgePulse 1.8s ease-in-out infinite}
+@keyframes badgePulse{0%,100%{transform:scale(1)}50%{transform:scale(1.12)}}
+
+/* Online dot */
+.contact-name span[style*="mint"],.online-dot{display:inline-block;animation:dotFade .4s ease}
+@keyframes dotFade{from{opacity:0;transform:scale(.4)}to{opacity:1;transform:scale(1)}}
+
+/* Folder tabs */
+.folder-tab{transition:background .2s,color .2s,transform .2s}
+.folder-tab.active{animation:tabPop .3s ease}
+
+/* Bubbles direction-aware */
+.bubble-row.me .bubble{animation:riseMe .28s cubic-bezier(.2,.8,.2,1)}
+.bubble-row.them .bubble{animation:riseThem .28s cubic-bezier(.2,.8,.2,1)}
+@keyframes riseMe{from{opacity:0;transform:translateX(16px) scale(.96)}to{opacity:1;transform:none}}
+@keyframes riseThem{from{opacity:0;transform:translateX(-16px) scale(.96)}to{opacity:1;transform:none}}
+.bubble.sending{opacity:.55}
+.bubble-row.removing{animation:msgOut .25s ease forwards}
+@keyframes msgOut{to{opacity:0;transform:scale(.92);max-height:0;margin:0;padding:0}}
+
+/* Reaction chip bounce */
+.reaction-chip{transition:transform .15s}
+.reaction-chip:active,.reaction-chip.bounce{animation:chipBounce .35s ease}
+@keyframes chipBounce{0%{transform:scale(1)}40%{transform:scale(1.25)}100%{transform:scale(1)}}
+
+/* Typing dots */
+.typing-dots{display:inline-flex;gap:3px;align-items:center;height:12px;vertical-align:middle}
+.typing-dots i{width:5px;height:5px;border-radius:50%;background:var(--mint);display:block;animation:typingDot 1.2s ease-in-out infinite}
+.typing-dots i:nth-child(2){animation-delay:.15s}
+.typing-dots i:nth-child(3){animation-delay:.3s}
+@keyframes typingDot{0%,60%,100%{transform:translateY(0);opacity:.4}30%{transform:translateY(-4px);opacity:1}}
+.chat-status.typing{font-style:normal}
+
+/* Swipe reply hint */
+.bubble-row.swiped::after{content:'↩';position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:18px;opacity:.7;animation:replyHint .25s ease}
+@keyframes replyHint{from{opacity:0;transform:translateY(-50%) translateX(10px)}to{opacity:.7;transform:translateY(-50%)}}
+
+/* Story ring spin when unviewed */
+.story-ring{position:relative}
+.story-ring.unseen{background:conic-gradient(from 0deg,var(--accent-a),var(--mint),var(--accent-b),var(--accent-a));animation:ringSpin 3s linear infinite}
+@keyframes ringSpin{to{filter:hue-rotate(360deg)}}
+.story-progress{position:absolute;top:8px;left:8px;right:8px;height:3px;display:flex;gap:4px;z-index:5}
+.story-progress i{flex:1;height:100%;background:rgba(255,255,255,.35);border-radius:2px;overflow:hidden}
+.story-progress i b{display:block;height:100%;width:0;background:#fff;border-radius:2px}
+.story-progress i.active b{animation:storyFill linear forwards}
+.story-progress i.done b{width:100%}
+@keyframes storyFill{from{width:0}to{width:100%}}
+.story-slide-in{animation:storySlide .3s ease}
+@keyframes storySlide{from{opacity:0;transform:translateX(30px)}to{opacity:1;transform:none}}
+
+/* Call avatar breathe */
+.call-avatar-big{animation:avatarBreathe 2.2s ease-in-out infinite}
+@keyframes avatarBreathe{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
+.call-btn-round.accept,.call-btn-round.decline{animation:callBtnIn .4s cubic-bezier(.2,.9,.2,1.2)}
+@keyframes callBtnIn{from{opacity:0;transform:scale(.5)}to{opacity:1;transform:scale(1)}}
+.call-status-text.connected{animation:statusPop .4s ease}
+@keyframes statusPop{0%{opacity:0;transform:translateY(6px)}100%{opacity:1;transform:none}}
+
+/* Profile sheet */
+.profile-sheet{animation:sheetUp .32s cubic-bezier(.2,.8,.2,1)}
+@keyframes sheetUp{from{transform:translateY(40px);opacity:0}to{transform:none;opacity:1}}
+
+/* Toggle spring */
+.toggle-switch::after{transition:transform .28s cubic-bezier(.34,1.4,.64,1)}
+
+/* QR fade */
+.qr-box{animation:fadeIn .35s ease}
+@keyframes fadeIn{from{opacity:0;transform:scale(.92)}to{opacity:1;transform:none}}
+
+/* Like heart burst */
+.post-like-btn.liked svg,.vs-btn.liked svg{animation:heartBurst .4s ease}
+@keyframes heartBurst{0%{transform:scale(1)}30%{transform:scale(1.35)}60%{transform:scale(.9)}100%{transform:scale(1.1)}}
+.heart-particle{position:fixed;pointer-events:none;z-index:9999;font-size:18px;animation:heartFly .8s ease-out forwards}
+@keyframes heartFly{0%{opacity:1;transform:translate(0,0) scale(1)}100%{opacity:0;transform:translate(var(--dx,0),-60px) scale(.5)}}
+
+/* Video slides */
+.video-slide{transition:opacity .3s}
+.video-slide.dim{opacity:.35}
+
+/* Social FAB */
+.social-fab{transition:transform .25s cubic-bezier(.34,1.4,.64,1)}
+.social-fab.open{transform:rotate(45deg) scale(1.05)}
+
+/* Chat pane / pages */
+.app-page{animation:pageFade .25s ease}
+@keyframes pageFade{from{opacity:.4}to{opacity:1}}
+.chat-pane{transition:opacity .2s}
+.sidebar{transition:transform .3s cubic-bezier(.2,.8,.2,1)}
+
+/* Send button already has transition — boost */
+.send-btn.visible{animation:sendPop .3s cubic-bezier(.34,1.4,.64,1)}
+@keyframes sendPop{0%{transform:scale(.6)}70%{transform:scale(1.08)}100%{transform:scale(1)}}
+
+/* Empty state float */
+.empty-state{animation:emptyFloat 3s ease-in-out infinite}
+@keyframes emptyFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+
+/* Toast */
+.cd-toast{animation:toastIn .3s cubic-bezier(.2,.8,.2,1)}
+.cd-toast.shake{animation:toastShake .4s ease}
+@keyframes toastIn{from{opacity:0;transform:translateX(-50%) translateY(16px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+@keyframes toastShake{0%,100%{transform:translateX(-50%)}25%{transform:translateX(calc(-50% - 6px))}75%{transform:translateX(calc(-50% + 6px))}}
+
+/* PIN keys */
+.pin-key{position:relative;overflow:hidden;transition:transform .1s,background .15s}
+.pin-key:active{transform:scale(.92)}
+.pin-key .ripple{position:absolute;border-radius:50%;background:rgba(76,124,243,.35);transform:scale(0);animation:ripple .4s ease-out;pointer-events:none}
+@keyframes ripple{to{transform:scale(2.5);opacity:0}}
+
+/* Gift already stickerPop */
+.gift-bubble{animation:stickerPop .55s cubic-bezier(.175,.885,.32,1.275)}
+
+/* Modal */
+.modal-overlay{animation:fadeIn .2s ease}
+.modal{animation:modalIn .28s cubic-bezier(.2,.8,.2,1)}
+@keyframes modalIn{from{opacity:0;transform:translateY(20px) scale(.96)}to{opacity:1;transform:none}}
+
+/* Settings items */
+.settings-item{transition:background .15s,transform .15s}
+.settings-item:active{transform:scale(.98)}
+
+/* Auth card */
+.auth-card{animation:modalIn .4s cubic-bezier(.2,.8,.2,1)}
+
+
 </style>
 </head>
 <body oncontextmenu="return false;">
@@ -4532,6 +4675,139 @@ notifyIncomingMessage = function(msg){
 
 document.getElementById('me-avatar-chats')?.addEventListener('click',()=>{ if(myProfile) openFullProfile(myProfile); });
 document.getElementById('settings-avatar')?.addEventListener('click',()=>{ if(myProfile) openFullProfile(myProfile); });
+
+
+// ========== ANIMATION BEHAVIOR HOOKS ==========
+// Typing indicator with dots
+const _updPartnerStatus = updatePartnerStatus;
+updatePartnerStatus = function(){
+  _updPartnerStatus();
+  const el=document.getElementById('chat-partner-status');
+  if(!el) return;
+  if(el.classList.contains('typing') || /печат|typing/i.test(el.textContent||'')){
+    el.innerHTML='<span class="typing-dots"><i></i><i></i><i></i></span>';
+  }
+};
+// Intercept typing broadcast display
+const _setupTyping = setupTyping;
+setupTyping = function(){
+  if(typingChannel) try{ sb.removeChannel(typingChannel); }catch(e){}
+  typingChannel=sb.channel('typing')
+    .on('broadcast',{event:'typing'},({payload})=>{
+      if(payload.to===myProfile.id&&activePartner?.id===payload.from){
+        const el=document.getElementById('chat-partner-status');
+        if(el){ el.className='chat-status typing'; el.innerHTML='<span class="typing-dots"><i></i><i></i><i></i></span>'; }
+      }
+    })
+    .on('broadcast',{event:'stop_typing'},({payload})=>{
+      if(payload.to===myProfile.id&&activePartner?.id===payload.from) updatePartnerStatus();
+    })
+    .subscribe();
+};
+
+// Toast with optional shake on errors
+const _showToast = typeof showToast==='function' ? showToast : null;
+if(_showToast){
+  window.showToast = function(msg, isError){
+    document.querySelectorAll('.cd-toast').forEach(t=>t.remove());
+    const t=document.createElement('div'); t.className='cd-toast'+(isError?' shake':'');
+    t.textContent=msg; document.body.appendChild(t);
+    setTimeout(()=>{ t.style.opacity='0'; t.style.transition='opacity .3s'; setTimeout(()=>t.remove(),300); },2600);
+  };
+}
+
+// PIN ripple
+document.addEventListener('click', e=>{
+  const key=e.target.closest('.pin-key');
+  if(!key || key.classList.contains('pin-key-empty')) return;
+  const r=document.createElement('span'); r.className='ripple';
+  const rect=key.getBoundingClientRect();
+  const size=Math.max(rect.width,rect.height);
+  r.style.width=r.style.height=size+'px';
+  r.style.left=(e.clientX-rect.left-size/2)+'px';
+  r.style.top=(e.clientY-rect.top-size/2)+'px';
+  key.appendChild(r);
+  setTimeout(()=>r.remove(),400);
+}, true);
+
+// Reaction chip bounce
+document.addEventListener('click', e=>{
+  const chip=e.target.closest('.reaction-chip');
+  if(chip){ chip.classList.remove('bounce'); void chip.offsetWidth; chip.classList.add('bounce'); }
+}, true);
+
+// Heart particles on like
+document.addEventListener('click', e=>{
+  const btn=e.target.closest('.post-like-btn, .vs-btn[data-like]');
+  if(!btn) return;
+  for(let i=0;i<5;i++){
+    const p=document.createElement('span'); p.className='heart-particle'; p.textContent='❤️';
+    p.style.left=e.clientX+'px'; p.style.top=e.clientY+'px';
+    p.style.setProperty('--dx', (Math.random()*40-20)+'px');
+    document.body.appendChild(p);
+    setTimeout(()=>p.remove(),800);
+  }
+}, true);
+
+// Call status connected animation
+const _origAttach = typeof attachRemoteTrack==='function' ? attachRemoteTrack : null;
+if(_origAttach){
+  // already wrapped maybe — enhance status text
+  const obs=new MutationObserver(()=>{
+    const st=document.getElementById('call-status-text');
+    if(st && /Соединено|Connected/i.test(st.textContent||'')){
+      st.classList.add('connected');
+    }
+  });
+  const st=document.getElementById('call-status-text');
+  if(st) obs.observe(st,{childList:true,characterData:true,subtree:true});
+}
+
+// Enhance openStoryViewer with progress bars if function exists
+const _openStory = typeof openStoryViewer==='function' ? openStoryViewer : null;
+if(_openStory){
+  openStoryViewer = async function(userId, name){
+    await _openStory(userId, name);
+    setTimeout(()=>{
+      const viewer=document.getElementById('story-viewer');
+      if(!viewer) return;
+      viewer.classList.add('story-slide-in');
+      // inject progress if missing
+      if(!viewer.querySelector('.story-progress')){
+        const bar=document.createElement('div'); bar.className='story-progress';
+        bar.innerHTML='<i class="active"><b style="animation-duration:5s"></b></i>';
+        viewer.prepend(bar);
+      }
+      // mark rings
+      document.querySelectorAll(`.story-item[data-uid="${userId}"] .story-ring`).forEach(r=>r.classList.remove('unseen'));
+    },50);
+  };
+}
+
+// Mark story rings as unseen by default when loaded
+const _loadSt = loadStories;
+loadStories = async function(){
+  await _loadSt();
+  document.querySelectorAll('#stories-bar .story-item[data-uid] .story-ring').forEach(r=>r.classList.add('unseen'));
+};
+
+// Message removing animation helper
+window.animateRemoveMessage = function(row){
+  if(!row) return;
+  row.classList.add('removing');
+  setTimeout(()=>row.remove(),250);
+};
+
+// Social FAB rotate on open create tab
+document.querySelectorAll('.social-tab').forEach(tb=>{
+  tb.addEventListener('click',()=>{
+    const fab=document.querySelector('.social-fab');
+    if(!fab) return;
+    if(tb.dataset.ptab==='create'||tb.dataset.vtab==='create') fab.classList.add('open');
+    else fab.classList.remove('open');
+  });
+});
+
 
 updateCircleIcon();
 if(sb) sb.auth.getSession().then(({data})=>{ if(data?.session) onAuthenticated(data.session.user); });
