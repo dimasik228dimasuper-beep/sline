@@ -591,6 +591,9 @@ body.theme-light,body{transition:background-color .35s ease}
 .auth-card{animation:modalIn .4s cubic-bezier(.2,.8,.2,1)}
 
 
+
+.rec-btn.on{background:var(--accent-a)!important;box-shadow:0 0 16px rgba(76,124,243,.5)}
+.rec-btn#rflash.on{background:#F7B955!important;box-shadow:0 0 20px rgba(247,185,85,.55)}
 </style>
 </head>
 <body oncontextmenu="return false;">
@@ -1725,11 +1728,60 @@ async function beginRecording(){
     if(recSeconds>=maxSec) finishRecording();
   },1000);
 }
+
+let circleTorchOn=false;
+async function toggleCircleTorch(){
+  if(recordMode!=='circle' || !circleStream) return;
+  try{
+    let track = circleStream.getVideoTracks()[0];
+    if(!track) return;
+    let caps = {};
+    try{ caps = track.getCapabilities ? track.getCapabilities() : {}; }catch(e){}
+    // Torch usually only on rear camera
+    if(!caps.torch && circleFacing==='user'){
+      // switch to environment
+      circleFacing='environment';
+      circleStream.getTracks().forEach(t=>t.stop());
+      circleStream = await navigator.mediaDevices.getUserMedia({
+        video:{facingMode:{ideal:'environment'}, width:{ideal:480}, height:{ideal:480}},
+        audio:true
+      });
+      track = circleStream.getVideoTracks()[0];
+      const v=document.getElementById('clp');
+      if(v){ v.srcObject=circleStream; v.classList.remove('mirrored'); v.play().catch(()=>{}); }
+      try{ caps = track.getCapabilities ? track.getCapabilities() : {}; }catch(e){}
+      // restart recorder with new stream
+      if(mediaRecorder && mediaRecorder.state!=='inactive'){
+        try{ mediaRecorder.stop(); }catch(e){}
+        recordedChunks=[];
+        try{ mediaRecorder=new MediaRecorder(circleStream,{mimeType:'video/webm'}); }
+        catch(e){ mediaRecorder=new MediaRecorder(circleStream); }
+        mediaRecorder.ondataavailable=e=>{ if(e.data&&e.data.size>0) recordedChunks.push(e.data); };
+        mediaRecorder.start(250);
+      }
+    }
+    if(!caps.torch){
+      showToast(currentLang==='en'?'Flash not available on this device':'Вспышка недоступна на этом устройстве');
+      return;
+    }
+    circleTorchOn = !circleTorchOn;
+    await track.applyConstraints({ advanced: [{ torch: circleTorchOn }] });
+    const btn=document.getElementById('rflash');
+    if(btn) btn.classList.toggle('on', circleTorchOn);
+    showToast(circleTorchOn ? (currentLang==='en'?'Flash on':'Вспышка вкл') : (currentLang==='en'?'Flash off':'Вспышка выкл'));
+  }catch(e){
+    console.warn(e);
+    showToast(currentLang==='en'?'Cannot toggle flash':'Не удалось включить вспышку');
+    circleTorchOn=false;
+  }
+}
+
 function renderRecActions(){
   const isCircle = recordMode==='circle';
   document.getElementById('rec-actions').innerHTML=`
     <div class="rec-side-btns">
-      ${isCircle?`<button class="rec-btn" id="rflip" title="Камера"><svg viewBox="0 0 24 24"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 014-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 01-4 4H3"/></svg></button>`:''}
+      ${isCircle?`<button class="rec-btn ${circleTorchOn?'on':''}" id="rflash" title="Вспышка"><svg viewBox="0 0 24 24"><path d="M13 2L3 14h8l-1 8 11-12h-8l1-8z"/></svg></button>
+      <button class="rec-btn" id="rflip" title="Камера"><svg viewBox="0 0 24 24"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 014-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 01-4 4H3"/></svg></button>`:''}
       <button class="rec-btn cancel" id="rcancel"><svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
     </div>
     <button class="rec-btn stop" id="rpause">${recIsPaused
@@ -1738,6 +1790,7 @@ function renderRecActions(){
     <button class="rec-btn send" id="rsend"><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>`;
   document.getElementById('rcancel').onclick=cancelRecording;
   document.getElementById('rpause').onclick=togglePauseRecording;
+  document.getElementById('rflash')?.addEventListener('click', (e)=>{ e.stopPropagation(); toggleCircleTorch(); });
   document.getElementById('rsend').onclick=finishRecording;
   document.getElementById('rflip')?.addEventListener('click', async ()=>{
     circleFacing = circleFacing==='user' ? 'environment' : 'user';
@@ -1769,6 +1822,7 @@ function togglePauseRecording(){
   renderRecActions();
 }
 function cancelRecording(){
+  circleTorchOn=false;
   try{ mediaRecorder?.stop(); }catch(e){}
   circleStream?.getTracks().forEach(t=>t.stop()); circleStream=null;
   clearInterval(recTickInterval); isRecording=false;
@@ -1778,6 +1832,7 @@ function finishRecording(){
   if(!mediaRecorder||mediaRecorder.state==='inactive') return;
   clearInterval(recTickInterval);
   mediaRecorder.onstop=async()=>{
+    circleTorchOn=false;
     circleStream?.getTracks().forEach(t=>t.stop()); circleStream=null;
     document.getElementById('circle-record-overlay').style.display='none';
     isRecording=false;
@@ -3294,24 +3349,52 @@ async function initPushSystem(){
 }
 
 async function requestNotifPermission(){
-  if(!('Notification' in window)){ showToast(currentLang==='en'?'Notifications not supported':'Уведомления не поддерживаются'); return false; }
-  let perm=Notification.permission;
-  if(perm!=='granted') perm=await Notification.requestPermission();
-  if(perm!=='granted'){
-    storage.setItem(NOTIF_PREF_KEY,'0');
-    showToast(currentLang==='en'?'Blocked in browser settings':'Запрещено в настройках браузера');
+  try{
+    if(!window.isSecureContext && location.protocol!=='https:' && location.hostname!=='localhost'){
+      showToast(currentLang==='en'?'Need HTTPS for notifications':'Нужен HTTPS для уведомлений', true);
+      return false;
+    }
+    if(!('Notification' in window)){
+      showToast(currentLang==='en'?'Notifications not supported in this browser':'Этот браузер не поддерживает уведомления', true);
+      return false;
+    }
+    let perm = Notification.permission;
+    if(perm==='denied'){
+      showToast(currentLang==='en'?'Allowed was blocked earlier — enable in browser site settings':'Ранее запрещено — разрешите в настройках сайта браузера', true);
+      return false;
+    }
+    if(perm!=='granted'){
+      try{
+        perm = await Notification.requestPermission();
+      }catch(e){
+        // older Safari
+        perm = await new Promise(res=>{
+          try{ Notification.requestPermission(res); }catch(e2){ res('denied'); }
+        });
+      }
+    }
+    if(perm!=='granted'){
+      storage.setItem(NOTIF_PREF_KEY,'0');
+      showToast(currentLang==='en'?'Permission not granted':'Разрешение не получено', true);
+      return false;
+    }
+    // Local notifications work even without Web Push
+    storage.setItem(NOTIF_PREF_KEY,'1');
+    try{ await subscribeWebPush(); }catch(e){ console.warn('webpush optional', e); }
+    try{
+      vibratePhone([150,60,150]);
+      // force show test without depending on pref checks mid-call
+      const opts={body: currentLang==='en'?'Notifications are on':'Уведомления включены', tag:'sl-test', vibrate:[150,60,150]};
+      if(swRegistration) await swRegistration.showNotification('Signal Line', opts);
+      else new Notification('Signal Line', opts);
+    }catch(e){ console.warn('test notif', e); }
+    showToast(currentLang==='en'?'Notifications enabled':'Уведомления включены');
+    return true;
+  }catch(e){
+    console.error(e);
+    showToast((currentLang==='en'?'Error: ':'Ошибка: ')+String(e.message||e).slice(0,80), true);
     return false;
   }
-  storage.setItem(NOTIF_PREF_KEY,'1');
-  const sub=await subscribeWebPush();
-  try{
-    vibratePhone([150,60,150]);
-    showLocalNotification('Signal Line', currentLang==='en'?'Notifications enabled — no extra apps needed':'Уведомления включены — ничего дополнительно ставить не нужно', {tag:'sl-test', vibrate:[150,60,150]});
-  }catch(e){}
-  if(!sub){
-    showToast(currentLang==='en'?'Browser granted permission. For closed-app delivery, admin must deploy free Edge Function (see settings).':'Разрешение получено. Для доставки при закрытом приложении админу нужно один раз задеплоить бесплатную Edge Function (см. подсказку в настройках).');
-  }
-  return true;
 }
 
 function showLocalNotification(title, body, opts={}){
@@ -3344,30 +3427,61 @@ function notifyIncomingCall(name){
 }
 
 document.getElementById('settings-notifications').onclick=async()=>{
-  const on=storage.getItem(NOTIF_PREF_KEY)==='1';
+  const on = storage.getItem(NOTIF_PREF_KEY)==='1' && typeof Notification!=='undefined' && Notification.permission==='granted';
+  const perm = (typeof Notification!=='undefined') ? Notification.permission : 'unsupported';
   const ov=document.createElement('div'); ov.className='modal-overlay';
   ov.innerHTML=`<div class="modal" style="max-width:420px">
     <button class="close-x" id="nt-x">×</button>
     <h3>${currentLang==='en'?'Notifications & calls':'Уведомления и звонки'}</h3>
-    <div class="settings-item" style="padding-left:0">
+    <p style="font-size:12px;color:var(--muted);margin-bottom:12px">${currentLang==='en'?'Status: ':'Статус: '}<b style="color:var(--text)">${perm==='granted'?(currentLang==='en'?'allowed':'разрешено'):perm==='denied'?(currentLang==='en'?'blocked':'запрещено'):perm==='unsupported'?'—':(currentLang==='en'?'not asked':'не запрошено')}</b></p>
+    <div class="settings-item" style="padding-left:0" id="nt-row">
       <span class="item-text">${currentLang==='en'?'Enable alerts':'Включить оповещения'}</span>
       <div class="toggle-switch ${on?'on':''}" id="nt-tg"></div>
     </div>
-    <button class="btn-primary" id="nt-test" style="margin-top:14px">${currentLang==='en'?'Test notification':'Тест уведомления'}</button>
+    <button class="btn-primary" id="nt-enable" style="margin-top:10px">${on?(currentLang==='en'?'Enabled':'Включено'):(currentLang==='en'?'Allow notifications':'Разрешить уведомления')}</button>
+    <button class="btn-secondary" id="nt-test" style="margin-top:8px">${currentLang==='en'?'Test notification':'Тест уведомления'}</button>
   </div>`;
   document.body.appendChild(ov);
   ov.querySelector('#nt-x').onclick=()=>ov.remove();
-  ov.querySelector('#nt-tg').onclick=async function(){
-    const cur=storage.getItem(NOTIF_PREF_KEY)==='1';
-    if(!cur){ const ok=await requestNotifPermission(); this.classList.toggle('on',ok); }
-    else { storage.setItem(NOTIF_PREF_KEY,'0'); this.classList.remove('on'); stopRingtone(); }
+  const applyOn = (ok)=>{
+    ov.querySelector('#nt-tg').classList.toggle('on', !!ok);
+    const b=ov.querySelector('#nt-enable');
+    if(b) b.textContent = ok ? (currentLang==='en'?'Enabled':'Включено') : (currentLang==='en'?'Allow notifications':'Разрешить уведомления');
   };
-  ov.querySelector('#nt-test').onclick=async()=>{
-    if(!myProfile) return;
-    await requestNotifPermission();
-    showLocalNotification('Signal Line', currentLang==='en'?'Local test':'Локальный тест', {vibrate:[200,100,200]});
-    await sendWebPushToUser(myProfile.id, 'Signal Line', currentLang==='en'?'Push test':'Тест push', {tag:'sl-test'});
-    showToast(currentLang==='en'?'Test sent':'Тест отправлен');
+  const doEnable = async (e)=>{
+    if(e) e.stopPropagation();
+    const cur = storage.getItem(NOTIF_PREF_KEY)==='1' && Notification.permission==='granted';
+    if(cur){
+      storage.setItem(NOTIF_PREF_KEY,'0');
+      applyOn(false);
+      try{ stopRingtone(); }catch(err){}
+      showToast(currentLang==='en'?'Notifications off':'Уведомления выключены');
+      return;
+    }
+    const ok = await requestNotifPermission();
+    applyOn(ok);
+  };
+  ov.querySelector('#nt-tg').onclick=doEnable;
+  ov.querySelector('#nt-row').onclick=doEnable;
+  ov.querySelector('#nt-enable').onclick=doEnable;
+  ov.querySelector('#nt-test').onclick=async (e)=>{
+    e.stopPropagation();
+    if(Notification.permission!=='granted'){
+      const ok=await requestNotifPermission();
+      if(!ok) return;
+      applyOn(true);
+    } else {
+      storage.setItem(NOTIF_PREF_KEY,'1');
+    }
+    try{
+      if(swRegistration) await swRegistration.showNotification('Signal Line', {body: currentLang==='en'?'Test':'Тест', tag:'sl-test'});
+      else new Notification('Signal Line', {body: currentLang==='en'?'Test':'Тест'});
+      vibratePhone([200,100,200]);
+      showToast(currentLang==='en'?'Test sent':'Тест отправлен');
+    }catch(err){
+      showToast(String(err.message||err).slice(0,80), true);
+    }
+    try{ await sendWebPushToUser(myProfile?.id, 'Signal Line', 'Test', {tag:'sl-test'}); }catch(e){}
   };
 };
 
