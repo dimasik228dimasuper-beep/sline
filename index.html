@@ -309,6 +309,59 @@ body.theme-light{
 .call-btn-round.mute.on{background:var(--accent-a)}
 .call-ring-pulse{position:absolute;inset:0;background:radial-gradient(circle,rgba(76,124,243,.25),transparent 60%);animation:callPulse 2s ease-in-out infinite}
 @keyframes callPulse{0%,100%{opacity:.4}50%{opacity:.9}}
+
+/* ===== Social overlays (Signal Posts / Signal Video) ===== */
+.social-overlay{position:fixed;inset:0;background:var(--bg);z-index:9400;display:none;flex-direction:column}
+.social-overlay.show{display:flex}
+.social-topbar{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--line);background:var(--panel);flex-shrink:0}
+.social-close{width:34px;height:34px;border-radius:10px;background:var(--panel-hover);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text)}
+.social-title{font-weight:800;font-size:16px}
+.social-body{flex:1;overflow-y:auto}
+.social-tabs{display:flex;background:var(--panel);border-top:1px solid var(--line);flex-shrink:0}
+.social-tab{flex:1;text-align:center;padding:12px 0;cursor:pointer;color:var(--muted);font-size:11px;font-weight:700;display:flex;flex-direction:column;align-items:center;gap:4px}
+.social-tab.active{color:var(--accent-a)}
+.social-tab svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2}
+
+.post-card{border-bottom:1px solid var(--line);padding-bottom:10px;margin-bottom:6px}
+.post-head{display:flex;align-items:center;gap:10px;padding:12px 14px}
+.post-head .p-name{font-weight:700;font-size:14px}
+.post-media{width:100%;max-height:480px;object-fit:cover;background:#000;display:block;cursor:pointer}
+.post-actions{display:flex;align-items:center;gap:16px;padding:10px 14px}
+.post-like-btn{display:flex;align-items:center;gap:6px;cursor:pointer;background:none;border:none;color:var(--text)}
+.post-like-btn svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:2;transition:transform .15s}
+.post-like-btn.liked svg{fill:var(--danger);stroke:var(--danger);transform:scale(1.1)}
+.post-comment-btn{display:flex;align-items:center;gap:6px;cursor:pointer;background:none;border:none;color:var(--text)}
+.post-comment-btn svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2}
+.post-caption{padding:0 14px;font-size:13px;line-height:1.4}
+.post-hashtags{color:var(--accent-a);font-size:12px;padding:0 14px 6px}
+.post-comments-wrap{padding:0 14px;margin-top:4px}
+.post-comment-row{font-size:12px;padding:3px 0;color:var(--text)}
+.post-comment-row b{margin-right:4px}
+.post-comment-input-row{display:flex;gap:8px;padding:8px 14px 0}
+.post-comment-input-row input{flex:1;padding:8px 12px;border-radius:16px;border:1px solid var(--line);background:var(--input-bg);color:var(--text);font-size:13px;outline:none}
+
+.social-fab{position:absolute;right:16px;bottom:80px;width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,var(--accent-a),var(--accent-b));display:flex;align-items:center;justify-content:center;color:#fff;cursor:pointer;box-shadow:0 8px 24px rgba(76,124,243,.4)}
+.social-fab svg{width:24px;height:24px;fill:none;stroke:#fff;stroke-width:2}
+
+.profile-header{display:flex;flex-direction:column;align-items:center;padding:28px 20px 16px;gap:8px}
+.profile-stats{display:flex;gap:26px;margin:8px 0}
+.profile-stat b{display:block;font-size:16px}
+.profile-stat span{font-size:11px;color:var(--muted)}
+.profile-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:2px;padding:2px}
+.profile-grid .g-item{aspect-ratio:1;object-fit:cover;background:#000;cursor:pointer}
+
+.video-feed{height:100%;overflow-y:auto;scroll-snap-type:y mandatory}
+.video-slide{position:relative;height:100%;scroll-snap-align:start;background:#000;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.video-slide video{width:100%;height:100%;object-fit:contain}
+.video-overlay-ui{position:absolute;left:0;right:0;bottom:0;padding:16px 70px 20px 16px;background:linear-gradient(transparent,rgba(0,0,0,.65));color:#fff}
+.video-side-actions{position:absolute;right:10px;bottom:90px;display:flex;flex-direction:column;align-items:center;gap:20px;color:#fff}
+.video-side-actions .vs-btn{display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer}
+.video-side-actions svg{width:30px;height:30px;fill:none;stroke:#fff;stroke-width:2}
+.video-side-actions .vs-btn.liked svg{fill:var(--danger);stroke:var(--danger)}
+.video-side-actions span{font-size:11px;font-weight:700}
+
+.follow-btn{padding:8px 22px;border-radius:10px;border:none;font-weight:700;font-size:13px;cursor:pointer;background:linear-gradient(135deg,var(--accent-a),var(--accent-b));color:#fff}
+.follow-btn.following{background:var(--panel-hover);color:var(--text);border:1px solid var(--line)}
 </style>
 </head>
 <body oncontextmenu="return false;">
@@ -471,6 +524,11 @@ body.theme-light{
         <div class="settings-item" id="settings-notifications"><svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 00-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg><span class="item-text" data-i18n="it_notifications">Уведомления</span></div>
       </div>
       <div class="settings-section">
+        <div class="settings-section-title" data-i18n="sec_social">Соцсеть</div>
+        <div class="settings-item" id="settings-posts"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg><span class="item-text" data-i18n="it_posts">Лента постов</span></div>
+        <div class="settings-item" id="settings-videos"><svg viewBox="0 0 24 24"><rect x="2" y="4" width="14" height="16" rx="3"/><path d="M16 9l6-4v14l-6-4"/></svg><span class="item-text" data-i18n="it_videos">Лента видео</span></div>
+      </div>
+      <div class="settings-section">
         <div class="settings-section-title" data-i18n="sec_gifts">Подарки</div>
         <div class="settings-item" id="settings-gifts"><svg viewBox="0 0 24 24"><rect x="3" y="8" width="18" height="13" rx="1"/><path d="M12 8v13M3 12h18"/><path d="M12 8c-1.5 0-3-1-3-2.5S10 3 12 5c0-2 1.5-3.5 3-2.5S13.5 8 12 8z"/></svg><span class="item-text" data-i18n="it_gifts">Подарки</span></div>
       </div>
@@ -488,6 +546,30 @@ body.theme-light{
   </div>
 </div>
 
+<div class="social-overlay" id="posts-overlay">
+  <div class="social-topbar">
+    <button class="social-close" id="posts-close"><svg viewBox="0 0 24 24" style="width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+    <div class="social-title">Signal Posts</div>
+  </div>
+  <div class="social-body" id="posts-body" style="position:relative"></div>
+  <div class="social-tabs">
+    <div class="social-tab active" data-ptab="feed"><svg viewBox="0 0 24 24"><path d="M3 12l9-9 9 9M5 10v10h14V10"/></svg>Лента</div>
+    <div class="social-tab" data-ptab="create"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Создать</div>
+    <div class="social-tab" data-ptab="me"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-7 8-7s8 3 8 7"/></svg>Мой аккаунт</div>
+  </div>
+</div>
+<div class="social-overlay" id="video-overlay">
+  <div class="social-topbar">
+    <button class="social-close" id="video-close"><svg viewBox="0 0 24 24" style="width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+    <div class="social-title">Signal Video</div>
+  </div>
+  <div class="social-body" id="video-body" style="position:relative;padding:0"></div>
+  <div class="social-tabs">
+    <div class="social-tab active" data-vtab="feed"><svg viewBox="0 0 24 24"><path d="M3 12l9-9 9 9M5 10v10h14V10"/></svg>Лента</div>
+    <div class="social-tab" data-vtab="create"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Загрузить</div>
+    <div class="social-tab" data-vtab="me"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-7 8-7s8 3 8 7"/></svg>Мой аккаунт</div>
+  </div>
+</div>
 <div id="ctx-menu" class="ctx-menu"></div>
 <div class="circle-record-overlay" id="circle-record-overlay">
   <div id="circle-preview-container"></div>
@@ -534,6 +616,7 @@ document.addEventListener('selectstart', e => { if(!e.target.closest('input,text
 
 let authMethod = 'email';
 let currentUser=null, myProfile=null, contacts=[], groups=[], activePartner=null, activeGroup=null;
+let pendingDeepLink = location.hash || location.pathname || '';
 let messagesChannel=null, presenceChannel=null, typingChannel=null;
 let replyToMsg=null, editingMsgId=null;
 let circleStream, mediaRecorder, recordedChunks=[], isRecording=false;
@@ -689,15 +772,45 @@ async function onAuthenticated(user){
 }
 
 // ========== DEEP LINK ==========
-function handleDeepLink(){
-  const path = location.pathname + location.hash;
-  const m = path.match(/\/user\/@?([a-zA-Z0-9_]+)/i) || location.hash.match(/#\/user\/@?([a-zA-Z0-9_]+)/i);
-  if(m && myProfile){
+async function handleDeepLink(){
+  const path = pendingDeepLink || location.hash || location.pathname || '';
+  if(!path || !myProfile) return;
+  let m;
+  if((m = path.match(/\/user\/@?([a-zA-Z0-9_]+)/i))){
     const uname = m[1].toLowerCase();
-    sb.from('profiles').select('*').eq('username', uname).maybeSingle().then(({data})=>{
-      if(data && data.id !== myProfile.id) openChat(data);
-    });
+    const {data} = await sb.from('profiles').select('*').eq('username', uname).maybeSingle();
+    if(data && data.id !== myProfile.id){ ensureInContacts(data); openChat(data); }
+    else if(!data) showToast(currentLang==='en' ? 'User not found' : 'Пользователь не найден');
+  } else if((m = path.match(/\/channel\/@?([a-zA-Z0-9_]+)/i))){
+    const uname = m[1].toLowerCase();
+    let group=null;
+    try{ const {data}=await sb.from('groups').select('*').eq('username', uname).maybeSingle(); group=data; }catch(e){}
+    if(group){ await joinOrOpenGroup(group); }
+    else showToast(currentLang==='en' ? 'Channel not found' : 'Канал не найден');
+  } else if((m = path.match(/\/group\/([a-zA-Z0-9-]+)/i))){
+    const gid = m[1];
+    let group = groups.find(g=>g.id===gid);
+    if(!group){ try{ const {data}=await sb.from('groups').select('*').eq('id', gid).maybeSingle(); group=data; }catch(e){} }
+    if(group){ await joinOrOpenGroup(group); }
+    else showToast(currentLang==='en' ? 'Group not found' : 'Группа не найдена');
   }
+  pendingDeepLink='';
+  try{ history.replaceState(null,'', location.pathname); }catch(e){}
+}
+async function joinOrOpenGroup(group){
+  const already = groups.some(g=>g.id===group.id);
+  if(!already){
+    if(group.type==='channel' && group.is_public){
+      try{ await sb.from('group_members').insert({group_id:group.id, user_id:myProfile.id, role:'member'}); }catch(e){}
+      await loadGroups();
+      showToast(currentLang==='en' ? 'Joined the channel' : 'Вы подписались на канал');
+    } else {
+      showToast(currentLang==='en' ? 'This is a private group — ask an admin to add you' : 'Это приватная группа — попросите админа добавить вас');
+      return;
+    }
+  }
+  const fresh = groups.find(g=>g.id===group.id) || group;
+  switchPage('chats'); openGroup(fresh);
 }
 
 // ========== DATA ==========
@@ -1397,7 +1510,7 @@ document.getElementById('file-input').onchange=function(e){ const f=e.target.fil
 // ========== SETTINGS ==========
 document.getElementById('settings-favorites').onclick=()=>{ switchPage('chats'); openChat({id:myProfile.id, username:myProfile.username, first_name:t('it_favorites'), color:myProfile.color, avatar_url:myProfile.avatar_url}); };
 document.getElementById('settings-my-link').onclick=()=>{
-  const link=`${location.origin}/user/@${myProfile.username}`;
+  const link=`${location.origin}${location.pathname}#/user/@${myProfile.username}`;
   showInfoDialog('Моя ссылка', link);
 };
 document.getElementById('settings-devices').onclick=()=>{
@@ -1912,6 +2025,7 @@ document.getElementById('group-settings-btn').onclick=()=>{
   modal.innerHTML=`<div class="modal"><button class="close-x" id="gs-x">×</button>
     <h3>${escapeHtml(activeGroup.name)}</h3>
     <p style="color:var(--muted);font-size:13px;margin-bottom:12px">${activeGroup.type==='channel'?(activeGroup.is_public?'Публичный канал':'Приватный канал'):'Группа'}</p>
+    <button class="btn-secondary" id="gs-copy-link">${currentLang==='en'?'Copy chat link':'Скопировать ссылку'}</button>
     ${isAdmin&&activeGroup.type==='channel'?`<div class="settings-item" id="toggle-comments" style="padding-left:0"><span class="item-text">Комментарии</span><div class="toggle-switch ${activeGroup.comments_enabled?'on':''}" id="comments-tg"></div></div>
     <div class="settings-item" id="toggle-public" style="padding-left:0"><span class="item-text">Публичный канал</span><div class="toggle-switch ${activeGroup.is_public?'on':''}" id="public-tg"></div></div>`:''}
     ${isAdmin?`<div class="settings-item" style="padding-left:0"><span class="item-text">Антиспам (запрещённые слова)</span><div class="toggle-switch ${antispamOn?'on':''}" id="antispam-tg"></div></div>
@@ -1920,6 +2034,12 @@ document.getElementById('group-settings-btn').onclick=()=>{
   </div>`;
   modal.style.display='flex';
   modal.querySelector('#gs-x').onclick=()=>modal.style.display='none';
+  modal.querySelector('#gs-copy-link').onclick=()=>{
+    const link = (activeGroup.type==='channel' && activeGroup.is_public && activeGroup.username)
+      ? `${location.origin}${location.pathname}#/channel/${activeGroup.username}`
+      : `${location.origin}${location.pathname}#/group/${activeGroup.id}`;
+    showInfoDialog(currentLang==='en'?'Chat link':'Ссылка на чат', link);
+  };
   modal.querySelector('#toggle-comments')?.addEventListener('click', async()=>{
     const on=!activeGroup.comments_enabled;
     try{ await sb.from('groups').update({comments_enabled:on}).eq('id',activeGroup.id); activeGroup.comments_enabled=on; modal.querySelector('#comments-tg').classList.toggle('on',on);
@@ -1963,9 +2083,11 @@ document.getElementById('story-input').onchange=function(e){
     const r=new FileReader();
     r.onload=async ev=>{
       try{
-        await sb.from('stories').insert({user_id:myProfile.id, media_url:ev.target.result, type:f.type.startsWith('video/')?'video':'image', expires_at:new Date(Date.now()+86400000).toISOString()});
+        const mType = f.type.startsWith('video/')?'video':'image';
+        await sb.from('stories').insert({user_id:myProfile.id, media_url:ev.target.result, type:mType, expires_at:new Date(Date.now()+86400000).toISOString()});
         storage.setItem('sl_story_audience_'+myProfile.id, JSON.stringify(audience));
         loadStories(); showToast('История опубликована');
+        crossPostStory(ev.target.result, mType);
       }catch(err){ showToast(friendlyError(err)); }
     };
     r.readAsDataURL(f);
@@ -2003,6 +2125,13 @@ function pickContactsForStory(){
 }
 
 // ---------- Robust profile search (auto-drops DB columns that don't exist, e.g. no "phone" column) ----------
+function ensureInContacts(profile){
+  if(!profile || profile.id===myProfile?.id) return;
+  if(!contacts.some(c=>c.id===profile.id)){
+    contacts.unshift({...profile, lastMessage:'', lastAt:new Date().toISOString()});
+    renderContactsAndGroups();
+  }
+}
 async function searchProfilesSafe(q, excludeId, limit, fields){
   fields = fields || ['username','email','phone','first_name','last_name'];
   let attempt = [...fields];
@@ -2236,7 +2365,7 @@ document.querySelector('[data-action="contact"]').onclick=async()=>{
   },250);
   document.getElementById('ac-go').onclick=async()=>{
     const raw=inp.value.trim(); if(!raw) return;
-    const q=raw.replace('@','').replace(/\s/g,'');
+    const q=raw.startsWith('@') ? raw.slice(1).trim() : (/^[+\d\s()-]+$/.test(raw) ? raw.replace(/\s+/g,'') : raw);
     let user=null; let lastError=null;
     try{
       const {data,error}=await searchProfilesSafe(q, myProfile.id, 1);
@@ -2244,7 +2373,7 @@ document.querySelector('[data-action="contact"]').onclick=async()=>{
       user=data && data[0];
     }catch(e){ lastError=e; console.warn('profiles search exception:', e); }
     if(!user){ document.getElementById('ac-msg').textContent = lastError ? friendlyProfileSearchError(lastError) : 'Не найден'; return; }
-    ov.remove(); openChat(user);
+    ov.remove(); ensureInContacts(user); openChat(user);
   };
 };
 function friendlyProfileSearchError(error){
@@ -2342,6 +2471,7 @@ const I18N={
     sec_appearance:'Оформление', it_wallpaper:'Настроить обои', it_emojistatus:'Эмодзи статус', it_emojiavatar:'Эмодзи аватар',
     sec_privacy:'Приватность', it_anonymity:'Анонимность', it_notifications:'Уведомления',
     sec_gifts:'Подарки', it_gifts:'Подарки', sec_logout:'Выход', it_logout:'Выйти',
+    sec_social:'Соцсеть', it_posts:'Лента постов', it_videos:'Лента видео',
     online:'в сети', offline:'не в сети', typing:'печатает…', notes:'заметки', bot:'бот',
     you_sure_delete_chat:'Удалить чат?', you_sure_delete_msg:'Удалить сообщение?', you_sure_logout:'Выйти из аккаунта?',
     copied:'Скопировано', not_found:'Не найден', added:'Добавлен',
@@ -2364,6 +2494,7 @@ const I18N={
     sec_appearance:'Appearance', it_wallpaper:'Set wallpaper', it_emojistatus:'Emoji status', it_emojiavatar:'Emoji avatar',
     sec_privacy:'Privacy', it_anonymity:'Anonymity', it_notifications:'Notifications',
     sec_gifts:'Gifts', it_gifts:'Gifts', sec_logout:'Sign out', it_logout:'Log out',
+    sec_social:'Social', it_posts:'Posts feed', it_videos:'Video feed',
     online:'online', offline:'offline', typing:'typing…', notes:'notes', bot:'bot',
     you_sure_delete_chat:'Delete this chat?', you_sure_delete_msg:'Delete this message?', you_sure_logout:'Sign out of your account?',
     copied:'Copied', not_found:'Not found', added:'Added',
@@ -2616,7 +2747,7 @@ async function appendGlobalSearchResults(list, q){
       <div style="min-width:0;flex:1"><div class="contact-name">${escapeHtml(name)}${verifiedBadgeIf(p.email)}</div>
       <div class="contact-sub">@${escapeHtml(p.username||'')}</div></div></div>`;
     renderAvatarInto(row.querySelector('.avatar'), p.avatar_url, (name||'?')[0].toUpperCase(), p.color||colorFor(p.id));
-    row.onclick=()=>openChat(p);
+    row.onclick=()=>{ ensureInContacts(p); openChat(p); };
     list.appendChild(row);
   });
 }
@@ -2627,6 +2758,295 @@ renderContactsAndGroups = function(){
   const q=(document.getElementById('search-input')?.value||'');
   if(list && q.trim().length>=2) appendGlobalSearchResults(list, q);
 };
+
+// ---------- Social (Signal Posts / Signal Video) ----------
+const _warnedTables=new Set();
+async function withTable(promise, tableLabel){
+  try{
+    const res = await promise;
+    if(res.error){
+      if(/relation .* does not exist/i.test(res.error.message||'') || res.error.code==='42P01'){
+        if(!_warnedTables.has(tableLabel)){ _warnedTables.add(tableLabel); showToast((currentLang==='en'?'Missing table: ':'Нет таблицы: ')+tableLabel); }
+      } else console.warn(tableLabel, res.error);
+      return {data:[], error:res.error};
+    }
+    return res;
+  }catch(e){ console.warn(tableLabel, e); return {data:[], error:e}; }
+}
+let followingSet=new Set();
+async function loadFollowing(){
+  const {data} = await withTable(sb.from('follows').select('following_id').eq('follower_id', myProfile.id), 'follows');
+  followingSet = new Set((data||[]).map(f=>f.following_id));
+}
+async function toggleFollow(userId, btn){
+  const isFollowing = followingSet.has(userId);
+  if(isFollowing){
+    followingSet.delete(userId);
+    await withTable(sb.from('follows').delete().eq('follower_id',myProfile.id).eq('following_id',userId), 'follows');
+  } else {
+    followingSet.add(userId);
+    await withTable(sb.from('follows').insert({follower_id:myProfile.id, following_id:userId}), 'follows');
+  }
+  if(btn){ const f=followingSet.has(userId); btn.classList.toggle('following', f); btn.textContent = f ? (currentLang==='en'?'Following':'Вы подписаны') : (currentLang==='en'?'Follow':'Подписаться'); }
+}
+async function fetchPosts(kind, userId){
+  let q = sb.from('posts').select('*').eq('kind', kind).order('created_at',{ascending:false}).limit(40);
+  if(userId) q = q.eq('user_id', userId);
+  const {data} = await withTable(q, 'posts');
+  const list = data||[];
+  const ids=[...new Set(list.map(p=>p.user_id))];
+  let profs={};
+  if(ids.length){ const {data:prs}=await withTable(sb.from('profiles').select('*').in('id',ids),'profiles'); (prs||[]).forEach(p=>profs[p.id]=p); }
+  return list.map(p=>({...p, author:profs[p.user_id]||{id:p.user_id,username:'user'}}));
+}
+function openPostsOverlay(){ document.getElementById('posts-overlay').classList.add('show'); switchPostsTab('feed'); }
+function closePostsOverlay(){ document.getElementById('posts-overlay').classList.remove('show'); }
+function openVideoOverlay(){ document.getElementById('video-overlay').classList.add('show'); switchVideoTab('feed'); }
+function closeVideoOverlay(){ document.getElementById('video-overlay').classList.remove('show'); }
+document.getElementById('settings-posts').onclick=openPostsOverlay;
+document.getElementById('settings-videos').onclick=openVideoOverlay;
+document.getElementById('posts-close').onclick=closePostsOverlay;
+document.getElementById('video-close').onclick=closeVideoOverlay;
+document.querySelectorAll('#posts-overlay .social-tab').forEach(tb=>tb.onclick=()=>switchPostsTab(tb.dataset.ptab));
+document.querySelectorAll('#video-overlay .social-tab').forEach(tb=>tb.onclick=()=>switchVideoTab(tb.dataset.vtab));
+
+async function switchPostsTab(tabName){
+  document.querySelectorAll('#posts-overlay .social-tab').forEach(tb=>tb.classList.toggle('active', tb.dataset.ptab===tabName));
+  const body=document.getElementById('posts-body');
+  if(tabName==='feed'){ body.innerHTML=`<div class="empty-state">${t('loading')}</div>`; await renderPostsFeed(body); }
+  else if(tabName==='create'){ renderCreatePost(body,'post'); }
+  else if(tabName==='me'){ body.innerHTML=`<div class="empty-state">${t('loading')}</div>`; await renderSocialProfile(body, myProfile.id, 'post'); }
+}
+async function switchVideoTab(tabName){
+  document.querySelectorAll('#video-overlay .social-tab').forEach(tb=>tb.classList.toggle('active', tb.dataset.vtab===tabName));
+  const body=document.getElementById('video-body');
+  if(tabName==='feed'){ body.innerHTML=`<div class="empty-state">${t('loading')}</div>`; await renderVideoFeed(body); }
+  else if(tabName==='create'){ renderCreatePost(body,'video'); }
+  else if(tabName==='me'){ body.innerHTML=`<div class="empty-state">${t('loading')}</div>`; await renderSocialProfile(body, myProfile.id, 'video'); }
+}
+
+async function renderPostsFeed(body){
+  await loadFollowing();
+  const list = await fetchPosts('post');
+  if(!list.length){ body.innerHTML=`<div class="empty-state">${currentLang==='en'?'No posts yet':'Пока нет постов'}</div>`; return; }
+  body.innerHTML='';
+  for(const p of list) body.appendChild(await buildPostCard(p));
+}
+async function buildPostCard(p){
+  const el=document.createElement('div'); el.className='post-card';
+  const author=p.author;
+  const name=author.first_name?`${author.first_name} ${author.last_name||''}`:(author.username||'user');
+  el.innerHTML=`
+    <div class="post-head">
+      <div class="avatar" data-authorbtn style="width:36px;height:36px;font-size:13px;cursor:pointer"></div>
+      <div class="p-name" data-authorbtn style="cursor:pointer">${escapeHtml(name)}${verifiedBadgeIf(author.email)}</div>
+    </div>
+    ${p.media_type==='video' ? `<video class="post-media" src="${p.media_url}" controls playsinline></video>` : `<img class="post-media" src="${p.media_url}">`}
+    <div class="post-actions">
+      <button class="post-like-btn" data-like><svg viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 00-7.8 0L12 5.6l-1-1a5.5 5.5 0 00-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 000-7.8z"/></svg><span data-likecount>0</span></button>
+      <button class="post-comment-btn" data-commentbtn><svg viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/></svg><span data-commentcount>0</span></button>
+    </div>
+    ${p.caption?`<div class="post-caption">${escapeHtml(p.caption)}</div>`:''}
+    ${p.hashtags?`<div class="post-hashtags">${escapeHtml(p.hashtags)}</div>`:''}
+    <div class="post-comments-wrap" data-commentswrap style="display:none">
+      <div data-commentslist></div>
+      <div class="post-comment-input-row"><input type="text" placeholder="${currentLang==='en'?'Add a comment...':'Написать комментарий...'}" data-commentinput><button class="icon-btn" data-commentsend><svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg></button></div>
+    </div>`;
+  renderAvatarInto(el.querySelector('[data-authorbtn].avatar'), author.avatar_url, (name||'?')[0].toUpperCase(), author.color||colorFor(author.id));
+  el.querySelectorAll('[data-authorbtn]').forEach(x=>x.onclick=()=>openAuthorOverlay(author.id, 'post'));
+  const {data:likes} = await withTable(sb.from('post_likes').select('user_id').eq('post_id',p.id), 'post_likes');
+  const likeSet = new Set((likes||[]).map(l=>l.user_id));
+  const likeBtn = el.querySelector('[data-like]');
+  likeBtn.querySelector('[data-likecount]').textContent = likeSet.size;
+  likeBtn.classList.toggle('liked', likeSet.has(myProfile.id));
+  likeBtn.onclick = async()=>{
+    const mine = likeSet.has(myProfile.id);
+    if(mine){ likeSet.delete(myProfile.id); await withTable(sb.from('post_likes').delete().eq('post_id',p.id).eq('user_id',myProfile.id),'post_likes'); }
+    else { likeSet.add(myProfile.id); await withTable(sb.from('post_likes').insert({post_id:p.id, user_id:myProfile.id}),'post_likes'); }
+    likeBtn.classList.toggle('liked', likeSet.has(myProfile.id));
+    likeBtn.querySelector('[data-likecount]').textContent = likeSet.size;
+  };
+  const {data:comments} = await withTable(sb.from('post_comments').select('*').eq('post_id',p.id).order('created_at'), 'post_comments');
+  const commentsArr = comments||[];
+  el.querySelector('[data-commentcount]').textContent = commentsArr.length;
+  const wrap = el.querySelector('[data-commentswrap]');
+  const listEl = el.querySelector('[data-commentslist]');
+  async function renderComments(){
+    const ids=[...new Set(commentsArr.map(c=>c.user_id))];
+    let profs={};
+    if(ids.length){ const {data:prs}=await withTable(sb.from('profiles').select('id,username,first_name').in('id',ids),'profiles'); (prs||[]).forEach(pp=>profs[pp.id]=pp); }
+    listEl.innerHTML = commentsArr.map(c=>`<div class="post-comment-row"><b>${escapeHtml(profs[c.user_id]?.first_name||profs[c.user_id]?.username||'')}: </b>${escapeHtml(c.content)}</div>`).join('');
+  }
+  el.querySelector('[data-commentbtn]').onclick = async()=>{
+    const show = wrap.style.display==='none';
+    wrap.style.display = show?'block':'none';
+    if(show) await renderComments();
+  };
+  el.querySelector('[data-commentsend]').onclick = async()=>{
+    const inp = el.querySelector('[data-commentinput]');
+    const text = inp.value.trim(); if(!text) return;
+    inp.value='';
+    const {data,error} = await withTable(sb.from('post_comments').insert({post_id:p.id, user_id:myProfile.id, content:text}).select().single(), 'post_comments');
+    if(!error && data){ commentsArr.push(data); el.querySelector('[data-commentcount]').textContent = commentsArr.length; await renderComments(); }
+  };
+  return el;
+}
+function renderCreatePost(body, kind){
+  body.innerHTML = `<div style="padding:16px">
+    <div class="field"><label>${kind==='video'?(currentLang==='en'?'Video':'Видео'):(currentLang==='en'?'Photo or video':'Фото или видео')}</label>
+      <button class="btn-secondary" id="cp-pick" type="button">${currentLang==='en'?'Choose file':'Выбрать файл'}</button>
+      <input type="file" class="hidden-input" id="cp-file" accept="${kind==='video'?'video/*':'image/*,video/*'}">
+      <div id="cp-preview" style="margin-top:10px"></div>
+    </div>
+    <div class="field"><label>${currentLang==='en'?'Caption':'Подпись'}</label><input class="cd-input" id="cp-caption"></div>
+    ${kind==='video'?`<div class="field"><label>${currentLang==='en'?'Hashtags':'Хэштеги'}</label><input class="cd-input" id="cp-hashtags" placeholder="#signal #video"></div>`:''}
+    <button class="btn-primary" id="cp-publish">${currentLang==='en'?'Publish':'Опубликовать'}</button>
+  </div>`;
+  let mediaData=null, mediaType=kind==='video'?'video':'image';
+  body.querySelector('#cp-pick').onclick=()=>body.querySelector('#cp-file').click();
+  body.querySelector('#cp-file').onchange=e=>{
+    const f=e.target.files[0]; if(!f) return;
+    mediaType = f.type.startsWith('video/')?'video':'image';
+    const r=new FileReader();
+    r.onload=ev=>{
+      mediaData=ev.target.result;
+      const prev=body.querySelector('#cp-preview');
+      prev.innerHTML = mediaType==='video' ? `<video src="${mediaData}" style="max-width:100%;border-radius:12px" controls></video>` : `<img src="${mediaData}" style="max-width:100%;border-radius:12px">`;
+    };
+    r.readAsDataURL(f);
+  };
+  body.querySelector('#cp-publish').onclick=async()=>{
+    if(!mediaData){ showToast(currentLang==='en'?'Choose a file first':'Сначала выберите файл'); return; }
+    const caption=body.querySelector('#cp-caption').value.trim();
+    const hashtags=kind==='video'?body.querySelector('#cp-hashtags').value.trim():'';
+    const {error} = await withTable(sb.from('posts').insert({user_id:myProfile.id, kind, media_url:mediaData, media_type:mediaType, caption, hashtags}), 'posts');
+    if(!error){ showToast(currentLang==='en'?'Published!':'Опубликовано!'); if(kind==='video') switchVideoTab('feed'); else switchPostsTab('feed'); }
+  };
+}
+async function renderSocialProfile(body, userId, kind){
+  let profile = userId===myProfile.id ? myProfile : null;
+  if(!profile){ const {data}=await sb.from('profiles').select('*').eq('id',userId).maybeSingle(); profile=data; }
+  if(!profile){ body.innerHTML=`<div class="empty-state">${currentLang==='en'?'Not found':'Не найден'}</div>`; return; }
+  await loadFollowing();
+  const isMe = userId===myProfile.id;
+  const name=profile.first_name?`${profile.first_name} ${profile.last_name||''}`:profile.username;
+  const postsList = await fetchPosts(kind, userId);
+  const {data:followers} = await withTable(sb.from('follows').select('follower_id').eq('following_id',userId), 'follows');
+  const {data:followingRows} = await withTable(sb.from('follows').select('following_id').eq('follower_id',userId), 'follows');
+  body.innerHTML = `
+    <div class="profile-header">
+      <div class="avatar" id="sp-avatar" style="width:84px;height:84px;font-size:30px"></div>
+      <div style="font-weight:800;font-size:17px">${escapeHtml(name)}${verifiedBadgeIf(profile.email)}</div>
+      <div style="color:var(--muted);font-size:13px">@${escapeHtml(profile.username||'')}</div>
+      <div class="profile-stats">
+        <div class="profile-stat"><b>${postsList.length}</b><span>${currentLang==='en'?'posts':'постов'}</span></div>
+        <div class="profile-stat"><b>${(followers||[]).length}</b><span>${currentLang==='en'?'followers':'подписчики'}</span></div>
+        <div class="profile-stat"><b>${(followingRows||[]).length}</b><span>${currentLang==='en'?'following':'подписки'}</span></div>
+      </div>
+      ${!profile.hide_email && profile.email ? `<div style="font-size:12px;color:var(--muted)">${escapeHtml(profile.email)}</div>`:''}
+      ${!profile.hide_phone && profile.phone ? `<div style="font-size:12px;color:var(--muted)">${escapeHtml(profile.phone)}</div>`:''}
+      ${!isMe ? `<button class="follow-btn ${followingSet.has(userId)?'following':''}" id="sp-follow">${followingSet.has(userId)?(currentLang==='en'?'Following':'Вы подписаны'):(currentLang==='en'?'Follow':'Подписаться')}</button>`:''}
+    </div>
+    <div class="profile-grid" id="sp-grid"></div>`;
+  renderAvatarInto(document.getElementById('sp-avatar'), profile.avatar_url, (name||'?')[0].toUpperCase(), profile.color||colorFor(profile.id));
+  document.getElementById('sp-follow')?.addEventListener('click', function(){ toggleFollow(userId, this); });
+  const grid=document.getElementById('sp-grid');
+  grid.innerHTML = postsList.map(p=>p.media_type==='video'
+    ? `<video class="g-item" src="${p.media_url}" muted></video>`
+    : `<img class="g-item" src="${p.media_url}">`).join('') || `<div class="empty-state">${currentLang==='en'?'No posts yet':'Пока нет постов'}</div>`;
+}
+async function openAuthorOverlay(userId, kind){
+  const bodyId = kind==='video' ? 'video-body' : 'posts-body';
+  const body=document.getElementById(bodyId);
+  body.innerHTML=`<div class="empty-state">${t('loading')}</div>`;
+  await renderSocialProfile(body, userId, kind);
+  const back=document.createElement('div');
+  back.style.cssText='padding:10px 14px;color:var(--accent-a);cursor:pointer;font-size:13px;font-weight:700';
+  back.textContent='← '+(currentLang==='en'?'Back to feed':'Назад к ленте');
+  back.onclick=()=> kind==='video' ? switchVideoTab('feed') : switchPostsTab('feed');
+  body.prepend(back);
+}
+async function renderVideoFeed(body){
+  await loadFollowing();
+  const list = await fetchPosts('video');
+  if(!list.length){ body.innerHTML = `<div class="empty-state">${currentLang==='en'?'No videos yet':'Пока нет видео'}</div>`; return; }
+  body.innerHTML = `<div class="video-feed" id="video-feed-wrap"></div>`;
+  const wrap = document.getElementById('video-feed-wrap');
+  for(const v of list){
+    const author=v.author;
+    const isVideo = v.media_type==='video';
+    const slide=document.createElement('div'); slide.className='video-slide';
+    slide.innerHTML=`
+      ${isVideo ? `<video src="${v.media_url}" loop playsinline></video>` : `<img src="${v.media_url}" style="width:100%;height:100%;object-fit:contain">`}
+      <div class="video-overlay-ui">
+        <div style="font-weight:700;display:flex;align-items:center;gap:6px;cursor:pointer" data-authorbtn>@${escapeHtml(author.username||'')}${verifiedBadgeIf(author.email)}</div>
+        <div style="font-size:13px;margin-top:4px">${escapeHtml(v.caption||'')}</div>
+        <div style="font-size:12px;color:var(--accent-a);margin-top:2px">${escapeHtml(v.hashtags||'')}</div>
+      </div>
+      <div class="video-side-actions">
+        <div class="vs-btn" data-like><svg viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 00-7.8 0L12 5.6l-1-1a5.5 5.5 0 00-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 000-7.8z"/></svg><span data-likecount>0</span></div>
+        <div class="vs-btn" data-commentbtn><svg viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z"/></svg><span data-commentcount>0</span></div>
+      </div>`;
+    if(isVideo){
+      const vidEl = slide.querySelector('video');
+      slide.addEventListener('click', e=>{ if(e.target===vidEl){ vidEl.paused ? vidEl.play().catch(()=>{}) : vidEl.pause(); } });
+    }
+    slide.querySelector('[data-authorbtn]').onclick=()=>openAuthorOverlay(author.id,'video');
+    wrap.appendChild(slide);
+    const {data:likes} = await withTable(sb.from('post_likes').select('user_id').eq('post_id',v.id), 'post_likes');
+    const likeSet=new Set((likes||[]).map(l=>l.user_id));
+    const likeBtn=slide.querySelector('[data-like]');
+    likeBtn.querySelector('[data-likecount]').textContent=likeSet.size;
+    likeBtn.classList.toggle('liked', likeSet.has(myProfile.id));
+    likeBtn.onclick=async()=>{
+      const mine=likeSet.has(myProfile.id);
+      if(mine){ likeSet.delete(myProfile.id); await withTable(sb.from('post_likes').delete().eq('post_id',v.id).eq('user_id',myProfile.id),'post_likes'); }
+      else{ likeSet.add(myProfile.id); await withTable(sb.from('post_likes').insert({post_id:v.id,user_id:myProfile.id}),'post_likes'); }
+      likeBtn.classList.toggle('liked', likeSet.has(myProfile.id));
+      likeBtn.querySelector('[data-likecount]').textContent=likeSet.size;
+    };
+    const {data:comments}=await withTable(sb.from('post_comments').select('*').eq('post_id',v.id),'post_comments');
+    const commentsArr=comments||[];
+    slide.querySelector('[data-commentcount]').textContent=commentsArr.length;
+    slide.querySelector('[data-commentbtn]').onclick=()=>openVideoComments(v,commentsArr,slide.querySelector('[data-commentcount]'));
+  }
+  const io = new IntersectionObserver(entries=>{
+    entries.forEach(en=>{
+      const v=en.target.querySelector('video');
+      if(!v) return;
+      if(en.isIntersecting) v.play().catch(()=>{}); else v.pause();
+    });
+  }, {root:wrap, threshold:0.6});
+  wrap.querySelectorAll('.video-slide').forEach(s=>io.observe(s));
+}
+function openVideoComments(post, commentsArr, countEl){
+  const ov=document.createElement('div'); ov.className='modal-overlay';
+  ov.innerHTML=`<div class="modal"><button class="close-x" id="vc-x">×</button><h3>${currentLang==='en'?'Comments':'Комментарии'}</h3>
+    <div id="vc-list" style="max-height:260px;overflow-y:auto;margin-bottom:10px"></div>
+    <div class="post-comment-input-row"><input class="cd-input" id="vc-input" placeholder="${currentLang==='en'?'Add a comment...':'Комментарий...'}"><button class="icon-btn" id="vc-send"><svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg></button></div></div>`;
+  document.body.appendChild(ov);
+  ov.querySelector('#vc-x').onclick=()=>ov.remove();
+  const listEl=ov.querySelector('#vc-list');
+  async function refresh(){
+    const ids=[...new Set(commentsArr.map(c=>c.user_id))];
+    let profs={};
+    if(ids.length){ const {data:prs}=await withTable(sb.from('profiles').select('id,username,first_name').in('id',ids),'profiles'); (prs||[]).forEach(pp=>profs[pp.id]=pp); }
+    listEl.innerHTML = commentsArr.map(c=>`<div class="post-comment-row"><b>${escapeHtml(profs[c.user_id]?.first_name||profs[c.user_id]?.username||'')}: </b>${escapeHtml(c.content)}</div>`).join('') || `<div class="empty-state">${currentLang==='en'?'No comments yet':'Пока нет комментариев'}</div>`;
+  }
+  refresh();
+  ov.querySelector('#vc-send').onclick=async()=>{
+    const inp=ov.querySelector('#vc-input'); const text=inp.value.trim(); if(!text) return;
+    inp.value='';
+    const {data,error}=await withTable(sb.from('post_comments').insert({post_id:post.id,user_id:myProfile.id,content:text}).select().single(),'post_comments');
+    if(!error && data){ commentsArr.push(data); if(countEl) countEl.textContent=commentsArr.length; refresh(); }
+  };
+}
+async function crossPostStory(mediaUrl, mediaType){
+  try{
+    await sb.from('posts').insert({user_id:myProfile.id, kind:'post', media_url:mediaUrl, media_type:mediaType, caption:'', hashtags:'', from_story:true});
+    await sb.from('posts').insert({user_id:myProfile.id, kind:'video', media_url:mediaUrl, media_type:mediaType, caption:'', hashtags:'', from_story:true});
+  }catch(e){ /* social tables not set up yet — safe to ignore */ }
+}
 
 updateCircleIcon();
 if(sb) sb.auth.getSession().then(({data})=>{ if(data?.session) onAuthenticated(data.session.user); });
