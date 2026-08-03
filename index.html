@@ -43,7 +43,6 @@ body{
   overflow-x:hidden;
   overscroll-behavior:none;
   overscroll-behavior-x:none;
-  touch-action:manipulation;
   max-width:100vw;
 }
 input,textarea{user-select:text!important;-webkit-user-select:text!important}
@@ -144,7 +143,6 @@ body.in-chat .app-pages{
   margin:0 0 2px;
   position:relative;
   background:var(--panel);
-  touch-action:pan-y;
   -webkit-user-select:none;
   user-select:none;
 }
@@ -168,12 +166,10 @@ body.in-chat .app-pages{
   margin:0!important;
   overflow:hidden;
   transform:translate3d(0,0,0);
-  transition:transform .22s cubic-bezier(.2,.8,.2,1);
+  transition:transform .2s ease;
   will-change:transform;
-  touch-action:none;
-  cursor:grab;
 }
-.sw-front.swiping{transition:none;cursor:grabbing}
+.sw-front.swiping{transition:none!important}
 .sw-front:hover,
 .sw-front.active{background:var(--panel-hover)!important}
 .sw-front.active{box-shadow:inset 3px 0 0 var(--accent-a)}
@@ -1606,10 +1602,12 @@ function switchPage(page){
   // always reset chat swipes so actions never peek after tab switch
   try{
     document.querySelectorAll('#contacts-list .sw-clip').forEach(c=>{
-      const fr=c.querySelector('.sw-front');
-      if(fr){ fr.classList.remove('swiping'); fr.style.transform='translate3d(0,0,0)'; }
-      delete c.dataset.open;
-      c.classList.remove('sw-dragging');
+      if(c._closeSwipe) c._closeSwipe();
+      else {
+        const fr=c.querySelector('.sw-front');
+        if(fr){ fr.classList.remove('swiping'); fr.style.transform='translate3d(0,0,0)'; }
+        delete c.dataset.open;
+      }
     });
   }catch(e){}
   document.querySelectorAll('.app-page').forEach(p=>p.classList.remove('active'));
@@ -1930,69 +1928,78 @@ function renderContactsAndGroups(){
     clip.appendChild(row);
 
     const ACTION_W = 216;
-    let startX=0, startY=0, baseX=0, curX=0;
-    let dragging=false, axis=null;
+    let sx=0, sy=0, baseX=0, curX=0, axis=null, tracking=false;
 
-    function setFront(x, animate){
-      curX = Math.max(-ACTION_W, Math.min(0, x));
-      if(animate===false) row.classList.add('swiping');
+    function setX(x, anim){
+      curX = Math.max(-ACTION_W, Math.min(0, x|0));
+      if(anim===false) row.classList.add('swiping');
       else row.classList.remove('swiping');
       row.style.transform = 'translate3d('+curX+'px,0,0)';
     }
-    function openSwipe(){
-      setFront(-ACTION_W, true);
-      clip.dataset.open='1';
-    }
-    function closeSwipe(){
-      setFront(0, true);
-      delete clip.dataset.open;
-    }
-    function closeOthers(){
+    function openSw(){ setX(-ACTION_W, true); clip.dataset.open='1'; }
+    function closeSw(){ setX(0, true); delete clip.dataset.open; }
+    function closeAllOther(){
       list.querySelectorAll('.sw-clip[data-open]').forEach(c=>{
         if(c===clip) return;
-        const fr=c.querySelector('.sw-front');
-        if(fr){ fr.classList.remove('swiping'); fr.style.transform='translate3d(0,0,0)'; }
+        const f=c.querySelector('.sw-front');
+        if(f){ f.classList.remove('swiping'); f.style.transform='translate3d(0,0,0)'; }
         delete c.dataset.open;
       });
     }
+    // expose for outer handlers
+    clip._closeSwipe = closeSw;
+    clip._openSwipe = openSw;
 
-    // Pointer events (touch + mouse) — reliable on iOS
-    row.addEventListener('pointerdown', e=>{
-      if(e.button!==undefined && e.button!==0) return;
-      startX=e.clientX; startY=e.clientY;
+    function onStart(x,y){
+      sx=x; sy=y; axis=null; tracking=true;
       baseX = clip.dataset.open ? -ACTION_W : 0;
       curX = baseX;
-      dragging=true; axis=null;
-      try{ row.setPointerCapture(e.pointerId); }catch(err){}
-    });
-    row.addEventListener('pointermove', e=>{
-      if(!dragging) return;
-      const dx=e.clientX-startX, dy=e.clientY-startY;
+    }
+    function onMove(x,y,e){
+      if(!tracking) return false;
+      const dx=x-sx, dy=y-sy;
       if(axis===null){
-        if(Math.abs(dx)<10 && Math.abs(dy)<10) return;
-        if(Math.abs(dy)>Math.abs(dx)*1.1){ axis='v'; dragging=false; return; }
+        if(Math.abs(dx)<8 && Math.abs(dy)<8) return false;
+        // vertical wins → let the list scroll (do NOT preventDefault)
+        if(Math.abs(dy) >= Math.abs(dx)){ axis='v'; tracking=false; return false; }
         axis='h';
-        closeOthers();
+        closeAllOther();
         row.classList.add('swiping');
       }
-      if(axis!=='h') return;
-      e.preventDefault();
-      e.stopPropagation();
-      setFront(baseX+dx, false);
-    });
-    function endPtr(e){
-      if(!dragging && axis!=='h'){ axis=null; return; }
-      if(axis==='h'){
-        if(curX < -ACTION_W*0.3) openSwipe();
-        else closeSwipe();
-      }
-      dragging=false; axis=null;
-      row.classList.remove('swiping');
-      try{ if(e&&e.pointerId!=null) row.releasePointerCapture(e.pointerId); }catch(err){}
+      if(axis!=='h') return false;
+      if(e && e.cancelable) e.preventDefault();
+      setX(baseX+dx, false);
+      return true;
     }
-    row.addEventListener('pointerup', endPtr);
-    row.addEventListener('pointercancel', endPtr);
-    row.addEventListener('lostpointercapture', ()=>{ dragging=false; axis=null; });
+    function onEnd(){
+      if(axis==='h'){
+        if(curX < -ACTION_W*0.28) openSw(); else closeSw();
+      }
+      tracking=false; axis=null;
+      row.classList.remove('swiping');
+    }
+
+    // TOUCH — passive start, non-passive move so we can preventDefault only for horizontal
+    row.addEventListener('touchstart', e=>{
+      if(e.touches.length!==1) return;
+      onStart(e.touches[0].clientX, e.touches[0].clientY);
+    }, {passive:true});
+    row.addEventListener('touchmove', e=>{
+      if(e.touches.length!==1) return;
+      onMove(e.touches[0].clientX, e.touches[0].clientY, e);
+    }, {passive:false});
+    row.addEventListener('touchend', onEnd);
+    row.addEventListener('touchcancel', onEnd);
+
+    // MOUSE (PC drag)
+    row.addEventListener('mousedown', e=>{
+      if(e.button!==0) return;
+      onStart(e.clientX, e.clientY);
+      const mm = ev=>{ onMove(ev.clientX, ev.clientY, ev); };
+      const mu = ()=>{ onEnd(); window.removeEventListener('mousemove', mm); window.removeEventListener('mouseup', mu); };
+      window.addEventListener('mousemove', mm);
+      window.addEventListener('mouseup', mu);
+    });
 
     // close on list scroll
     const scrollParent = list.closest('.sidebar-scroll') || list;
@@ -2000,22 +2007,19 @@ function renderContactsAndGroups(){
       scrollParent._swScrollBound = true;
       scrollParent.addEventListener('scroll', ()=>{
         list.querySelectorAll('.sw-clip[data-open]').forEach(c=>{
-          const fr=c.querySelector('.sw-front');
-          if(fr){ fr.classList.remove('swiping'); fr.style.transform='translate3d(0,0,0)'; }
-          delete c.dataset.open;
-          c.classList.remove('sw-dragging');
+          if(c._closeSwipe) c._closeSwipe();
+          else {
+            const fr=c.querySelector('.sw-front');
+            if(fr){ fr.classList.remove('swiping'); fr.style.transform='translate3d(0,0,0)'; }
+            delete c.dataset.open;
+          }
         });
       }, {passive:true});
     }
 
-    let didSwipe=false;
-    row.addEventListener('pointerup', ()=>{ if(Math.abs(curX)>12) didSwipe=true; });
     row.onclick=(e)=>{
-      if(didSwipe){ didSwipe=false; e.preventDefault(); e.stopPropagation(); return; }
-      if(clip.dataset.open){
-        closeSwipe();
-        return;
-      }
+      if(axis==='h' || Math.abs(curX)>20){ closeSw(); return; }
+      if(clip.dataset.open){ closeSw(); return; }
       if(type==='group') openGroup(data); else openChat(data);
     };
     const av=row.querySelector('.avatar');
@@ -2032,7 +2036,7 @@ function renderContactsAndGroups(){
         e.preventDefault();
         e.stopPropagation();
         const a=btn.dataset.a;
-        closeSwipe();
+        closeSw();
         if(a==='archive'){
           let ar=getArchive();
           if(ar.includes(data.id)) ar=ar.filter(id=>id!==data.id); else ar.push(data.id);
