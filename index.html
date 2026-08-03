@@ -421,28 +421,51 @@ body.theme-light{
 @keyframes tabIconSpin{0%{transform:rotate(0) scale(1)}50%{transform:rotate(-12deg) scale(1.2)}100%{transform:rotate(0) scale(1)}}
 
 /* Fullscreen profile sheet */
+/* ===== Profile sheet: round avatar + cover → on scroll cover gone, avatar STRETCHED square ===== */
 .profile-sheet{position:fixed;inset:0;z-index:9200;background:var(--bg);display:flex;flex-direction:column;overflow:hidden}
-.profile-sheet-top{position:absolute;top:0;left:0;right:0;z-index:30;padding:10px 12px;display:flex;align-items:center;gap:10px;background:transparent;border-bottom:1px solid transparent;transition:background .2s,border-color .2s;min-height:52px}
-.profile-sheet.collapsed .profile-sheet-top{background:var(--panel);border-bottom-color:var(--line)}
-.profile-sheet-top .ps-title{font-weight:800;font-size:16px;flex:1;opacity:0;transform:translateY(6px);transition:opacity .2s,transform .2s;pointer-events:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.profile-sheet-top{position:absolute;top:0;left:0;right:0;z-index:40;padding:10px 12px;display:flex;align-items:center;gap:10px;background:transparent;border-bottom:1px solid transparent;transition:background .2s,border-color .2s;min-height:52px;pointer-events:none}
+.profile-sheet-top > *{pointer-events:auto}
+.profile-sheet.collapsed .profile-sheet-top{background:rgba(11,17,32,.72);backdrop-filter:blur(10px);border-bottom-color:transparent}
+.profile-sheet-top .ps-title{font-weight:800;font-size:16px;flex:1;opacity:0;transform:translateY(6px);transition:opacity .2s,transform .2s;pointer-events:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#fff;text-shadow:0 1px 4px rgba(0,0,0,.5)}
 .profile-sheet.collapsed .profile-sheet-top .ps-title{opacity:1;transform:none}
 .profile-sheet-top .icon-btn{background:rgba(0,0,0,.35);border-color:transparent;color:#fff;backdrop-filter:blur(8px)}
-.profile-sheet.collapsed .profile-sheet-top .icon-btn{background:none;border:1px solid var(--line);color:var(--muted)}
+.profile-sheet.collapsed .profile-sheet-top .icon-btn{background:rgba(0,0,0,.4);border-color:transparent;color:#fff}
 .profile-sheet-body{flex:1;overflow-y:auto;padding:0 0 40px;-webkit-overflow-scrolling:touch}
-.profile-header{position:relative;width:100%;height:min(56vw,300px);min-height:220px;overflow:visible;flex-shrink:0;background:linear-gradient(135deg,var(--accent-a),var(--accent-b));transition:height .28s ease,min-height .28s ease}
-.profile-sheet.collapsed .profile-header{height:0;min-height:0;overflow:hidden}
-.profile-cover{position:absolute;inset:0;background-size:cover;background-position:center;transition:opacity .25s}
-.profile-cover-overlay{position:absolute;inset:0;background:linear-gradient(to bottom,rgba(0,0,0,.2) 0%,rgba(0,0,0,.05) 45%,rgba(11,17,32,.65) 100%);pointer-events:none}
-.profile-header-content{position:absolute;left:0;right:0;bottom:0;padding:16px 16px 18px;display:flex;flex-direction:column;align-items:center;gap:6px;z-index:2;transition:opacity .2s}
-.profile-sheet.collapsed .profile-header-content{opacity:0;pointer-events:none}
+.profile-header{position:relative;width:100%;height:min(58vw,320px);min-height:240px;overflow:hidden;flex-shrink:0;background:linear-gradient(135deg,var(--accent-a),var(--accent-b));transition:height .3s ease,min-height .3s ease}
+/* When collapsed: header grows into full stretched square photo area */
+.profile-sheet.collapsed .profile-header{height:min(100vw,420px);min-height:min(100vw,420px)}
+.profile-cover{position:absolute;inset:0;background-size:cover;background-position:center;transition:opacity .28s,transform .28s}
+.profile-sheet.collapsed .profile-cover{opacity:0;transform:scale(1.08);pointer-events:none}
+.profile-cover-overlay{position:absolute;inset:0;background:linear-gradient(to bottom,rgba(0,0,0,.25) 0%,rgba(0,0,0,.05) 40%,rgba(11,17,32,.55) 100%);pointer-events:none;transition:opacity .25s}
+.profile-sheet.collapsed .profile-cover-overlay{opacity:0}
+.profile-header-content{position:absolute;left:0;right:0;bottom:0;padding:16px 16px 18px;display:flex;flex-direction:column;align-items:center;gap:6px;z-index:3;transition:opacity .2s,transform .25s}
+.profile-sheet.collapsed .profile-header-content{opacity:0;pointer-events:none;transform:scale(.9)}
 /* Big avatar: ROUND by default */
-.profile-av-big{width:112px;height:112px;border-radius:50%;border:3px solid rgba(255,255,255,.9);box-shadow:0 8px 28px rgba(0,0,0,.35);background:var(--accent-a);background-size:cover;background-position:center;display:flex;align-items:center;justify-content:center;font-size:42px;font-weight:800;color:#fff;flex-shrink:0}
+.profile-av-big{
+  width:112px;height:112px;border-radius:50%;
+  border:3px solid rgba(255,255,255,.9);
+  box-shadow:0 8px 28px rgba(0,0,0,.35);
+  background:var(--accent-a);background-size:cover;background-position:center;
+  display:flex;align-items:center;justify-content:center;
+  font-size:42px;font-weight:800;color:#fff;flex-shrink:0;
+  transition:all .3s cubic-bezier(.2,.8,.2,1);
+  z-index:4;
+}
+/* STRETCHED square avatar layer (hidden until scroll) */
+.profile-av-stretch{
+  position:absolute;inset:0;z-index:2;
+  background:var(--accent-a);background-size:cover;background-position:center;
+  border-radius:0;opacity:0;transform:scale(.92);
+  transition:opacity .3s ease,transform .3s ease;
+  display:flex;align-items:center;justify-content:center;
+  font-size:72px;font-weight:800;color:#fff;
+}
+.profile-sheet.collapsed .profile-av-stretch{opacity:1;transform:scale(1)}
 .profile-name-big{font-weight:800;font-size:22px;color:#fff;text-shadow:0 1px 8px rgba(0,0,0,.45);text-align:center}
 .profile-sub-big{font-size:13px;color:rgba(255,255,255,.85);text-align:center}
 .profile-online-big{font-size:12px;color:var(--mint);text-shadow:0 1px 4px rgba(0,0,0,.4)}
-/* Collapsed: SQUARE avatar in the top bar */
-.profile-collapsed-av{width:36px;height:36px;border-radius:10px!important;background:var(--accent-a);background-size:cover;background-position:center;display:none!important;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#fff;flex-shrink:0;overflow:hidden}
-.profile-sheet.collapsed .profile-collapsed-av{display:flex!important}
+/* No mini square — stretched photo is the icon */
+.profile-collapsed-av{display:none!important}
 .profile-body-inner{padding:16px 16px 40px}
 .profile-sheet-actions{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:8px 0 18px}
 .profile-action{display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 8px;border-radius:14px;background:var(--panel);border:1px solid var(--line);cursor:pointer;color:var(--text);font-size:11px;font-weight:600}
@@ -452,15 +475,32 @@ body.theme-light{
 .profile-cover-btn svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2}
 .profile-sheet.collapsed .profile-cover-btn{display:none}
 
-/* ===== Settings page: cover + ROUND avatar; on scroll cover gone, avatar SQUARE ===== */
+/* ===== Settings: round avatar + cover → on scroll cover gone, avatar STRETCHED full-width square ===== */
 .settings-page{padding:0;overflow-y:auto!important;-webkit-overflow-scrolling:touch}
 .settings-profile{position:relative;padding:0;border-bottom:1px solid var(--line);background:var(--panel)}
-.settings-cover-wrap{position:relative;height:160px;background:linear-gradient(135deg,var(--accent-a),var(--accent-b));overflow:hidden;transition:height .28s ease,opacity .28s ease;flex-shrink:0}
-.settings-cover{position:absolute;inset:0;background-size:cover;background-position:center}
-.settings-cover-fade{position:absolute;inset:0;background:linear-gradient(to bottom,transparent 40%,var(--panel) 100%);pointer-events:none}
-.settings-cover-edit{position:absolute;right:12px;top:12px;z-index:4;padding:7px 11px;border-radius:999px;border:none;background:rgba(0,0,0,.45);color:#fff;font-size:12px;font-weight:600;cursor:pointer;backdrop-filter:blur(6px)}
-.settings-profile-info{display:flex;flex-direction:column;align-items:center;padding:0 20px 18px;margin-top:-50px;position:relative;z-index:5}
-/* Avatar ALWAYS visible, ROUND by default */
+.settings-cover-wrap{
+  position:relative;height:160px;
+  background:linear-gradient(135deg,var(--accent-a),var(--accent-b));
+  overflow:hidden;transition:height .32s ease,opacity .28s ease;flex-shrink:0;
+}
+.settings-cover{position:absolute;inset:0;background-size:cover;background-position:center;transition:opacity .28s}
+.settings-cover-fade{position:absolute;inset:0;background:linear-gradient(to bottom,transparent 40%,var(--panel) 100%);pointer-events:none;transition:opacity .25s}
+.settings-cover-edit{position:absolute;right:12px;top:12px;z-index:6;padding:7px 11px;border-radius:999px;border:none;background:rgba(0,0,0,.45);color:#fff;font-size:12px;font-weight:600;cursor:pointer;backdrop-filter:blur(6px)}
+/* Stretched avatar layer inside cover area */
+.settings-av-stretch{
+  position:absolute;inset:0;z-index:2;
+  background:var(--accent-a);background-size:cover;background-position:center;
+  opacity:0;transform:scale(.94);
+  transition:opacity .32s ease,transform .32s ease;
+  display:flex;align-items:center;justify-content:center;
+  font-size:64px;font-weight:800;color:#fff;
+}
+.settings-profile-info{
+  display:flex;flex-direction:column;align-items:center;
+  padding:0 20px 18px;margin-top:-50px;position:relative;z-index:5;
+  transition:margin .28s ease,opacity .25s;
+}
+/* Avatar ROUND and visible by default */
 .settings-avatar{
   width:96px!important;height:96px!important;min-width:96px;min-height:96px;
   border-radius:50%!important;
@@ -471,21 +511,25 @@ body.theme-light{
   cursor:pointer;background-size:cover;background-position:center;
   border:3px solid var(--panel);
   box-shadow:0 6px 20px rgba(0,0,0,.3);
-  transition:border-radius .25s ease,width .25s ease,height .25s ease,font-size .25s;
+  transition:opacity .25s,transform .28s,border-radius .28s;
   flex-shrink:0;overflow:hidden;position:relative;z-index:6;
 }
-/* On scroll: cover collapses, avatar becomes SQUARE */
-.settings-page.collapsed .settings-cover-wrap{height:0!important;opacity:0;min-height:0}
-.settings-page.collapsed .settings-cover-edit{display:none}
-.settings-page.collapsed .settings-profile-info{margin-top:16px}
-.settings-page.collapsed .settings-avatar{
-  width:64px!important;height:64px!important;min-width:64px;min-height:64px;
-  border-radius:14px!important;
-  font-size:24px;
-  margin-bottom:10px;
-}
-.settings-name{font-size:18px;font-weight:700}
+.settings-name{font-size:18px;font-weight:700;transition:opacity .2s}
 .settings-username{font-size:13px;color:var(--muted);margin-top:2px}
+
+/* COLLAPSED / scrolled: cover pattern gone, avatar STRETCHED as full square header */
+.settings-page.collapsed .settings-cover-wrap{
+  height:min(100vw,380px)!important;opacity:1;min-height:min(100vw,380px);
+}
+.settings-page.collapsed .settings-cover{opacity:0}
+.settings-page.collapsed .settings-cover-fade{opacity:0}
+.settings-page.collapsed .settings-av-stretch{opacity:1;transform:scale(1)}
+.settings-page.collapsed .settings-cover-edit{display:none}
+.settings-page.collapsed .settings-profile-info{margin-top:12px}
+.settings-page.collapsed .settings-avatar{
+  opacity:0;transform:scale(.5);pointer-events:none;
+  border-radius:14px!important;
+}
 
 .qr-box{background:#fff;padding:16px;border-radius:16px;display:inline-block}
 .qr-box img,.qr-box canvas{display:block;width:200px;height:200px}
@@ -789,6 +833,7 @@ body.theme-light,body{transition:background-color .35s ease}
       <div class="settings-profile">
         <div class="settings-cover-wrap" id="settings-cover-wrap">
           <div class="settings-cover" id="settings-cover"></div>
+          <div class="settings-av-stretch" id="settings-av-stretch"></div>
           <div class="settings-cover-fade"></div>
           <button type="button" class="settings-cover-edit" id="settings-cover-edit" title="Обложка">Обложка</button>
         </div>
@@ -965,10 +1010,22 @@ function updateAllUIs(){
   }
   const sav=document.getElementById('settings-avatar');
   if(sav){
-    // keep visible; shape controlled by .collapsed class on page
     sav.style.display='flex';
     sav.style.visibility='visible';
-    sav.style.opacity='1';
+  }
+  // stretched avatar uses same photo as round avatar
+  const stretch=document.getElementById('settings-av-stretch');
+  if(stretch){
+    stretch.innerHTML='';
+    if(myProfile.avatar_url && !(typeof myProfile.avatar_url==='string' && myProfile.avatar_url.startsWith('data:video'))){
+      stretch.style.backgroundImage=`url(${myProfile.avatar_url})`;
+      stretch.style.background='';
+      stretch.textContent='';
+    } else {
+      stretch.style.backgroundImage='';
+      stretch.style.background=myProfile.color||colorFor(myProfile.id)||'#4C7CF3';
+      stretch.textContent=(myProfile.username||'?')[0].toUpperCase();
+    }
   }
 }
 function isVideoDataUrl(u){ return typeof u==='string' && u.startsWith('data:video'); }
@@ -2133,7 +2190,7 @@ document.getElementById('settings-cover-edit')?.addEventListener('click', pickCo
   const page=document.getElementById('page-settings');
   if(!page) return;
   const onScroll=()=>{
-    if(page.scrollTop > 60) page.classList.add('collapsed');
+    if(page.scrollTop > 40) page.classList.add('collapsed');
     else page.classList.remove('collapsed');
   };
   page.addEventListener('scroll', onScroll, {passive:true});
@@ -4659,6 +4716,7 @@ async function openFullProfile(profileLike){
     <div class="profile-sheet-body" id="ps-scroll">
       <div class="profile-header" id="ps-header">
         <div class="profile-cover" id="ps-cover" style="${coverUrl?`background-image:url(${coverUrl})`:''}"></div>
+        <div class="profile-av-stretch" id="ps-av-stretch"></div>
         <div class="profile-cover-overlay"></div>
         <div class="profile-header-content">
           <div class="avatar profile-av-big" id="ps-av"></div>
@@ -4686,18 +4744,25 @@ async function openFullProfile(profileLike){
     </div>`;
   document.body.appendChild(sheet);
   renderAvatarInto(sheet.querySelector('#ps-av'), p.avatar_url, (p.username||'?')[0].toUpperCase(), p.color||colorFor(p.id));
-  renderAvatarInto(sheet.querySelector('#ps-av-mini'), p.avatar_url, (p.username||'?')[0].toUpperCase(), p.color||colorFor(p.id));
-  const mini=sheet.querySelector('#ps-av-mini');
-  if(mini){
-    mini.style.borderRadius='10px';
-    mini.style.width='36px';
-    mini.style.height='36px';
-  }
   const big=sheet.querySelector('#ps-av');
   if(big){
     big.style.borderRadius='50%';
     big.style.width='112px';
     big.style.height='112px';
+  }
+  // stretched full-bleed avatar (shown on scroll)
+  const stretch=sheet.querySelector('#ps-av-stretch');
+  if(stretch){
+    stretch.innerHTML='';
+    if(p.avatar_url && !(typeof p.avatar_url==='string' && p.avatar_url.startsWith('data:video'))){
+      stretch.style.backgroundImage=`url(${p.avatar_url})`;
+      stretch.style.background='';
+      stretch.textContent='';
+    } else {
+      stretch.style.backgroundImage='';
+      stretch.style.background=p.color||colorFor(p.id)||'#4C7CF3';
+      stretch.textContent=(p.username||'?')[0].toUpperCase();
+    }
   }
   const onEl=sheet.querySelector('#ps-online');
   if(onEl) onEl.textContent = onlineUsers.has(p.id) ? (currentLang==='en'?'online':'в сети') : (currentLang==='en'?'offline':'не в сети');
@@ -4705,7 +4770,7 @@ async function openFullProfile(profileLike){
   // collapse on scroll
   const sc=sheet.querySelector('#ps-scroll');
   const header=sheet.querySelector('#ps-header');
-  const collapseAt = 48;
+  const collapseAt = 36;
   sc.addEventListener('scroll', ()=>{
     if(sc.scrollTop > collapseAt) sheet.classList.add('collapsed');
     else sheet.classList.remove('collapsed');
