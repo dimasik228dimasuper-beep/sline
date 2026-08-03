@@ -788,6 +788,47 @@ body.in-chat .bottom-tabs{height:0;overflow:hidden;padding:0;border:none}
   body.in-chat .bottom-tabs{display:none!important}
 }
 
+
+/* ===== Animated loaders (no text) ===== */
+.sl-spinner{
+  width:36px;height:36px;border-radius:50%;
+  border:3px solid rgba(124,138,165,.25);
+  border-top-color:var(--accent-a,#4C7CF3);
+  border-right-color:var(--accent-b,#6D5DF6);
+  animation:slSpin .7s linear infinite;
+  flex-shrink:0;
+}
+.sl-spinner.sm{width:22px;height:22px;border-width:2.5px}
+.sl-spinner.lg{width:48px;height:48px;border-width:3.5px}
+@keyframes slSpin{to{transform:rotate(360deg)}}
+.sl-loader-overlay{
+  position:fixed;inset:0;z-index:10000;
+  background:rgba(11,17,32,.45);backdrop-filter:blur(6px);
+  display:flex;align-items:center;justify-content:center;
+  opacity:0;pointer-events:none;transition:opacity .2s;
+}
+.sl-loader-overlay.show{opacity:1;pointer-events:auto}
+.sl-loader-box{
+  width:72px;height:72px;border-radius:20px;
+  background:var(--panel,#131B2E);border:1px solid var(--line,#212C46);
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:0 12px 40px rgba(0,0,0,.4);
+}
+.sl-loader-inline{
+  display:flex;align-items:center;justify-content:center;
+  padding:36px 16px;min-height:80px;
+}
+.sl-loader-inline.compact{padding:16px}
+.btn-loading{
+  position:relative;color:transparent!important;pointer-events:none;
+}
+.btn-loading::after{
+  content:'';position:absolute;left:50%;top:50%;
+  width:20px;height:20px;margin:-10px 0 0 -10px;border-radius:50%;
+  border:2.5px solid rgba(255,255,255,.25);border-top-color:#fff;
+  animation:slSpin .7s linear infinite;
+}
+
 </style>
 </head>
 <body oncontextmenu="return false;">
@@ -912,7 +953,7 @@ html.sl-ready.sl-booting::before{display:none!important}
             </div>
             <div class="stories-bar" id="stories-bar"></div>
             <div class="folder-tabs" id="folder-tabs"></div>
-            <div class="contacts" id="contacts-list"><div class="empty-state" data-i18n="loading">Загрузка...</div></div>
+            <div class="contacts" id="contacts-list"><div class="sl-loader-inline" data-i18n="loading"><div class="sl-spinner"></div></div></div>
           </div>
         </div>
         <div class="chat-pane" id="chat-pane">
@@ -1140,6 +1181,42 @@ function setLocked(l){ storage.setItem(LOCKED_KEY,JSON.stringify(l)); }
 function getOfflineQ(){ try{return JSON.parse(storage.getItem(OFFLINE_Q)||'[]');}catch(e){return[];} }
 function setOfflineQ(q){ storage.setItem(OFFLINE_Q,JSON.stringify(q)); }
 
+// ========== ANIMATED LOADER ==========
+(function setupLoaderDom(){
+  if(document.getElementById('sl-loader')) return;
+  const ov=document.createElement('div');
+  ov.id='sl-loader'; ov.className='sl-loader-overlay'; ov.setAttribute('aria-hidden','true');
+  ov.innerHTML='<div class="sl-loader-box"><div class="sl-spinner lg"></div></div>';
+  document.body.appendChild(ov);
+})();
+let _loaderCount=0;
+function showLoader(){
+  _loaderCount++;
+  const ov=document.getElementById('sl-loader');
+  if(ov){ ov.classList.add('show'); ov.setAttribute('aria-hidden','false'); }
+}
+function hideLoader(){
+  _loaderCount=Math.max(0,_loaderCount-1);
+  if(_loaderCount>0) return;
+  const ov=document.getElementById('sl-loader');
+  if(ov){ ov.classList.remove('show'); ov.setAttribute('aria-hidden','true'); }
+}
+function loaderHTML(size){
+  const cls=size==='sm'?'sl-spinner sm':(size==='lg'?'sl-spinner lg':'sl-spinner');
+  return `<div class="sl-loader-inline"><div class="${cls}"></div></div>`;
+}
+function setBtnLoading(btn, on){
+  if(!btn) return;
+  if(on){
+    if(!btn.dataset._label) btn.dataset._label=btn.textContent;
+    btn.classList.add('btn-loading'); btn.disabled=true;
+  } else {
+    btn.classList.remove('btn-loading'); btn.disabled=false;
+    if(btn.dataset._label){ btn.textContent=btn.dataset._label; delete btn.dataset._label; }
+  }
+}
+
+
 // ========== UI HELPERS ==========
 function switchPage(page){
   checkPipOnLeave();
@@ -1207,18 +1284,19 @@ async function doLogin(){
     const phone=document.getElementById('login-phone').value.trim();
     const password=document.getElementById('login-phone-password').value;
     if(!phone||!password){ am.textContent='Заполните поля'; return; }
-    btn.disabled=true; btn.textContent='Входим...';
+    setBtnLoading(btn,true);
     try{
       const {data,error}=await sb.auth.signInWithPassword({email:phone.replace(/\s/g,'')+'@phone.local', password});
-      if(error){ am.textContent='Неверный телефон/пароль'; btn.disabled=false; btn.textContent='Войти'; return; }
+      if(error){ am.textContent='Неверный телефон/пароль'; setBtnLoading(btn,false); return; }
       if(data?.user) onAuthenticated(data.user);
-    }catch(e){ am.textContent='Ошибка сети'; btn.disabled=false; btn.textContent='Войти'; }
+      else setBtnLoading(btn,false);
+    }catch(e){ am.textContent='Ошибка сети'; setBtnLoading(btn,false); }
     return;
   }
   const email=document.getElementById('login-email').value.trim().toLowerCase();
   const password=document.getElementById('login-password').value;
   if(!email||!password){ am.textContent='Введите email и пароль'; return; }
-  btn.disabled=true; btn.textContent='Входим...';
+  setBtnLoading(btn,true);
   try{
     let {data,error}=await sb.auth.signInWithPassword({email,password});
     if(error){
@@ -1226,9 +1304,10 @@ async function doLogin(){
       if(!up.error && up.data?.session?.user){ data=up.data; error=null; }
       else if(!up.error && up.data?.user){ const a=await sb.auth.signInWithPassword({email,password}); if(a.data?.user){data=a.data;error=null;} else error=a.error||error; }
     }
-    if(error){ am.textContent=/invalid/i.test(error.message)?'Неверный email/пароль':error.message; btn.disabled=false; btn.textContent='Войти'; return; }
+    if(error){ am.textContent=/invalid/i.test(error.message)?'Неверный email/пароль':error.message; setBtnLoading(btn,false); return; }
     if(data?.user) onAuthenticated(data.user);
-  }catch(e){ am.textContent='Ошибка сети'; btn.disabled=false; btn.textContent='Войти'; }
+    else setBtnLoading(btn,false);
+  }catch(e){ am.textContent='Ошибка сети'; setBtnLoading(btn,false); }
 }
 async function doRegister(){
   const am=document.getElementById('auth-msg'); am.textContent='';
@@ -1242,27 +1321,27 @@ async function doRegister(){
     const phone=document.getElementById('reg-phone').value.trim();
     const password=document.getElementById('reg-phone-password').value;
     if(!phone||password.length<6){ am.textContent='Телефон и пароль (мин.6)'; return; }
-    btn.disabled=true; btn.textContent='Создаём...';
+    setBtnLoading(btn,true);
     try{
       const {data,error}=await sb.auth.signUp({email:phone.replace(/\s/g,'')+'@phone.local', password, options:{data:{username,first_name:first,last_name:last,birth_date:birth,phone}}});
-      if(error){ am.textContent=error.message; btn.disabled=false; btn.textContent='Создать аккаунт'; return; }
+      if(error){ am.textContent=error.message; setBtnLoading(btn,false); return; }
       if(data.session?.user) onAuthenticated(data.session.user);
       else { am.textContent='Аккаунт создан! Войдите.'; document.querySelector('.tab[data-tab="login"]').click(); }
-      btn.disabled=false; btn.textContent='Создать аккаунт';
-    }catch(e){ am.textContent='Ошибка'; btn.disabled=false; btn.textContent='Создать аккаунт'; }
+      setBtnLoading(btn,false);
+    }catch(e){ am.textContent='Ошибка'; setBtnLoading(btn,false); }
     return;
   }
   const email=document.getElementById('reg-email').value.trim().toLowerCase();
   const password=document.getElementById('reg-password').value;
   if(!email||password.length<6){ am.textContent='Email и пароль (мин.6)'; return; }
-  btn.disabled=true; btn.textContent='Создаём...';
+  setBtnLoading(btn,true);
   try{
     const {data,error}=await sb.auth.signUp({email,password,options:{data:{username,first_name:first,last_name:last,birth_date:birth}}});
-    if(error){ am.textContent=error.message; btn.disabled=false; btn.textContent='Создать аккаунт'; return; }
+    if(error){ am.textContent=error.message; setBtnLoading(btn,false); return; }
     if(data.session?.user) onAuthenticated(data.session.user);
     else { am.textContent='Аккаунт создан! Войдите.'; document.querySelector('.tab[data-tab="login"]').click(); }
-    btn.disabled=false; btn.textContent='Создать аккаунт';
-  }catch(e){ am.textContent='Ошибка'; btn.disabled=false; btn.textContent='Создать аккаунт'; }
+    setBtnLoading(btn,false);
+  }catch(e){ am.textContent='Ошибка'; setBtnLoading(btn,false); }
 }
 function setAuthMethod(m){
   authMethod=m;
@@ -1296,10 +1375,13 @@ async function onAuthenticated(user){
   document.getElementById('auth-screen').style.display='none';
   document.getElementById('app-screen').style.display='flex';
   updateAllUIs();
-  await loadChats(); await loadGroups(); await loadStories();
-  subscribeRealtime(); setupPresence(); setupTyping();
-  flushOfflineQueue();
-  handleDeepLink();
+  showLoader();
+  try{
+    await loadChats(); await loadGroups(); await loadStories();
+    subscribeRealtime(); setupPresence(); setupTyping();
+    flushOfflineQueue();
+    handleDeepLink();
+  } finally { hideLoader(); }
 }
 
 // ========== DEEP LINK ==========
@@ -1347,7 +1429,7 @@ async function joinOrOpenGroup(group){
 // ========== DATA ==========
 async function loadChats(){
   const list=document.getElementById('contacts-list'); if(!list||!myProfile) return;
-  list.innerHTML='<div class="empty-state">Загрузка...</div>';
+  list.innerHTML=loaderHTML();
   try{
     const {data}=await sb.from('messages').select('sender_id,receiver_id,content,created_at,group_id').or(`sender_id.eq.${myProfile.id},receiver_id.eq.${myProfile.id}`).is('group_id',null).order('created_at',{ascending:false}).limit(300);
     const map=new Map();
@@ -1792,6 +1874,79 @@ function canPublish(){
 }
 function markPublished(){ storage.setItem(PUBLISH_KEY, String(Date.now())); }
 
+// ========== MEDIA PREPARE (stories + chat) ==========
+function dataUrlBytes(dataUrl){
+  try{
+    const i=dataUrl.indexOf(',');
+    const b64=i>=0?dataUrl.slice(i+1):dataUrl;
+    return Math.floor(b64.length*0.75);
+  }catch(e){ return dataUrl?dataUrl.length:0; }
+}
+function compressImageDataUrl(dataUrl, maxSide, quality){
+  return new Promise((resolve)=>{
+    const img=new Image();
+    img.onload=()=>{
+      try{
+        let w=img.width, h=img.height;
+        const sc=Math.min(1, (maxSide||1280)/Math.max(w,h));
+        w=Math.round(w*sc); h=Math.round(h*sc);
+        const c=document.createElement('canvas'); c.width=w; c.height=h;
+        c.getContext('2d').drawImage(img,0,0,w,h);
+        resolve(c.toDataURL('image/jpeg', quality||0.72));
+      }catch(e){ resolve(dataUrl); }
+    };
+    img.onerror=()=>resolve(dataUrl);
+    img.src=dataUrl;
+  });
+}
+async function prepareMediaForUpload(file, kind){
+  // kind: 'story' | 'chat'
+  const maxBytes = kind==='story' ? 1.8*1024*1024 : 2.5*1024*1024;
+  if(file.type.startsWith('image/')){
+    const dataUrl = await new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(file); });
+    let out = await compressImageDataUrl(dataUrl, kind==='story'?1080:1280, kind==='story'?0.7:0.75);
+    // recompress harder if still large
+    if(dataUrlBytes(out) > maxBytes) out = await compressImageDataUrl(out, 720, 0.55);
+    if(dataUrlBytes(out) > maxBytes) out = await compressImageDataUrl(out, 480, 0.45);
+    return { ok:true, type:'image', dataUrl:out, bytes:dataUrlBytes(out) };
+  }
+  if(file.type.startsWith('video/')){
+    if(file.size > maxBytes){
+      return { ok:false, error: (typeof currentLang!=='undefined' && currentLang==='en')
+        ? ('Video is too large ('+Math.round(file.size/1024/1024)+' MB). Max ~'+Math.round(maxBytes/1024/1024)+' MB.')
+        : ('Видео слишком большое ('+Math.round(file.size/1024/1024)+' МБ). Макс. ~'+Math.round(maxBytes/1024/1024)+' МБ. Сожмите файл.') };
+    }
+    const dataUrl = await new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(file); });
+    if(dataUrlBytes(dataUrl) > maxBytes*1.4){
+      return { ok:false, error: currentLang==='en'?'Video payload too large after encoding':'Видео слишком большое для отправки' };
+    }
+    return { ok:true, type:'video', dataUrl, bytes:dataUrlBytes(dataUrl) };
+  }
+  return { ok:false, error:'Unsupported file' };
+}
+
+// Local stories fallback (always visible for me)
+const LOCAL_STORIES_KEY='sl_local_stories';
+function getLocalStories(){
+  try{
+    const arr=JSON.parse(storage.getItem(LOCAL_STORIES_KEY)||'[]');
+    const now=Date.now();
+    return arr.filter(s=>s && s.expires_at && new Date(s.expires_at).getTime()>now);
+  }catch(e){ return []; }
+}
+function setLocalStories(arr){
+  try{ storage.setItem(LOCAL_STORIES_KEY, JSON.stringify(arr.slice(0,20))); }catch(e){
+    // quota — keep only last 5 smaller
+    try{ storage.setItem(LOCAL_STORIES_KEY, JSON.stringify(arr.slice(0,5))); }catch(e2){}
+  }
+}
+function addLocalStory(story){
+  const arr=getLocalStories();
+  arr.unshift(story);
+  setLocalStories(arr);
+}
+
+
 // ========== CONTEXT MENU ==========
 function showMsgCtx(e, msg){
   const menu=document.getElementById('ctx-menu');
@@ -1887,7 +2042,13 @@ async function sendMessage(type='text', fileUrl=null, content=null){
   }
   try{
     const {data,error}=await sb.from('messages').insert(payload).select().single();
-    if(error){ alert(friendlyError(error)); return; }
+    if(error){
+      const msg=String(error.message||error);
+      if(/payload|too large|413|row-level|value too long|bytes/i.test(msg) || (payload.file_url&&payload.file_url.length>900000))
+        showToast(currentLang==='en'?'File too large for server':'Файл слишком большой для сервера. Сожмите видео.');
+      else showToast(friendlyError(error));
+      return;
+    }
     if(data){
       renderMessage(data, !!activeGroup);
       scrollToBottom();
@@ -2195,7 +2356,7 @@ document.getElementById('media-btn').onclick=async()=>{
   if(!activePartner&&!activeGroup) return;
   let modal=document.getElementById('media-modal');
   if(!modal){ modal=document.createElement('div'); modal.id='media-modal'; modal.className='modal-overlay'; document.body.appendChild(modal); }
-  modal.innerHTML=`<div class="modal" style="max-width:480px"><button class="close-x" onclick="this.closest('.modal-overlay').style.display='none'">×</button><h3>Медиа</h3><div class="media-grid" id="media-grid"><div class="empty-state">Загрузка...</div></div></div>`;
+  modal.innerHTML=`<div class="modal" style="max-width:480px"><button class="close-x" onclick="this.closest('.modal-overlay').style.display='none'">×</button><h3>Медиа</h3><div class="media-grid" id="media-grid">${loaderHTML()}</div></div>`;
   modal.style.display='flex';
   try{
     let q=sb.from('messages').select('file_url,type,content').in('type',['image','video','file']);
@@ -2239,7 +2400,14 @@ async function loadStories(){
   try{
     const {data:stories,error}=await sb.from('stories').select('id,user_id,media_url,type,expires_at,created_at').gt('expires_at',new Date().toISOString()).order('created_at',{ascending:false});
     if(error) console.warn('stories load', error);
-    const list=stories||[];
+    let list=stories||[];
+    // Merge local stories (own device) so published stories always show
+    const local=getLocalStories().filter(s=>s.user_id===myProfile.id);
+    const seen=new Set(list.map(s=>String(s.id)));
+    for(const ls of local){
+      if(!seen.has(String(ls.id))) list = [ls, ...list];
+    }
+    // also match by media if server returned without our local
     const myStories=list.filter(s=>s.user_id===myProfile.id);
     const byUser=new Map();
     for(const s of list){
@@ -2276,8 +2444,17 @@ async function loadStories(){
   bar.querySelectorAll('[data-uid]').forEach(el=>el.onclick=()=>openStoryViewer(el.dataset.uid, el.dataset.name));
 }
 async function openStoryViewer(userId, name){
-  const {data:stories}=await sb.from('stories').select('*').eq('user_id',userId).gt('expires_at',new Date().toISOString()).order('created_at');
-  if(!stories?.length) return;
+  let stories=[];
+  try{
+    const {data}=await sb.from('stories').select('*').eq('user_id',userId).gt('expires_at',new Date().toISOString()).order('created_at');
+    stories=data||[];
+  }catch(e){}
+  if(String(userId)===String(myProfile?.id)){
+    const local=getLocalStories().filter(s=>s.user_id===myProfile.id);
+    const ids=new Set(stories.map(s=>String(s.id)));
+    for(const ls of local){ if(!ids.has(String(ls.id))) stories.push(ls); }
+  }
+  if(!stories?.length){ showToast(currentLang==='en'?'No stories':'Нет историй'); return; }
   let viewer=document.getElementById('story-viewer');
   if(!viewer){
     viewer=document.createElement('div'); viewer.id='story-viewer';
@@ -3150,21 +3327,54 @@ sendMessage = async function(type='text', fileUrl=null, content=null){
 // ---------- Story privacy ----------
 document.getElementById('story-input').onchange=function(e){
   const f=e.target.files[0]; if(!f||!myProfile) return; e.target.value='';
-  chooseStoryAudience().then(audience=>{
+  chooseStoryAudience().then(async audience=>{
     if(!audience) return;
-    const r=new FileReader();
-    r.onload=async ev=>{
+    try{
+      showLoader();
+      const prep = await prepareMediaForUpload(f, 'story');
+      if(!prep.ok){ showToast(prep.error||'Ошибка файла'); return; }
+      const expires = new Date(Date.now()+86400000).toISOString();
+      const localStory = {
+        id: 'local_'+Date.now(),
+        user_id: myProfile.id,
+        media_url: prep.dataUrl,
+        type: prep.type,
+        expires_at: expires,
+        created_at: new Date().toISOString(),
+        audience
+      };
+      // Always keep local copy so it is visible even if DB rejects large payload / RLS
+      addLocalStory(localStory);
+      storage.setItem('sl_story_audience_'+myProfile.id, JSON.stringify(audience));
+      let dbOk=false;
       try{
-        const mType = f.type.startsWith('video/')?'video':'image';
-        const ins=await sb.from('stories').insert({user_id:myProfile.id, media_url:ev.target.result, type:mType, expires_at:new Date(Date.now()+86400000).toISOString()}).select();
-        if(ins.error){ showToast(friendlyError(ins.error)); return; }
-        storage.setItem('sl_story_audience_'+myProfile.id, JSON.stringify(audience));
-        await loadStories();
-        showToast('История опубликована');
-        try{ crossPostStory(ev.target.result, mType); }catch(e){}
-      }catch(err){ showToast(friendlyError(err)); }
-    };
-    r.readAsDataURL(f);
+        const ins=await sb.from('stories').insert({
+          user_id:myProfile.id,
+          media_url:prep.dataUrl,
+          type:prep.type,
+          expires_at:expires
+        }).select();
+        if(ins.error){
+          console.warn('story insert', ins.error);
+          // still visible locally
+          showToast((currentLang==='en'?'Story saved on this device':'История сохранена на устройстве')+(ins.error.message?': '+String(ins.error.message).slice(0,60):''));
+        } else {
+          dbOk=true;
+          if(ins.data?.[0]?.id){
+            // replace local id with server id
+            const arr=getLocalStories().map(s=>s.id===localStory.id?{...s,id:ins.data[0].id}:s);
+            setLocalStories(arr);
+          }
+          showToast(currentLang==='en'?'Story published':'История опубликована');
+        }
+      }catch(err){
+        console.warn(err);
+        showToast(currentLang==='en'?'Story saved on this device':'История сохранена на устройстве');
+      }
+      await loadStories();
+      try{ if(dbOk) crossPostStory(prep.dataUrl, prep.type); }catch(e){}
+    }catch(err){ showToast(friendlyError(err)); }
+    finally{ hideLoader(); }
   });
 };
 function chooseStoryAudience(){
@@ -4582,16 +4792,16 @@ document.querySelectorAll('#video-overlay .social-tab').forEach(tb=>tb.onclick=(
 async function switchPostsTab(tabName){
   document.querySelectorAll('#posts-overlay .social-tab').forEach(tb=>tb.classList.toggle('active', tb.dataset.ptab===tabName));
   const body=document.getElementById('posts-body');
-  if(tabName==='feed'){ body.innerHTML=`<div class="empty-state">${t('loading')}</div>`; await renderPostsFeed(body); }
+  if(tabName==='feed'){ body.innerHTML=loaderHTML(); await renderPostsFeed(body); }
   else if(tabName==='create'){ renderCreatePost(body,'post'); }
-  else if(tabName==='me'){ body.innerHTML=`<div class="empty-state">${t('loading')}</div>`; await renderSocialProfile(body, myProfile.id, 'post'); }
+  else if(tabName==='me'){ body.innerHTML=loaderHTML(); await renderSocialProfile(body, myProfile.id, 'post'); }
 }
 async function switchVideoTab(tabName){
   document.querySelectorAll('#video-overlay .social-tab').forEach(tb=>tb.classList.toggle('active', tb.dataset.vtab===tabName));
   const body=document.getElementById('video-body');
-  if(tabName==='feed'){ body.innerHTML=`<div class="empty-state">${t('loading')}</div>`; await renderVideoFeed(body); }
+  if(tabName==='feed'){ body.innerHTML=loaderHTML(); await renderVideoFeed(body); }
   else if(tabName==='create'){ renderCreatePost(body,'video'); }
-  else if(tabName==='me'){ body.innerHTML=`<div class="empty-state">${t('loading')}</div>`; await renderSocialProfile(body, myProfile.id, 'video'); }
+  else if(tabName==='me'){ body.innerHTML=loaderHTML(); await renderSocialProfile(body, myProfile.id, 'video'); }
 }
 
 async function renderPostsFeed(body){
@@ -4729,7 +4939,7 @@ function renderCreatePost(body, kind){
     if(!mediaData){ showToast(currentLang==='en'?'Choose a file first':'Сначала выберите файл'); return; }
     const btn=body.querySelector('#cp-publish');
     if(btn.disabled) return;
-    btn.disabled=true; btn.textContent=currentLang==='en'?'Publishing...':'Публикация...';
+    setBtnLoading(btn,true);
     try{
       const caption=body.querySelector('#cp-caption').value.trim();
       const hashtags=kind==='video'?body.querySelector('#cp-hashtags')?.value.trim()||'':'';
@@ -4739,7 +4949,7 @@ function renderCreatePost(body, kind){
       }
       if(mediaType==='video' && typeof outData==='string' && outData.length > 12000000){
         showToast(currentLang==='en'?'Video is too large — pick a shorter clip':'Видео слишком большое — выберите короткий ролик');
-        btn.disabled=false; btn.textContent=currentLang==='en'?'Publish':'Опубликовать';
+        setBtnLoading(btn,false);
         return;
       }
       const {error} = await withTable(sb.from('posts').insert({user_id:myProfile.id, kind, media_url:outData, media_type:mediaType, caption, hashtags}), 'posts');
@@ -4748,10 +4958,10 @@ function renderCreatePost(body, kind){
         showToast(currentLang==='en'?'Published!':'Опубликовано!');
         if(kind==='video') switchVideoTab('feed'); else switchPostsTab('feed');
       } else {
-        btn.disabled=false; btn.textContent=currentLang==='en'?'Publish':'Опубликовать';
+        setBtnLoading(btn,false);
       }
     }catch(e){
-      btn.disabled=false; btn.textContent=currentLang==='en'?'Publish':'Опубликовать';
+      setBtnLoading(btn,false);
       showToast(friendlyError(e));
     }
   };
@@ -4791,7 +5001,7 @@ async function renderSocialProfile(body, userId, kind){
 async function openAuthorOverlay(userId, kind){
   const bodyId = kind==='video' ? 'video-body' : 'posts-body';
   const body=document.getElementById(bodyId);
-  body.innerHTML=`<div class="empty-state">${t('loading')}</div>`;
+  body.innerHTML=loaderHTML();
   await renderSocialProfile(body, userId, kind);
   const back=document.createElement('div');
   back.style.cssText='padding:10px 14px;color:var(--accent-a);cursor:pointer;font-size:13px;font-weight:700';
@@ -5165,18 +5375,25 @@ function openPhotoEditor(dataUrl){
   });
 }
 // intercept photo-input for images → editor; videos send as before
-document.getElementById('photo-input').onchange=function(e){
+document.getElementById('photo-input').onchange=async function(e){
   const f=e.target.files[0]; if(!f) return; e.target.value='';
-  if(f.type.startsWith('video/')){
-    const r=new FileReader(); r.onload=ev=>sendMessage('video', ev.target.result, ''); r.readAsDataURL(f); return;
-  }
-  if(!f.type.startsWith('image/')) return;
-  const r=new FileReader();
-  r.onload=async ev=>{
-    const edited=await openPhotoEditor(ev.target.result);
-    if(edited) sendMessage('image', edited, '');
-  };
-  r.readAsDataURL(f);
+  if(!activePartner && !activeGroup){ showToast(currentLang==='en'?'Open a chat first':'Сначала откройте чат'); return; }
+  try{
+    if(f.type.startsWith('video/')){
+      showLoader();
+      try{
+        const prep=await prepareMediaForUpload(f, 'chat');
+        if(!prep.ok){ showToast(prep.error||'Ошибка'); return; }
+        await sendMessage('video', prep.dataUrl, '');
+      } finally { hideLoader(); }
+      return;
+    }
+    if(!f.type.startsWith('image/')){ showToast('Только фото или видео'); return; }
+    const prep=await prepareMediaForUpload(f, 'chat');
+    if(!prep.ok){ showToast(prep.error||'Ошибка'); return; }
+    const edited=await openPhotoEditor(prep.dataUrl);
+    if(edited) await sendMessage('image', edited, '');
+  }catch(err){ showToast(friendlyError(err)); }
 };
 
 
@@ -5511,7 +5728,7 @@ if(_gsBtn){
       const isAdmin=activeGroup.myRole==='admin'||activeGroup.owner_id===myProfile.id;
       const wrap=document.createElement('div');
       wrap.id='gs-roles';
-      wrap.innerHTML=`<div class="settings-section-title" style="padding:12px 0 4px">Участники и роли</div><div id="gs-members-list" class="empty-state">Загрузка...</div>`;
+      wrap.innerHTML=`<div class="settings-section-title" style="padding:12px 0 4px">Участники и роли</div><div id="gs-members-list" class="sl-loader-inline compact"><div class="sl-spinner sm"></div></div>`;
       box.appendChild(wrap);
       try{
         const {data:mems}=await sb.from('group_members').select('user_id,role,profiles:user_id(id,username,first_name)').eq('group_id',activeGroup.id);
