@@ -21,17 +21,35 @@
   --safe-bottom:env(safe-area-inset-bottom,0px); --safe-top:env(safe-area-inset-top,0px); --input-bg:#0E1626;
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;user-select:none!important;-webkit-user-select:none!important}
-html,body{height:100%;width:100%;overflow:hidden;margin:0;padding:0}
-html{height:100%;height:100dvh}
+html{
+  height:100%;
+  height:-webkit-fill-available;
+}
+html,body{
+  width:100%;
+  margin:0;
+  padding:0;
+  overflow:hidden;
+}
 body{
-  background:var(--bg);color:var(--text);
+  /* panel so notch/status strip matches app header */
+  background:var(--panel);
+  color:var(--text);
   font-family:Inter,-apple-system,BlinkMacSystemFont,sans-serif;
-  height:100%;height:100dvh;max-height:100dvh;
-  display:flex;flex-direction:column;
-  position:fixed;inset:0;width:100%;
+  min-height:100%;
+  min-height:100dvh;
+  min-height:-webkit-fill-available;
+  height:100%;
+  height:100dvh;
+  height:-webkit-fill-available;
+  display:flex;
+  flex-direction:column;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:0;
 }
 input,textarea{user-select:text!important;-webkit-user-select:text!important}
-#auth-screen{height:100%;display:flex;align-items:center;justify-content:center;padding:20px}
+#auth-screen{flex:1;min-height:0;width:100%;display:flex;align-items:center;justify-content:center;padding:20px;box-sizing:border-box;background:var(--bg)}
 .auth-card{width:100%;max-width:420px;background:var(--panel);border:1px solid var(--line);border-radius:24px;padding:32px 28px;position:relative;overflow:hidden}
 .auth-card::before{content:"";position:absolute;top:-40%;right:-30%;width:220px;height:220px;border-radius:50%;background:conic-gradient(from 180deg,var(--accent-a),var(--mint),var(--accent-b),var(--accent-a));filter:blur(50px);opacity:.35}
 .brand{display:flex;align-items:center;gap:12px;margin-bottom:8px;position:relative}
@@ -49,7 +67,7 @@ input,textarea{user-select:text!important;-webkit-user-select:text!important}
 .btn-primary:disabled{opacity:.55;cursor:default}
 .btn-secondary{width:100%;padding:12px 0;border:1px solid var(--line);border-radius:12px;background:transparent;color:var(--text);font-weight:600;font-size:14px;cursor:pointer;margin-top:8px}
 .auth-msg{font-size:13px;margin-top:14px;min-height:18px;color:var(--danger);text-align:center}
-#app-screen{display:none;flex:1;min-height:0;height:100%;width:100%;flex-direction:column;overflow:hidden}
+#app-screen{display:none;flex:1;min-height:0;width:100%;flex-direction:column;overflow:hidden;background:var(--bg)}
 .app-pages{flex:1;min-height:0;overflow:hidden;position:relative}
 .app-page{position:absolute;inset:0;display:none!important;flex-direction:column;overflow:hidden;visibility:hidden;pointer-events:none;z-index:0}
 .app-page.active{display:flex!important;visibility:visible;pointer-events:auto;z-index:2}
@@ -236,7 +254,16 @@ body.beta-oled .sw-front{background:var(--panel)!important}
 .sticker-grid img:hover{transform:scale(1.1)}
 .sticker-animated{width:120px;height:120px;object-fit:contain;animation:stickerPop .5s cubic-bezier(.175,.885,.32,1.275)}
 @keyframes stickerPop{0%{transform:scale(.3) rotate(-10deg);opacity:0}60%{transform:scale(1.15) rotate(3deg)}100%{transform:scale(1) rotate(0);opacity:1}}
-.bottom-tabs{display:flex;background:var(--panel);border-top:1px solid var(--line);flex-shrink:0;padding-bottom:var(--safe-bottom);margin:0;width:100%;box-sizing:border-box}
+.bottom-tabs{
+  display:flex;
+  background:var(--panel);
+  border-top:1px solid var(--line);
+  flex-shrink:0;
+  margin:0;
+  width:100%;
+  box-sizing:border-box;
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
 .bottom-tab{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:8px 0;cursor:pointer;color:var(--muted);gap:4px;font-size:10px;font-weight:600}
 .bottom-tab.active{color:var(--accent-a)}
 .bottom-tab svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
