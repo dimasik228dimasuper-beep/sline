@@ -741,6 +741,53 @@ body.theme-light,body{transition:background-color .35s ease}
 
 .rec-btn.on{background:var(--accent-a)!important;box-shadow:0 0 16px rgba(76,124,243,.5)}
 .rec-btn#rflash.on{background:#F7B955!important;box-shadow:0 0 20px rgba(247,185,85,.55)}
+
+/* ===== Hide bottom tabs when in a chat ===== */
+body.in-chat .bottom-tabs{display:none!important}
+body.in-chat #page-chats .sidebar{/* mobile already hides */}
+body.in-chat .bottom-tabs{height:0;overflow:hidden;padding:0;border:none}
+
+/* ===== Desktop left navigation rail ===== */
+.nav-rail{display:none}
+@media(min-width:769px){
+  #app-screen{flex-direction:row}
+  .nav-rail{
+    display:flex;flex-direction:column;align-items:center;
+    width:72px;min-width:72px;flex-shrink:0;
+    background:var(--panel);border-right:1px solid var(--line);
+    padding:12px 0;gap:6px;z-index:20;
+  }
+  .nav-rail .nav-logo{
+    width:40px;height:40px;border-radius:12px;
+    background:linear-gradient(135deg,var(--accent-a),var(--accent-b));
+    display:flex;align-items:center;justify-content:center;
+    font-weight:800;color:#fff;font-size:16px;margin-bottom:10px;
+  }
+  .nav-rail .nav-item{
+    width:52px;height:52px;border-radius:14px;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:2px;cursor:pointer;color:var(--muted);border:none;background:none;
+    font-size:9px;font-weight:600;transition:background .15s,color .15s;
+  }
+  .nav-rail .nav-item svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+  .nav-rail .nav-item.active{color:var(--accent-a);background:var(--panel-hover)}
+  .nav-rail .nav-item:hover{color:var(--text);background:var(--panel-hover)}
+  .nav-rail .nav-spacer{flex:1}
+  /* bottom tabs only on mobile */
+  .bottom-tabs{display:none!important}
+  /* app-pages fill rest */
+  .app-pages{flex:1;min-width:0}
+  /* desktop: sidebar always visible in chats, chat open doesn't hide tabs (tabs are left) */
+  body.in-chat .nav-rail{display:flex}
+  .sidebar{position:relative;transform:none!important}
+  .back-btn{display:none!important}
+}
+@media(max-width:768px){
+  .nav-rail{display:none!important}
+  .bottom-tabs{display:flex}
+  body.in-chat .bottom-tabs{display:none!important}
+}
+
 </style>
 </head>
 <body oncontextmenu="return false;">
@@ -787,6 +834,22 @@ body.theme-light,body{transition:background-color .35s ease}
 </div>
 
 <div id="app-screen">
+  <nav class="nav-rail" id="nav-rail" aria-label="Main">
+    <div class="nav-logo">S</div>
+    <button type="button" class="nav-item active" data-tab="chats" title="Чаты">
+      <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+      <span>Чаты</span>
+    </button>
+    <button type="button" class="nav-item" data-tab="calls" title="Звонки">
+      <svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2A19.8 19.8 0 0111.19 18a19.5 19.5 0 01-6-6A19.8 19.8 0 012.12 3.38 2 2 0 014.11 2h3a2 2 0 012 1.72c.13.96.36 1.9.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0122 16.92z"/></svg>
+      <span>Звонки</span>
+    </button>
+    <div class="nav-spacer"></div>
+    <button type="button" class="nav-item" data-tab="settings" title="Настройки">
+      <svg viewBox="0 0 24 24"><path d="M12 15a3 3 0 100-6 3 3 0 000 6z"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+      <span>Ещё</span>
+    </button>
+  </nav>
   <div class="app-pages">
     <div class="app-page active" id="page-chats">
       <div class="chats-layout">
@@ -1050,8 +1113,16 @@ function switchPage(page){
   document.getElementById('page-'+page)?.classList.add('active');
   document.querySelectorAll('.bottom-tab').forEach(t=>t.classList.remove('active'));
   document.querySelector(`.bottom-tab[data-tab="${page}"]`)?.classList.add('active');
+  document.querySelectorAll('.nav-rail .nav-item').forEach(t=>t.classList.toggle('active', t.dataset.tab===page));
+  if(page!=='chats'){
+    document.body.classList.remove('in-chat');
+    document.getElementById('sidebar')?.classList.remove('hidden');
+  }
   if(page==='calls' && typeof renderCallsList==='function') renderCallsList();
 }
+document.querySelectorAll('.nav-rail .nav-item').forEach(btn=>{
+  btn.addEventListener('click', ()=> switchPage(btn.dataset.tab));
+});
 function updateAllUIs(){
   if(!myProfile) return;
   const name = myProfile.first_name ? `${myProfile.first_name} ${myProfile.last_name||''}` : myProfile.username;
@@ -1367,9 +1438,12 @@ async function openChat(partner){
   if(typeof saveDraft==='function') saveDraft();
   checkPipOnLeave();
   activePartner=partner; activeGroup=null;
+  document.body.classList.add('in-chat');
+  document.getElementById('sidebar')?.classList.add('hidden');
   document.getElementById('no-chat-state').style.display='none';
   document.getElementById('chat-active').style.display='flex';
   setTimeout(()=>{ if(typeof loadDraft==='function') loadDraft(); }, 80);
+  if(typeof startChatLiveSync==='function') startChatLiveSync();
   const isSelf=partner.id===myProfile.id;
   document.getElementById('chat-partner-name').innerHTML=(isSelf?t('it_favorites'):escapeHtml(partner.first_name?`${partner.first_name} ${partner.last_name||''}`:partner.username))+verifiedBadgeIf(partner.email);
   updatePartnerStatus();
@@ -1397,8 +1471,11 @@ async function openGroup(group){
   checkPipOnLeave();
   if(typeof saveDraft==='function') saveDraft();
   activeGroup=group; activePartner=null;
+  document.body.classList.add('in-chat');
+  document.getElementById('sidebar')?.classList.add('hidden');
   document.getElementById('no-chat-state').style.display='none';
   document.getElementById('chat-active').style.display='flex';
+  if(typeof startChatLiveSync==='function') startChatLiveSync();
   const isAdmin=group.myRole==='admin'||group.owner_id===myProfile.id;
   document.getElementById('chat-partner-name').textContent=group.name;
   document.getElementById('chat-partner-status').textContent=group.type==='channel'?(group.is_public?'публичный канал':'приватный канал'):'группа';
@@ -1420,7 +1497,9 @@ async function openGroup(group){
 }
 document.getElementById('back-btn').onclick=()=>{
   checkPipOnLeave(); stopTyping();
-  document.getElementById('sidebar').classList.remove('hidden');
+  if(typeof stopChatLiveSync==='function') stopChatLiveSync();
+  document.body.classList.remove('in-chat');
+  document.getElementById('sidebar')?.classList.remove('hidden');
   document.getElementById('no-chat-state').style.display='flex';
   document.getElementById('chat-active').style.display='none';
   activePartner=null; activeGroup=null;
@@ -2358,6 +2437,49 @@ function clearDraft(){
 document.getElementById('settings-logout').onclick=async()=>{ if(await customConfirm(t('you_sure_logout'))){ try{ await sb.auth.signOut(); }catch(e){} location.reload(); } };
 
 // ========== REALTIME ==========
+
+// ========== LIVE MESSAGE SYNC (no re-enter needed) ==========
+let _chatPollTimer=null;
+let _chatPollSince=null;
+function stopChatLiveSync(){
+  if(_chatPollTimer){ clearInterval(_chatPollTimer); _chatPollTimer=null; }
+  _chatPollSince=null;
+}
+function startChatLiveSync(){
+  stopChatLiveSync();
+  _chatPollSince = new Date().toISOString();
+  // Poll every 2.5s as reliable fallback when Realtime lag/RLS
+  _chatPollTimer = setInterval(()=>{ pullNewMessages().catch(()=>{}); }, 2500);
+  pullNewMessages().catch(()=>{});
+}
+async function pullNewMessages(){
+  if(!myProfile || (!activePartner && !activeGroup)) return;
+  try{
+    let q = sb.from('messages').select('*').order('created_at',{ascending:true}).limit(50);
+    if(activeGroup){
+      q = q.eq('group_id', activeGroup.id);
+    } else if(activePartner){
+      if(activePartner.id===myProfile.id){
+        q = q.eq('sender_id', myProfile.id).eq('receiver_id', myProfile.id);
+      } else {
+        q = q.or(`and(sender_id.eq.${myProfile.id},receiver_id.eq.${activePartner.id}),and(sender_id.eq.${activePartner.id},receiver_id.eq.${myProfile.id})`).is('group_id', null);
+      }
+    } else return;
+    if(_chatPollSince) q = q.gt('created_at', _chatPollSince);
+    const {data, error} = await q;
+    if(error || !data?.length) return;
+    let added=false;
+    for(const msg of data){
+      if(document.querySelector(`.bubble-row[data-id="${msg.id}"]`)) continue;
+      handleIncomingMessage(msg);
+      added=true;
+      if(msg.created_at && (!_chatPollSince || msg.created_at > _chatPollSince))
+        _chatPollSince = msg.created_at;
+    }
+    if(added) scrollToBottom();
+  }catch(e){}
+}
+
 function subscribeRealtime(){
   if(messagesChannel) try{ sb.removeChannel(messagesChannel); }catch(e){}
   messagesChannel = sb.channel('msg-'+myProfile.id+'-'+Date.now())
@@ -2412,41 +2534,48 @@ openGroup = async function(group){
   }catch(e){}
 };
 function handleIncomingMessage(msg){
+  if(!msg || !myProfile) return;
+  // already on screen
+  if(msg.id && document.querySelector(`.bubble-row[data-id="${msg.id}"]`)) {
+    // still refresh list timestamps
+    try{ loadChats(); }catch(e){}
+    return;
+  }
   // Group chat open
   if(msg.group_id){
-    if(activeGroup && msg.group_id === activeGroup.id){
+    if(activeGroup && String(msg.group_id) === String(activeGroup.id)){
       renderMessage(msg, true);
       scrollToBottom();
       if(msg.sender_id !== myProfile.id) clearUnread(activeGroup.id);
+      try{ if(msg.created_at) _chatPollSince = msg.created_at; }catch(e){}
     } else if(msg.sender_id !== myProfile.id){
       incUnread(msg.group_id);
       notifyIncomingMessage(msg);
     }
-    loadGroups();
+    try{ loadGroups(); }catch(e){}
     return;
   }
   // Direct chat
   const involvesMe = msg.receiver_id === myProfile.id || msg.sender_id === myProfile.id;
   if(!involvesMe) return;
-  const partnerId = msg.sender_id === myProfile.id ? msg.receiver_id : msg.sender_id;
   const isActive = activePartner && (
     (msg.sender_id === myProfile.id && msg.receiver_id === activePartner.id) ||
     (msg.sender_id === activePartner.id && msg.receiver_id === myProfile.id) ||
     (activePartner.id === myProfile.id && msg.sender_id === myProfile.id && msg.receiver_id === myProfile.id)
   );
   if(isActive){
-    renderMessage(msg);
+    renderMessage(msg, false);
     scrollToBottom();
     if(msg.sender_id !== myProfile.id){
       clearUnread(activePartner.id);
-      sendReadReceipt(activePartner.id);
+      try{ sendReadReceipt(activePartner.id); }catch(e){}
     }
+    try{ if(msg.created_at) _chatPollSince = msg.created_at; }catch(e){}
   } else if(msg.receiver_id === myProfile.id && msg.sender_id !== myProfile.id){
     incUnread(msg.sender_id);
     notifyIncomingMessage(msg);
   }
-  // Refresh list (debounced-ish)
-  loadChats();
+  try{ loadChats(); }catch(e){}
 }
 function setupPresence(){
   if(presenceChannel) sb.removeChannel(presenceChannel);
