@@ -864,6 +864,41 @@ body.in-chat .bottom-tabs{height:0;overflow:hidden;padding:0;border:none}
   background:#000;
 }
 
+
+/* Telegram-like contact profile */
+.tg-contact-sheet{position:fixed;inset:0;z-index:9600;background:#0a0a0a;display:flex;flex-direction:column;overflow:hidden;animation:pageFade .25s ease}
+.tg-contact-top{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;padding-top:calc(10px + var(--safe-top,0px));flex-shrink:0}
+.tg-contact-top .tg-back,.tg-contact-top .tg-edit{
+  height:36px;padding:0 14px;border-radius:999px;border:none;background:rgba(255,255,255,.08);color:#fff;
+  font-size:14px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px
+}
+.tg-contact-top .tg-title{font-size:16px;font-weight:700;color:#fff}
+.tg-contact-body{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:8px 16px 40px}
+.tg-av-wrap{display:flex;justify-content:center;padding:18px 0 12px}
+.tg-av{width:120px;height:120px;border-radius:50%;background-size:cover;background-position:center;
+  display:flex;align-items:center;justify-content:center;font-size:42px;font-weight:800;color:#fff;
+  box-shadow:0 8px 28px rgba(0,0,0,.45)}
+.tg-name{text-align:center;font-size:26px;font-weight:800;color:#fff;margin:6px 0 4px;line-height:1.2;padding:0 12px;word-break:break-word}
+.tg-phone{text-align:center;font-size:14px;color:rgba(255,255,255,.45);margin-bottom:18px}
+.tg-actions{display:flex;gap:10px;justify-content:center;margin-bottom:18px}
+.tg-act{flex:1;max-width:110px;background:rgba(255,255,255,.08);border-radius:16px;padding:14px 8px;border:none;color:#fff;
+  display:flex;flex-direction:column;align-items:center;gap:6px;cursor:pointer;font-size:12px;font-weight:600}
+.tg-act svg{width:24px;height:24px;fill:none;stroke:#34c759;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.tg-act:active{background:rgba(255,255,255,.14)}
+.tg-section{background:rgba(255,255,255,.06);border-radius:16px;margin-bottom:12px;overflow:hidden}
+.tg-row{display:flex;align-items:center;gap:12px;padding:14px 16px;cursor:pointer;color:#fff;font-size:15px}
+.tg-row + .tg-row{border-top:1px solid rgba(255,255,255,.06)}
+.tg-row svg{width:22px;height:22px;fill:none;stroke:rgba(255,255,255,.55);stroke-width:1.8;flex-shrink:0}
+.tg-row .tg-muted{margin-left:auto;color:rgba(255,255,255,.35);font-size:14px}
+.tg-row .tg-chevron{color:rgba(255,255,255,.25);font-size:18px;margin-left:4px}
+.channel-post-comments{
+  display:inline-flex;align-items:center;gap:6px;margin-top:6px;padding:4px 10px;border-radius:12px;
+  background:rgba(76,124,243,.15);color:var(--accent-a);font-size:12px;font-weight:600;cursor:pointer
+}
+.support-admin-btns{display:flex;gap:6px;margin-top:6px}
+.support-admin-btns button{font-size:11px;padding:5px 10px;border-radius:8px;border:1px solid var(--line);background:var(--panel-hover);color:var(--text);cursor:pointer}
+.support-admin-btns button.danger{color:var(--danger);border-color:rgba(240,112,138,.35)}
+
 </style>
 </head>
 <body oncontextmenu="return false;">
@@ -1105,6 +1140,7 @@ html.sl-ready.sl-booting::before{display:none!important}
       </div>
       <div class="settings-section">
         <div class="settings-section-title" data-i18n="sec_logout">Выход</div>
+        <div class="settings-item" id="settings-about"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg><span class="item-text">О приложении</span></div>
         <div class="settings-item danger" id="settings-logout"><svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg><span class="item-text" data-i18n="it_logout">Выйти</span></div>
       </div>
       <input type="file" class="hidden-input" id="avatar-upload" accept="image/*">
@@ -5960,6 +5996,440 @@ document.querySelectorAll('.social-tab').forEach(tb=>{
 
 
 updateCircleIcon();
+
+
+// ========== FEATURE PACK: profile / channel comments / calls / support / about / anonymity ==========
+const SUPPORT_ADMIN_EMAILS = ['admin@mail.ru','dimasik.228.dima.super@gmail.com'];
+function isSupportAdmin(){
+  return SUPPORT_ADMIN_EMAILS.includes((myProfile?.email||'').toLowerCase());
+}
+const SUPPORT_CONTACT = {
+  id: 'support_signal_line',
+  username: 'support',
+  first_name: 'Поддержка Signal Line',
+  last_name: '',
+  color: '#4C7CF3',
+  isBot: true,
+  isSupport: true,
+  lastMessage: 'Напишите нам — поможем',
+  lastAt: new Date().toISOString()
+};
+const SUPPORT_MSG_KEY = 'sl_support_msgs';
+const SUPPORT_BAN_KEY = 'sl_support_banned';
+const SUPPORT_RATE_KEY = 'sl_support_rate';
+
+function getSupportMsgs(){ try{ return JSON.parse(storage.getItem(SUPPORT_MSG_KEY)||'[]'); }catch(e){ return []; } }
+function setSupportMsgs(a){ try{ storage.setItem(SUPPORT_MSG_KEY, JSON.stringify(a.slice(-500))); }catch(e){} }
+function getSupportBanned(){ try{ return JSON.parse(storage.getItem(SUPPORT_BAN_KEY)||'[]'); }catch(e){ return []; } }
+function setSupportBanned(a){ storage.setItem(SUPPORT_BAN_KEY, JSON.stringify(a)); }
+
+function ensureSupportContact(){
+  if(!contacts.find(c=>c.id===SUPPORT_CONTACT.id)){
+    contacts.unshift({...SUPPORT_CONTACT});
+  }
+  if(isSupportAdmin()){
+    // virtual inbox for admins
+    if(!contacts.find(c=>c.id==='support_inbox_admin')){
+      contacts.unshift({
+        id:'support_inbox_admin',
+        username:'support_inbox',
+        first_name:'Ответ поддержки',
+        color:'#F0708A',
+        isBot:true,
+        isSupportInbox:true,
+        lastMessage:'Обращения пользователей',
+        lastAt:new Date().toISOString()
+      });
+    }
+  }
+}
+
+// wrap loadChats / render to inject support
+const _renderCG = typeof renderContactsAndGroups==='function' ? renderContactsAndGroups : null;
+if(_renderCG){
+  renderContactsAndGroups = function(){
+    ensureSupportContact();
+    return _renderCG.apply(this, arguments);
+  };
+}
+
+// Rate limit for support: 1 msg / 10s
+function canSendSupport(){
+  const last = parseInt(storage.getItem(SUPPORT_RATE_KEY)||'0',10)||0;
+  const left = 10000 - (Date.now()-last);
+  if(left>0){
+    showToast((currentLang==='en'?'Wait ':'Подождите ')+Math.ceil(left/1000)+'с');
+    return false;
+  }
+  return true;
+}
+
+// Intercept openChat for support
+const _openChatSupport = openChat;
+openChat = async function(partner){
+  if(partner?.isSupport || partner?.id===SUPPORT_CONTACT.id){
+    activePartner={...SUPPORT_CONTACT}; activeGroup=null;
+    document.body.classList.add('in-chat');
+    document.getElementById('sidebar')?.classList.add('hidden');
+    document.getElementById('no-chat-state').style.display='none';
+    document.getElementById('chat-active').style.display='flex';
+    document.getElementById('chat-partner-name').textContent='Поддержка Signal Line';
+    document.getElementById('chat-partner-status').textContent=currentLang==='en'?'Support team':'Служба поддержки';
+    document.getElementById('chat-partner-status').className='chat-status';
+    const av=document.getElementById('chat-partner-avatar');
+    if(av){ av.style.background='#4C7CF3'; av.textContent='S'; av.style.backgroundImage=''; }
+    document.getElementById('composer').style.display='flex';
+    document.getElementById('comment-bar')?.classList.remove('show');
+    renderSupportThread(myProfile.id);
+    return;
+  }
+  if(partner?.isSupportInbox){
+    activePartner={...partner}; activeGroup=null;
+    document.body.classList.add('in-chat');
+    document.getElementById('sidebar')?.classList.add('hidden');
+    document.getElementById('no-chat-state').style.display='none';
+    document.getElementById('chat-active').style.display='flex';
+    document.getElementById('chat-partner-name').textContent='Ответ поддержки';
+    document.getElementById('chat-partner-status').textContent='Admin inbox';
+    document.getElementById('composer').style.display='none';
+    renderSupportAdminInbox();
+    return;
+  }
+  return _openChatSupport.apply(this, arguments);
+};
+
+function renderSupportThread(userId){
+  const list=document.getElementById('messages-list'); if(!list) return;
+  list.innerHTML='';
+  const banned=getSupportBanned();
+  if(banned.includes(userId)){
+    list.innerHTML=`<div class="empty-state">${currentLang==='en'?'You are banned from support':'Вам запрещено писать в поддержку'}</div>`;
+    document.getElementById('composer').style.display='none';
+    return;
+  }
+  const msgs=getSupportMsgs().filter(m=>m.userId===userId);
+  if(!msgs.length){
+    list.innerHTML=`<div class="empty-state">${currentLang==='en'?'Describe your issue':'Опишите проблему — мы ответим'}</div>`;
+  }
+  msgs.forEach(m=>{
+    const mine=m.from==='user';
+    const row=document.createElement('div');
+    row.className='bubble-row '+(mine?'me':'them');
+    row.innerHTML=`<div class="bubble ${mine?'me':'them'}">${escapeHtml(m.text)}<span class="bubble-time">${new Date(m.at).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</span></div>`;
+    list.appendChild(row);
+  });
+  scrollToBottom();
+}
+
+function renderSupportAdminInbox(){
+  const list=document.getElementById('messages-list'); if(!list) return;
+  list.innerHTML='';
+  const msgs=getSupportMsgs().filter(m=>m.from==='user').slice().reverse();
+  // group by user latest
+  const byUser=new Map();
+  getSupportMsgs().forEach(m=>{
+    if(!byUser.has(m.userId)) byUser.set(m.userId, []);
+    byUser.get(m.userId).push(m);
+  });
+  if(!byUser.size){
+    list.innerHTML=`<div class="empty-state">Нет обращений</div>`;
+    return;
+  }
+  for(const [uid, arr] of byUser){
+    const last=arr[arr.length-1];
+    const row=document.createElement('div');
+    row.className='bubble-row them';
+    row.innerHTML=`<div class="bubble them">
+      <div style="font-size:11px;color:var(--mint);margin-bottom:4px">${escapeHtml(last.userName||uid)}</div>
+      ${escapeHtml(last.text)}
+      <span class="bubble-time">${new Date(last.at).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</span>
+      <div class="support-admin-btns">
+        <button type="button" data-reply="${uid}">Ответить</button>
+        <button type="button" class="danger" data-ban="${uid}">Запретить сюда писать</button>
+      </div>
+    </div>`;
+    list.appendChild(row);
+  }
+  list.querySelectorAll('[data-reply]').forEach(btn=>{
+    btn.onclick=()=>{
+      const uid=btn.dataset.reply;
+      const text=prompt('Ответ пользователю:');
+      if(!text) return;
+      const msgs=getSupportMsgs();
+      msgs.push({id:'s_'+Date.now(), userId:uid, userName:byUser.get(uid)?.[0]?.userName||'', from:'admin', text, at:Date.now()});
+      setSupportMsgs(msgs);
+      // notify via broadcast
+      try{
+        const ch=sb.channel('support-'+uid);
+        ch.subscribe(st=>{ if(st==='SUBSCRIBED'){ ch.send({type:'broadcast',event:'reply',payload:{text}}); setTimeout(()=>sb.removeChannel(ch),2000);} });
+      }catch(e){}
+      showToast('Ответ отправлен');
+      renderSupportAdminInbox();
+    };
+  });
+  list.querySelectorAll('[data-ban]').forEach(btn=>{
+    btn.onclick=()=>{
+      const uid=btn.dataset.ban;
+      const bans=getSupportBanned();
+      if(!bans.includes(uid)) bans.push(uid);
+      setSupportBanned(bans);
+      showToast('Пользователю запрещено писать');
+    };
+  });
+}
+
+// Hook sendMessage for support
+const _sendSupport = sendMessage;
+sendMessage = async function(type='text', fileUrl=null, content=null){
+  if(activePartner?.isSupport || activePartner?.id===SUPPORT_CONTACT.id){
+    if(getSupportBanned().includes(myProfile.id)){
+      showToast('Вам запрещено писать в поддержку'); return;
+    }
+    if(!canSendSupport()) return;
+    const text=(content ?? (document.getElementById('message-input')?.value || '')).trim();
+    if(!text && type==='text') return;
+    document.getElementById('message-input').value='';
+    document.getElementById('send-btn')?.classList.remove('visible');
+    storage.setItem(SUPPORT_RATE_KEY, String(Date.now()));
+    const msgs=getSupportMsgs();
+    msgs.push({
+      id:'s_'+Date.now(),
+      userId: myProfile.id,
+      userName: myProfile.first_name||myProfile.username||'',
+      userEmail: myProfile.email||'',
+      from:'user',
+      text: text||('[media] '+type),
+      at: Date.now()
+    });
+    setSupportMsgs(msgs);
+    // broadcast to admins
+    try{
+      SUPPORT_ADMIN_EMAILS.forEach(()=>{});
+      const ch=sb.channel('support-admins');
+      ch.subscribe(st=>{ if(st==='SUBSCRIBED'){ ch.send({type:'broadcast',event:'ticket',payload:{userId:myProfile.id,text}}); setTimeout(()=>sb.removeChannel(ch),2000);} });
+    }catch(e){}
+    renderSupportThread(myProfile.id);
+    showToast(currentLang==='en'?'Sent to support':'Отправлено в поддержку');
+    return;
+  }
+  return _sendSupport.apply(this, arguments);
+};
+
+// Listen for support replies when in support chat
+(function setupSupportRealtime(){
+  const trySub=()=>{
+    if(!myProfile||!sb) return;
+    try{
+      const ch=sb.channel('support-'+myProfile.id)
+        .on('broadcast',{event:'reply'},({payload})=>{
+          if(!payload?.text) return;
+          const msgs=getSupportMsgs();
+          msgs.push({id:'s_'+Date.now(), userId:myProfile.id, from:'admin', text:payload.text, at:Date.now()});
+          setSupportMsgs(msgs);
+          if(activePartner?.isSupport) renderSupportThread(myProfile.id);
+          showToast(currentLang==='en'?'Support replied':'Ответ поддержки');
+        }).subscribe();
+      window._slSupportCh=ch;
+    }catch(e){}
+  };
+  const _oa=onAuthenticated;
+  onAuthenticated=async function(user){
+    await _oa(user);
+    ensureSupportContact();
+    trySub();
+  };
+})();
+
+// ========== About ==========
+document.getElementById('settings-about')?.addEventListener('click', ()=>{
+  const ov=document.createElement('div'); ov.className='modal-overlay';
+  ov.innerHTML=`<div class="modal" style="max-width:400px">
+    <button class="close-x" id="ab-x">×</button>
+    <div style="text-align:center;padding:8px 0 4px">
+      <div style="width:64px;height:64px;border-radius:18px;margin:0 auto 12px;background:linear-gradient(135deg,var(--accent-a),var(--accent-b));display:flex;align-items:center;justify-content:center;font-weight:900;font-size:28px;color:#fff">S</div>
+      <h3 style="margin:0 0 4px">Signal Line</h3>
+      <div style="color:var(--muted);font-size:13px;margin-bottom:12px">Версия 2.4.0</div>
+    </div>
+    <p style="font-size:13px;color:var(--muted);line-height:1.5;text-align:center">
+      Современный мессенджер с звонками, историями, каналами и поддержкой.
+    </p>
+    <div style="font-size:12px;color:var(--muted);text-align:center;margin-top:12px">© Signal Line</div>
+  </div>`;
+  document.body.appendChild(ov);
+  ov.querySelector('#ab-x').onclick=()=>ov.remove();
+  ov.addEventListener('click',e=>{ if(e.target===ov) ov.remove(); });
+});
+
+// ========== Telegram-style contact profile ==========
+const _openFullProfileOrig = openFullProfile;
+openFullProfile = async function(profileLike){
+  let p=profileLike;
+  try{ const {data}=await sb.from('profiles').select('*').eq('id',profileLike.id).maybeSingle(); if(data) p=data; }catch(e){}
+  const isMe = p.id===myProfile?.id;
+  const name=p.first_name?`${p.first_name} ${p.last_name||''}`.trim():(p.username||'');
+  const anon=getAnon();
+  // respect target privacy for phone/email
+  let phone = p.phone||'';
+  let email = p.email||'';
+  if(!isMe){
+    if(p.hide_phone) phone='';
+    if(p.hide_email) email='';
+  } else {
+    if(anon.hidePhone) phone='';
+    if(anon.hideEmail) email='';
+  }
+  const sheet=document.createElement('div');
+  sheet.className='tg-contact-sheet';
+  const ch=(name||p.username||'?')[0].toUpperCase();
+  const col=p.color||colorFor(p.id);
+  const avStyle=p.avatar_url?`background-image:url(${p.avatar_url})`:`background:${col}`;
+  const onlineTxt = (!isMe && p.hide_online) ? '' : (onlineUsers.has(p.id)?(currentLang==='en'?'в сети':'в сети'):'');
+  sheet.innerHTML=`
+    <div class="tg-contact-top">
+      <button type="button" class="tg-back" id="tg-back"><svg viewBox="0 0 24 24" style="width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg></button>
+      <div class="tg-title">О контакте</div>
+      ${isMe?`<button type="button" class="tg-edit" id="tg-edit">Изменить</button>`:`<span style="width:70px"></span>`}
+    </div>
+    <div class="tg-contact-body">
+      <div class="tg-av-wrap"><div class="tg-av" style="${avStyle}">${p.avatar_url?'':ch}</div></div>
+      <div class="tg-name">${escapeHtml(name||p.username||'')}${p.emoji_status?(' '+p.emoji_status):''}</div>
+      ${phone?`<div class="tg-phone">${escapeHtml(phone)}</div>`:(email?`<div class="tg-phone">${escapeHtml(email)}</div>`:`<div class="tg-phone">@${escapeHtml(p.username||'')}</div>`)}
+      ${onlineTxt?`<div class="tg-phone" style="color:var(--mint);margin-top:-10px">${onlineTxt}</div>`:''}
+      ${!isMe?`<div class="tg-actions">
+        <button type="button" class="tg-act" id="tg-audio"><svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2A19.8 19.8 0 0111.19 18a19.5 19.5 0 01-6-6A19.8 19.8 0 012.12 3.38 2 2 0 014.11 2h3a2 2 0 012 1.72c.13.96.36 1.9.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0122 16.92z"/></svg>Аудио</button>
+        <button type="button" class="tg-act" id="tg-video"><svg viewBox="0 0 24 24"><rect x="2" y="6" width="14" height="12" rx="2"/><path d="M16 10l6-4v12l-6-4"/></svg>Видео</button>
+        <button type="button" class="tg-act" id="tg-search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>Поиск</button>
+      </div>`:''}
+      <div class="tg-section">
+        <div class="tg-row" id="tg-media"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg><span>Медиа, ссылки и докум.</span><span class="tg-muted">›</span></div>
+      </div>
+      <div class="tg-section">
+        <div class="tg-row" id="tg-notify"><svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 00-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg><span>Уведомления</span><span class="tg-muted">›</span></div>
+        ${!isMe?`<div class="tg-row" id="tg-msg"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg><span>Написать сообщение</span><span class="tg-muted">›</span></div>`:''}
+      </div>
+    </div>`;
+  document.body.appendChild(sheet);
+  sheet.querySelector('#tg-back').onclick=()=>sheet.remove();
+  sheet.querySelector('#tg-edit')?.addEventListener('click', ()=>{ sheet.remove(); document.getElementById('edit-profile-btn')?.click(); });
+  sheet.querySelector('#tg-audio')?.addEventListener('click', ()=>{ sheet.remove(); ensureInContacts(p); openChat(p).then(()=>startCall(p,false)); });
+  sheet.querySelector('#tg-video')?.addEventListener('click', ()=>{ sheet.remove(); ensureInContacts(p); openChat(p).then(()=>startCall(p,true)); });
+  sheet.querySelector('#tg-search')?.addEventListener('click', ()=>{ sheet.remove(); ensureInContacts(p); openChat(p).then(()=>document.getElementById('chat-search-btn')?.click()); });
+  sheet.querySelector('#tg-media')?.addEventListener('click', ()=>{ sheet.remove(); ensureInContacts(p); openChat(p).then(()=>document.getElementById('media-btn')?.click()); });
+  sheet.querySelector('#tg-msg')?.addEventListener('click', ()=>{ sheet.remove(); ensureInContacts(p); openChat(p); });
+  sheet.querySelector('#tg-notify')?.addEventListener('click', ()=> showToast(currentLang==='en'?'Notifications':'Уведомления чата'));
+};
+
+// ========== Channel comments under posts ==========
+const _renderMsgCh = renderMessage;
+renderMessage = function(msg, isGroup=false){
+  const r = _renderMsgCh.apply(this, arguments);
+  try{
+    if(activeGroup?.type==='channel' && activeGroup.comments_enabled && msg && msg.id){
+      const row=document.querySelector(`.bubble-row[data-id="${msg.id}"]`);
+      if(row && !row.querySelector('.channel-post-comments')){
+        const bubble=row.querySelector('.bubble');
+        if(bubble){
+          const btn=document.createElement('div');
+          btn.className='channel-post-comments';
+          btn.innerHTML=`💬 ${currentLang==='en'?'Comments':'Комментарии'}`;
+          btn.onclick=(e)=>{
+            e.stopPropagation();
+            // open comment composer focused on this post
+            const bar=document.getElementById('comment-bar');
+            if(bar){
+              bar.classList.add('show');
+              const inp=bar.querySelector('input');
+              if(inp){ inp.placeholder=(currentLang==='en'?'Comment on post…':'Комментарий к посту…'); inp.focus(); inp.dataset.replyPost=msg.id; }
+            }
+            showToast(currentLang==='en'?'Write a comment below':'Напишите комментарий ниже');
+          };
+          bubble.appendChild(btn);
+        }
+      }
+    }
+  }catch(e){}
+  return r;
+};
+
+// Channel: non-admins cannot write even if somehow shown
+const _sendCh = sendMessage;
+sendMessage = async function(type='text', fileUrl=null, content=null){
+  if(activeGroup?.type==='channel'){
+    const isAdmin = activeGroup.myRole==='admin' || activeGroup.owner_id===myProfile?.id;
+    if(!isAdmin){
+      showToast(currentLang==='en'?'Only admins can post in channels':'В канале пишут только админы');
+      return;
+    }
+  }
+  return _sendCh.apply(this, arguments);
+};
+
+// ========== Incoming call reliability ==========
+const _initCall = initCallSystem;
+initCallSystem = function(){
+  _initCall.apply(this, arguments);
+  // Also listen on inbox for call offers (fallback)
+  try{
+    if(window._slCallInbox){ try{ sb.removeChannel(window._slCallInbox); }catch(e){} }
+    window._slCallInbox = sb.channel('inbox-'+myProfile.id)
+      .on('broadcast', {event:'call_offer'}, ({payload})=>{
+        if(payload) handleIncomingOffer(payload);
+      })
+      .on('broadcast', {event:'call_hangup'}, ()=>endCall(false))
+      .subscribe();
+  }catch(e){}
+};
+const _sendSignal = sendSignal;
+sendSignal = async function(toId, event, payload){
+  await _sendSignal(toId, event, payload);
+  // parallel inbox path for offer/hangup
+  if(event==='offer' || event==='hangup'){
+    try{
+      const ch = sb.channel('inbox-'+toId);
+      await new Promise(res=>{
+        ch.subscribe(st=>{
+          if(st==='SUBSCRIBED'){
+            ch.send({type:'broadcast', event: event==='offer'?'call_offer':'call_hangup', payload});
+            setTimeout(()=>{ try{ sb.removeChannel(ch); }catch(e){} res(); }, 800);
+          }
+        });
+      });
+    }catch(e){}
+  }
+};
+// Ensure accept/decline buttons always visible + bring overlay to front
+const _showCallUI = showCallUI;
+showCallUI = function(){
+  _showCallUI.apply(this, arguments);
+  const ov=document.getElementById('call-overlay');
+  if(ov){
+    ov.classList.add('show');
+    ov.style.zIndex='99999';
+    ov.style.display='flex';
+  }
+  try{ renderCallActions(); }catch(e){}
+  // vibrate hard
+  try{ navigator.vibrate && navigator.vibrate([400,150,400,150,400]); }catch(e){}
+};
+
+// ========== Anonymity enforcement ==========
+const _updatePartnerStatus = updatePartnerStatus;
+updatePartnerStatus = function(){
+  if(activePartner && !activePartner.isBot){
+    // if partner hid online, always show offline-ish
+    // our own hide is already in setupPresence
+  }
+  return _updatePartnerStatus.apply(this, arguments);
+};
+// hide read receipts when anon
+const _sendRead = typeof sendReadReceipt==='function' ? sendReadReceipt : null;
+if(_sendRead){
+  sendReadReceipt = function(peerId){
+    if(getAnon().hideRead) return;
+    return _sendRead.apply(this, arguments);
+  };
+}
+// apply hide phone/email on own profile displays is in openFullProfile above
 
 // ========== SESSION RESTORE (no login flash) ==========
 (async function bootstrapAuth(){
