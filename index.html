@@ -6547,14 +6547,27 @@ function showCreatorBirthdaySplash(force){
   ov.querySelector('#bd-ok').onclick=close;
   return true;
 }
-// After auth — every app entry
+// After auth — every app entry (login, register, session restore)
 const _bdOnAuth = onAuthenticated;
 onAuthenticated = async function(user){
   await _bdOnAuth(user);
-  setTimeout(()=>showCreatorBirthdaySplash(), 400);
+  // Registered users see the splash on every app open (Aug 3–5)
+  setTimeout(()=>showCreatorBirthdaySplash(), 350);
+  setTimeout(()=>showCreatorBirthdaySplash(), 1200); // retry if first was too early
 };
-// If already logged in via session restore, onAuthenticated covers it.
-// Also try once on DOM ready for edge cases (after login button path shares onAuthenticated).
+// Also after session bootstrap finishes (already-logged-in users)
+const _bdBootFlag = {done:false};
+function scheduleBirthdayAfterAppReady(){
+  if(_bdBootFlag.done) return;
+  const tryShow=()=>{
+    if(!myProfile) return;
+    if(document.getElementById('app-screen')?.style.display==='none') return;
+    showCreatorBirthdaySplash();
+    _bdBootFlag.done=true;
+  };
+  setTimeout(tryShow, 500);
+  setTimeout(tryShow, 1500);
+}
 
 // ========== SESSION RESTORE (no login flash) ==========
 (async function bootstrapAuth(){
@@ -6583,6 +6596,7 @@ onAuthenticated = async function(user){
       document.documentElement.classList.remove('sl-booting');
       document.documentElement.classList.add('sl-ready');
       hideLoader(true);
+      try{ scheduleBirthdayAfterAppReady(); }catch(e){}
     } else {
       showAuth();
     }
