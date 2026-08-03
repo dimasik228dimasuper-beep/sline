@@ -899,6 +899,41 @@ body.in-chat .bottom-tabs{height:0;overflow:hidden;padding:0;border:none}
 .support-admin-btns button{font-size:11px;padding:5px 10px;border-radius:8px;border:1px solid var(--line);background:var(--panel-hover);color:var(--text);cursor:pointer}
 .support-admin-btns button.danger{color:var(--danger);border-color:rgba(240,112,138,.35)}
 
+
+.call-overlay{z-index:99999!important;pointer-events:auto!important}
+.call-overlay .call-remote-video{pointer-events:none!important;z-index:1}
+.call-overlay .call-local-video{pointer-events:none!important;z-index:5}
+.call-overlay .call-ring-pulse{pointer-events:none!important}
+.call-overlay .call-avatar-big,
+.call-overlay .call-name,
+.call-overlay .call-status-text{position:relative;z-index:10;pointer-events:none}
+.call-overlay .call-actions{
+  position:relative;z-index:50!important;pointer-events:auto!important;
+  display:flex!important;gap:28px;align-items:center;justify-content:center;
+  margin-top:24px;padding-bottom:calc(24px + var(--safe-bottom,0px));
+}
+.call-overlay .call-btn-round{
+  pointer-events:auto!important;touch-action:manipulation;
+  width:68px;height:68px;z-index:51;position:relative;
+  -webkit-tap-highlight-color:transparent;
+}
+/* Contact profile with cover */
+.tg-contact-sheet{background:#0a0a0a}
+.tg-cover{
+  width:100%;height:180px;background:linear-gradient(135deg,#4C7CF3,#6D5DF6);
+  background-size:cover;background-position:center;position:relative;flex-shrink:0;
+}
+.tg-cover-fade{
+  position:absolute;left:0;right:0;bottom:0;height:70px;
+  background:linear-gradient(to bottom,transparent,#0a0a0a);
+  pointer-events:none;
+}
+.tg-av-wrap{margin-top:-56px;position:relative;z-index:2}
+.tg-av{border:4px solid #0a0a0a;box-shadow:0 8px 28px rgba(0,0,0,.5)}
+.tg-contact-top{position:absolute;top:0;left:0;right:0;z-index:5;background:transparent}
+.tg-contact-top .tg-back,.tg-contact-top .tg-edit{background:rgba(0,0,0,.4);backdrop-filter:blur(8px)}
+.tg-contact-body{padding-top:0}
+
 </style>
 </head>
 <body oncontextmenu="return false;">
@@ -4582,22 +4617,52 @@ function showCallUI(){
 }
 function renderCallActions(){
   const wrap=document.getElementById('call-actions');
+  if(!wrap || !currentCall) return;
+  wrap.style.pointerEvents='auto';
+  wrap.style.zIndex='50';
   if(currentCall.state==='incoming'){
-    wrap.innerHTML=`<button class="call-btn-round decline" id="cc-decline"><svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
-      <button class="call-btn-round accept" id="cc-accept"><svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2A19.8 19.8 0 0111.19 18a19.5 19.5 0 01-6-6A19.8 19.8 0 012.12 3.38 2 2 0 014.11 2h3a2 2 0 012 1.72c.13.96.36 1.9.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0122 16.92z"/></svg></button>`;
-    document.getElementById('cc-decline').onclick=declineCall;
-    document.getElementById('cc-accept').onclick=acceptCall;
+    wrap.innerHTML=`<button type="button" class="call-btn-round decline" id="cc-decline" aria-label="Decline"><svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+      <button type="button" class="call-btn-round accept" id="cc-accept" aria-label="Accept"><svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2A19.8 19.8 0 0111.19 18a19.5 19.5 0 01-6-6A19.8 19.8 0 012.12 3.38 2 2 0 014.11 2h3a2 2 0 012 1.72c.13.96.36 1.9.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0122 16.92z"/></svg></button>`;
   } else {
-    wrap.innerHTML=`<button class="call-btn-round mute" id="cc-mute"><svg viewBox="0 0 24 24"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4"/></svg></button>
-      <button class="call-btn-round decline" id="cc-hangup"><svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg></button>`;
-    document.getElementById('cc-hangup').onclick=()=>{ sendSignal(currentCall.peerId,'hangup',{}); endCall(false); };
-    document.getElementById('cc-mute').onclick=function(){
+    wrap.innerHTML=`<button type="button" class="call-btn-round mute" id="cc-mute" aria-label="Mute"><svg viewBox="0 0 24 24"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4"/></svg></button>
+      <button type="button" class="call-btn-round decline" id="cc-hangup" aria-label="Hang up"><svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg></button>`;
+  }
+  // bind with both click and touchend for mobile reliability
+  const bind=(id, fn)=>{
+    const el=document.getElementById(id); if(!el) return;
+    el.onclick=(e)=>{ e.preventDefault(); e.stopPropagation(); fn(e); };
+    el.ontouchend=(e)=>{ e.preventDefault(); e.stopPropagation(); fn(e); };
+  };
+  bind('cc-decline', ()=>declineCall());
+  bind('cc-accept', ()=>acceptCall());
+  bind('cc-hangup', ()=>{ if(currentCall) sendSignal(currentCall.peerId,'hangup',{}); endCall(false); });
+  bind('cc-mute', function(){
+    if(!localStream) return;
+    const track=localStream.getAudioTracks()[0]; if(!track) return;
+    track.enabled=!track.enabled;
+    const b=document.getElementById('cc-mute');
+    if(b) b.classList.toggle('on', !track.enabled);
+  });
+}
+// Event delegation backup on overlay
+(function(){
+  const ov=document.getElementById('call-overlay');
+  if(!ov || ov._slCallBound) return;
+  ov._slCallBound=true;
+  ov.addEventListener('click', (e)=>{
+    const btn=e.target.closest('.call-btn-round');
+    if(!btn) return;
+    e.preventDefault(); e.stopPropagation();
+    if(btn.id==='cc-accept') acceptCall();
+    else if(btn.id==='cc-decline') declineCall();
+    else if(btn.id==='cc-hangup'){ if(currentCall) sendSignal(currentCall.peerId,'hangup',{}); endCall(false); }
+    else if(btn.id==='cc-mute'){
       if(!localStream) return;
       const track=localStream.getAudioTracks()[0]; if(!track) return;
-      track.enabled=!track.enabled; this.classList.toggle('on', !track.enabled);
-    };
-  }
-}
+      track.enabled=!track.enabled; btn.classList.toggle('on', !track.enabled);
+    }
+  }, true);
+})();
 /* notifyIncomingCall defined above */
 
 
@@ -5666,7 +5731,7 @@ async function openFullProfile(profileLike){
 }
 
 // Override openUserInfo + partner avatar + contact avatars
-openUserInfo = openFullProfile;
+openUserInfo = function(p){ return openFullProfile(p); };
 document.getElementById('partner-avatar').onclick=()=>{ if(activePartner) openFullProfile(activePartner); };
 
 // Tap contact avatar opens full profile (event delegation)
@@ -6278,13 +6343,18 @@ openFullProfile = async function(profileLike){
     if(anon.hidePhone) phone='';
     if(anon.hideEmail) email='';
   }
+  // remove any old profile-sheet still open
+  document.querySelectorAll('.profile-sheet,.tg-contact-sheet').forEach(el=>el.remove());
   const sheet=document.createElement('div');
   sheet.className='tg-contact-sheet';
   const ch=(name||p.username||'?')[0].toUpperCase();
   const col=p.color||colorFor(p.id);
   const avStyle=p.avatar_url?`background-image:url(${p.avatar_url})`:`background:${col}`;
-  const onlineTxt = (!isMe && p.hide_online) ? '' : (onlineUsers.has(p.id)?(currentLang==='en'?'в сети':'в сети'):'');
+  const coverUrl = p.cover_url || '';
+  const coverStyle = coverUrl ? `background-image:url(${coverUrl})` : `background:linear-gradient(135deg,${col},#6D5DF6)`;
+  const onlineTxt = (!isMe && p.hide_online) ? '' : (onlineUsers.has(p.id)?(currentLang==='en'?'online':'в сети'):'');
   sheet.innerHTML=`
+    <div class="tg-cover" style="${coverStyle}"><div class="tg-cover-fade"></div></div>
     <div class="tg-contact-top">
       <button type="button" class="tg-back" id="tg-back"><svg viewBox="0 0 24 24" style="width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg></button>
       <div class="tg-title">О контакте</div>
@@ -6430,6 +6500,14 @@ if(_sendRead){
   };
 }
 // apply hide phone/email on own profile displays is in openFullProfile above
+
+// Always use TG contact profile (never old profile-sheet)
+openUserInfo = function(p){ return openFullProfile(p); };
+document.getElementById('partner-avatar')?.addEventListener('click', (e)=>{
+  e.stopPropagation();
+  if(activePartner && !activePartner.isBot) openFullProfile(activePartner);
+});
+
 
 // ========== SESSION RESTORE (no login flash) ==========
 (async function bootstrapAuth(){
