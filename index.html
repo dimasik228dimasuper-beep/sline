@@ -1676,7 +1676,7 @@ function renderContactsAndGroups(){
     row.onclick=()=>{ if(type==='group') openGroup(data); else openChat(data); };
     const av=row.querySelector('.avatar');
     if(av && type==='user'){
-      av.onclick=(e)=>{ e.stopPropagation(); openFullProfile(data); };
+      av.onclick=async (e)=>{ e.stopPropagation(); await openStoriesOrProfile(data); };
     }
     // long press / context for archive
     let pressT;
@@ -2618,6 +2618,29 @@ async function loadStories(){
   document.getElementById('add-story-btn-bar')?.addEventListener('click',()=>document.getElementById('story-input').click());
   bar.querySelectorAll('[data-uid]').forEach(el=>el.onclick=()=>openStoryViewer(el.dataset.uid, el.dataset.name));
 }
+async function userHasActiveStories(userId){
+  if(!userId) return false;
+  try{
+    if(myProfile && userId===myProfile.id){
+      const local=getLocalStories().filter(s=>s.user_id===myProfile.id && new Date(s.expires_at)>new Date());
+      if(local.length) return true;
+    }
+    const {data}=await sb.from('stories').select('id').eq('user_id',userId).gt('expires_at',new Date().toISOString()).limit(1);
+    return !!(data&&data.length);
+  }catch(e){ return false; }
+}
+async function openStoriesOrProfile(profileLike){
+  if(!profileLike) return;
+  const uid=profileLike.id||profileLike;
+  const name=profileLike.first_name||profileLike.username||'';
+  if(await userHasActiveStories(uid)){
+    openStoryViewer(uid, name);
+    return;
+  }
+  if(typeof openFullProfile==='function') openFullProfile(profileLike);
+  else if(typeof openUserInfo==='function') openUserInfo(profileLike);
+}
+
 async function openStoryViewer(userId, name){
   let stories=[];
   try{
@@ -3561,7 +3584,7 @@ async function openUserInfo(profileLike){
     if(gifts?.length) ov.querySelector('#ui-gifts').innerHTML=`<div class="uinfo-label" style="margin-top:10px">Подарки (${gifts.length})</div><div class="gift-grid">${gifts.map(g=>`<div class="gift-opt">${giftSvgFor(g.file_url)}</div>`).join('')}</div>`;
   }catch(e){}
 }
-document.getElementById('partner-avatar').addEventListener('click',()=>{ if(activePartner) openUserInfo(activePartner); });
+document.getElementById('partner-avatar').addEventListener('click',()=>{ if(activePartner) openStoriesOrProfile(activePartner); });
 
 // ---------- Anti-spam / banned words (channels & groups) ----------
 function getBannedWords(gid){ try{ return JSON.parse(storage.getItem('sl_banned_'+gid)||'[]'); }catch(e){ return []; } }
@@ -3674,7 +3697,7 @@ document.getElementById('story-input').onchange=function(e){
         showToast(currentLang==='en'?'Story saved on this device':'История сохранена на устройстве');
       }
       await loadStories();
-      try{ if(dbOk) crossPostStory(prep.dataUrl, prep.type); }catch(e){}
+      // Stories stay only in stories bar / avatar — do NOT cross-post to feed
     }catch(err){ showToast(friendlyError(err)); }
     finally{ hideLoader(); }
   });
@@ -5100,7 +5123,8 @@ async function fetchPosts(kind, userId){
   let q = sb.from('posts').select('*').eq('kind', kind).order('created_at',{ascending:false}).limit(40);
   if(userId) q = q.eq('user_id', userId);
   const {data} = await withTable(q, 'posts');
-  const list = data||[];
+  // Exclude items that came from story cross-post (stories are not feed posts)
+  const list = (data||[]).filter(p=>!p.from_story);
   const ids=[...new Set(list.map(p=>p.user_id))];
   let profs={};
   if(ids.length){ const {data:prs}=await withTable(sb.from('profiles').select('*').in('id',ids),'profiles'); (prs||[]).forEach(p=>profs[p.id]=p); }
@@ -5132,11 +5156,73 @@ async function switchVideoTab(tabName){
   else if(tabName==='me'){ body.innerHTML=loaderHTML(); await renderSocialProfile(body, myProfile.id, 'video'); }
 }
 
+async function renderSocialStoriesBar(container){
+  // Compact stories row at top of posts/video feeds (not posts themselves)
+  const wrap=document.createElement('div');
+  wrap.className='stories-bar';
+  wrap.style.cssText='display:flex;gap:12px;padding:10px 14px;overflow-x:auto;border-bottom:1px solid var(--line);flex-shrink:0;background:var(--panel)';
+  wrap.innerHTML='<div class="sl-loader-inline compact"><div class="sl-spinner sm"></div></div>';
+  container.prepend(wrap);
+  try{
+    const {data:stories}=await sb.from('stories').select('id,user_id,media_url,type,expires_at,created_at').gt('expires_at',new Date().toISOString()).order('created_at',{ascending:false});
+    let list=stories||[];
+    if(myProfile){
+      const local=getLocalStories().filter(s=>s.user_id===myProfile.id && new Date(s.expires_at)>new Date());
+      const seen=new Set(list.map(s=>String(s.id)));
+      for(const ls of local){ if(!seen.has(String(ls.id))) list=[ls,...list]; }
+    }
+    const byUser=new Map();
+    for(const s of list){
+      if(!byUser.has(s.user_id)) byUser.set(s.user_id,[]);
+      byUser.get(s.user_id).push(s);
+    }
+    let html='';
+    // own
+    if(myProfile){
+      const mine=byUser.get(myProfile.id)||[];
+      html+=`<div class="story-item" data-add-story style="cursor:pointer"><div class="story-ring" style="${mine.length?'':'background:var(--line)'}"><div class="avatar" id="soc-story-me" style="width:100%;height:100%;border-radius:50%;${mine.length?'':'background:var(--panel-hover);display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700'}">${mine.length?'':'+'}</div></div><span style="font-size:10px">${mine.length?(currentLang==='en'?'My':'Моя'):(currentLang==='en'?'Add':'Добавить')}</span></div>`;
+    }
+    const ids=[...byUser.keys()].filter(id=>!myProfile||id!==myProfile.id);
+    let profs={};
+    if(ids.length){ const {data}=await sb.from('profiles').select('id,username,first_name,avatar_url,color').in('id',ids); (data||[]).forEach(p=>profs[p.id]=p); }
+    for(const uid of ids){
+      const p=profs[uid]||{}; const name=p.first_name||p.username||'?';
+      html+=`<div class="story-item" data-uid="${uid}" data-name="${escapeHtml(name)}"><div class="story-ring unseen"><div class="avatar" data-av="${uid}" style="width:100%;height:100%;border-radius:50%;background:${p.color||colorFor(uid)}"></div></div><span style="font-size:10px">${escapeHtml(name)}</span></div>`;
+    }
+    wrap.innerHTML=html||`<div class="empty-state" style="padding:8px;font-size:12px">${currentLang==='en'?'No stories':'Нет историй'}</div>`;
+    if(myProfile){
+      const meAv=wrap.querySelector('#soc-story-me');
+      if(meAv && (byUser.get(myProfile.id)||[]).length){
+        renderAvatarInto(meAv, myProfile.avatar_url, (myProfile.username||'?')[0].toUpperCase(), myProfile.color||colorFor(myProfile.id));
+      }
+      wrap.querySelector('[data-add-story]')?.addEventListener('click',()=>{
+        const mine=byUser.get(myProfile.id)||[];
+        if(mine.length) openStoryViewer(myProfile.id, myProfile.first_name||'Моя');
+        else document.getElementById('story-input')?.click();
+      });
+    }
+    wrap.querySelectorAll('[data-uid]').forEach(el=>{
+      const p=profs[el.dataset.uid];
+      const av=el.querySelector('.avatar');
+      if(av&&p) renderAvatarInto(av, p.avatar_url, (p.username||'?')[0].toUpperCase(), p.color||colorFor(p.id));
+      el.onclick=()=>openStoryViewer(el.dataset.uid, el.dataset.name);
+    });
+  }catch(e){
+    wrap.innerHTML=`<div class="empty-state" style="padding:8px;font-size:12px">${currentLang==='en'?'Stories unavailable':'Истории недоступны'}</div>`;
+  }
+}
 async function renderPostsFeed(body){
   await loadFollowing();
   const list = await fetchPosts('post');
-  if(!list.length){ body.innerHTML=`<div class="empty-state">${currentLang==='en'?'No posts yet':'Пока нет постов'}</div>`; return; }
   body.innerHTML='';
+  await renderSocialStoriesBar(body);
+  if(!list.length){
+    const empty=document.createElement('div');
+    empty.className='empty-state';
+    empty.textContent=currentLang==='en'?'No posts yet':'Пока нет постов';
+    body.appendChild(empty);
+    return;
+  }
   for(const p of list) body.appendChild(await buildPostCard(p));
 }
 async function buildPostCard(p){
@@ -5162,7 +5248,7 @@ async function buildPostCard(p){
       <div class="post-comment-input-row"><input type="text" placeholder="${currentLang==='en'?'Add a comment...':'Написать комментарий...'}" data-commentinput><button class="icon-btn" data-commentsend><svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg></button></div>
     </div>`;
   renderAvatarInto(el.querySelector('[data-authorbtn].avatar'), author.avatar_url, (name||'?')[0].toUpperCase(), author.color||colorFor(author.id));
-  el.querySelectorAll('[data-authorbtn]').forEach(x=>x.onclick=()=>openAuthorOverlay(author.id, 'post'));
+  el.querySelectorAll('[data-authorbtn]').forEach(x=>x.onclick=async()=>{ if(await userHasActiveStories(author.id)) openStoryViewer(author.id, author.first_name||author.username||''); else openAuthorOverlay(author.id, 'post'); });
   el.querySelector('[data-savepost]')?.addEventListener('click', ()=>saveMediaToGallery({type:p.media_type||'image', file_url:p.media_url}));
   el.querySelector('[data-postmenu]')?.addEventListener('click', async (ev)=>{
     ev.stopPropagation();
@@ -5340,8 +5426,23 @@ async function openAuthorOverlay(userId, kind){
 async function renderVideoFeed(body){
   await loadFollowing();
   const list = await fetchPosts('video');
-  if(!list.length){ body.innerHTML = `<div class="empty-state">${currentLang==='en'?'No videos yet':'Пока нет видео'}</div>`; return; }
-  body.innerHTML = `<div class="video-feed" id="video-feed-wrap"></div>`;
+  body.innerHTML = '';
+  await renderSocialStoriesBar(body);
+  if(!list.length){
+    const empty=document.createElement('div');
+    empty.className='empty-state';
+    empty.textContent=currentLang==='en'?'No videos yet':'Пока нет видео';
+    body.appendChild(empty);
+    return;
+  }
+  const feedWrap=document.createElement('div');
+  feedWrap.className='video-feed';
+  feedWrap.id='video-feed-wrap';
+  feedWrap.style.flex='1';
+  feedWrap.style.minHeight='0';
+  body.appendChild(feedWrap);
+  body.style.display='flex';
+  body.style.flexDirection='column';
   const wrap = document.getElementById('video-feed-wrap');
   for(const v of list){
     const author=v.author;
@@ -5365,7 +5466,7 @@ async function renderVideoFeed(body){
       const vidEl = slide.querySelector('video');
       slide.addEventListener('click', e=>{ if(e.target===vidEl){ vidEl.paused ? vidEl.play().catch(()=>{}) : vidEl.pause(); } });
     }
-    slide.querySelector('[data-authorbtn]').onclick=()=>openAuthorOverlay(author.id,'video');
+    slide.querySelector('[data-authorbtn]').onclick=async()=>{ if(await userHasActiveStories(author.id)) openStoryViewer(author.id, author.first_name||author.username||''); else openAuthorOverlay(author.id,'video'); };
     slide.querySelector('[data-savevid]')?.addEventListener('click', e=>{ e.stopPropagation(); saveMediaToGallery({type:v.media_type||'video', file_url:v.media_url}); });
     slide.querySelector('[data-delvid]')?.addEventListener('click', async e=>{
       e.stopPropagation();
@@ -5430,10 +5531,9 @@ function openVideoComments(post, commentsArr, countEl){
   };
 }
 async function crossPostStory(mediaUrl, mediaType){
-  try{
-    await sb.from('posts').insert({user_id:myProfile.id, kind:'post', media_url:mediaUrl, media_type:mediaType, caption:'', hashtags:'', from_story:true});
-    await sb.from('posts').insert({user_id:myProfile.id, kind:'video', media_url:mediaUrl, media_type:mediaType, caption:'', hashtags:'', from_story:true});
-  }catch(e){ /* social tables not set up yet — safe to ignore */ }
+  // Intentionally empty: stories must NOT appear in posts/video feed.
+  // They only show in the stories bar and when tapping avatars.
+  return;
 }
 
 
@@ -5905,7 +6005,7 @@ async function openFullProfile(profileLike){
 
 // Override openUserInfo + partner avatar + contact avatars
 openUserInfo = openFullProfile;
-document.getElementById('partner-avatar').onclick=()=>{ if(activePartner) openFullProfile(activePartner); };
+document.getElementById('partner-avatar').onclick=()=>{ if(activePartner) openStoriesOrProfile(activePartner); };
 
 // Tap contact avatar opens full profile (event delegation)
 document.getElementById('contacts-list')?.addEventListener('click', e=>{
@@ -6097,7 +6197,7 @@ notifyIncomingMessage = function(msg){
 };
 
 
-document.getElementById('me-avatar-chats')?.addEventListener('click',()=>{ if(myProfile) openFullProfile(myProfile); });
+document.getElementById('me-avatar-chats')?.addEventListener('click',()=>{ if(myProfile) openStoriesOrProfile(myProfile); });
 document.getElementById('settings-avatar')?.addEventListener('click',()=>{ if(myProfile) openFullProfile(myProfile); });
 
 
