@@ -2197,19 +2197,34 @@ document.getElementById('settings-cover-edit')?.addEventListener('click', pickCo
 (function setupSettingsCollapse(){
   const page=document.getElementById('page-settings');
   if(!page) return;
-  let _touchY0=0;
-  page.addEventListener('touchstart', e=>{ _touchY0=e.touches[0].clientY; }, {passive:true});
+  // Stretch ONLY when user scrolls UP (scrollTop decreases / finger moves up over content)
+  let _lastSt = 0;
+  let _touchY0 = 0;
+  page.addEventListener('touchstart', e=>{
+    _touchY0 = e.touches[0].clientY;
+    _lastSt = page.scrollTop;
+  }, {passive:true});
   page.addEventListener('touchmove', e=>{
-    const y=e.touches[0].clientY;
-    const dy=y-_touchY0; // finger down = positive
-    // finger moves UP (dy<0) → stretch; finger moves DOWN (dy>0) near top → unstretch
-    if(dy < -12) page.classList.add('is-stretch');
-    else if(dy > 12 && page.scrollTop < 30) page.classList.remove('is-stretch');
+    const y = e.touches[0].clientY;
+    const dy = y - _touchY0; // finger DOWN = +, finger UP = -
+    // Finger DOWN (scroll page UP) → stretch; finger UP (scroll page DOWN) → round
+    if(dy > 10) page.classList.add('is-stretch');
+    else if(dy < -10) page.classList.remove('is-stretch');
   }, {passive:true});
   page.addEventListener('scroll', ()=>{
-    // scrolling content up (scrollTop grows) also stretch — like Telegram expand
-    if(page.scrollTop > 15) page.classList.add('is-stretch');
-    else if(page.scrollTop <= 5) page.classList.remove('is-stretch');
+    const st = page.scrollTop;
+    if(st < _lastSt - 1){
+      // scrolling UP
+      page.classList.add('is-stretch');
+    } else if(st > _lastSt + 1){
+      // scrolling DOWN
+      page.classList.remove('is-stretch');
+    }
+    _lastSt = st;
+  }, {passive:true});
+  page.addEventListener('wheel', e=>{
+    if(e.deltaY < 0) page.classList.add('is-stretch');      // wheel up
+    else if(e.deltaY > 0) page.classList.remove('is-stretch'); // wheel down
   }, {passive:true});
 })();
 document.getElementById('settings-logout').onclick=async()=>{ if(await customConfirm(t('you_sure_logout'))){ try{ await sb.auth.signOut(); }catch(e){} location.reload(); } };
@@ -4785,16 +4800,27 @@ async function openFullProfile(profileLike){
   // collapse on scroll
   const sc=sheet.querySelector('#ps-scroll');
   const header=sheet.querySelector('#ps-header');
-  let _pty=0;
-  sc.addEventListener('touchstart', e=>{ _pty=e.touches[0].clientY; }, {passive:true});
+  let _lastSt = 0;
+  let _pty = 0;
+  sc.addEventListener('touchstart', e=>{
+    _pty = e.touches[0].clientY;
+    _lastSt = sc.scrollTop;
+  }, {passive:true});
   sc.addEventListener('touchmove', e=>{
-    const dy=e.touches[0].clientY-_pty;
-    if(dy < -12) sheet.classList.add('is-stretch');
-    else if(dy > 12 && sc.scrollTop < 30) sheet.classList.remove('is-stretch');
+    const dy = e.touches[0].clientY - _pty;
+    // Finger DOWN = scroll page UP → stretch; finger UP = scroll DOWN → round
+    if(dy > 10) sheet.classList.add('is-stretch');
+    else if(dy < -10) sheet.classList.remove('is-stretch');
   }, {passive:true});
   sc.addEventListener('scroll', ()=>{
-    if(sc.scrollTop > 15) sheet.classList.add('is-stretch');
-    else if(sc.scrollTop <= 5) sheet.classList.remove('is-stretch');
+    const st = sc.scrollTop;
+    if(st < _lastSt - 1) sheet.classList.add('is-stretch');
+    else if(st > _lastSt + 1) sheet.classList.remove('is-stretch');
+    _lastSt = st;
+  }, {passive:true});
+  sc.addEventListener('wheel', e=>{
+    if(e.deltaY < 0) sheet.classList.add('is-stretch');
+    else if(e.deltaY > 0) sheet.classList.remove('is-stretch');
   }, {passive:true});
   // cover change
   function pickCover(){
