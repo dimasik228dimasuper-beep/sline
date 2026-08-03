@@ -791,6 +791,40 @@ body.in-chat .bottom-tabs{height:0;overflow:hidden;padding:0;border:none}
 </style>
 </head>
 <body oncontextmenu="return false;">
+
+<script>
+/* Boot: skip login flash if session already stored */
+(function(){
+  try{
+    var keys = Object.keys(localStorage||{});
+    var has = keys.some(function(k){
+      if(k.indexOf('auth-token')===-1 && k.indexOf('supabase.auth')===-1) return false;
+      try{
+        var v = localStorage.getItem(k);
+        if(!v) return false;
+        var j = JSON.parse(v);
+        var tok = j.access_token || (j.currentSession && j.currentSession.access_token) || (j.user && j.access_token);
+        return !!(tok || j.user || j.currentSession);
+      }catch(e){ return v && v.length>20; }
+    });
+    if(has || localStorage.getItem('sl_logged_in')==='1'){
+      document.documentElement.classList.add('sl-booting');
+    }
+  }catch(e){}
+})();
+</script>
+<style>
+html.sl-booting #auth-screen{display:none!important}
+html.sl-booting #app-screen{display:flex!important}
+html.sl-booting::before{
+  content:'';position:fixed;inset:0;z-index:99999;background:#0B1120;
+  /* subtle loading without text */
+}
+body.sl-ready html.sl-booting::before,
+html.sl-ready.sl-booting::before{display:none}
+html.sl-ready.sl-booting::before{display:none!important}
+</style>
+
 <div id="auth-screen">
   <div class="auth-card">
     <div class="brand"><div class="brand-mark">S</div><div class="brand-name">Signal Line</div></div>
@@ -1256,6 +1290,9 @@ async function onAuthenticated(user){
     if(!profile) profile={id:user.id, username:meta.username||'user', first_name:'', last_name:'', color:colorFor(user.id), email:user.email};
   }
   myProfile=profile;
+  try{ storage.setItem('sl_logged_in','1'); }catch(e){}
+  document.documentElement.classList.remove('sl-booting');
+  document.documentElement.classList.add('sl-ready');
   document.getElementById('auth-screen').style.display='none';
   document.getElementById('app-screen').style.display='flex';
   updateAllUIs();
@@ -2434,7 +2471,7 @@ function clearDraft(){
 }
 
 
-document.getElementById('settings-logout').onclick=async()=>{ if(await customConfirm(t('you_sure_logout'))){ try{ await sb.auth.signOut(); }catch(e){} location.reload(); } };
+document.getElementById('settings-logout').onclick=async()=>{ if(await customConfirm(t('you_sure_logout'))){ try{ storage.removeItem('sl_logged_in'); await sb.auth.signOut(); }catch(e){} location.reload(); } };
 
 // ========== REALTIME ==========
 
@@ -5660,7 +5697,56 @@ document.querySelectorAll('.social-tab').forEach(tb=>{
 
 
 updateCircleIcon();
-if(sb) sb.auth.getSession().then(({data})=>{ if(data?.session) onAuthenticated(data.session.user); });
+
+// ========== SESSION RESTORE (no login flash) ==========
+(async function bootstrapAuth(){
+  function showAuth(){
+    try{ storage.removeItem('sl_logged_in'); }catch(e){}
+    document.documentElement.classList.remove('sl-booting');
+    document.documentElement.classList.add('sl-ready');
+    const a=document.getElementById('auth-screen');
+    const app=document.getElementById('app-screen');
+    if(a) a.style.display='flex';
+    if(app) app.style.display='none';
+  }
+  function showAppShell(){
+    const a=document.getElementById('auth-screen');
+    const app=document.getElementById('app-screen');
+    if(a) a.style.display='none';
+    if(app) app.style.display='flex';
+  }
+  if(!sb){ showAuth(); return; }
+  try{
+    // Prefer stored session immediately
+    const {data, error} = await sb.auth.getSession();
+    if(data?.session?.user){
+      showAppShell();
+      await onAuthenticated(data.session.user);
+      document.documentElement.classList.remove('sl-booting');
+      document.documentElement.classList.add('sl-ready');
+    } else {
+      showAuth();
+    }
+  }catch(e){
+    console.warn('session restore', e);
+    showAuth();
+  }
+  // Keep session in sync (token refresh, multi-tab logout)
+  try{
+    sb.auth.onAuthStateChange(async (event, session)=>{
+      if(event==='SIGNED_OUT'){
+        try{ storage.removeItem('sl_logged_in'); }catch(e){}
+        if(!document.getElementById('auth-screen') || document.getElementById('auth-screen').style.display==='none'){
+          // only reload if we were inside the app
+          if(myProfile) location.reload();
+        }
+      } else if((event==='SIGNED_IN' || event==='TOKEN_REFRESHED') && session?.user){
+        try{ storage.setItem('sl_logged_in','1'); }catch(e){}
+        if(!myProfile) await onAuthenticated(session.user);
+      }
+    });
+  }catch(e){}
+})();
 </script>
 </body>
 </html>
