@@ -1385,37 +1385,39 @@ document.querySelectorAll('.nav-rail .nav-item').forEach(btn=>{
 });
 function updateAllUIs(){
   if(!myProfile) return;
-  const name = myProfile.first_name ? `${myProfile.first_name} ${myProfile.last_name||''}` : myProfile.username;
-  document.getElementById('me-name-chats').textContent = name;
-  document.getElementById('me-initial-chats').textContent = (myProfile.username||'?')[0].toUpperCase();
-  renderAvatarInto(document.getElementById('me-avatar-chats'), myProfile.avatar_url, (myProfile.username||'?')[0].toUpperCase(), myProfile.color||colorFor(myProfile.id));
-  document.getElementById('settings-display-name').textContent = name;
-  document.getElementById('settings-display-username').textContent = '@'+(myProfile.username||'');
-  renderAvatarInto(document.getElementById('settings-avatar'), myProfile.avatar_url, (myProfile.username||'?')[0].toUpperCase(), myProfile.color||colorFor(myProfile.id));
-  const scov=document.getElementById('settings-cover');
-  if(scov){
-    if(myProfile.cover_url) scov.style.backgroundImage=`url(${myProfile.cover_url})`;
-    else scov.style.backgroundImage='';
-  }
-  const sav=document.getElementById('settings-avatar');
-  if(sav){
-    sav.style.display='flex';
-    sav.style.visibility='visible';
-  }
-  // stretched avatar uses same photo as round avatar
-  const stretch=document.getElementById('settings-av-stretch');
-  if(stretch){
-    stretch.innerHTML='';
-    if(myProfile.avatar_url && !(typeof myProfile.avatar_url==='string' && myProfile.avatar_url.startsWith('data:video'))){
-      stretch.style.backgroundImage=`url(${myProfile.avatar_url})`;
-      stretch.style.background='';
-      stretch.textContent='';
-    } else {
-      stretch.style.backgroundImage='';
-      stretch.style.background=myProfile.color||colorFor(myProfile.id)||'#4C7CF3';
-      stretch.textContent=(myProfile.username||'?')[0].toUpperCase();
+  try{
+    const name = myProfile.first_name ? `${myProfile.first_name} ${myProfile.last_name||''}` : (myProfile.username||'');
+    const ch = (myProfile.username||myProfile.first_name||'?')[0].toUpperCase();
+    const col = myProfile.color||colorFor(myProfile.id);
+    const setTxt=(id,v)=>{ const el=document.getElementById(id); if(el) el.textContent=v; };
+    setTxt('me-name-chats', name);
+    setTxt('me-initial-chats', ch);
+    setTxt('settings-display-name', name);
+    setTxt('settings-display-username', '@'+(myProfile.username||''));
+    setTxt('settings-avatar-text', ch);
+    renderAvatarInto(document.getElementById('me-avatar-chats'), myProfile.avatar_url, ch, col);
+    renderAvatarInto(document.getElementById('settings-avatar'), myProfile.avatar_url, ch, col);
+    const scov=document.getElementById('settings-cover');
+    if(scov){
+      if(myProfile.cover_url) scov.style.backgroundImage=`url(${myProfile.cover_url})`;
+      else scov.style.backgroundImage='';
     }
-  }
+    const sav=document.getElementById('settings-avatar');
+    if(sav){ sav.style.display='flex'; sav.style.visibility='visible'; }
+    const stretch=document.getElementById('settings-av-stretch');
+    if(stretch){
+      stretch.innerHTML='';
+      if(myProfile.avatar_url && !(typeof myProfile.avatar_url==='string' && myProfile.avatar_url.startsWith('data:video'))){
+        stretch.style.backgroundImage=`url(${myProfile.avatar_url})`;
+        stretch.style.background='';
+        stretch.textContent='';
+      } else {
+        stretch.style.backgroundImage='';
+        stretch.style.background=col||'#4C7CF3';
+        stretch.textContent=ch;
+      }
+    }
+  }catch(e){ console.warn('updateAllUIs', e); }
 }
 function isVideoDataUrl(u){ return typeof u==='string' && u.startsWith('data:video'); }
 function renderAvatarInto(el, url, ch, color){
@@ -2676,10 +2678,29 @@ document.getElementById('settings-edit-profile').onclick=()=>{
   };
   document.getElementById('ecover').onclick=()=>{ pickCoverImage(); };
 };
-document.getElementById('avatar-upload').onchange=function(e){
+document.getElementById('avatar-upload').onchange=async function(e){
   const f=e.target.files[0]; if(!f) return; e.target.value='';
-  const r=new FileReader(); r.onload=async ev=>{ myProfile.avatar_url=ev.target.result; updateAllUIs(); try{ await sb.from('profiles').update({avatar_url:ev.target.result}).eq('id',myProfile.id); }catch(e){} };
-  r.readAsDataURL(f);
+  if(!f.type.startsWith('image/')){ showToast('Выберите изображение'); return; }
+  try{
+    showLoader();
+    let dataUrl;
+    if(typeof prepareMediaForUpload==='function'){
+      const prep=await prepareMediaForUpload(f, 'story');
+      if(!prep.ok){ showToast(prep.error||'Ошибка файла'); return; }
+      dataUrl=prep.dataUrl;
+    } else {
+      dataUrl = await new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(f); });
+      if(typeof compressImageDataUrl==='function') dataUrl = await compressImageDataUrl(dataUrl, 512, 0.72);
+    }
+    myProfile.avatar_url = dataUrl;
+    updateAllUIs();
+    try{
+      const {error}=await sb.from('profiles').update({avatar_url:dataUrl}).eq('id', myProfile.id);
+      if(error) showToast(friendlyError(error));
+      else showToast(currentLang==='en'?'Photo updated':'Фото обновлено');
+    }catch(err){ showToast(friendlyError(err)); }
+  }catch(err){ showToast(friendlyError(err)); }
+  finally{ hideLoader(true); }
 };
 function pickCoverImage(){
   let inp=document.getElementById('cover-upload');
