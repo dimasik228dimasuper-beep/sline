@@ -40,7 +40,7 @@ input,textarea{user-select:text!important;-webkit-user-select:text!important}
 #app-screen{display:none;flex:1;height:100%;flex-direction:column;overflow:hidden}
 .app-pages{flex:1;overflow:hidden;position:relative}
 .app-page{position:absolute;inset:0;display:none;flex-direction:column;overflow:hidden}
-.app-page.settings-page{overflow-y:auto!important;overflow-x:hidden;-webkit-overflow-scrolling:touch}
+.app-page.settings-page{display:block!important;overflow-y:auto!important;overflow-x:hidden!important;-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain;padding-bottom:calc(72px + var(--safe-bottom))}
 .app-page.active{display:flex}
 .chats-layout{display:flex;flex:1;overflow:hidden}
 .sidebar{background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;width:320px;min-width:320px;height:100%;transition:transform .3s}
@@ -495,7 +495,7 @@ body.beta-oled.theme-light{--bg:#000;--panel:#0A0A0A;--panel-hover:#141414;--lin
 .profile-sheet.is-stretch .profile-cover-btn{display:none}
 
 /* ===== Settings header: avatar INSIDE cover, no split ===== */
-.settings-page{padding:0;overflow-y:auto!important;overflow-x:hidden;-webkit-overflow-scrolling:touch}
+.settings-page{padding:0 0 calc(72px + var(--safe-bottom)) 0;overflow-y:auto!important;overflow-x:hidden!important;-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain}
 .settings-profile{position:relative;padding:0;border-bottom:1px solid var(--line);background:var(--panel)}
 .settings-cover-wrap{
   position:relative;
@@ -548,12 +548,10 @@ body.beta-oled.theme-light{--bg:#000;--panel:#0A0A0A;--panel-hover:#141414;--lin
 .settings-username{font-size:13px;color:rgba(255,255,255,.8);margin-top:0;text-shadow:0 1px 4px rgba(0,0,0,.4)}
 
 /* stretch on scroll */
-.settings-page.is-stretch .settings-cover-wrap{height:100vw!important;max-height:100vw}
-.settings-page.is-stretch .settings-cover{opacity:0}
-.settings-page.is-stretch .settings-cover-fade{opacity:0}
-.settings-page.is-stretch .settings-av-stretch{opacity:1}
-.settings-page.is-stretch .settings-cover-edit{display:none}
-.settings-page.is-stretch .settings-hero{opacity:0;transform:scale(.9);pointer-events:none}
+/* stretch disabled on settings — was blocking scroll to bottom */
+.settings-page.is-stretch .settings-cover-wrap{height:210px!important}
+.settings-page.is-stretch .settings-av-stretch{opacity:0}
+.settings-page.is-stretch .settings-hero{opacity:1;transform:none;pointer-events:auto}
 
 .qr-box{background:#fff;padding:16px;border-radius:16px;display:inline-block}
 .qr-box img,.qr-box canvas{display:block;width:200px;height:200px}
@@ -2227,38 +2225,13 @@ function pickCoverImage(){
 }
 document.getElementById('settings-cover-edit')?.addEventListener('click', pickCoverImage);
 // settings page scroll: ROUND avatar -> SQUARE, cover hides
-(function setupSettingsCollapse(){
+(function setupSettingsScroll(){
   const page=document.getElementById('page-settings');
   if(!page) return;
-  // Stretch ONLY when user scrolls UP (scrollTop decreases / finger moves up over content)
-  let _lastSt = 0;
-  let _touchY0 = 0;
-  page.addEventListener('touchstart', e=>{
-    _touchY0 = e.touches[0].clientY;
-    _lastSt = page.scrollTop;
-  }, {passive:true});
-  page.addEventListener('touchmove', e=>{
-    const y = e.touches[0].clientY;
-    const dy = y - _touchY0; // finger DOWN = +, finger UP = -
-    // Finger DOWN (scroll page UP) → stretch; finger UP (scroll page DOWN) → round
-    if(dy > 10) page.classList.add('is-stretch');
-    else if(dy < -10) page.classList.remove('is-stretch');
-  }, {passive:true});
-  page.addEventListener('scroll', ()=>{
-    const st = page.scrollTop;
-    if(st < _lastSt - 1){
-      // scrolling UP
-      page.classList.add('is-stretch');
-    } else if(st > _lastSt + 1){
-      // scrolling DOWN
-      page.classList.remove('is-stretch');
-    }
-    _lastSt = st;
-  }, {passive:true});
-  page.addEventListener('wheel', e=>{
-    if(e.deltaY < 0) page.classList.add('is-stretch');      // wheel up
-    else if(e.deltaY > 0) page.classList.remove('is-stretch'); // wheel down
-  }, {passive:true});
+  // No stretch on settings — free scroll to bottom (beta, logout, etc.)
+  page.classList.remove('is-stretch');
+  page.style.overflowY = 'auto';
+  page.style.webkitOverflowScrolling = 'touch';
 })();
 
 // ========== BETA FEATURES ==========
