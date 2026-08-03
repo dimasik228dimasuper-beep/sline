@@ -45,7 +45,7 @@ body{
   display:flex;
   flex-direction:column;
   box-sizing:border-box;
-  padding-top:env(safe-area-inset-top,0px);
+  padding-top:calc(env(safe-area-inset-top,0px) + 4px);
   padding-bottom:0;
 }
 input,textarea{user-select:text!important;-webkit-user-select:text!important}
@@ -262,7 +262,10 @@ body.beta-oled .sw-front{background:var(--panel)!important}
   margin:0;
   width:100%;
   box-sizing:border-box;
-  padding-bottom:env(safe-area-inset-bottom,0px);
+  /* extend into home-indicator zone so no dark gap under tabs */
+  padding-bottom:max(env(safe-area-inset-bottom,0px), 12px);
+  position:relative;
+  z-index:30;
 }
 .bottom-tab{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:8px 0;cursor:pointer;color:var(--muted);gap:4px;font-size:10px;font-weight:600}
 .bottom-tab.active{color:var(--accent-a)}
@@ -757,9 +760,9 @@ body.theme-light,body{transition:background-color .35s ease}
 @keyframes replyHint{from{opacity:0;transform:translateY(-50%) translateX(10px)}to{opacity:.7;transform:translateY(-50%)}}
 
 /* Story ring spin when unviewed */
-.story-ring{position:relative}
-.story-ring.unseen{background:conic-gradient(from 0deg,var(--accent-a),var(--mint),var(--accent-b),var(--accent-a));animation:ringSpin 3s linear infinite}
-@keyframes ringSpin{to{filter:hue-rotate(360deg)}}
+.story-ring{position:relative;background:linear-gradient(135deg,var(--accent-a),var(--mint))}
+.story-ring.unseen{background:linear-gradient(135deg,var(--accent-a),var(--mint));animation:none}
+.story-ring.seen{background:var(--line)}
 .story-progress{position:absolute;top:8px;left:8px;right:8px;height:3px;display:flex;gap:4px;z-index:5}
 .story-progress i{flex:1;height:100%;background:rgba(255,255,255,.35);border-radius:2px;overflow:hidden}
 .story-progress i b{display:block;height:100%;width:0;background:#fff;border-radius:2px}
@@ -2925,15 +2928,21 @@ async function openStoryViewer(userId, name){
   }
   if(!stories?.length){ showToast(currentLang==='en'?'No stories':'Нет историй'); return; }
   let viewer=document.getElementById('story-viewer');
+  // recreate if old markup (double progress bars / no safe-area)
+  if(viewer && !viewer.querySelector('#story-progress-wrap')){
+    try{ clearInterval(window._storyTimer); }catch(e){}
+    viewer.remove();
+    viewer=null;
+  }
   if(!viewer){
     viewer=document.createElement('div'); viewer.id='story-viewer';
-    viewer.style.cssText='display:none;position:fixed;inset:0;background:#000;z-index:6000;flex-direction:column';
-    viewer.innerHTML=`<div style="position:absolute;top:0;left:0;right:0;height:4px;background:rgba(255,255,255,.2)"><div id="story-progress" style="height:100%;width:0%;background:#fff"></div></div>
-      <button id="story-close" style="position:absolute;top:16px;right:16px;z-index:3;background:none;border:none;color:#fff;font-size:28px">×</button>
-      <div id="story-user" style="position:absolute;top:20px;left:16px;z-index:3;color:#fff;font-weight:600"></div>
+    viewer.style.cssText='display:none;position:fixed;inset:0;background:#000;z-index:6000;flex-direction:column;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);box-sizing:border-box';
+    viewer.innerHTML=`<div id="story-progress-wrap" style="position:absolute;top:calc(8px + env(safe-area-inset-top,0px));left:8px;right:8px;height:3px;background:rgba(255,255,255,.25);border-radius:2px;z-index:5;overflow:hidden"><div id="story-progress" style="height:100%;width:0%;background:#fff;border-radius:2px"></div></div>
+      <button id="story-close" style="position:absolute;top:calc(18px + env(safe-area-inset-top,0px));right:16px;z-index:6;background:none;border:none;color:#fff;font-size:28px;line-height:1">×</button>
+      <div id="story-user" style="position:absolute;top:calc(22px + env(safe-area-inset-top,0px));left:16px;z-index:6;color:#fff;font-weight:600"></div>
       <img id="story-image" style="display:none;width:100%;height:100%;object-fit:contain">
       <video id="story-video" style="display:none;width:100%;height:100%;object-fit:contain" playsinline></video>
-      <button id="story-reply-btn" style="position:absolute;bottom:30px;left:50%;transform:translateX(-50%);padding:12px 24px;border-radius:999px;border:none;background:rgba(255,255,255,.2);color:#fff;font-weight:600;cursor:pointer;z-index:4">Ответить</button>`;
+      <button id="story-reply-btn" style="position:absolute;bottom:calc(24px + env(safe-area-inset-bottom,0px));left:50%;transform:translateX(-50%);padding:12px 24px;border-radius:999px;border:none;background:rgba(255,255,255,.2);color:#fff;font-weight:600;cursor:pointer;z-index:6">Ответить</button>`;
     document.body.appendChild(viewer);
     document.getElementById('story-close').onclick=()=>{ clearInterval(window._storyTimer); viewer.style.display='none'; };
   }
@@ -5458,7 +5467,7 @@ async function renderSocialStoriesBar(container){
     if(ids.length){ const {data}=await sb.from('profiles').select('id,username,first_name,avatar_url,color').in('id',ids); (data||[]).forEach(p=>profs[p.id]=p); }
     for(const uid of ids){
       const p=profs[uid]||{}; const name=p.first_name||p.username||'?';
-      html+=`<div class="story-item" data-uid="${uid}" data-name="${escapeHtml(name)}"><div class="story-ring unseen"><div class="avatar" data-av="${uid}" style="width:100%;height:100%;border-radius:50%;background:${p.color||colorFor(uid)}"></div></div><span style="font-size:10px">${escapeHtml(name)}</span></div>`;
+      html+=`<div class="story-item" data-uid="${uid}" data-name="${escapeHtml(name)}"><div class="story-ring"><div class="avatar" data-av="${uid}" style="width:100%;height:100%;border-radius:50%;background:${p.color||colorFor(uid)}"></div></div><span style="font-size:10px">${escapeHtml(name)}</span></div>`;
     }
     wrap.innerHTML=html||`<div class="empty-state" style="padding:8px;font-size:12px">${currentLang==='en'?'No stories':'Нет историй'}</div>`;
     if(myProfile){
@@ -6558,32 +6567,28 @@ if(_origAttach){
   if(st) obs.observe(st,{childList:true,characterData:true,subtree:true});
 }
 
-// Enhance openStoryViewer with progress bars if function exists
+// Story viewed: mark ring as seen (no rainbow animation)
 const _openStory = typeof openStoryViewer==='function' ? openStoryViewer : null;
 if(_openStory){
   openStoryViewer = async function(userId, name){
     await _openStory(userId, name);
     setTimeout(()=>{
-      const viewer=document.getElementById('story-viewer');
-      if(!viewer) return;
-      viewer.classList.add('story-slide-in');
-      // inject progress if missing
-      if(!viewer.querySelector('.story-progress')){
-        const bar=document.createElement('div'); bar.className='story-progress';
-        bar.innerHTML='<i class="active"><b style="animation-duration:5s"></b></i>';
-        viewer.prepend(bar);
-      }
-      // mark rings
-      document.querySelectorAll(`.story-item[data-uid="${userId}"] .story-ring`).forEach(r=>r.classList.remove('unseen'));
+      document.querySelectorAll(`.story-item[data-uid="${userId}"] .story-ring`).forEach(r=>{
+        r.classList.remove('unseen');
+        r.classList.add('seen');
+      });
     },50);
   };
 }
 
-// Mark story rings as unseen by default when loaded
+// Unviewed stories: static accent ring (not rainbow)
 const _loadSt = loadStories;
 loadStories = async function(){
   await _loadSt();
-  document.querySelectorAll('#stories-bar .story-item[data-uid] .story-ring').forEach(r=>r.classList.add('unseen'));
+  document.querySelectorAll('#stories-bar .story-item[data-uid] .story-ring').forEach(r=>{
+    r.classList.add('unseen');
+    r.classList.remove('seen');
+  });
 };
 
 // Message removing animation helper
