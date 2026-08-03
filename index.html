@@ -1,4 +1,4 @@
- <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ru">
 <head>
 <meta charset="UTF-8" />
@@ -83,7 +83,7 @@ input,textarea{user-select:text!important;-webkit-user-select:text!important}
   min-height:0;
   overflow:hidden;
   position:relative;
-  padding-bottom:calc(48px + env(safe-area-inset-bottom,0px));
+  padding-bottom:0;
   box-sizing:border-box;
 }
 body.in-chat .app-pages{
@@ -215,17 +215,16 @@ body.beta-oled .sw-front{background:var(--panel)!important}
 .pinned-bar{background:var(--panel);border-bottom:1px solid var(--line);padding:8px 16px;font-size:13px;display:none;align-items:center;gap:8px;cursor:pointer}
 .pinned-bar.show{display:flex}
 .composer{
-  padding:8px 14px calc(6px + env(safe-area-inset-bottom,0px));
+  padding:10px 14px 10px;
   border-top:1px solid var(--line);
   display:flex;align-items:flex-end;gap:8px;
   background:var(--panel);
-  z-index:210;
+  z-index:10;
   flex-shrink:0;margin:0;width:100%;box-sizing:border-box;
-  position:fixed;left:0;right:0;bottom:0;
+  position:relative;
 }
-/* spacer so messages not hidden under fixed composer */
 #chat-active{
-  padding-bottom:calc(56px + env(safe-area-inset-bottom,0px));
+  padding-bottom:0;
   box-sizing:border-box;
 }
 .composer-actions{display:flex;gap:4px;flex-shrink:0}
@@ -298,15 +297,11 @@ body.beta-oled .sw-front{background:var(--panel)!important}
   width:100%;
   max-width:100%;
   box-sizing:border-box;
-  position:fixed;
-  left:0;
-  right:0;
-  bottom:0;
+  /* in document flow — last flex child of #app-screen = true bottom */
+  position:relative;
+  flex-shrink:0;
   z-index:200;
-  /* compact: icons near bottom edge, only tiny safe gap */
-  padding:6px 0 calc(4px + env(safe-area-inset-bottom,0px));
-  min-height:0;
-  height:auto;
+  padding:8px 0 8px;
   align-items:center;
 }
 .bottom-tab{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:4px 0 2px;cursor:pointer;color:var(--muted);gap:2px;font-size:10px;font-weight:600}
@@ -570,19 +565,15 @@ body.beta-oled.theme-light{--bg:#000;--panel:#0A0A0A;--panel-hover:#141414;--lin
 }
 .social-close{width:34px;height:34px;border-radius:10px;background:var(--panel-hover);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text)}
 .social-title{font-weight:800;font-size:16px}
-.social-body{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;padding-bottom:calc(52px + env(safe-area-inset-bottom,0px));box-sizing:border-box}
+.social-body{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;padding-bottom:0;box-sizing:border-box}
 .social-tabs{
   display:flex;background:var(--panel);
   border-top:1px solid var(--line);flex-shrink:0;
-  padding:6px 0 calc(4px + env(safe-area-inset-bottom,0px));
+  padding:8px 0;
   box-sizing:border-box;
   margin:0;width:100%;
-  position:fixed;left:0;right:0;bottom:0;z-index:200;
-  min-height:0;height:auto;align-items:center;
-}
-.social-body{
-  padding-bottom:calc(52px + env(safe-area-inset-bottom,0px))!important;
-  box-sizing:border-box;
+  position:relative;z-index:200;
+  align-items:center;
 }
 .social-tab{flex:1;text-align:center;padding:12px 0;cursor:pointer;color:var(--muted);font-size:11px;font-weight:700;display:flex;flex-direction:column;align-items:center;gap:4px}
 .social-tab.active{color:var(--accent-a)}
@@ -960,14 +951,8 @@ body.in-chat .bottom-tabs{
   .bottom-tabs{display:none!important;position:static}
   /* app-pages fill rest */
   .app-pages{flex:1;min-width:0;padding-bottom:0!important}
-  /* composer stays in chat column flow on desktop */
-  .composer{
-    position:relative!important;
-    left:auto!important;right:auto!important;bottom:auto!important;
-  }
-  #chat-active{padding-bottom:0!important}
-  .social-tabs{position:relative!important;left:auto;right:auto;bottom:auto}
-  .social-body{padding-bottom:0!important}
+  .composer{position:relative!important}
+  .social-tabs{position:relative!important}
   /* desktop: sidebar always visible in chats, chat open doesn't hide tabs (tabs are left) */
   body.in-chat .nav-rail{display:flex}
   .sidebar{position:relative;transform:none!important}
