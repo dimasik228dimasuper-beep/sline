@@ -145,20 +145,29 @@ body.in-chat .app-pages{
   touch-action:pan-y;
   position:relative;
   background:var(--panel);
-  /* critical: never expand page width */
-  contain:layout style;
 }
-.sw-track{
+/* actions sit under the front row, never expand layout */
+.sw-actions{
+  position:absolute;
+  right:0; top:0; bottom:0;
+  width:216px;
   display:flex;
-  flex-direction:row;
   align-items:stretch;
-  transform:translate3d(0,0,0);
-  transition:transform .2s cubic-bezier(.2,.8,.2,1);
-  will-change:transform;
+  z-index:0;
+  pointer-events:none;
 }
-.sw-track.swiping{transition:none}
+.sw-clip[data-open] .sw-actions,
+.sw-clip.sw-dragging .sw-actions{pointer-events:auto}
+.sw-track{
+  display:block;
+  width:100%;
+  position:relative;
+  z-index:1;
+}
 .sw-front{
-  flex:0 0 auto;
+  width:100%!important;
+  max-width:100%!important;
+  min-width:0!important;
   box-sizing:border-box;
   background:var(--panel)!important;
   position:relative;
@@ -167,17 +176,14 @@ body.in-chat .app-pages{
   padding:0!important;
   margin:0!important;
   overflow:hidden;
+  transform:translate3d(0,0,0);
+  transition:transform .2s cubic-bezier(.2,.8,.2,1);
+  will-change:transform;
 }
+.sw-front.swiping{transition:none}
 .sw-front:hover,
 .sw-front.active{background:var(--panel-hover)!important}
 .sw-front.active{box-shadow:inset 3px 0 0 var(--accent-a)}
-.sw-actions{
-  flex:0 0 216px;
-  width:216px;
-  display:flex;
-  align-items:stretch;
-  flex-shrink:0;
-}
 .sw-act{
   flex:1;
   display:flex;
@@ -1171,6 +1177,25 @@ body.in-chat .bottom-tabs{
   background-repeat:no-repeat!important;
 }
 
+
+/* ===== Feature pack UI ===== */
+.reply-bar{display:none;align-items:center;gap:10px;padding:8px 14px;background:var(--panel-hover);border-top:1px solid var(--line);flex-shrink:0}
+.reply-bar.show{display:flex}
+.reply-bar-text{flex:1;font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border-left:3px solid var(--accent-a);padding-left:8px}
+.reply-bar-close{background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer;padding:4px 8px}
+.bottom-tab{position:relative}
+.tab-badge{position:absolute;top:2px;right:calc(50% - 22px);min-width:16px;height:16px;padding:0 4px;border-radius:999px;background:var(--danger);color:#fff;font-size:10px;font-weight:700;display:none;align-items:center;justify-content:center;line-height:1}
+.tab-badge.show{display:flex}
+.contact-muted{opacity:.55}
+.contact-draft{color:var(--accent-a)!important;font-style:italic}
+.fwd-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9800;display:flex;align-items:flex-end;justify-content:center}
+.fwd-sheet{background:var(--panel);border-radius:18px 18px 0 0;width:100%;max-width:480px;max-height:70vh;display:flex;flex-direction:column;padding-bottom:env(safe-area-inset-bottom,0px)}
+.fwd-sheet h3{margin:0;padding:16px;font-size:16px;border-bottom:1px solid var(--line)}
+.fwd-list{flex:1;overflow-y:auto;padding:8px}
+.fwd-item{display:flex;align-items:center;gap:12px;padding:12px 14px;cursor:pointer;border-radius:12px}
+.fwd-item:hover{background:var(--panel-hover)}
+.fwd-item .avatar{width:40px;height:40px}
+
 </style>
 </head>
 <body oncontextmenu="return false;">
@@ -1328,7 +1353,8 @@ html.sl-ready.sl-booting::before{display:none!important}
               <input type="text" id="comment-input" placeholder="Комментарий...">
               <button class="icon-btn" id="comment-send"><svg viewBox="0 0 24 24"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg></button>
             </div>
-            <div class="composer" id="composer">
+            <div class="reply-bar" id="reply-bar"><div class="reply-bar-text" id="reply-bar-text"></div><button type="button" class="reply-bar-close" id="reply-bar-close">✕</button></div>
+    <div class="composer" id="composer">
               <div class="composer-actions">
                 <button class="icon-btn" id="attach-btn" title="Прикрепить" data-i18n-title="tt_attach"><svg viewBox="0 0 24 24"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg></button>
                 <button class="icon-btn" id="sticker-btn" title="Стикеры" data-i18n-title="tt_stickers"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01"/></svg></button>
@@ -1383,6 +1409,7 @@ html.sl-ready.sl-booting::before{display:none!important}
         <div class="settings-item" id="settings-favorites"><svg viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg><span class="item-text" data-i18n="it_favorites">Избранное</span></div>
         <div class="settings-item" id="settings-devices"><svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg><span class="item-text" data-i18n="it_devices">Устройства</span></div>
         <div class="settings-item" id="settings-pin-lock"><svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg><span class="item-text" data-i18n="it_pinlock">Защита чатов (PIN)</span></div>
+        <div class="settings-item" id="settings-2fa"><svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg><span class="item-text">Двухфакторная защита</span><span id="settings-2fa-badge" style="margin-left:auto;font-size:11px;color:var(--muted)"></span></div>
         <div class="settings-item" id="settings-my-link"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg><span class="item-text" data-i18n="it_mylink">Моя ссылка</span></div>
       </div>
       <div class="settings-section">
@@ -1419,7 +1446,7 @@ html.sl-ready.sl-booting::before{display:none!important}
     </div>
   </div>
   <div class="bottom-tabs">
-    <div class="bottom-tab active" data-tab="chats"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg><span data-i18n="tab_chats">Чаты</span></div>
+    <div class="bottom-tab active" data-tab="chats"><span class="tab-badge" id="chats-tab-badge">0</span><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg><span data-i18n="tab_chats">Чаты</span></div>
     <div class="bottom-tab" data-tab="calls"><svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2A19.8 19.8 0 0111.19 18a19.5 19.5 0 01-6-6A19.8 19.8 0 012.12 3.38 2 2 0 014.11 2h3a2 2 0 012 1.72c.13.96.36 1.9.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0122 16.92z"/></svg><span data-i18n="tab_calls">Звонки</span></div>
     <div class="bottom-tab" data-tab="settings"><svg viewBox="0 0 24 24"><path d="M12 15a3 3 0 100-6 3 3 0 000 6z"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg><span data-i18n="tab_settings">Настройки</span></div>
   </div>
@@ -1520,8 +1547,14 @@ function escapeHtml(s){ const d=document.createElement('div'); d.textContent=s||
 function friendlyError(e){ if(!e) return 'Ошибка'; const m=e.message||''; if(m.includes('foreign key')) return 'Пользователь/группа не найдены'; return String(m).slice(0,100); }
 function getUnread(){ try{return JSON.parse(storage.getItem(UNREAD_KEY)||'{}');}catch(e){return{};} }
 function setUnread(id,c){ const u=getUnread(); if(c<=0) delete u[id]; else u[id]=c; storage.setItem(UNREAD_KEY,JSON.stringify(u)); }
-function incUnread(id){ const u=getUnread(); u[id]=(u[id]||0)+1; storage.setItem(UNREAD_KEY,JSON.stringify(u)); }
-function clearUnread(id){ setUnread(id,0); }
+function incUnread(id){
+  const u=getUnread(); u[id]=(u[id]||0)+1; storage.setItem(UNREAD_KEY,JSON.stringify(u));
+  try{ if(typeof updateUnreadBadge==='function') updateUnreadBadge(); }catch(e){}
+}
+function clearUnread(id){
+  setUnread(id,0);
+  try{ if(typeof updateUnreadBadge==='function') updateUnreadBadge(); }catch(e){}
+}
 function getArchive(){ try{return JSON.parse(storage.getItem(ARCHIVE_KEY)||'[]');}catch(e){return[];} }
 function setArchive(a){ storage.setItem(ARCHIVE_KEY,JSON.stringify(a)); }
 function getPinned(){ try{return JSON.parse(storage.getItem(PINNED_KEY)||'{}');}catch(e){return{};} }
@@ -1577,6 +1610,15 @@ function setBtnLoading(btn, on){
 // ========== UI HELPERS ==========
 function switchPage(page){
   checkPipOnLeave();
+  // always reset chat swipes so actions never peek after tab switch
+  try{
+    document.querySelectorAll('#contacts-list .sw-clip').forEach(c=>{
+      const fr=c.querySelector('.sw-front');
+      if(fr){ fr.classList.remove('swiping'); fr.style.transform='translate3d(0,0,0)'; }
+      delete c.dataset.open;
+      c.classList.remove('sw-dragging');
+    });
+  }catch(e){}
   document.querySelectorAll('.app-page').forEach(p=>p.classList.remove('active'));
   document.getElementById('page-'+page)?.classList.add('active');
   document.querySelectorAll('.bottom-tab').forEach(t=>t.classList.remove('active'));
@@ -1587,6 +1629,10 @@ function switchPage(page){
     document.getElementById('sidebar')?.classList.remove('hidden');
   }
   if(page==='calls' && typeof renderCallsList==='function') renderCallsList();
+  if(page==='chats'){
+    // re-render ensures clean closed state after tab switch
+    try{ if(typeof renderContactsAndGroups==='function') renderContactsAndGroups(); }catch(e){}
+  }
 }
 document.querySelectorAll('.nav-rail .nav-item').forEach(btn=>{
   btn.addEventListener('click', ()=> switchPage(btn.dataset.tab));
@@ -1670,9 +1716,18 @@ async function doRegister(){
     if(!phone||password.length<6){ am.textContent='Телефон и пароль (мин.6)'; return; }
     setBtnLoading(btn,true);
     try{
-      const {data,error}=await sb.auth.signUp({email:phone.replace(/\s/g,'')+'@phone.local', password, options:{data:{username,first_name:first,last_name:last,birth_date:birth,phone}}});
+      const emailLocal=phone.replace(/\s/g,'')+'@phone.local';
+      const {data,error}=await sb.auth.signUp({email:emailLocal, password, options:{data:{username,first_name:first,last_name:last,birth_date:birth,phone}}});
       if(error){ am.textContent=error.message; setBtnLoading(btn,false); return; }
-      if(data.session?.user) onAuthenticated(data.session.user);
+      let user=data.session?.user;
+      if(!user){
+        // no email confirm — immediate sign-in
+        try{
+          const a=await sb.auth.signInWithPassword({email:emailLocal, password});
+          user=a.data?.session?.user||a.data?.user;
+        }catch(e){}
+      }
+      if(user) onAuthenticated(user);
       else { am.textContent='Аккаунт создан! Войдите.'; document.querySelector('.tab[data-tab="login"]').click(); }
       setBtnLoading(btn,false);
     }catch(e){ am.textContent='Ошибка'; setBtnLoading(btn,false); }
@@ -1683,10 +1738,18 @@ async function doRegister(){
   if(!email||password.length<6){ am.textContent='Email и пароль (мин.6)'; return; }
   setBtnLoading(btn,true);
   try{
-    const {data,error}=await sb.auth.signUp({email,password,options:{data:{username,first_name:first,last_name:last,birth_date:birth}}});
+    const {data,error}=await sb.auth.signUp({email,password,options:{data:{username,first_name:first,last_name:last,birth_date:birth}, emailRedirectTo: undefined}});
     if(error){ am.textContent=error.message; setBtnLoading(btn,false); return; }
-    if(data.session?.user) onAuthenticated(data.session.user);
-    else { am.textContent='Аккаунт создан! Войдите.'; document.querySelector('.tab[data-tab="login"]').click(); }
+    let user=data.session?.user;
+    if(!user){
+      // Registration without confirmation: try immediate login
+      try{
+        const a=await sb.auth.signInWithPassword({email, password});
+        user=a.data?.session?.user||a.data?.user;
+      }catch(e){}
+    }
+    if(user) onAuthenticated(user);
+    else { am.textContent='Аккаунт создан. Войдите (в Supabase отключите Confirm email).'; document.querySelector('.tab[data-tab="login"]').click(); }
     setBtnLoading(btn,false);
   }catch(e){ am.textContent='Ошибка'; setBtnLoading(btn,false); }
 }
@@ -1851,8 +1914,6 @@ function renderContactsAndGroups(){
     row.dataset.cid=data.id; row.dataset.ctype=type;
     const clip=document.createElement('div');
     clip.className='sw-clip';
-    const track=document.createElement('div');
-    track.className='sw-track';
     const actions=document.createElement('div');
     actions.className='sw-actions';
     const archivedNow=getArchive().includes(data.id);
@@ -1870,50 +1931,39 @@ function renderContactsAndGroups(){
         <svg viewBox="0 0 24 24"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
         <span>${currentLang==='en'?'Delete':'Удалить'}</span>
       </button>`;
-    // front = the contact row
+    // front covers actions; only front translates
     row.classList.add('sw-front');
-    track.appendChild(row);
-    track.appendChild(actions);
-    clip.appendChild(track);
-
-    function fitFrontWidth(){
-      const w = clip.clientWidth || clip.offsetWidth;
-      if(w > 0){
-        row.style.width = w + 'px';
-        row.style.minWidth = w + 'px';
-        row.style.maxWidth = w + 'px';
-        row.style.flex = '0 0 ' + w + 'px';
-      }
-    }
-    fitFrontWidth();
-    requestAnimationFrame(fitFrontWidth);
+    clip.appendChild(actions);
+    clip.appendChild(row);
 
     const ACTION_W = 216;
     let startX=0, startY=0, baseX=0, curX=0;
     let dragging=false, axis=null, opened=false;
 
-    function setTrack(x, animate){
+    function setFront(x, animate){
       curX = x;
-      if(animate===false) track.classList.add('swiping');
-      else track.classList.remove('swiping');
-      track.style.transform = 'translate3d('+x+'px,0,0)';
+      if(animate===false) row.classList.add('swiping');
+      else row.classList.remove('swiping');
+      row.style.transform = 'translate3d('+x+'px,0,0)';
     }
     function openSwipe(){
-      setTrack(-ACTION_W, true);
+      setFront(-ACTION_W, true);
       opened=true;
       clip.dataset.open='1';
     }
     function closeSwipe(){
-      setTrack(0, true);
+      setFront(0, true);
       opened=false;
       delete clip.dataset.open;
+      clip.classList.remove('sw-dragging');
     }
     function closeOthers(){
       list.querySelectorAll('.sw-clip[data-open]').forEach(c=>{
         if(c===clip) return;
-        const tr=c.querySelector('.sw-track');
-        if(tr){ tr.classList.remove('swiping'); tr.style.transform='translate3d(0,0,0)'; }
+        const fr=c.querySelector('.sw-front');
+        if(fr){ fr.classList.remove('swiping'); fr.style.transform='translate3d(0,0,0)'; }
         delete c.dataset.open;
+        c.classList.remove('sw-dragging');
       });
     }
 
@@ -1940,6 +1990,7 @@ function renderContactsAndGroups(){
         }
         axis='h';
         closeOthers();
+        clip.classList.add('sw-dragging');
         clip.style.touchAction='none';
       }
       if(axis!=='h') return;
@@ -1948,7 +1999,7 @@ function renderContactsAndGroups(){
       let x = baseX + dx;
       if(x > 0) x = 0;
       if(x < -ACTION_W) x = -ACTION_W;
-      setTrack(x, false);
+      setFront(x, false);
     }, {passive:false});
 
     function endSwipe(){
@@ -1969,9 +2020,10 @@ function renderContactsAndGroups(){
       scrollParent._swScrollBound = true;
       scrollParent.addEventListener('scroll', ()=>{
         list.querySelectorAll('.sw-clip[data-open]').forEach(c=>{
-          const tr=c.querySelector('.sw-track');
-          if(tr){ tr.classList.remove('swiping'); tr.style.transform='translate3d(0,0,0)'; }
+          const fr=c.querySelector('.sw-front');
+          if(fr){ fr.classList.remove('swiping'); fr.style.transform='translate3d(0,0,0)'; }
           delete c.dataset.open;
+          c.classList.remove('sw-dragging');
         });
       }, {passive:true});
     }
@@ -2031,8 +2083,11 @@ function renderContactsAndGroups(){
 function showChatCtx(e, type, data){
   const menu=document.getElementById('ctx-menu');
   const archived=getArchive().includes(data.id);
+  const mutedUntil=(JSON.parse(storage.getItem('sl_muted')||'{}')[data.id]||0);
+  const isMuted=mutedUntil===-1||mutedUntil>Date.now();
   menu.innerHTML=`
     <div class="ctx-item" data-a="archive">${archived?'Разархивировать':'В архив'}</div>
+    <div class="ctx-item" data-a="mute">${isMuted?'Включить звук':'Без звука'}</div>
     <div class="ctx-item" data-a="lock">PIN-защита</div>
     <div class="ctx-item danger" data-a="del">Удалить чат</div>`;
   menu.style.left=Math.min(e.clientX||e.pageX,innerWidth-200)+'px';
@@ -2045,6 +2100,20 @@ function showChatCtx(e, type, data){
         let a=getArchive();
         if(archived) a=a.filter(id=>id!==data.id); else a.push(data.id);
         setArchive(a); renderContactsAndGroups();
+      } else if(it.dataset.a==='mute'){
+        const m=JSON.parse(storage.getItem('sl_muted')||'{}');
+        const cur=m[data.id]||0;
+        if(cur===-1||cur>Date.now()){ delete m[data.id]; showToast('Звук включён'); }
+        else {
+          // quick pick
+          const choice=await customPrompt('Без звука (часов). -1 = навсегда','8');
+          if(choice===null) return;
+          const h=parseInt(choice,10);
+          m[data.id]=h<0?-1:Date.now()+Math.max(1,h)*3600*1000;
+          showToast(h<0?'Без звука навсегда':'Без звука '+h+'ч');
+        }
+        storage.setItem('sl_muted',JSON.stringify(m));
+        renderContactsAndGroups();
       } else if(it.dataset.a==='lock'){
         if(!storage.getItem(PIN_CODE_KEY)){ showToast(currentLang==='en'?'Set a PIN in Settings first':'Сначала установите PIN в Настройках'); return; }
         let l=getLocked();
@@ -2469,8 +2538,10 @@ function showMsgCtx(e, msg){
   const menu=document.getElementById('ctx-menu');
   const mine=msg.sender_id===myProfile.id;
   let items=`<div class="ctx-item" data-a="reply">Ответить</div>
+    <div class="ctx-item" data-a="forward">Переслать</div>
     <div class="ctx-item" data-a="react">Реакция</div>
-    <div class="ctx-item" data-a="pin">Закрепить</div>`;
+    <div class="ctx-item" data-a="pin">Закрепить</div>
+    <div class="ctx-item" data-a="copy">Копировать</div>`;
   if(msg.type==='image'||msg.type==='video'||msg.type==='circle'||msg.type==='voice'||msg.type==='sticker'){
     items+=`<div class="ctx-item" data-a="save">Сохранить в галерею</div>`;
   }
@@ -2490,7 +2561,9 @@ function showMsgCtx(e, msg){
     it.onclick=async()=>{
       menu.style.display='none';
       const a=it.dataset.a;
-      if(a==='reply'){ replyToMsg=msg; document.getElementById('message-input').placeholder='Ответ: '+(msg.content||'').slice(0,40); document.getElementById('message-input').focus(); }
+      if(a==='reply'){ replyToMsg=msg; document.getElementById('message-input').placeholder='Ответ: '+(msg.content||'').slice(0,40); document.getElementById('message-input').focus(); showReplyBar(msg); }
+      else if(a==='forward'){ openForwardPicker(msg); }
+      else if(a==='copy'){ try{ await navigator.clipboard.writeText(msg.content||msg.file_url||''); showToast('Скопировано'); }catch(e){ showToast('Не удалось скопировать'); } }
       else if(a==='react'){ openReactionPicker(msg); }
       else if(a==='pin'){
         const key=activeGroup?activeGroup.id:activePartner.id;
@@ -7222,6 +7295,209 @@ function scheduleBirthdayAfterAppReady(){
     });
   }catch(e){}
 })();
+
+// ========== FEATURE PACK: 2FA, forward, mute, badges, push, reply bar, drafts in list ==========
+(function(){
+  const TFA_KEY='sl_2fa_on';
+  const TFA_PIN='sl_2fa_pin';
+  const MUTE_KEY='sl_muted';
+
+  // --- 2FA (optional, on own account in Settings) ---
+  function is2faOn(){ return storage.getItem(TFA_KEY)==='1' && !!storage.getItem(TFA_PIN); }
+  function update2faBadge(){
+    const el=document.getElementById('settings-2fa-badge');
+    if(el) el.textContent=is2faOn()?'Вкл.':'Выкл.';
+  }
+  document.getElementById('settings-2fa')?.addEventListener('click', async ()=>{
+    if(is2faOn()){
+      const pin=await customPrompt('Введите PIN, чтобы отключить 2FA','');
+      if(pin===null) return;
+      if(pin!==storage.getItem(TFA_PIN)){ showToast('Неверный PIN'); return; }
+      storage.removeItem(TFA_KEY); storage.removeItem(TFA_PIN);
+      showToast('2FA отключена');
+    } else {
+      const p1=await customPrompt('Придумайте PIN (4–8 цифр)','');
+      if(p1===null) return;
+      if(!/^\d{4,8}$/.test(p1)){ showToast('PIN: 4–8 цифр'); return; }
+      const p2=await customPrompt('Повторите PIN','');
+      if(p2!==p1){ showToast('PIN не совпал'); return; }
+      storage.setItem(TFA_PIN, p1);
+      storage.setItem(TFA_KEY, '1');
+      showToast('2FA включена — PIN после входа');
+    }
+    update2faBadge();
+  });
+  update2faBadge();
+
+  // After password login — ask 2FA PIN if enabled
+  const _onAuth = onAuthenticated;
+  onAuthenticated = async function(user){
+    await _onAuth(user);
+    if(is2faOn()){
+      // lightweight gate
+      for(let i=0;i<3;i++){
+        const pin=await customPrompt('Двухфакторная защита — введите PIN','');
+        if(pin===storage.getItem(TFA_PIN)) break;
+        if(i===2){ showToast('Неверный PIN'); try{ await sb.auth.signOut(); }catch(e){} location.reload(); return; }
+        showToast('Неверный PIN, попытка '+(i+2)+'/3');
+      }
+    }
+    try{ updateUnreadBadge(); requestPushPermission(); }catch(e){}
+  };
+
+  // --- Reply bar ---
+  window.showReplyBar = function(msg){
+    const bar=document.getElementById('reply-bar');
+    const txt=document.getElementById('reply-bar-text');
+    if(!bar||!txt) return;
+    txt.textContent='↪ '+(msg.content||msg.type||'сообщение').slice(0,80);
+    bar.classList.add('show');
+  };
+  window.hideReplyBar = function(){
+    document.getElementById('reply-bar')?.classList.remove('show');
+    replyToMsg=null;
+    const inp=document.getElementById('message-input');
+    if(inp) inp.placeholder='Сообщение...';
+  };
+  document.getElementById('reply-bar-close')?.addEventListener('click', hideReplyBar);
+
+  // clear reply bar after send
+  const _send = sendMessage;
+  sendMessage = async function(type, fileUrl, content){
+    const r = await _send(type, fileUrl, content);
+    try{ hideReplyBar(); }catch(e){}
+    return r;
+  };
+
+  // --- Forward picker ---
+  window.openForwardPicker = async function(msg){
+    const ov=document.createElement('div');
+    ov.className='fwd-overlay';
+    ov.innerHTML=`<div class="fwd-sheet"><h3>Переслать</h3><div class="fwd-list" id="fwd-list"><div style="padding:20px;color:var(--muted);text-align:center">Загрузка...</div></div></div>`;
+    document.body.appendChild(ov);
+    ov.addEventListener('click', e=>{ if(e.target===ov) ov.remove(); });
+    let list=[];
+    try{
+      // contacts from already loaded chats
+      const contacts=document.querySelectorAll('#contacts-list .contact[data-id], #contacts-list .sw-clip[data-id]');
+      // better: use profiles from last load
+      const {data}=await sb.from('profiles').select('id,username,first_name,last_name,avatar_url,color').neq('id', myProfile.id).limit(40);
+      list=data||[];
+    }catch(e){ list=[]; }
+    const box=ov.querySelector('#fwd-list');
+    if(!list.length){ box.innerHTML='<div style="padding:20px;color:var(--muted);text-align:center">Нет контактов</div>'; return; }
+    box.innerHTML=list.map(p=>{
+      const name=escapeHtml(p.first_name?`${p.first_name} ${p.last_name||''}`:p.username||'');
+      return `<div class="fwd-item" data-id="${p.id}"><div class="avatar" style="background:${p.color||colorFor(p.id)};background-size:cover;background-position:center;${p.avatar_url&&!String(p.avatar_url).startsWith('data:video')?`background-image:url(${p.avatar_url})`:''}">${p.avatar_url?'':(p.username||'?')[0].toUpperCase()}</div><div style="font-weight:600;font-size:14px">${name}</div></div>`;
+    }).join('');
+    box.querySelectorAll('.fwd-item').forEach(el=>{
+      el.onclick=async()=>{
+        ov.remove();
+        const toId=el.dataset.id;
+        try{
+          const payload={
+            sender_id: myProfile.id,
+            receiver_id: toId,
+            type: msg.type||'text',
+            content: msg.type==='text' ? ('↪ '+ (msg.content||'')) : (msg.content||'Переслано'),
+            file_url: msg.file_url||null,
+            created_at: new Date().toISOString()
+          };
+          await sb.from('messages').insert(payload);
+          showToast('Переслано');
+        }catch(e){ showToast('Ошибка пересылки'); }
+      };
+    });
+  };
+
+  // --- Unread badge ---
+  window.updateUnreadBadge = function(){
+    try{
+      const u=JSON.parse(storage.getItem(UNREAD_KEY)||'{}');
+      let n=0; Object.values(u).forEach(v=>n+=Number(v)||0);
+      const b=document.getElementById('chats-tab-badge');
+      if(b){ if(n>0){ b.textContent=n>99?'99+':String(n); b.classList.add('show'); } else b.classList.remove('show'); }
+      // PWA badge
+      if(navigator.setAppBadge){ if(n>0) navigator.setAppBadge(n); else navigator.clearAppBadge?.(); }
+    }catch(e){}
+  };
+  // hook render contacts
+  const _rc = typeof renderContactsAndGroups==='function' ? renderContactsAndGroups : null;
+  if(_rc){
+    renderContactsAndGroups = function(){
+      const r=_rc.apply(this, arguments);
+      try{
+        // draft + mute markers
+        const drafts=JSON.parse(storage.getItem('sl_drafts')||'{}');
+        const muted=JSON.parse(storage.getItem(MUTE_KEY)||'{}');
+        document.querySelectorAll('#contacts-list .contact, #contacts-list .sw-front').forEach(row=>{
+          const id=row.dataset.id||row.closest('[data-id]')?.dataset.id;
+          if(!id) return;
+          const sub=row.querySelector('.contact-sub');
+          if(sub && drafts[id] && String(drafts[id]).trim()){
+            sub.textContent='Черновик: '+String(drafts[id]).slice(0,40);
+            sub.classList.add('contact-draft');
+          }
+          const mu=muted[id];
+          if(mu===-1||(mu&&mu>Date.now())) row.classList.add('contact-muted');
+        });
+        updateUnreadBadge();
+      }catch(e){}
+      return r;
+    };
+  }
+
+  // --- Push notifications (browser) ---
+  window.requestPushPermission = function(){
+    if(!('Notification' in window)) return;
+    if(Notification.permission==='default'){
+      Notification.requestPermission().catch(()=>{});
+    }
+  };
+  window.notifyNewMessage = function(title, body){
+    try{
+      if(!('Notification' in window) || Notification.permission!=='granted') return;
+      // skip if muted
+      // skip if tab focused and in that chat
+      if(!document.hidden && document.body.classList.contains('in-chat')) return;
+      const n=new Notification(title||'Signal Line', { body: body||'Новое сообщение', icon: undefined, tag:'sl-msg' });
+      setTimeout(()=>n.close(), 5000);
+    }catch(e){}
+  };
+
+  // devices list
+  document.getElementById('settings-devices')?.addEventListener('click', async ()=>{
+    let html='<div style="padding:8px 0">';
+    html+='<div style="font-size:13px;color:var(--muted);margin-bottom:12px">Текущая сессия на этом устройстве.</div>';
+    html+=`<div class="settings-item" style="padding-left:0"><span class="item-text">${navigator.userAgent.slice(0,60)}…</span></div>`;
+    html+='<div class="settings-item danger" id="dev-logout-others" style="padding-left:0;margin-top:12px"><span class="item-text">Выйти на этом устройстве</span></div>';
+    html+='</div>';
+    if(typeof openSettingsSub==='function'){ /* skip */ }
+    // simple modal
+    const ov=document.createElement('div');
+    ov.className='modal-overlay';
+    ov.innerHTML=`<div class="modal" style="max-width:400px"><h3 style="margin:0 0 12px">Устройства</h3>${html}<button class="btn-primary" id="dev-close" style="margin-top:12px">Закрыть</button></div>`;
+    document.body.appendChild(ov);
+    ov.querySelector('#dev-close').onclick=()=>ov.remove();
+    ov.querySelector('#dev-logout-others')?.addEventListener('click', async ()=>{
+      try{ await sb.auth.signOut(); }catch(e){}
+      location.reload();
+    });
+    ov.addEventListener('click', e=>{ if(e.target===ov) ov.remove(); });
+  });
+
+  // notifications settings opens permission
+  document.getElementById('settings-notifications')?.addEventListener('click', ()=>{
+    requestPushPermission();
+    if(Notification?.permission==='granted') showToast('Уведомления разрешены');
+    else if(Notification?.permission==='denied') showToast('Уведомления запрещены в системе');
+    else showToast('Запросите разрешение в системном окне');
+  });
+
+  // initial badge
+  try{ updateUnreadBadge(); }catch(e){}
+})();
+
 </script>
 </body>
 </html>
