@@ -963,6 +963,38 @@ body.in-chat .bottom-tabs{height:0;overflow:hidden;padding:0;border:none}
 }
 .bd-splash-btn:active{opacity:.9}
 
+
+/* Avatar cropper */
+.av-crop-overlay{
+  position:fixed;inset:0;z-index:120000;background:rgba(0,0,0,.85);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px;
+}
+.av-crop-stage{
+  position:relative;width:min(92vw,360px);height:min(92vw,360px);
+  overflow:hidden;border-radius:16px;background:#111;touch-action:none;
+  cursor:grab;
+}
+.av-crop-stage:active{cursor:grabbing}
+.av-crop-stage img{
+  position:absolute;transform-origin:center center;
+  user-select:none;-webkit-user-drag:none;pointer-events:none;
+}
+.av-crop-mask{
+  position:absolute;inset:0;pointer-events:none;
+  background:radial-gradient(circle at center, transparent 36%, rgba(0,0,0,.62) 37%);
+  border-radius:16px;
+}
+.av-crop-hint{color:rgba(255,255,255,.75);font-size:13px;margin:12px 0 8px;text-align:center}
+.av-crop-actions{display:flex;gap:10px;width:min(92vw,360px)}
+.av-crop-actions button{flex:1;padding:14px;border:none;border-radius:14px;font-weight:700;font-size:15px;cursor:pointer}
+.av-crop-actions .cancel{background:rgba(255,255,255,.12);color:#fff}
+.av-crop-actions .ok{background:linear-gradient(135deg,var(--accent-a),var(--accent-b));color:#fff}
+.profile-av-stretch,.settings-av-stretch{
+  background-size:cover!important;
+  background-position:center!important;
+  background-repeat:no-repeat!important;
+}
+
 </style>
 </head>
 <body oncontextmenu="return false;">
@@ -1404,19 +1436,7 @@ function updateAllUIs(){
     }
     const sav=document.getElementById('settings-avatar');
     if(sav){ sav.style.display='flex'; sav.style.visibility='visible'; }
-    const stretch=document.getElementById('settings-av-stretch');
-    if(stretch){
-      stretch.innerHTML='';
-      if(myProfile.avatar_url && !(typeof myProfile.avatar_url==='string' && myProfile.avatar_url.startsWith('data:video'))){
-        stretch.style.backgroundImage=`url(${myProfile.avatar_url})`;
-        stretch.style.background='';
-        stretch.textContent='';
-      } else {
-        stretch.style.backgroundImage='';
-        stretch.style.background=col||'#4C7CF3';
-        stretch.textContent=ch;
-      }
-    }
+    applyStretchBg(document.getElementById('settings-av-stretch'), myProfile.avatar_url, col, ch);
   }catch(e){ console.warn('updateAllUIs', e); }
 }
 function isVideoDataUrl(u){ return typeof u==='string' && u.startsWith('data:video'); }
@@ -2678,22 +2698,130 @@ document.getElementById('settings-edit-profile').onclick=()=>{
   };
   document.getElementById('ecover').onclick=()=>{ pickCoverImage(); };
 };
+
+function applyStretchBg(el, url, color, ch){
+  if(!el) return;
+  el.innerHTML='';
+  if(url && typeof url==='string' && !url.startsWith('data:video')){
+    el.style.backgroundColor='transparent';
+    el.style.backgroundImage='url("'+url.replace(/"/g,'')+'")';
+    el.style.backgroundSize='cover';
+    el.style.backgroundPosition='center';
+    el.style.backgroundRepeat='no-repeat';
+    el.textContent='';
+  } else {
+    el.style.backgroundImage='none';
+    el.style.backgroundColor=color||'#4C7CF3';
+    el.textContent=ch||'?';
+  }
+}
+function openAvatarCrop(dataUrl){
+  return new Promise((resolve)=>{
+    const ov=document.createElement('div');
+    ov.className='av-crop-overlay';
+    ov.innerHTML=`<div class="av-crop-hint">Перетащите фото — выберите область для иконки</div>
+      <div class="av-crop-stage" id="av-stage"><img id="av-img" alt=""><div class="av-crop-mask"></div></div>
+      <div class="av-crop-actions">
+        <button type="button" class="cancel" id="av-cancel">Отмена</button>
+        <button type="button" class="ok" id="av-ok">Готово</button>
+      </div>`;
+    document.body.appendChild(ov);
+    const stage=ov.querySelector('#av-stage');
+    const img=ov.querySelector('#av-img');
+    let scale=1, tx=0, ty=0, baseW=0, baseH=0;
+    let dragging=false, lx=0, ly=0;
+    img.onload=()=>{
+      const sw=stage.clientWidth, sh=stage.clientHeight;
+      const fit=Math.max(sw/img.naturalWidth, sh/img.naturalHeight);
+      scale=fit;
+      baseW=img.naturalWidth; baseH=img.naturalHeight;
+      tx=(sw - baseW*scale)/2;
+      ty=(sh - baseH*scale)/2;
+      apply();
+    };
+    img.src=dataUrl;
+    function apply(){
+      img.style.width=baseW+'px';
+      img.style.height=baseH+'px';
+      img.style.transform=`translate(${tx}px,${ty}px) scale(${scale})`;
+      img.style.transformOrigin='0 0';
+    }
+    function onDown(x,y){ dragging=true; lx=x; ly=y; }
+    function onMove(x,y){
+      if(!dragging) return;
+      tx+=x-lx; ty+=y-ly; lx=x; ly=y; apply();
+    }
+    function onUp(){ dragging=false; }
+    stage.addEventListener('mousedown', e=>{ onDown(e.clientX,e.clientY); e.preventDefault(); });
+    window.addEventListener('mousemove', e=>{ if(dragging) onMove(e.clientX,e.clientY); });
+    window.addEventListener('mouseup', onUp);
+    stage.addEventListener('touchstart', e=>{ const t=e.touches[0]; onDown(t.clientX,t.clientY); }, {passive:true});
+    stage.addEventListener('touchmove', e=>{ const t=e.touches[0]; onMove(t.clientX,t.clientY); e.preventDefault(); }, {passive:false});
+    stage.addEventListener('touchend', onUp);
+    // pinch zoom simple via wheel
+    stage.addEventListener('wheel', e=>{
+      e.preventDefault();
+      const delta=e.deltaY>0?0.95:1.05;
+      const sw=stage.clientWidth, sh=stage.clientHeight;
+      const cx=sw/2, cy=sh/2;
+      const newScale=Math.min(8, Math.max(0.2, scale*delta));
+      // zoom toward center
+      tx = cx - (cx - tx)*(newScale/scale);
+      ty = cy - (cy - ty)*(newScale/scale);
+      scale=newScale; apply();
+    }, {passive:false});
+    ov.querySelector('#av-cancel').onclick=()=>{ ov.remove(); resolve(null); };
+    ov.querySelector('#av-ok').onclick=()=>{
+      try{
+        const size=512;
+        const canvas=document.createElement('canvas');
+        canvas.width=size; canvas.height=size;
+        const ctx=canvas.getContext('2d');
+        // map stage coords to image
+        // image drawn at tx,ty with scale
+        // stage cell 0..sw maps to output
+        const sw=stage.clientWidth, sh=stage.clientHeight;
+        // For each output pixel, sample from image
+        // Image pixel = (stageX - tx)/scale
+        ctx.fillStyle='#111';
+        ctx.fillRect(0,0,size,size);
+        ctx.save();
+        // clip circle optional - for square avatar storage use square; circle via CSS
+        const scaleOut=size/sw;
+        ctx.setTransform(scale*scaleOut, 0, 0, scale*scaleOut, tx*scaleOut, ty*scaleOut);
+        ctx.drawImage(img, 0, 0);
+        ctx.restore();
+        const out=canvas.toDataURL('image/jpeg', 0.88);
+        ov.remove();
+        resolve(out);
+      }catch(err){
+        console.error(err);
+        ov.remove();
+        resolve(dataUrl);
+      }
+    };
+  });
+}
+
 document.getElementById('avatar-upload').onchange=async function(e){
   const f=e.target.files[0]; if(!f) return; e.target.value='';
   if(!f.type.startsWith('image/')){ showToast('Выберите изображение'); return; }
   try{
+    const raw = await new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(f); });
+    const cropped = await openAvatarCrop(raw);
+    if(!cropped) return;
     showLoader();
-    let dataUrl;
-    if(typeof prepareMediaForUpload==='function'){
-      const prep=await prepareMediaForUpload(f, 'story');
-      if(!prep.ok){ showToast(prep.error||'Ошибка файла'); return; }
-      dataUrl=prep.dataUrl;
-    } else {
-      dataUrl = await new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(f); });
-      if(typeof compressImageDataUrl==='function') dataUrl = await compressImageDataUrl(dataUrl, 512, 0.72);
-    }
+    let dataUrl = cropped;
+    if(typeof compressImageDataUrl==='function') dataUrl = await compressImageDataUrl(cropped, 512, 0.85);
     myProfile.avatar_url = dataUrl;
     updateAllUIs();
+    // refresh open profile sheet stretch if any
+    document.querySelectorAll('#ps-av-stretch, #settings-av-stretch').forEach(el=>{
+      applyStretchBg(el, dataUrl, myProfile.color, (myProfile.username||'?')[0].toUpperCase());
+    });
+    document.querySelectorAll('#ps-av').forEach(el=>{
+      renderAvatarInto(el, dataUrl, (myProfile.username||'?')[0].toUpperCase(), myProfile.color);
+    });
     try{
       const {error}=await sb.from('profiles').update({avatar_url:dataUrl}).eq('id', myProfile.id);
       if(error) showToast(friendlyError(error));
@@ -5694,19 +5822,7 @@ async function openFullProfile(profileLike){
     big.style.height='112px';
   }
   // stretched full-bleed avatar (shown on scroll)
-  const stretch=sheet.querySelector('#ps-av-stretch');
-  if(stretch){
-    stretch.innerHTML='';
-    if(p.avatar_url && !(typeof p.avatar_url==='string' && p.avatar_url.startsWith('data:video'))){
-      stretch.style.backgroundImage=`url(${p.avatar_url})`;
-      stretch.style.background='';
-      stretch.textContent='';
-    } else {
-      stretch.style.backgroundImage='';
-      stretch.style.background=p.color||colorFor(p.id)||'#4C7CF3';
-      stretch.textContent=(p.username||'?')[0].toUpperCase();
-    }
-  }
+  applyStretchBg(sheet.querySelector('#ps-av-stretch'), p.avatar_url, p.color||colorFor(p.id), (p.username||'?')[0].toUpperCase());
   const onEl=sheet.querySelector('#ps-online');
   if(onEl) onEl.textContent = onlineUsers.has(p.id) ? (currentLang==='en'?'online':'в сети') : (currentLang==='en'?'offline':'не в сети');
   sheet.querySelector('#ps-back').onclick=()=>sheet.remove();
