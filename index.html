@@ -39,9 +39,13 @@ input,textarea{user-select:text!important;-webkit-user-select:text!important}
 .auth-msg{font-size:13px;margin-top:14px;min-height:18px;color:var(--danger);text-align:center}
 #app-screen{display:none;flex:1;height:100%;flex-direction:column;overflow:hidden}
 .app-pages{flex:1;overflow:hidden;position:relative}
-.app-page{position:absolute;inset:0;display:none;flex-direction:column;overflow:hidden}
-.app-page.settings-page{display:block!important;overflow-y:auto!important;overflow-x:hidden!important;-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain;padding-bottom:calc(72px + var(--safe-bottom))}
-.app-page.active{display:flex}
+.app-page{position:absolute;inset:0;display:none!important;flex-direction:column;overflow:hidden;visibility:hidden;pointer-events:none;z-index:0}
+.app-page.active{display:flex!important;visibility:visible;pointer-events:auto;z-index:2}
+.app-page.settings-page{overflow-y:auto!important;overflow-x:hidden!important;-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain;padding-bottom:calc(72px + var(--safe-bottom))}
+.app-page.settings-page.active{display:block!important;visibility:visible;pointer-events:auto;z-index:2}
+#page-calls.active{display:flex!important;flex-direction:column;visibility:visible;pointer-events:auto;z-index:2;background:var(--bg)}
+#page-chats.active{background:var(--bg)}
+#page-settings.active{background:var(--bg)}
 .chats-layout{display:flex;flex:1;overflow:hidden}
 .sidebar{background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;width:320px;min-width:320px;height:100%;transition:transform .3s}
 .sidebar-scroll{flex:1;min-height:0;overflow-y:auto!important;overflow-x:hidden;display:block;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;touch-action:pan-y}
@@ -294,8 +298,7 @@ body.theme-light{
 .calls-page-head{padding:16px;background:var(--panel);border-bottom:1px solid var(--line);font-size:17px;font-weight:700;display:flex;align-items:center;justify-content:space-between}
 .calls-page-head .calls-clear{font-size:12px;font-weight:600;color:var(--muted);background:none;border:none;cursor:pointer;padding:6px 10px;border-radius:8px}
 .calls-page-head .calls-clear:hover{color:var(--danger);background:var(--panel-hover)}
-#page-calls{overflow:hidden;display:none;flex-direction:column}
-#page-calls.active{display:flex!important}
+#page-calls{overflow:hidden;flex-direction:column;background:var(--bg)}
 #calls-list{flex:1;overflow-y:auto;padding:6px 8px 24px;-webkit-overflow-scrolling:touch}
 .call-row{display:flex;align-items:center;gap:12px;padding:12px 10px;border-radius:14px;cursor:pointer;transition:background .15s}
 .call-row:hover,.call-row:active{background:var(--panel-hover)}
@@ -871,7 +874,10 @@ body.theme-light,body{transition:background-color .35s ease}
     </div>
     <div class="app-page" id="page-calls">
       <div class="calls-page-head">
-        <span data-i18n="calls_title">Звонки</span>
+        <div>
+          <div data-i18n="calls_title" style="font-size:17px;font-weight:700">Звонки</div>
+          <div style="font-size:12px;color:var(--muted);font-weight:500;margin-top:2px">Недавние звонки</div>
+        </div>
         <button type="button" class="calls-clear" id="calls-clear-btn">Очистить</button>
       </div>
       <div id="calls-list"><div class="empty-state" data-i18n="no_calls">Нет звонков</div></div>
