@@ -290,6 +290,28 @@ body.theme-light{
 
 .settings-item .toggle-switch{margin-left:auto}
 
+/* ===== Recent calls ===== */
+.calls-page-head{padding:16px;background:var(--panel);border-bottom:1px solid var(--line);font-size:17px;font-weight:700;display:flex;align-items:center;justify-content:space-between}
+.calls-page-head .calls-clear{font-size:12px;font-weight:600;color:var(--muted);background:none;border:none;cursor:pointer;padding:6px 10px;border-radius:8px}
+.calls-page-head .calls-clear:hover{color:var(--danger);background:var(--panel-hover)}
+#page-calls{overflow:hidden;display:none;flex-direction:column}
+#page-calls.active{display:flex!important}
+#calls-list{flex:1;overflow-y:auto;padding:6px 8px 24px;-webkit-overflow-scrolling:touch}
+.call-row{display:flex;align-items:center;gap:12px;padding:12px 10px;border-radius:14px;cursor:pointer;transition:background .15s}
+.call-row:hover,.call-row:active{background:var(--panel-hover)}
+.call-row .avatar{width:48px;height:48px;border-radius:50%;flex-shrink:0;background-size:cover;background-position:center;display:flex;align-items:center;justify-content:center;font-weight:700;color:#fff;font-size:18px}
+.call-row-info{flex:1;min-width:0}
+.call-row-name{font-size:15px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.call-row-meta{font-size:12px;color:var(--muted);margin-top:3px;display:flex;align-items:center;gap:6px}
+.call-row-meta .dir-icon{width:14px;height:14px;flex-shrink:0}
+.call-row-meta.missed{color:var(--danger)}
+.call-row-meta.out{color:var(--mint)}
+.call-row-time{font-size:11px;color:var(--muted);flex-shrink:0;white-space:nowrap}
+.call-row-actions{display:flex;gap:4px;flex-shrink:0}
+.call-row-actions .icon-btn{width:36px;height:36px;border-radius:10px}
+.calls-section-title{padding:14px 12px 6px;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;font-weight:600}
+
+
 /* ===== Beta features ===== */
 body.beta-compact .contact{padding:6px 10px;border-radius:10px;gap:8px}
 body.beta-compact .contact .avatar{width:34px;height:34px;font-size:13px}
@@ -848,8 +870,11 @@ body.theme-light,body{transition:background-color .35s ease}
       </div>
     </div>
     <div class="app-page" id="page-calls">
-      <div style="padding:16px;background:var(--panel);border-bottom:1px solid var(--line);font-size:17px;font-weight:700" data-i18n="calls_title">Звонки</div>
-      <div id="calls-list" style="flex:1;overflow-y:auto;padding:8px"><div class="empty-state" data-i18n="no_calls">Нет звонков</div></div>
+      <div class="calls-page-head">
+        <span data-i18n="calls_title">Звонки</span>
+        <button type="button" class="calls-clear" id="calls-clear-btn">Очистить</button>
+      </div>
+      <div id="calls-list"><div class="empty-state" data-i18n="no_calls">Нет звонков</div></div>
     </div>
     <div class="app-page settings-page" id="page-settings">
       <div class="settings-profile">
@@ -1019,6 +1044,7 @@ function switchPage(page){
   document.getElementById('page-'+page)?.classList.add('active');
   document.querySelectorAll('.bottom-tab').forEach(t=>t.classList.remove('active'));
   document.querySelector(`.bottom-tab[data-tab="${page}"]`)?.classList.add('active');
+  if(page==='calls' && typeof renderCallsList==='function') renderCallsList();
 }
 function updateAllUIs(){
   if(!myProfile) return;
@@ -3944,7 +3970,8 @@ function wirePeerConnection(peerId, withVideo){
 async function startCall(partner, withVideo){
   if(!partner||partner.isBot||partner.id===myProfile.id) return;
   if(currentCall){ showToast('Уже в звонке'); return; }
-  currentCall={peerId:partner.id, peerName:partner.first_name||partner.username, peerColor:partner.color||colorFor(partner.id), peerAvatar:partner.avatar_url, video:withVideo, state:'calling'};
+  currentCall={peerId:partner.id, peerName:partner.first_name||partner.username, peerColor:partner.color||colorFor(partner.id), peerAvatar:partner.avatar_url, video:withVideo, state:'calling', _dir:'out'};
+  _callStartedAt=Date.now();
   showCallUI();
   document.getElementById('call-avatar-big').style.display='flex';
   try{
@@ -3976,7 +4003,8 @@ let pendingOffer=null;
 function handleIncomingOffer(payload){
   if(currentCall){ sendSignal(payload.from,'hangup',{}); return; }
   pendingOffer=payload;
-  currentCall={peerId:payload.from, peerName:payload.name||'Пользователь', peerColor:payload.color||colorFor(payload.from), peerAvatar:payload.avatar, video:payload.video, state:'incoming'};
+  currentCall={peerId:payload.from, peerName:payload.name||'Пользователь', peerColor:payload.color||colorFor(payload.from), peerAvatar:payload.avatar, video:payload.video, state:'incoming', _dir:'in'};
+  _callStartedAt=Date.now();
   showCallUI();
   document.getElementById('call-avatar-big').style.display='flex';
   document.getElementById('call-status-text').textContent=payload.video?'Входящий видеозвонок':'Входящий звонок';
@@ -4002,7 +4030,8 @@ async function acceptCall(){
     const answer=await pc.createAnswer();
     await pc.setLocalDescription(answer);
     sendSignal(pendingOffer.from,'answer',{from:myProfile.id, sdp: pc.localDescription});
-    currentCall.state='active';
+    currentCall.state='active'; currentCall._dir='in';
+    _callStartedAt=Date.now();
   try{ stopRingtone(); }catch(e){}
     renderCallActions();
   }catch(e){ console.error(e); showToast('Ошибка ответа на звонок'); endCall(false); }
@@ -4073,7 +4102,165 @@ function renderCallActions(){
 }
 /* notifyIncomingCall defined above */
 
+
+// ========== RECENT CALLS ==========
+const CALL_HIST_KEY='sl_call_history';
+function getCallHistory(){
+  try{ return JSON.parse(storage.getItem(CALL_HIST_KEY)||'[]'); }catch(e){ return []; }
+}
+function setCallHistory(arr){
+  storage.setItem(CALL_HIST_KEY, JSON.stringify(arr.slice(0,100)));
+}
+function pushCallHistory(entry){
+  if(!entry||!entry.peerId) return;
+  const arr=getCallHistory();
+  arr.unshift({
+    id:'c_'+Date.now()+'_'+Math.random().toString(36).slice(2,7),
+    peerId:entry.peerId,
+    name:entry.name||'Пользователь',
+    avatar:entry.avatar||null,
+    color:entry.color||null,
+    video:!!entry.video,
+    dir:entry.dir||'out', // out | in | missed
+    at:entry.at||Date.now(),
+    duration:entry.duration||0
+  });
+  setCallHistory(arr);
+  renderCallsList();
+}
+function formatCallTime(ts){
+  const d=new Date(ts), now=new Date();
+  const sameDay=d.toDateString()===now.toDateString();
+  const yest=new Date(now); yest.setDate(now.getDate()-1);
+  const time=d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+  if(sameDay) return time;
+  if(d.toDateString()===yest.toDateString()) return (currentLang==='en'?'Yesterday ':'Вчера ')+time;
+  return d.toLocaleDateString([], {day:'2-digit', month:'2-digit'})+' '+time;
+}
+function formatCallDuration(sec){
+  if(!sec||sec<1) return '';
+  const m=Math.floor(sec/60), s=sec%60;
+  return m?`${m} мин ${s} с`:`${s} с`;
+}
+function renderCallsList(){
+  const list=document.getElementById('calls-list'); if(!list) return;
+  const arr=getCallHistory();
+  if(!arr.length){
+    list.innerHTML=`<div class="empty-state">${currentLang==='en'?'No recent calls':'Нет недавних звонков'}</div>`;
+    return;
+  }
+  const dirLabel={
+    out: currentLang==='en'?'Outgoing':'Исходящий',
+    in: currentLang==='en'?'Incoming':'Входящий',
+    missed: currentLang==='en'?'Missed':'Пропущенный'
+  };
+  const dirSvg={
+    out:'<svg class="dir-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M7 17L17 7M7 7h10v10"/></svg>',
+    in:'<svg class="dir-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17 7L7 17M17 17H7V7"/></svg>',
+    missed:'<svg class="dir-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17 7L7 17M17 17H7V7"/><path d="M3 3l18 18"/></svg>'
+  };
+  list.innerHTML=`<div class="calls-section-title">${currentLang==='en'?'Recent':'Недавние'}</div>`+arr.map(c=>{
+    const metaClass=c.dir==='missed'?'missed':(c.dir==='out'?'out':'');
+    const typeLab=c.video?(currentLang==='en'?'Video':'Видео'):(currentLang==='en'?'Audio':'Аудио');
+    const dur=formatCallDuration(c.duration);
+    const sub=`${dirSvg[c.dir]||dirSvg.out}<span>${dirLabel[c.dir]||''} · ${typeLab}${dur?' · '+dur:''}</span>`;
+    const ch=(c.name||'?')[0].toUpperCase();
+    const col=c.color||'#4C7CF3';
+    const avStyle=c.avatar?`background-image:url(${c.avatar})`:`background:${col}`;
+    return `<div class="call-row" data-cid="${c.id}" data-peer="${c.peerId}">
+      <div class="avatar" style="${avStyle}">${c.avatar?'':ch}</div>
+      <div class="call-row-info">
+        <div class="call-row-name">${escapeHtml(c.name||'')}</div>
+        <div class="call-row-meta ${metaClass}">${sub}</div>
+      </div>
+      <div class="call-row-time">${formatCallTime(c.at)}</div>
+      <div class="call-row-actions">
+        <button type="button" class="icon-btn" data-act="audio" title="Звонок"><svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2A19.8 19.8 0 0111.19 18a19.5 19.5 0 01-6-6A19.8 19.8 0 012.12 3.38 2 2 0 014.11 2h3a2 2 0 012 1.72c.13.96.36 1.9.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0122 16.92z"/></svg></button>
+        <button type="button" class="icon-btn" data-act="video" title="Видео"><svg viewBox="0 0 24 24"><rect x="2" y="6" width="14" height="12" rx="2"/><path d="M16 10l6-4v12l-6-4"/></svg></button>
+      </div>
+    </div>`;
+  }).join('');
+  list.querySelectorAll('.call-row').forEach(row=>{
+    const peerId=row.dataset.peer;
+    const entry=arr.find(x=>x.id===row.dataset.cid);
+    row.querySelector('[data-act="audio"]').onclick=async e=>{
+      e.stopPropagation();
+      await callBackPeer(peerId, entry, false);
+    };
+    row.querySelector('[data-act="video"]').onclick=async e=>{
+      e.stopPropagation();
+      await callBackPeer(peerId, entry, true);
+    };
+    row.onclick=async()=>{
+      await openPeerFromCall(peerId, entry);
+    };
+  });
+}
+async function openPeerFromCall(peerId, entry){
+  let p=contacts.find(c=>c.id===peerId);
+  if(!p){
+    try{
+      const {data}=await sb.from('profiles').select('*').eq('id',peerId).maybeSingle();
+      if(data) p=data;
+    }catch(e){}
+  }
+  if(!p && entry){
+    p={id:peerId, username:entry.name, first_name:entry.name, avatar_url:entry.avatar, color:entry.color};
+  }
+  if(!p){ showToast(currentLang==='en'?'User not found':'Пользователь не найден'); return; }
+  ensureInContacts(p);
+  switchPage('chats');
+  openChat(p);
+}
+async function callBackPeer(peerId, entry, video){
+  let p=contacts.find(c=>c.id===peerId);
+  if(!p){
+    try{
+      const {data}=await sb.from('profiles').select('*').eq('id',peerId).maybeSingle();
+      if(data) p=data;
+    }catch(e){}
+  }
+  if(!p && entry){
+    p={id:peerId, username:entry.name, first_name:entry.name, avatar_url:entry.avatar, color:entry.color};
+  }
+  if(!p){ showToast(currentLang==='en'?'User not found':'Пользователь не найден'); return; }
+  ensureInContacts(p);
+  switchPage('chats');
+  await openChat(p);
+  startCall(p, !!video);
+}
+document.getElementById('calls-clear-btn')?.addEventListener('click', async()=>{
+  if(!(await customConfirm(currentLang==='en'?'Clear call history?':'Очистить историю звонков?'))) return;
+  setCallHistory([]);
+  renderCallsList();
+  showToast(currentLang==='en'?'Cleared':'Очищено');
+});
+
+// Track call start time for duration
+let _callStartedAt=0;
+
 function endCall(){
+  try{
+    if(currentCall && currentCall.peerId){
+      const state=currentCall.state;
+      let dir=currentCall._dir||'out';
+      if(state==='incoming') dir='missed';
+      else if(state==='calling') dir='out';
+      else if(state==='active') dir=currentCall._dir||'out';
+      const dur = _callStartedAt ? Math.max(0, Math.round((Date.now()-_callStartedAt)/1000)) : 0;
+      pushCallHistory({
+        peerId: currentCall.peerId,
+        name: currentCall.peerName,
+        avatar: currentCall.peerAvatar,
+        color: currentCall.peerColor,
+        video: !!currentCall.video,
+        dir: dir,
+        at: Date.now(),
+        duration: state==='active'?dur:0
+      });
+    }
+  }catch(e){}
+  _callStartedAt=0;
   try{ stopRingtone(); }catch(e){}
   try{ cleanupCallChannels(); }catch(e){}
   try{ pc?.close(); }catch(e){}
