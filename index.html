@@ -290,6 +290,22 @@ body.theme-light{
 
 .settings-item .toggle-switch{margin-left:auto}
 
+/* ===== Beta features ===== */
+body.beta-compact .contact{padding:6px 10px;border-radius:10px;gap:8px}
+body.beta-compact .contact .avatar{width:34px;height:34px;font-size:13px}
+body.beta-compact .contact-name{font-size:13px}
+body.beta-compact .contact-sub{font-size:11px;margin-top:1px}
+body.beta-compact .contact-time{font-size:10px}
+body.beta-compact .unread-badge{min-width:18px;height:18px;font-size:11px}
+body.beta-oled{--bg:#000000;--panel:#0A0A0A;--panel-hover:#141414;--line:#1F1F1F;--input-bg:#0A0A0A}
+body.beta-oled.theme-light{--bg:#000;--panel:#0A0A0A;--panel-hover:#141414;--line:#1F1F1F;--text:#E7ECF5;--muted:#7C8AA5;--input-bg:#0A0A0A}
+.beta-modal .beta-row{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--line)}
+.beta-modal .beta-row:last-child{border-bottom:none}
+.beta-modal .beta-row .beta-info{flex:1;min-width:0}
+.beta-modal .beta-row .beta-title{font-size:14px;font-weight:600}
+.beta-modal .beta-row .beta-desc{font-size:11px;color:var(--muted);margin-top:2px;line-height:1.35}
+
+
 /* ===== PIN keypad ===== */
 .pin-dot{width:14px;height:14px;border-radius:50%;border:2px solid var(--muted);display:inline-block}
 .pin-dot.filled{background:var(--accent-a);border-color:var(--accent-a)}
@@ -882,6 +898,10 @@ body.theme-light,body{transition:background-color .35s ease}
         <div class="settings-item" id="settings-gifts"><svg viewBox="0 0 24 24"><rect x="3" y="8" width="18" height="13" rx="1"/><path d="M12 8v13M3 12h18"/><path d="M12 8c-1.5 0-3-1-3-2.5S10 3 12 5c0-2 1.5-3.5 3-2.5S13.5 8 12 8z"/></svg><span class="item-text" data-i18n="it_gifts">Подарки</span></div>
       </div>
       <div class="settings-section">
+        <div class="settings-section-title">Эксперименты</div>
+        <div class="settings-item" id="settings-beta"><svg viewBox="0 0 24 24"><path d="M12 2v6M12 16v6M4.93 4.93l4.24 4.24M14.83 14.83l4.24 4.24M2 12h6M16 12h6M4.93 19.07l4.24-4.24M14.83 9.17l4.24-4.24"/><circle cx="12" cy="12" r="3"/></svg><span class="item-text">Бета-функции</span></div>
+      </div>
+      <div class="settings-section">
         <div class="settings-section-title" data-i18n="sec_logout">Выход</div>
         <div class="settings-item danger" id="settings-logout"><svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg><span class="item-text" data-i18n="it_logout">Выйти</span></div>
       </div>
@@ -1314,10 +1334,12 @@ function renderFolderTabs(){
 
 // ========== OPEN CHAT ==========
 async function openChat(partner){
+  if(typeof saveDraft==='function') saveDraft();
   checkPipOnLeave();
   activePartner=partner; activeGroup=null;
   document.getElementById('no-chat-state').style.display='none';
   document.getElementById('chat-active').style.display='flex';
+  setTimeout(()=>{ if(typeof loadDraft==='function') loadDraft(); }, 80);
   const isSelf=partner.id===myProfile.id;
   document.getElementById('chat-partner-name').innerHTML=(isSelf?t('it_favorites'):escapeHtml(partner.first_name?`${partner.first_name} ${partner.last_name||''}`:partner.username))+verifiedBadgeIf(partner.email);
   updatePartnerStatus();
@@ -1343,6 +1365,7 @@ async function openChat(partner){
 }
 async function openGroup(group){
   checkPipOnLeave();
+  if(typeof saveDraft==='function') saveDraft();
   activeGroup=group; activePartner=null;
   document.getElementById('no-chat-state').style.display='none';
   document.getElementById('chat-active').style.display='flex';
@@ -1752,8 +1775,18 @@ async function sendMessage(type='text', fileUrl=null, content=null){
     if(activeGroup) loadGroups(); else loadChats();
   }catch(e){ alert(friendlyError(e)); }
 }
+(function(){
+  const _betaWrapSend = sendMessage;
+  sendMessage = async function(){
+    const res = await _betaWrapSend.apply(this, arguments);
+    if(typeof haptic==='function') haptic(14);
+    if(typeof clearDraft==='function') clearDraft();
+    return res;
+  };
+})();
 sendBtn.onclick=()=>sendMessage();
-input.addEventListener('keydown', e=>{ if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); sendMessage(); } });
+input.addEventListener('keydown', e=>{ if(e.key==='Enter'&&!e.shiftKey){ if(typeof betaOn==='function'&&!betaOn('enterSend')) return; e.preventDefault(); sendMessage(); } });
+input.addEventListener('input', ()=>{ if(typeof saveDraft==='function') saveDraft(); });
 
 async function flushOfflineQueue(){
   const q=getOfflineQ(); if(!q.length||!navigator.onLine) return;
@@ -2227,6 +2260,96 @@ document.getElementById('settings-cover-edit')?.addEventListener('click', pickCo
     else if(e.deltaY > 0) page.classList.remove('is-stretch'); // wheel down
   }, {passive:true});
 })();
+
+// ========== BETA FEATURES ==========
+const BETA_KEY='sl_beta';
+const BETA_DEFAULTS={compact:false, enterSend:true, drafts:true, doubleTapHeart:true, oled:false, haptics:false};
+function getBeta(){
+  try{ return Object.assign({}, BETA_DEFAULTS, JSON.parse(storage.getItem(BETA_KEY)||'{}')); }
+  catch(e){ return Object.assign({}, BETA_DEFAULTS); }
+}
+function setBeta(o){ storage.setItem(BETA_KEY, JSON.stringify(o)); applyBetaFeatures(); }
+function betaOn(key){ return !!getBeta()[key]; }
+function haptic(ms){
+  if(!betaOn('haptics')) return;
+  try{ if(navigator.vibrate) navigator.vibrate(ms||12); }catch(e){}
+}
+function applyBetaFeatures(){
+  const b=getBeta();
+  document.body.classList.toggle('beta-compact', !!b.compact);
+  document.body.classList.toggle('beta-oled', !!b.oled);
+}
+applyBetaFeatures();
+
+document.getElementById('settings-beta')?.addEventListener('click', ()=>{
+  const b=getBeta();
+  const items=[
+    {key:'compact', title:'Компактные чаты', desc:'Меньше отступы в списке диалогов'},
+    {key:'enterSend', title:'Enter = отправить', desc:'Enter отправляет, Shift+Enter — новая строка'},
+    {key:'drafts', title:'Черновики', desc:'Текст в поле сохраняется при смене чата'},
+    {key:'doubleTapHeart', title:'Двойной тап = ❤️', desc:'Двойное нажатие на сообщение ставит реакцию'},
+    {key:'oled', title:'Тема OLED', desc:'Почти чёрный фон для AMOLED'},
+    {key:'haptics', title:'Хаптика', desc:'Вибрация при отправке и важных действиях'},
+  ];
+  const ov=document.createElement('div'); ov.className='modal-overlay';
+  ov.innerHTML=`<div class="modal beta-modal"><button class="close-x" id="beta-x">×</button>
+    <h3>Бета-функции</h3>
+    <p style="font-size:12px;color:var(--muted);margin:-8px 0 12px">Экспериментальные опции. Можно включать и выключать в любой момент.</p>
+    <div id="beta-list">${items.map(it=>`
+      <div class="beta-row" data-key="${it.key}">
+        <div class="beta-info"><div class="beta-title">${it.title}</div><div class="beta-desc">${it.desc}</div></div>
+        <div class="toggle-switch ${b[it.key]?'on':''}" data-beta="${it.key}"></div>
+      </div>`).join('')}
+    </div>
+  </div>`;
+  document.body.appendChild(ov);
+  ov.querySelector('#beta-x').onclick=()=>ov.remove();
+  ov.querySelectorAll('[data-beta]').forEach(el=>{
+    el.onclick=()=>{
+      const key=el.dataset.beta;
+      const cur=getBeta();
+      cur[key]=!cur[key];
+      setBeta(cur);
+      el.classList.toggle('on', cur[key]);
+      haptic(8);
+      if(key==='oled') showToast(cur[key]?'OLED включён':'OLED выключен');
+      if(key==='compact') showToast(cur[key]?'Компактный список':'Обычный список');
+    };
+  });
+});
+
+// Drafts
+const DRAFTS_KEY='sl_drafts';
+function draftKey(){ return activeGroup?.id || activePartner?.id || ''; }
+function saveDraft(){
+  if(!betaOn('drafts')) return;
+  const k=draftKey(); if(!k) return;
+  const val=(document.getElementById('message-input')?.value||'');
+  try{
+    const all=JSON.parse(storage.getItem(DRAFTS_KEY)||'{}');
+    if(val) all[k]=val; else delete all[k];
+    storage.setItem(DRAFTS_KEY, JSON.stringify(all));
+  }catch(e){}
+}
+function loadDraft(){
+  const input=document.getElementById('message-input'); if(!input) return;
+  if(!betaOn('drafts')) return;
+  const k=draftKey(); if(!k) return;
+  try{
+    const all=JSON.parse(storage.getItem(DRAFTS_KEY)||'{}');
+    if(all[k]){ input.value=all[k]; input.dispatchEvent(new Event('input')); document.getElementById('send-btn')?.classList.add('visible'); }
+  }catch(e){}
+}
+function clearDraft(){
+  const k=draftKey(); if(!k) return;
+  try{
+    const all=JSON.parse(storage.getItem(DRAFTS_KEY)||'{}');
+    delete all[k];
+    storage.setItem(DRAFTS_KEY, JSON.stringify(all));
+  }catch(e){}
+}
+
+
 document.getElementById('settings-logout').onclick=async()=>{ if(await customConfirm(t('you_sure_logout'))){ try{ await sb.auth.signOut(); }catch(e){} location.reload(); } };
 
 // ========== REALTIME ==========
@@ -3137,17 +3260,20 @@ function openReactionPicker(msg, x, y){
 function attachDoubleTapReaction(row, msg){
   const bubble=row.querySelector('.bubble'); if(!bubble) return;
   let lastTap=0;
+  const doHeart=(clientX,clientY)=>{
+    if(typeof betaOn==='function' && !betaOn('doubleTapHeart')) return;
+    toggleReaction(msg, '❤️');
+    if(typeof haptic==='function') haptic(10);
+    const f=document.createElement('div'); f.className='reaction-float'; f.textContent='❤️';
+    f.style.left=clientX+'px'; f.style.top=clientY+'px';
+    document.body.appendChild(f); setTimeout(()=>f.remove(),800);
+  };
   const fire=(clientX,clientY)=>{
     const now=Date.now();
-    if(now-lastTap<320){
-      toggleReaction(msg, '❤️');
-      const f=document.createElement('div'); f.className='reaction-float'; f.textContent='❤️';
-      f.style.left=clientX+'px'; f.style.top=clientY+'px';
-      document.body.appendChild(f); setTimeout(()=>f.remove(),800);
-      lastTap=0;
-    } else lastTap=now;
+    if(now-lastTap<320){ doHeart(clientX,clientY); lastTap=0; }
+    else lastTap=now;
   };
-  bubble.addEventListener('dblclick', e=>{ toggleReaction(msg,'❤️'); const f=document.createElement('div'); f.className='reaction-float'; f.textContent='❤️'; f.style.left=e.clientX+'px'; f.style.top=e.clientY+'px'; document.body.appendChild(f); setTimeout(()=>f.remove(),800); });
+  bubble.addEventListener('dblclick', e=>{ doHeart(e.clientX,e.clientY); });
   bubble.addEventListener('touchend', e=>{ const t=e.changedTouches[0]; fire(t.clientX,t.clientY); }, {passive:true});
 }
 // update long-press menu to open the emoji picker anchored at press point
