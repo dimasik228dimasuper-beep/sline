@@ -1225,10 +1225,17 @@ html.sl-ready.sl-booting::before{display:none!important}
   <div class="call-ring-pulse" id="call-pulse"></div>
   <video class="call-remote-video" id="call-remote-video" autoplay playsinline webkit-playsinline></video>
   <video class="call-local-video" id="call-local-video" autoplay playsinline muted></video>
-  <div class="call-avatar-big" id="call-avatar-big"></div>
-  <div class="call-name" id="call-name"></div>
-  <div class="call-status-text" id="call-status-text"></div>
-  <div class="call-actions" id="call-actions"></div>
+  <div class="call-ui-center">
+    <div class="call-avatar-big" id="call-avatar-big"></div>
+    <div class="call-name" id="call-name"></div>
+    <div class="call-status-text" id="call-status-text"></div>
+  </div>
+  <div class="call-actions" id="call-actions">
+    <button type="button" class="call-btn-round decline" id="cc-decline" style="display:none" aria-label="Decline"><svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+    <button type="button" class="call-btn-round accept" id="cc-accept" style="display:none" aria-label="Accept"><svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2A19.8 19.8 0 0111.19 18a19.5 19.5 0 01-6-6A19.8 19.8 0 012.12 3.38 2 2 0 014.11 2h3a2 2 0 012 1.72c.13.96.36 1.9.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0122 16.92z"/></svg></button>
+    <button type="button" class="call-btn-round mute" id="cc-mute" style="display:none" aria-label="Mute"><svg viewBox="0 0 24 24"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4"/></svg></button>
+    <button type="button" class="call-btn-round decline" id="cc-hangup" style="display:none" aria-label="Hang up"><svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+  </div>
 </div>
 <div class="fmt-toolbar" id="fmt-toolbar">
   <button class="fmt-btn" data-fmt="b" style="font-weight:900">B</button>
@@ -4609,60 +4616,56 @@ function setupLocalVideo(){
   }
 }
 function showCallUI(){
-  document.getElementById('call-overlay').classList.add('show');
-  document.getElementById('call-avatar-big').style.background=currentCall.peerColor;
-  document.getElementById('call-avatar-big').textContent=(currentCall.peerName||'?')[0].toUpperCase();
-  document.getElementById('call-name').textContent=currentCall.peerName||'';
+  const ov=document.getElementById('call-overlay');
+  if(ov){ ov.classList.add('show'); ov.style.display='flex'; ov.style.zIndex='99999'; }
+  try{ wireCallButtonsOnce(); }catch(e){}
+  const av=document.getElementById('call-avatar-big');
+  if(av && currentCall){
+    if(currentCall.peerAvatar){ av.style.backgroundImage='url('+currentCall.peerAvatar+')'; av.textContent=''; }
+    else { av.style.backgroundImage=''; av.style.background=currentCall.peerColor||'#4C7CF3'; av.textContent=(currentCall.peerName||'?')[0].toUpperCase(); }
+  }
+  const nm=document.getElementById('call-name');
+  if(nm && currentCall) nm.textContent=currentCall.peerName||'';
   renderCallActions();
 }
 function renderCallActions(){
-  const wrap=document.getElementById('call-actions');
-  if(!wrap || !currentCall) return;
-  wrap.style.pointerEvents='auto';
-  wrap.style.zIndex='50';
-  if(currentCall.state==='incoming'){
-    wrap.innerHTML=`<button type="button" class="call-btn-round decline" id="cc-decline" aria-label="Decline"><svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
-      <button type="button" class="call-btn-round accept" id="cc-accept" aria-label="Accept"><svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2A19.8 19.8 0 0111.19 18a19.5 19.5 0 01-6-6A19.8 19.8 0 012.12 3.38 2 2 0 014.11 2h3a2 2 0 012 1.72c.13.96.36 1.9.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0122 16.92z"/></svg></button>`;
+  const ids=['cc-decline','cc-accept','cc-mute','cc-hangup','cc-screen'];
+  ids.forEach(id=>{ const el=document.getElementById(id); if(el) el.style.display='none'; });
+  if(!currentCall) return;
+  const incoming = currentCall.state==='incoming';
+  const set=(id,on)=>{ const el=document.getElementById(id); if(el) el.style.display=on?'flex':'none'; };
+  if(incoming){
+    set('cc-decline', true);
+    set('cc-accept', true);
   } else {
-    wrap.innerHTML=`<button type="button" class="call-btn-round mute" id="cc-mute" aria-label="Mute"><svg viewBox="0 0 24 24"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4"/></svg></button>
-      <button type="button" class="call-btn-round decline" id="cc-hangup" aria-label="Hang up"><svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg></button>`;
+    set('cc-mute', true);
+    set('cc-hangup', true);
   }
-  // bind with both click and touchend for mobile reliability
-  const bind=(id, fn)=>{
+}
+function wireCallButtonsOnce(){
+  if(window._slCallBtnsWired) return;
+  window._slCallBtnsWired = true;
+  const on = (id, fn)=>{
     const el=document.getElementById(id); if(!el) return;
-    el.onclick=(e)=>{ e.preventDefault(); e.stopPropagation(); fn(e); };
-    el.ontouchend=(e)=>{ e.preventDefault(); e.stopPropagation(); fn(e); };
+    const handler=(e)=>{ e.preventDefault(); e.stopPropagation(); try{ fn(); }catch(err){ console.error(err); } };
+    el.addEventListener('click', handler, true);
+    el.addEventListener('touchend', handler, true);
   };
-  bind('cc-decline', ()=>declineCall());
-  bind('cc-accept', ()=>acceptCall());
-  bind('cc-hangup', ()=>{ if(currentCall) sendSignal(currentCall.peerId,'hangup',{}); endCall(false); });
-  bind('cc-mute', function(){
+  on('cc-accept', ()=>{ if(typeof acceptCall==='function') acceptCall(); });
+  on('cc-decline', ()=>{ if(typeof declineCall==='function') declineCall(); });
+  on('cc-hangup', ()=>{
+    try{ if(currentCall) sendSignal(currentCall.peerId,'hangup',{}); }catch(e){}
+    if(typeof endCall==='function') endCall(false);
+  });
+  on('cc-mute', ()=>{
     if(!localStream) return;
     const track=localStream.getAudioTracks()[0]; if(!track) return;
     track.enabled=!track.enabled;
-    const b=document.getElementById('cc-mute');
-    if(b) b.classList.toggle('on', !track.enabled);
+    document.getElementById('cc-mute')?.classList.toggle('on', !track.enabled);
   });
 }
-// Event delegation backup on overlay
-(function(){
-  const ov=document.getElementById('call-overlay');
-  if(!ov || ov._slCallBound) return;
-  ov._slCallBound=true;
-  ov.addEventListener('click', (e)=>{
-    const btn=e.target.closest('.call-btn-round');
-    if(!btn) return;
-    e.preventDefault(); e.stopPropagation();
-    if(btn.id==='cc-accept') acceptCall();
-    else if(btn.id==='cc-decline') declineCall();
-    else if(btn.id==='cc-hangup'){ if(currentCall) sendSignal(currentCall.peerId,'hangup',{}); endCall(false); }
-    else if(btn.id==='cc-mute'){
-      if(!localStream) return;
-      const track=localStream.getAudioTracks()[0]; if(!track) return;
-      track.enabled=!track.enabled; btn.classList.toggle('on', !track.enabled);
-    }
-  }, true);
-})();
+wireCallButtonsOnce();
+
 /* notifyIncomingCall defined above */
 
 
@@ -5386,22 +5389,26 @@ async function toggleScreenShare(){
   if(btn) btn.classList.add('on');
   showToast(currentLang==='en'?'Sharing screen':'Демонстрация экрана');
 }
-// patch renderCallActions to add screen button when in active call
+// screen share button: ensure exists once among static call actions
 const _origRenderCallActions = renderCallActions;
 renderCallActions = function(){
   _origRenderCallActions();
   if(!currentCall || currentCall.state==='incoming') return;
-  const wrap=document.getElementById('call-actions');
-  if(!wrap || document.getElementById('cc-screen')) return;
-  const btn=document.createElement('button');
-  btn.className='call-btn-round mute'+(screenStream?' on':'');
-  btn.id='cc-screen';
-  btn.title=currentLang==='en'?'Share screen':'Демонстрация экрана';
-  btn.innerHTML=`<svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>`;
-  btn.onclick=()=>toggleScreenShare();
-  // insert before hangup
-  const hang=wrap.querySelector('#cc-hangup');
-  if(hang) wrap.insertBefore(btn, hang); else wrap.appendChild(btn);
+  let btn=document.getElementById('cc-screen');
+  if(!btn){
+    const wrap=document.getElementById('call-actions');
+    if(!wrap) return;
+    btn=document.createElement('button');
+    btn.type='button';
+    btn.className='call-btn-round mute';
+    btn.id='cc-screen';
+    btn.innerHTML=`<svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>`;
+    btn.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); toggleScreenShare(); }, true);
+    const hang=document.getElementById('cc-hangup');
+    if(hang) wrap.insertBefore(btn, hang); else wrap.appendChild(btn);
+  }
+  btn.style.display='flex';
+  btn.classList.toggle('on', !!screenStream);
 };
 // cleanup screen on endCall
 const _endCallScreen = endCall;
@@ -5731,7 +5738,7 @@ async function openFullProfile(profileLike){
 }
 
 // Override openUserInfo + partner avatar + contact avatars
-openUserInfo = function(p){ return openFullProfile(p); };
+openUserInfo = openFullProfile;
 document.getElementById('partner-avatar').onclick=()=>{ if(activePartner) openFullProfile(activePartner); };
 
 // Tap contact avatar opens full profile (event delegation)
@@ -6326,68 +6333,7 @@ document.getElementById('settings-about')?.addEventListener('click', ()=>{
 });
 
 // ========== Telegram-style contact profile ==========
-const _openFullProfileOrig = openFullProfile;
-openFullProfile = async function(profileLike){
-  let p=profileLike;
-  try{ const {data}=await sb.from('profiles').select('*').eq('id',profileLike.id).maybeSingle(); if(data) p=data; }catch(e){}
-  const isMe = p.id===myProfile?.id;
-  const name=p.first_name?`${p.first_name} ${p.last_name||''}`.trim():(p.username||'');
-  const anon=getAnon();
-  // respect target privacy for phone/email
-  let phone = p.phone||'';
-  let email = p.email||'';
-  if(!isMe){
-    if(p.hide_phone) phone='';
-    if(p.hide_email) email='';
-  } else {
-    if(anon.hidePhone) phone='';
-    if(anon.hideEmail) email='';
-  }
-  // remove any old profile-sheet still open
-  document.querySelectorAll('.profile-sheet,.tg-contact-sheet').forEach(el=>el.remove());
-  const sheet=document.createElement('div');
-  sheet.className='tg-contact-sheet';
-  const ch=(name||p.username||'?')[0].toUpperCase();
-  const col=p.color||colorFor(p.id);
-  const avStyle=p.avatar_url?`background-image:url(${p.avatar_url})`:`background:${col}`;
-  const coverUrl = p.cover_url || '';
-  const coverStyle = coverUrl ? `background-image:url(${coverUrl})` : `background:linear-gradient(135deg,${col},#6D5DF6)`;
-  const onlineTxt = (!isMe && p.hide_online) ? '' : (onlineUsers.has(p.id)?(currentLang==='en'?'online':'в сети'):'');
-  sheet.innerHTML=`
-    <div class="tg-cover" style="${coverStyle}"><div class="tg-cover-fade"></div></div>
-    <div class="tg-contact-top">
-      <button type="button" class="tg-back" id="tg-back"><svg viewBox="0 0 24 24" style="width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg></button>
-      <div class="tg-title">О контакте</div>
-      ${isMe?`<button type="button" class="tg-edit" id="tg-edit">Изменить</button>`:`<span style="width:70px"></span>`}
-    </div>
-    <div class="tg-contact-body">
-      <div class="tg-av-wrap"><div class="tg-av" style="${avStyle}">${p.avatar_url?'':ch}</div></div>
-      <div class="tg-name">${escapeHtml(name||p.username||'')}${p.emoji_status?(' '+p.emoji_status):''}</div>
-      ${phone?`<div class="tg-phone">${escapeHtml(phone)}</div>`:(email?`<div class="tg-phone">${escapeHtml(email)}</div>`:`<div class="tg-phone">@${escapeHtml(p.username||'')}</div>`)}
-      ${onlineTxt?`<div class="tg-phone" style="color:var(--mint);margin-top:-10px">${onlineTxt}</div>`:''}
-      ${!isMe?`<div class="tg-actions">
-        <button type="button" class="tg-act" id="tg-audio"><svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2A19.8 19.8 0 0111.19 18a19.5 19.5 0 01-6-6A19.8 19.8 0 012.12 3.38 2 2 0 014.11 2h3a2 2 0 012 1.72c.13.96.36 1.9.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0122 16.92z"/></svg>Аудио</button>
-        <button type="button" class="tg-act" id="tg-video"><svg viewBox="0 0 24 24"><rect x="2" y="6" width="14" height="12" rx="2"/><path d="M16 10l6-4v12l-6-4"/></svg>Видео</button>
-        <button type="button" class="tg-act" id="tg-search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>Поиск</button>
-      </div>`:''}
-      <div class="tg-section">
-        <div class="tg-row" id="tg-media"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg><span>Медиа, ссылки и докум.</span><span class="tg-muted">›</span></div>
-      </div>
-      <div class="tg-section">
-        <div class="tg-row" id="tg-notify"><svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 00-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg><span>Уведомления</span><span class="tg-muted">›</span></div>
-        ${!isMe?`<div class="tg-row" id="tg-msg"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg><span>Написать сообщение</span><span class="tg-muted">›</span></div>`:''}
-      </div>
-    </div>`;
-  document.body.appendChild(sheet);
-  sheet.querySelector('#tg-back').onclick=()=>sheet.remove();
-  sheet.querySelector('#tg-edit')?.addEventListener('click', ()=>{ sheet.remove(); document.getElementById('edit-profile-btn')?.click(); });
-  sheet.querySelector('#tg-audio')?.addEventListener('click', ()=>{ sheet.remove(); ensureInContacts(p); openChat(p).then(()=>startCall(p,false)); });
-  sheet.querySelector('#tg-video')?.addEventListener('click', ()=>{ sheet.remove(); ensureInContacts(p); openChat(p).then(()=>startCall(p,true)); });
-  sheet.querySelector('#tg-search')?.addEventListener('click', ()=>{ sheet.remove(); ensureInContacts(p); openChat(p).then(()=>document.getElementById('chat-search-btn')?.click()); });
-  sheet.querySelector('#tg-media')?.addEventListener('click', ()=>{ sheet.remove(); ensureInContacts(p); openChat(p).then(()=>document.getElementById('media-btn')?.click()); });
-  sheet.querySelector('#tg-msg')?.addEventListener('click', ()=>{ sheet.remove(); ensureInContacts(p); openChat(p); });
-  sheet.querySelector('#tg-notify')?.addEventListener('click', ()=> showToast(currentLang==='en'?'Notifications':'Уведомления чата'));
-};
+// (TG contact profile removed — using profile-sheet)
 
 // ========== Channel comments under posts ==========
 const _renderMsgCh = renderMessage;
@@ -6501,12 +6447,7 @@ if(_sendRead){
 }
 // apply hide phone/email on own profile displays is in openFullProfile above
 
-// Always use TG contact profile (never old profile-sheet)
-openUserInfo = function(p){ return openFullProfile(p); };
-document.getElementById('partner-avatar')?.addEventListener('click', (e)=>{
-  e.stopPropagation();
-  if(activePartner && !activePartner.isBot) openFullProfile(activePartner);
-});
+
 
 
 // ========== SESSION RESTORE (no login flash) ==========
