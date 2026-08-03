@@ -43,6 +43,7 @@ body{
   overflow-x:hidden;
   overscroll-behavior:none;
   overscroll-behavior-x:none;
+  touch-action:pan-y;
   max-width:100vw;
 }
 input,textarea{user-select:text!important;-webkit-user-select:text!important}
@@ -139,40 +140,53 @@ body.in-chat .app-pages{
   width:100%;
   max-width:100%;
   overflow:hidden;
-  border-radius:12px;
+  border-radius:14px;
   margin:0 0 2px;
   position:relative;
   background:var(--panel);
-  isolation:isolate;
+  /* allow JS to receive horizontal moves */
+  touch-action:manipulation;
+  -webkit-user-select:none;
+  user-select:none;
 }
 .sw-actions{
   position:absolute;
-  inset:0 0 0 auto;
+  right:0; top:0; bottom:0;
   width:216px;
   display:flex;
   align-items:stretch;
   z-index:0;
-  visibility:hidden; /* never peek when closed */
+  opacity:0;
+  pointer-events:none;
+  transition:opacity .12s;
 }
-.sw-clip.is-swiping .sw-actions,
-.sw-clip[data-open] .sw-actions{visibility:visible}
+.sw-clip[data-open] .sw-actions,
+.sw-clip.sw-dragging .sw-actions{
+  opacity:1;
+  pointer-events:auto;
+}
 .sw-front{
-  position:relative;
-  z-index:1;
-  width:100%;
+  width:100%!important;
+  max-width:100%!important;
+  min-width:100%!important;
   box-sizing:border-box;
-  background:var(--panel);
-  border-radius:12px;
+  background:var(--panel)!important;
+  position:relative;
+  z-index:2;
+  border-radius:14px;
+  padding:0!important;
+  margin:0!important;
+  overflow:hidden;
   transform:translate3d(0,0,0);
-  transition:transform .2s ease;
-  -webkit-mask-image:none;
+  transition:transform .2s cubic-bezier(.2,.8,.2,1);
+  will-change:transform;
+  -webkit-backface-visibility:hidden;
+  backface-visibility:hidden;
 }
 .sw-front.swiping{transition:none}
-.sw-front.active{background:var(--panel-hover);box-shadow:inset 3px 0 0 var(--accent-a)}
-body.theme-light .sw-front,
-body.theme-light .sw-clip,
-body.beta-oled .sw-front,
-body.beta-oled .sw-clip{background:var(--panel)!important}
+.sw-front:hover,
+.sw-front.active{background:var(--panel-hover)!important}
+.sw-front.active{box-shadow:inset 3px 0 0 var(--accent-a)}
 .sw-act{
   flex:1;
   display:flex;
@@ -194,6 +208,10 @@ body.beta-oled .sw-clip{background:var(--panel)!important}
 .sw-act.archive{background:#F7B955}
 .sw-act.lock{background:#4C7CF3}
 .sw-act.del{background:#F0708A}
+body.theme-light .sw-clip,
+body.theme-light .sw-front{background:var(--panel)!important}
+body.beta-oled .sw-clip,
+body.beta-oled .sw-front{background:var(--panel)!important}
 
 .chat-pane{flex:1;display:flex;flex-direction:column;min-width:0;min-height:0;height:100%;overflow:hidden;background:var(--bg)}
 .chat-header{padding:12px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px;background:var(--panel);flex-shrink:0}
@@ -1596,7 +1614,14 @@ function setBtnLoading(btn, on){
 function switchPage(page){
   checkPipOnLeave();
   // always reset chat swipes so actions never peek after tab switch
-  try{ if(typeof closeAllSwipes==='function') closeAllSwipes(); }catch(e){}
+  try{
+    document.querySelectorAll('#contacts-list .sw-clip').forEach(c=>{
+      const fr=c.querySelector('.sw-front');
+      if(fr){ fr.classList.remove('swiping'); fr.style.transform='translate3d(0,0,0)'; }
+      delete c.dataset.open;
+      c.classList.remove('sw-dragging');
+    });
+  }catch(e){}
   document.querySelectorAll('.app-page').forEach(p=>p.classList.remove('active'));
   document.getElementById('page-'+page)?.classList.add('active');
   document.querySelectorAll('.bottom-tab').forEach(t=>t.classList.remove('active'));
@@ -1892,8 +1917,6 @@ function renderContactsAndGroups(){
     row.dataset.cid=data.id; row.dataset.ctype=type;
     const clip=document.createElement('div');
     clip.className='sw-clip';
-    clip.dataset.cid=data.id;
-    clip.dataset.ctype=type;
     const actions=document.createElement('div');
     actions.className='sw-actions';
     const archivedNow=getArchive().includes(data.id);
@@ -1911,40 +1934,141 @@ function renderContactsAndGroups(){
         <svg viewBox="0 0 24 24"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
         <span>${currentLang==='en'?'Delete':'Удалить'}</span>
       </button>`;
+    // front covers actions; only front translates
     row.classList.add('sw-front');
     clip.appendChild(actions);
     clip.appendChild(row);
 
-    // click open chat (ignore if just swiped)
-    row.addEventListener('click', e=>{
-      if(clip.dataset.open){ closeAllSwipes(); return; }
-      if(window._swJustSwiped){ window._swJustSwiped=false; return; }
+    const ACTION_W = 216;
+    let startX=0, startY=0, baseX=0, curX=0;
+    let dragging=false, axis=null, opened=false;
+
+    function setFront(x, animate){
+      curX = x;
+      if(animate===false) row.classList.add('swiping');
+      else row.classList.remove('swiping');
+      row.style.transform = 'translate3d('+x+'px,0,0)';
+    }
+    function openSwipe(){
+      setFront(-ACTION_W, true);
+      opened=true;
+      clip.dataset.open='1';
+    }
+    function closeSwipe(){
+      setFront(0, true);
+      opened=false;
+      delete clip.dataset.open;
+      clip.classList.remove('sw-dragging');
+    }
+    function closeOthers(){
+      list.querySelectorAll('.sw-clip[data-open]').forEach(c=>{
+        if(c===clip) return;
+        const fr=c.querySelector('.sw-front');
+        if(fr){ fr.classList.remove('swiping'); fr.style.transform='translate3d(0,0,0)'; }
+        delete c.dataset.open;
+        c.classList.remove('sw-dragging');
+      });
+    }
+
+    clip.addEventListener('touchstart', e=>{
+      if(e.touches.length!==1) return;
+      startX=e.touches[0].clientX;
+      startY=e.touches[0].clientY;
+      baseX = clip.dataset.open ? -ACTION_W : 0;
+      dragging=true;
+      axis=null;
+    }, {passive:true});
+
+    clip.addEventListener('touchmove', e=>{
+      if(!dragging || e.touches.length!==1) return;
+      const dx=e.touches[0].clientX - startX;
+      const dy=e.touches[0].clientY - startY;
+
+      if(axis===null){
+        if(Math.abs(dx)<8 && Math.abs(dy)<8) return;
+        if(Math.abs(dy) > Math.abs(dx)){
+          axis='v';
+          dragging=false;
+          return;
+        }
+        axis='h';
+        closeOthers();
+        clip.classList.add('sw-dragging');
+        clip.style.touchAction='none';
+      }
+      if(axis!=='h') return;
+      e.preventDefault();
+      e.stopPropagation();
+      let x = baseX + dx;
+      if(x > 0) x = 0;
+      if(x < -ACTION_W) x = -ACTION_W;
+      setFront(x, false);
+    }, {passive:false});
+
+    function endSwipe(){
+      if(axis==='h'){
+        if(curX < -ACTION_W * 0.35) openSwipe();
+        else closeSwipe();
+      }
+      dragging=false;
+      axis=null;
+      clip.style.touchAction='pan-y';
+    }
+    clip.addEventListener('touchend', endSwipe);
+    clip.addEventListener('touchcancel', endSwipe);
+
+    // close on list scroll
+    const scrollParent = list.closest('.sidebar-scroll') || list;
+    if(scrollParent && !scrollParent._swScrollBound){
+      scrollParent._swScrollBound = true;
+      scrollParent.addEventListener('scroll', ()=>{
+        list.querySelectorAll('.sw-clip[data-open]').forEach(c=>{
+          const fr=c.querySelector('.sw-front');
+          if(fr){ fr.classList.remove('swiping'); fr.style.transform='translate3d(0,0,0)'; }
+          delete c.dataset.open;
+          c.classList.remove('sw-dragging');
+        });
+      }, {passive:true});
+    }
+
+    row.onclick=(e)=>{
+      if(clip.dataset.open){
+        closeSwipe();
+        return;
+      }
       if(type==='group') openGroup(data); else openChat(data);
-    });
+    };
     const av=row.querySelector('.avatar');
     if(av && type==='user'){
-      av.addEventListener('click', async e=>{ e.stopPropagation(); await openStoriesOrProfile(data); });
+      av.onclick=async (e)=>{ e.stopPropagation(); await openStoriesOrProfile(data); };
     }
+    // PC right-click
     row.addEventListener('contextmenu', e=>{
       e.preventDefault(); e.stopPropagation();
       showChatCtx(e, type, data);
     });
     actions.querySelectorAll('.sw-act').forEach(btn=>{
-      btn.addEventListener('click', async e=>{
-        e.preventDefault(); e.stopPropagation();
+      btn.addEventListener('click', async (e)=>{
+        e.preventDefault();
+        e.stopPropagation();
         const a=btn.dataset.a;
-        closeAllSwipes();
+        closeSwipe();
         if(a==='archive'){
           let ar=getArchive();
           if(ar.includes(data.id)) ar=ar.filter(id=>id!==data.id); else ar.push(data.id);
-          setArchive(ar); renderContactsAndGroups();
+          setArchive(ar);
+          renderContactsAndGroups();
           showToast(ar.includes(data.id)?(currentLang==='en'?'Archived':'В архиве'):(currentLang==='en'?'Unarchived':'Из архива'));
         } else if(a==='lock'){
-          if(!storage.getItem(PIN_CODE_KEY)){ showToast(currentLang==='en'?'Set a PIN in Settings first':'Сначала установите PIN в Настройках'); return; }
+          if(!storage.getItem(PIN_CODE_KEY)){
+            showToast(currentLang==='en'?'Set a PIN in Settings first':'Сначала установите PIN в Настройках');
+            return;
+          }
           let l=getLocked();
           if(l.includes(data.id)) l=l.filter(id=>id!==data.id); else l.push(data.id);
-          setLocked(l); renderContactsAndGroups();
-          showToast(l.includes(data.id)?(currentLang==='en'?'PIN on':'Чат защищён PIN'):(currentLang==='en'?'PIN off':'Защита снята'));
+          setLocked(l);
+          showToast(l.includes(data.id)?(currentLang==='en'?'PIN protection on':'Чат защищён PIN'):(currentLang==='en'?'PIN protection off':'Защита снята'));
+          renderContactsAndGroups();
         } else if(a==='del'){
           if(!(await customConfirm(t('you_sure_delete_chat')))) return;
           try{
@@ -1957,110 +2081,8 @@ function renderContactsAndGroups(){
     });
     list.appendChild(clip);
   });
-  bindContactsListSwipe(list);
   renderFolderTabs();
 }
-
-function closeAllSwipes(){
-  document.querySelectorAll('#contacts-list .sw-clip[data-open], #contacts-list .sw-clip.is-swiping').forEach(c=>{
-    const f=c.querySelector('.sw-front');
-    if(f){ f.classList.remove('swiping'); f.style.transform='translate3d(0,0,0)'; }
-    delete c.dataset.open;
-    c.classList.remove('is-swiping');
-  });
-}
-
-function bindContactsListSwipe(list){
-  if(!list || list._swipeBound) return;
-  list._swipeBound=true;
-  const ACTION_W=216;
-  let front=null, clip=null, sx=0, sy=0, base=0, cur=0, axis=null, active=false;
-
-  function setX(x, anim){
-    if(!front) return;
-    cur=Math.max(-ACTION_W, Math.min(0, x));
-    front.classList.toggle('swiping', anim===false);
-    front.style.transform='translate3d('+cur+'px,0,0)';
-  }
-  function end(){
-    if(!clip||!front){ active=false; axis=null; return; }
-    if(axis==='h'){
-      if(cur < -ACTION_W*0.3){
-        setX(-ACTION_W, true);
-        clip.dataset.open='1';
-        window._swJustSwiped=true;
-      } else {
-        setX(0, true);
-        delete clip.dataset.open;
-      }
-    }
-    clip.classList.remove('is-swiping');
-    front.classList.remove('swiping');
-    active=false; axis=null; front=null; clip=null;
-  }
-
-  list.addEventListener('touchstart', e=>{
-    if(e.touches.length!==1) return;
-    const f=e.target.closest('.sw-front');
-    if(!f || !list.contains(f)) return;
-    // ignore if on button
-    if(e.target.closest('.sw-act')) return;
-    closeAllSwipes();
-    front=f; clip=f.closest('.sw-clip');
-    if(!clip) return;
-    sx=e.touches[0].clientX; sy=e.touches[0].clientY;
-    base = clip.dataset.open ? -ACTION_W : 0;
-    cur=base; axis=null; active=true;
-  }, {passive:true});
-
-  list.addEventListener('touchmove', e=>{
-    if(!active || !front || e.touches.length!==1) return;
-    const x=e.touches[0].clientX, y=e.touches[0].clientY;
-    const dx=x-sx, dy=y-sy;
-    if(axis===null){
-      if(Math.abs(dx)<10 && Math.abs(dy)<10) return;
-      if(Math.abs(dy)>Math.abs(dx)){ // vertical scroll
-        active=false; axis='v'; front=null; clip=null; return;
-      }
-      axis='h';
-      clip.classList.add('is-swiping');
-    }
-    if(axis!=='h') return;
-    e.preventDefault();
-    setX(base+dx, false);
-  }, {passive:false});
-
-  list.addEventListener('touchend', end, {passive:true});
-  list.addEventListener('touchcancel', end, {passive:true});
-
-  // mouse (desktop)
-  list.addEventListener('mousedown', e=>{
-    if(e.button!==0) return;
-    const f=e.target.closest('.sw-front');
-    if(!f || !list.contains(f) || e.target.closest('.sw-act')) return;
-    closeAllSwipes();
-    front=f; clip=f.closest('.sw-clip');
-    sx=e.clientX; sy=e.clientY;
-    base=clip.dataset.open?-ACTION_W:0; cur=base; axis=null; active=true;
-    const move=ev=>{
-      if(!active) return;
-      const dx=ev.clientX-sx, dy=ev.clientY-sy;
-      if(axis===null){
-        if(Math.abs(dx)<6 && Math.abs(dy)<6) return;
-        if(Math.abs(dy)>Math.abs(dx)){ active=false; return; }
-        axis='h'; clip.classList.add('is-swiping');
-      }
-      if(axis==='h'){ ev.preventDefault(); setX(base+dx,false); }
-    };
-    const up=()=>{ end(); window.removeEventListener('mousemove',move); window.removeEventListener('mouseup',up); };
-    window.addEventListener('mousemove',move);
-    window.addEventListener('mouseup',up);
-  });
-
-  const sc=list.closest('.sidebar-scroll')||list;
-  sc.addEventListener('scroll', ()=>closeAllSwipes(), {passive:true});
-}
-
 function showChatCtx(e, type, data){
   const menu=document.getElementById('ctx-menu');
   const archived=getArchive().includes(data.id);
@@ -2466,84 +2488,30 @@ function compressImageDataUrl(dataUrl, maxSide, quality){
     img.src=dataUrl;
   });
 }
-async function readFileAsDataURL(file){
-  return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(file); });
-}
-
-/** Upload large media to Supabase Storage (supports multi-GB if bucket allows). */
-async function uploadFileToStorage(file, folder){
-  if(!sb?.storage) return { ok:false, error:'Storage unavailable' };
-  const uid = myProfile?.id || 'anon';
-  const rawExt = (file.name && file.name.includes('.')) ? file.name.split('.').pop() : '';
-  const ext = (rawExt || (file.type.includes('mp4')?'mp4':file.type.includes('webm')?'webm':file.type.includes('quicktime')?'mov':'bin')).toLowerCase().slice(0,8);
-  const path = `${folder||'chat'}/${uid}/${Date.now()}_${Math.random().toString(36).slice(2,9)}.${ext}`;
-  const buckets = ['media','chat-media','uploads','videos','public'];
-  let lastErr = null;
-  for(const bucket of buckets){
-    try{
-      const { data, error } = await sb.storage.from(bucket).upload(path, file, {
-        contentType: file.type || 'application/octet-stream',
-        cacheControl: '3600',
-        upsert: false
-      });
-      if(error){ lastErr = error; continue; }
-      const key = data?.path || path;
-      const { data: pub } = sb.storage.from(bucket).getPublicUrl(key);
-      if(pub?.publicUrl) return { ok:true, url: pub.publicUrl, bucket, path: key };
-      // signed URL fallback (private bucket)
-      try{
-        const { data: signed } = await sb.storage.from(bucket).createSignedUrl(key, 60*60*24*365);
-        if(signed?.signedUrl) return { ok:true, url: signed.signedUrl, bucket, path: key };
-      }catch(e){}
-    }catch(e){ lastErr = e; }
-  }
-  const msg = String(lastErr?.message||lastErr||'');
-  if(/bucket|not found|404/i.test(msg))
-    return { ok:false, error: (currentLang==='en'
-      ? 'Create a public Storage bucket named "media" in Supabase'
-      : 'Создайте в Supabase Storage публичный бакет с именем «media»') };
-  return { ok:false, error: msg || (currentLang==='en'?'Upload failed':'Не удалось загрузить файл') };
-}
-
 async function prepareMediaForUpload(file, kind){
-  // kind: 'story' | 'chat' | 'post'
-  // Images: compress to keep DB/message light
+  // kind: 'story' | 'chat'
+  const maxBytes = kind==='story' ? 1.8*1024*1024 : 2.5*1024*1024;
   if(file.type.startsWith('image/')){
-    const maxBytes = kind==='story' ? 1.8*1024*1024 : 3*1024*1024;
-    const dataUrl = await readFileAsDataURL(file);
-    let out = await compressImageDataUrl(dataUrl, kind==='story'?1080:1600, kind==='story'?0.7:0.78);
-    if(dataUrlBytes(out) > maxBytes) out = await compressImageDataUrl(out, 900, 0.6);
-    if(dataUrlBytes(out) > maxBytes) out = await compressImageDataUrl(out, 640, 0.5);
+    const dataUrl = await new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(file); });
+    let out = await compressImageDataUrl(dataUrl, kind==='story'?1080:1280, kind==='story'?0.7:0.75);
+    // recompress harder if still large
+    if(dataUrlBytes(out) > maxBytes) out = await compressImageDataUrl(out, 720, 0.55);
+    if(dataUrlBytes(out) > maxBytes) out = await compressImageDataUrl(out, 480, 0.45);
     return { ok:true, type:'image', dataUrl:out, bytes:dataUrlBytes(out) };
   }
-  // Video: NO client size cap — upload File/Blob to Storage (not base64)
-  if(file.type.startsWith('video/') || /\.(mp4|mov|webm|mkv|m4v)$/i.test(file.name||'')){
-    const mb = Math.round((file.size||0)/1024/1024);
-    if(mb > 50) showToast((currentLang==='en'?'Uploading video… ':'Загрузка видео… ')+mb+' МБ');
-    // Prefer Storage for anything over ~1.5 MB (base64 would bloat / hit DB limits)
-    if(file.size > 1.5*1024*1024 || kind==='chat' || kind==='post' || kind==='story'){
-      const up = await uploadFileToStorage(file, kind==='story'?'stories':(kind==='post'?'posts':'chat'));
-      if(up.ok) return { ok:true, type:'video', dataUrl: up.url, bytes: file.size, via:'storage' };
-      // tiny fallback to data-url only for small files
-      if(file.size <= 3*1024*1024){
-        try{
-          const dataUrl = await readFileAsDataURL(file);
-          return { ok:true, type:'video', dataUrl, bytes:dataUrlBytes(dataUrl), via:'data' };
-        }catch(e){}
-      }
-      return { ok:false, error: up.error||'Video upload failed' };
+  if(file.type.startsWith('video/')){
+    if(file.size > maxBytes){
+      return { ok:false, error: (typeof currentLang!=='undefined' && currentLang==='en')
+        ? ('Video is too large ('+Math.round(file.size/1024/1024)+' MB). Max ~'+Math.round(maxBytes/1024/1024)+' MB.')
+        : ('Видео слишком большое ('+Math.round(file.size/1024/1024)+' МБ). Макс. ~'+Math.round(maxBytes/1024/1024)+' МБ. Сожмите файл.') };
     }
-    const dataUrl = await readFileAsDataURL(file);
-    return { ok:true, type:'video', dataUrl, bytes:dataUrlBytes(dataUrl), via:'data' };
+    const dataUrl = await new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(file); });
+    if(dataUrlBytes(dataUrl) > maxBytes*1.4){
+      return { ok:false, error: currentLang==='en'?'Video payload too large after encoding':'Видео слишком большое для отправки' };
+    }
+    return { ok:true, type:'video', dataUrl, bytes:dataUrlBytes(dataUrl) };
   }
-  // generic files → storage
-  const up = await uploadFileToStorage(file, 'files');
-  if(up.ok) return { ok:true, type:'file', dataUrl: up.url, bytes: file.size, via:'storage' };
-  if(file.size <= 2*1024*1024){
-    const dataUrl = await readFileAsDataURL(file);
-    return { ok:true, type:'file', dataUrl, bytes:dataUrlBytes(dataUrl) };
-  }
-  return { ok:false, error: up.error||'Unsupported file' };
+  return { ok:false, error:'Unsupported file' };
 }
 
 // Local stories fallback (always visible for me)
@@ -2670,7 +2638,7 @@ async function sendMessage(type='text', fileUrl=null, content=null){
     if(error){
       const msg=String(error.message||error);
       if(/payload|too large|413|row-level|value too long|bytes/i.test(msg) || (payload.file_url&&payload.file_url.length>900000))
-        showToast(currentLang==='en'?'Server rejected the file. Use Storage bucket "media".':'Сервер отклонил файл. Нужен бакет Storage «media».');
+        showToast(currentLang==='en'?'File too large for server':'Файл слишком большой для сервера. Сожмите видео.');
       else showToast(friendlyError(error));
       return;
     }
@@ -3148,17 +3116,7 @@ document.getElementById('add-story-btn-side').onclick=()=>document.getElementByI
 
 // ========== ATTACH ==========
 document.getElementById('photo-input').onchange=function(e){ const f=e.target.files[0]; if(!f) return; e.target.value=''; const r=new FileReader(); r.onload=ev=>sendMessage(f.type.startsWith('video/')?'video':'image',ev.target.result,''); r.readAsDataURL(f); };
-document.getElementById('file-input').onchange=async function(e){
-  const f=e.target.files[0]; if(!f) return; e.target.value='';
-  if(!activePartner && !activeGroup){ showToast(currentLang==='en'?'Open a chat first':'Сначала откройте чат'); return; }
-  try{
-    showLoader();
-    const prep=await prepareMediaForUpload(f, 'chat');
-    if(!prep.ok){ showToast(prep.error||'Ошибка'); return; }
-    await sendMessage(prep.type==='video'?'video':(f.type.startsWith('image/')?'image':'file'), prep.dataUrl, f.name||'');
-  }catch(err){ showToast(friendlyError(err)); }
-  finally{ hideLoader(); }
-};
+document.getElementById('file-input').onchange=function(e){ const f=e.target.files[0]; if(!f) return; e.target.value=''; const r=new FileReader(); r.onload=ev=>sendMessage('file',ev.target.result,f.name); r.readAsDataURL(f); };
 
 // ========== SETTINGS ==========
 document.getElementById('settings-favorites').onclick=()=>{ switchPage('chats'); openChat({id:myProfile.id, username:myProfile.username, first_name:t('it_favorites'), color:myProfile.color, avatar_url:myProfile.avatar_url}); };
@@ -5801,26 +5759,18 @@ function renderCreatePost(body, kind){
     ${kind==='video'?`<div class="field"><label>${currentLang==='en'?'Hashtags':'Хэштеги'}</label><input class="cd-input" id="cp-hashtags" placeholder="#signal #video"></div>`:''}
     <button class="btn-primary" id="cp-publish">${currentLang==='en'?'Publish':'Опубликовать'}</button>
   </div>`;
-  let mediaData=null, mediaType=kind==='video'?'video':'image', mediaFile=null, mediaObjectUrl=null;
+  let mediaData=null, mediaType=kind==='video'?'video':'image';
   body.querySelector('#cp-pick').onclick=()=>body.querySelector('#cp-file').click();
   body.querySelector('#cp-file').onchange=e=>{
     const f=e.target.files[0]; if(!f) return;
-    mediaFile=f;
     mediaType = f.type.startsWith('video/')?'video':'image';
-    const prev=body.querySelector('#cp-preview');
-    if(mediaType==='video'){
-      try{ if(mediaObjectUrl) URL.revokeObjectURL(mediaObjectUrl); }catch(err){}
-      mediaObjectUrl=URL.createObjectURL(f);
-      mediaData=mediaObjectUrl;
-      prev.innerHTML=`<video src="${mediaObjectUrl}" style="max-width:100%;border-radius:12px" controls></video>`;
-    } else {
-      const r=new FileReader();
-      r.onload=ev=>{
-        mediaData=ev.target.result;
-        prev.innerHTML=`<img src="${mediaData}" style="max-width:100%;border-radius:12px">`;
-      };
-      r.readAsDataURL(f);
-    }
+    const r=new FileReader();
+    r.onload=ev=>{
+      mediaData=ev.target.result;
+      const prev=body.querySelector('#cp-preview');
+      prev.innerHTML = mediaType==='video' ? `<video src="${mediaData}" style="max-width:100%;border-radius:12px" controls></video>` : `<img src="${mediaData}" style="max-width:100%;border-radius:12px">`;
+    };
+    r.readAsDataURL(f);
   };
   body.querySelector('#cp-publish').onclick=async()=>{
     if(!canPublish()) return;
@@ -5835,13 +5785,10 @@ function renderCreatePost(body, kind){
       if(mediaType==='image' && typeof mediaData==='string' && mediaData.startsWith('data:image')){
         try{ outData = await compressDataUrlImage(mediaData, 1280, 0.72); }catch(e){}
       }
-      if(mediaType==='video' && mediaFile){
-        const prep=await prepareMediaForUpload(mediaFile, 'post');
-        if(!prep.ok){ showToast(prep.error||'Ошибка'); setBtnLoading(btn,false); return; }
-        outData=prep.dataUrl;
-      } else if(mediaType==='video' && typeof outData==='string' && outData.startsWith('data:') && outData.length > 4*1024*1024){
-        // try to re-upload is not possible without File — warn only
-        showToast(currentLang==='en'?'Large video: prefer re-selecting the file':'Большое видео лучше выбрать файлом заново');
+      if(mediaType==='video' && typeof outData==='string' && outData.length > 12000000){
+        showToast(currentLang==='en'?'Video is too large — pick a shorter clip':'Видео слишком большое — выберите короткий ролик');
+        setBtnLoading(btn,false);
+        return;
       }
       const {error} = await withTable(sb.from('posts').insert({user_id:myProfile.id, kind, media_url:outData, media_type:mediaType, caption, hashtags}), 'posts');
       if(!error){
@@ -7534,6 +7481,23 @@ function scheduleBirthdayAfterAppReady(){
 })();
 
 
+// sl-hscroll-guard: block horizontal page drag, allow chat swipe
+(function(){
+  let sx=0,sy=0,locked=false;
+  document.addEventListener('touchstart', e=>{
+    if(e.touches.length!==1) return;
+    sx=e.touches[0].clientX; sy=e.touches[0].clientY; locked=false;
+  }, {passive:true});
+  document.addEventListener('touchmove', e=>{
+    if(locked || e.touches.length!==1) return;
+    if(e.target.closest('.sw-clip, .stories-bar, .folder-tabs, .sticker-packs')) return;
+    const dx=e.touches[0].clientX-sx, dy=e.touches[0].clientY-sy;
+    if(Math.abs(dx)>12 && Math.abs(dx)>Math.abs(dy)*1.3){
+      if(e.cancelable) e.preventDefault();
+      locked=true;
+    }
+  }, {passive:false});
+})();
 
 </script>
 </body>
