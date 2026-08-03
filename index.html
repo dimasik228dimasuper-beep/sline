@@ -188,8 +188,8 @@ input,textarea{user-select:text!important;-webkit-user-select:text!important}
 .voice-bar{width:4px;background:var(--mint);border-radius:2px;animation:voiceBar .6s ease-in-out infinite}
 @keyframes voiceBar{0%,100%{height:10px}50%{height:40px}}
 .settings-page{padding:0;overflow-y:auto}
-.settings-profile{display:flex;flex-direction:column;align-items:center;padding:32px 20px 24px;border-bottom:1px solid var(--line);background:var(--panel)}
-.settings-avatar{width:80px;height:80px;border-radius:50%;margin-bottom:12px;background:var(--accent-a);display:flex;align-items:center;justify-content:center;font-size:32px;font-weight:700;color:#fff;cursor:pointer;background-size:cover;background-position:center}
+/* settings-profile styles moved to profile-sheet block */
+.settings-name{font-size:18px;font-weight:700}
 .settings-name{font-size:18px;font-weight:700}
 .settings-username{font-size:13px;color:var(--muted);margin-top:2px}
 .settings-section{padding:8px 0}
@@ -425,12 +425,48 @@ body.theme-light{
 
 /* Fullscreen profile sheet */
 .profile-sheet{position:fixed;inset:0;z-index:9200;background:var(--bg);display:flex;flex-direction:column;overflow:hidden}
-.profile-sheet-top{padding:12px 16px;display:flex;align-items:center;gap:10px;background:var(--panel);border-bottom:1px solid var(--line);flex-shrink:0}
-.profile-sheet-body{flex:1;overflow-y:auto;padding:20px 16px 40px}
-.profile-sheet-actions{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:18px 0}
+.profile-sheet-top{position:absolute;top:0;left:0;right:0;z-index:30;padding:12px 16px;display:flex;align-items:center;gap:10px;background:transparent;border-bottom:1px solid transparent;transition:background .2s,border-color .2s}
+.profile-sheet.collapsed .profile-sheet-top{background:var(--panel);border-bottom-color:var(--line)}
+.profile-sheet-top .ps-title{font-weight:800;font-size:16px;flex:1;opacity:0;transform:translateY(6px);transition:opacity .2s,transform .2s;pointer-events:none}
+.profile-sheet.collapsed .profile-sheet-top .ps-title{opacity:1;transform:none}
+.profile-sheet-top .icon-btn{background:rgba(0,0,0,.35);border-color:transparent;color:#fff;backdrop-filter:blur(8px)}
+.profile-sheet.collapsed .profile-sheet-top .icon-btn{background:none;border:1px solid var(--line);color:var(--muted)}
+.profile-sheet-body{flex:1;overflow-y:auto;padding:0 0 40px;-webkit-overflow-scrolling:touch}
+.profile-header{position:relative;width:100%;height:min(52vw,280px);min-height:200px;overflow:hidden;flex-shrink:0;background:linear-gradient(135deg,var(--accent-a),var(--accent-b))}
+.profile-cover{position:absolute;inset:0;background-size:cover;background-position:center;transition:opacity .25s,transform .25s}
+.profile-cover-overlay{position:absolute;inset:0;background:linear-gradient(to bottom,rgba(0,0,0,.25) 0%,rgba(0,0,0,.05) 40%,rgba(11,17,32,.55) 100%);pointer-events:none}
+.profile-sheet.collapsed .profile-cover{opacity:0;transform:scale(1.05)}
+.profile-header-content{position:absolute;left:0;right:0;bottom:0;padding:20px 16px 16px;display:flex;flex-direction:column;align-items:center;gap:8px;z-index:2;transition:opacity .2s,transform .25s}
+.profile-sheet.collapsed .profile-header-content{opacity:0;transform:translateY(-12px);pointer-events:none}
+.profile-av-big{width:110px;height:110px;border-radius:50%;border:3px solid rgba(255,255,255,.85);box-shadow:0 8px 28px rgba(0,0,0,.35);background:var(--accent-a);background-size:cover;background-position:center;display:flex;align-items:center;justify-content:center;font-size:42px;font-weight:800;color:#fff;transition:border-radius .25s,width .25s,height .25s,border .25s}
+.profile-sheet.collapsed .profile-av-big{border-radius:14px}
+.profile-name-big{font-weight:800;font-size:22px;color:#fff;text-shadow:0 1px 8px rgba(0,0,0,.45);text-align:center}
+.profile-sub-big{font-size:13px;color:rgba(255,255,255,.8);text-align:center}
+.profile-online-big{font-size:12px;color:var(--mint);text-shadow:0 1px 4px rgba(0,0,0,.4)}
+.profile-collapsed-av{width:34px;height:34px;border-radius:10px;background:var(--accent-a);background-size:cover;background-position:center;display:none;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#fff;flex-shrink:0;margin-right:4px}
+.profile-sheet.collapsed .profile-collapsed-av{display:flex}
+.profile-body-inner{padding:16px 16px 40px}
+.profile-sheet-actions{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:8px 0 18px}
 .profile-action{display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 8px;border-radius:14px;background:var(--panel);border:1px solid var(--line);cursor:pointer;color:var(--text);font-size:11px;font-weight:600}
 .profile-action svg{width:24px;height:24px;stroke:var(--accent-a);fill:none;stroke-width:2}
 .profile-action:active{transform:scale(.96)}
+.profile-cover-btn{position:absolute;right:14px;bottom:14px;z-index:5;padding:8px 12px;border-radius:999px;border:none;background:rgba(0,0,0,.45);color:#fff;font-size:12px;font-weight:600;cursor:pointer;backdrop-filter:blur(8px);display:flex;align-items:center;gap:6px}
+.profile-cover-btn svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2}
+.profile-sheet.collapsed .profile-cover-btn{display:none}
+/* Settings page collapsing header */
+.settings-page{padding:0;overflow-y:auto}
+.settings-profile{position:relative;padding:0;border-bottom:1px solid var(--line);background:var(--panel);overflow:hidden}
+.settings-cover-wrap{position:relative;height:180px;background:linear-gradient(135deg,var(--accent-a),var(--accent-b));overflow:hidden}
+.settings-cover{position:absolute;inset:0;background-size:cover;background-position:center}
+.settings-cover-fade{position:absolute;inset:0;background:linear-gradient(to bottom,transparent 30%,var(--panel) 100%)}
+.settings-profile-info{display:flex;flex-direction:column;align-items:center;padding:0 20px 20px;margin-top:-48px;position:relative;z-index:2}
+.settings-avatar{width:96px;height:96px;border-radius:50%;margin-bottom:12px;background:var(--accent-a);display:flex;align-items:center;justify-content:center;font-size:36px;font-weight:700;color:#fff;cursor:pointer;background-size:cover;background-position:center;border:3px solid var(--panel);box-shadow:0 6px 20px rgba(0,0,0,.25);transition:border-radius .25s,width .25s,height .25s}
+.settings-page.collapsed .settings-avatar{border-radius:14px;width:56px;height:56px;font-size:22px;margin-bottom:8px}
+.settings-cover-wrap{transition:height .25s,opacity .25s}
+.settings-page.collapsed .settings-cover-wrap{height:0;opacity:0;min-height:0}
+.settings-page.collapsed .settings-profile-info{margin-top:12px}
+.settings-cover-edit{position:absolute;right:12px;top:12px;z-index:4;padding:7px 11px;border-radius:999px;border:none;background:rgba(0,0,0,.4);color:#fff;font-size:12px;font-weight:600;cursor:pointer;backdrop-filter:blur(6px)}
+.settings-page.collapsed .settings-cover-edit{display:none}
 .qr-box{background:#fff;padding:16px;border-radius:16px;display:inline-block}
 .qr-box img,.qr-box canvas{display:block;width:200px;height:200px}
 .device-row{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--line)}
@@ -731,10 +767,18 @@ body.theme-light,body{transition:background-color .35s ease}
     </div>
     <div class="app-page settings-page" id="page-settings">
       <div class="settings-profile">
-        <div class="settings-avatar" id="settings-avatar"><span id="settings-avatar-text"></span></div>
-        <div class="settings-name" id="settings-display-name"></div>
-        <div class="settings-username" id="settings-display-username"></div>
+        <div class="settings-cover-wrap" id="settings-cover-wrap">
+          <div class="settings-cover" id="settings-cover"></div>
+          <div class="settings-cover-fade"></div>
+          <button type="button" class="settings-cover-edit" id="settings-cover-edit" title="Обложка">Обложка</button>
+        </div>
+        <div class="settings-profile-info">
+          <div class="settings-avatar" id="settings-avatar"><span id="settings-avatar-text"></span></div>
+          <div class="settings-name" id="settings-display-name"></div>
+          <div class="settings-username" id="settings-display-username"></div>
+        </div>
       </div>
+      <input type="file" class="hidden-input" id="cover-upload" accept="image/*">
       <div class="settings-section">
         <div class="settings-section-title" data-i18n="sec_account">Аккаунт</div>
         <div class="settings-item" id="settings-edit-profile"><svg viewBox="0 0 24 24"><path d="M20 14.66V20a2 2 0 01-2 2H4a2 2 0 01-2-2V6a2 2 0 012-2h5.34"/><path d="M18 2l4 4-10 10H8v-4L18 2z"/></svg><span class="item-text" data-i18n="it_edit_profile">Изменить профиль</span></div>
@@ -894,6 +938,11 @@ function updateAllUIs(){
   document.getElementById('settings-display-name').textContent = name;
   document.getElementById('settings-display-username').textContent = '@'+(myProfile.username||'');
   renderAvatarInto(document.getElementById('settings-avatar'), myProfile.avatar_url, (myProfile.username||'?')[0].toUpperCase(), myProfile.color||colorFor(myProfile.id));
+  const scov=document.getElementById('settings-cover');
+  if(scov){
+    if(myProfile.cover_url) scov.style.backgroundImage=`url(${myProfile.cover_url})`;
+    else scov.style.backgroundImage='';
+  }
 }
 function isVideoDataUrl(u){ return typeof u==='string' && u.startsWith('data:video'); }
 function renderAvatarInto(el, url, ch, color){
@@ -2017,18 +2066,50 @@ document.getElementById('settings-edit-profile').onclick=()=>{
     <div class="field"><label>Фамилия</label><input id="el" value="${escapeHtml(myProfile.last_name||'')}"></div>
     <div class="field"><label>Username</label><input id="eu" value="${escapeHtml(myProfile.username||'')}"></div>
     <button class="btn-primary" id="esave">Сохранить</button>
-    <button class="btn-secondary" onclick="document.getElementById('avatar-upload').click()">Фото</button></div>`;
+    <button class="btn-secondary" onclick="document.getElementById('avatar-upload').click()">Фото</button>
+    <button class="btn-secondary" id="ecover" style="margin-top:8px">Обложка</button></div>`;
   modal.style.display='flex';
   document.getElementById('esave').onclick=async()=>{
     const first=document.getElementById('ef').value.trim(), last=document.getElementById('el').value.trim(), username=document.getElementById('eu').value.trim().toLowerCase();
     try{ await sb.from('profiles').update({first_name:first,last_name:last,username}).eq('id',myProfile.id); Object.assign(myProfile,{first_name:first,last_name:last,username}); updateAllUIs(); modal.style.display='none'; }catch(e){ alert(friendlyError(e)); }
   };
+  document.getElementById('ecover').onclick=()=>{ pickCoverImage(); };
 };
 document.getElementById('avatar-upload').onchange=function(e){
   const f=e.target.files[0]; if(!f) return; e.target.value='';
   const r=new FileReader(); r.onload=async ev=>{ myProfile.avatar_url=ev.target.result; updateAllUIs(); try{ await sb.from('profiles').update({avatar_url:ev.target.result}).eq('id',myProfile.id); }catch(e){} };
   r.readAsDataURL(f);
 };
+function pickCoverImage(){
+  let inp=document.getElementById('cover-upload');
+  if(!inp){
+    inp=document.createElement('input');
+    inp.type='file'; inp.accept='image/*'; inp.id='cover-upload'; inp.className='hidden-input';
+    document.body.appendChild(inp);
+  }
+  inp.onchange=function(e){
+    const f=e.target.files[0]; if(!f) return; e.target.value='';
+    const r=new FileReader();
+    r.onload=async ev=>{
+      myProfile.cover_url=ev.target.result;
+      updateAllUIs();
+      try{ await sb.from('profiles').update({cover_url:ev.target.result}).eq('id',myProfile.id); }catch(err){}
+      showToast(currentLang==='en'?'Cover updated':'Обложка обновлена');
+    };
+    r.readAsDataURL(f);
+  };
+  inp.click();
+}
+document.getElementById('settings-cover-edit')?.addEventListener('click', pickCoverImage);
+// settings page scroll: round avatar -> square when cover collapses
+(function setupSettingsCollapse(){
+  const page=document.getElementById('page-settings');
+  if(!page) return;
+  page.addEventListener('scroll', ()=>{
+    if(page.scrollTop > 90) page.classList.add('collapsed');
+    else page.classList.remove('collapsed');
+  }, {passive:true});
+})();
 document.getElementById('settings-logout').onclick=async()=>{ if(await customConfirm(t('you_sure_logout'))){ try{ await sb.auth.signOut(); }catch(e){} location.reload(); } };
 
 // ========== REALTIME ==========
@@ -4534,21 +4615,30 @@ async function openFullProfile(profileLike){
   let p=profileLike;
   try{ const {data}=await sb.from('profiles').select('*').eq('id',profileLike.id).maybeSingle(); if(data) p=data; }catch(e){}
   const isMe = p.id===myProfile?.id;
-  const name=p.first_name?`${p.first_name} ${p.last_name||''}`:(p.username||'');
+  const name=p.first_name?`${p.first_name} ${p.last_name||''}`.trim():(p.username||'');
+  const coverUrl = p.cover_url || (isMe && myProfile?.cover_url) || '';
   const sheet=document.createElement('div');
   sheet.className='profile-sheet';
   sheet.innerHTML=`
     <div class="profile-sheet-top">
       <button class="icon-btn" id="ps-back"><svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg></button>
-      <div style="font-weight:800;font-size:16px;flex:1">Профиль</div>
+      <div class="avatar profile-collapsed-av" id="ps-av-mini"></div>
+      <div class="ps-title">${escapeHtml(name||'Профиль')}</div>
+      ${isMe?`<button class="icon-btn" id="ps-edit-cover" title="Обложка"><svg viewBox="0 0 24 24" style="width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg></button>`:''}
     </div>
-    <div class="profile-sheet-body">
-      <div style="display:flex;flex-direction:column;align-items:center;gap:8px;margin-bottom:8px">
-        <div class="avatar" id="ps-av" style="width:96px;height:96px;font-size:36px"></div>
-        <div style="font-weight:800;font-size:20px">${escapeHtml(name)}${verifiedBadgeIf(p.email)}</div>
-        <div style="color:var(--muted);font-size:14px">@${escapeHtml(p.username||'')}</div>
-        <div style="color:var(--mint);font-size:12px" id="ps-online"></div>
+    <div class="profile-sheet-body" id="ps-scroll">
+      <div class="profile-header" id="ps-header">
+        <div class="profile-cover" id="ps-cover" style="${coverUrl?`background-image:url(${coverUrl})`:''}"></div>
+        <div class="profile-cover-overlay"></div>
+        <div class="profile-header-content">
+          <div class="avatar profile-av-big" id="ps-av"></div>
+          <div class="profile-name-big">${escapeHtml(name)}${verifiedBadgeIf(p.email)}</div>
+          <div class="profile-sub-big">@${escapeHtml(p.username||'')}</div>
+          <div class="profile-online-big" id="ps-online"></div>
+        </div>
+        ${isMe?`<button type="button" class="profile-cover-btn" id="ps-cover-btn"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>Обложка</button>`:''}
       </div>
+      <div class="profile-body-inner">
       ${!isMe?`<div class="profile-sheet-actions">
         <div class="profile-action" data-a="msg"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>Чат</div>
         <div class="profile-action" data-a="search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>Поиск</div>
@@ -4562,12 +4652,52 @@ async function openFullProfile(profileLike){
       <div class="uinfo-row"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px;color:var(--muted)"><path d="M22 16.92v3a2 2 0 01-2.18 2A19.8 19.8 0 0111.19 18a19.5 19.5 0 01-6-6A19.8 19.8 0 012.12 3.38 2 2 0 014.11 2h3a2 2 0 012 1.72c.13.96.36 1.9.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0122 16.92z"/></svg>
         <div><div class="uinfo-label">Телефон</div><div class="uinfo-val">${p.hide_phone?'скрыт':escapeHtml(p.phone||'—')}</div></div></div>
       <div id="ps-gifts"></div>
+      </div>
     </div>`;
   document.body.appendChild(sheet);
   renderAvatarInto(sheet.querySelector('#ps-av'), p.avatar_url, (p.username||'?')[0].toUpperCase(), p.color||colorFor(p.id));
+  renderAvatarInto(sheet.querySelector('#ps-av-mini'), p.avatar_url, (p.username||'?')[0].toUpperCase(), p.color||colorFor(p.id));
+  // force square on mini
+  const mini=sheet.querySelector('#ps-av-mini');
+  if(mini){ mini.style.borderRadius='10px'; }
   const onEl=sheet.querySelector('#ps-online');
   if(onEl) onEl.textContent = onlineUsers.has(p.id) ? (currentLang==='en'?'online':'в сети') : (currentLang==='en'?'offline':'не в сети');
   sheet.querySelector('#ps-back').onclick=()=>sheet.remove();
+  // collapse on scroll
+  const sc=sheet.querySelector('#ps-scroll');
+  const header=sheet.querySelector('#ps-header');
+  const collapseAt = Math.max(80, (header?.offsetHeight||200) * 0.45);
+  sc.addEventListener('scroll', ()=>{
+    if(sc.scrollTop > collapseAt) sheet.classList.add('collapsed');
+    else sheet.classList.remove('collapsed');
+  }, {passive:true});
+  // cover change
+  function pickCover(){
+    let inp=document.getElementById('cover-upload');
+    if(!inp){
+      inp=document.createElement('input');
+      inp.type='file'; inp.accept='image/*'; inp.id='cover-upload'; inp.className='hidden-input';
+      document.body.appendChild(inp);
+    }
+    inp.onchange=function(e){
+      const f=e.target.files[0]; if(!f) return; e.target.value='';
+      const r=new FileReader();
+      r.onload=async ev=>{
+        const url=ev.target.result;
+        if(myProfile) myProfile.cover_url=url;
+        const cov=sheet.querySelector('#ps-cover');
+        if(cov) cov.style.backgroundImage=`url(${url})`;
+        const scov=document.getElementById('settings-cover');
+        if(scov) scov.style.backgroundImage=`url(${url})`;
+        try{ await sb.from('profiles').update({cover_url:url}).eq('id',myProfile.id); }catch(err){}
+        showToast(currentLang==='en'?'Cover updated':'Обложка обновлена');
+      };
+      r.readAsDataURL(f);
+    };
+    inp.click();
+  }
+  sheet.querySelector('#ps-cover-btn')?.addEventListener('click', pickCover);
+  sheet.querySelector('#ps-edit-cover')?.addEventListener('click', pickCover);
   sheet.querySelectorAll('[data-a]').forEach(btn=>{
     btn.onclick=async()=>{
       const a=btn.dataset.a;
@@ -4579,7 +4709,6 @@ async function openFullProfile(profileLike){
       else if(a==='search'){ switchPage('chats'); await openChat(p); document.getElementById('chat-search-btn')?.click(); }
       else if(a==='media'){ switchPage('chats'); await openChat(p); document.getElementById('media-btn')?.click(); }
       else if(a==='mute'){
-        // quiet chat toggle
         const key='sl_quiet';
         let q=[]; try{q=JSON.parse(storage.getItem(key)||'[]');}catch(e){}
         if(q.includes(p.id)){ q=q.filter(x=>x!==p.id); showToast('Звук включён'); }
@@ -4593,6 +4722,7 @@ async function openFullProfile(profileLike){
     if(gifts?.length) sheet.querySelector('#ps-gifts').innerHTML=`<div class="uinfo-label" style="margin-top:12px">Подарки (${gifts.length})</div><div class="gift-grid">${gifts.map(g=>`<div class="gift-opt">${giftSvgFor(g.file_url)}</div>`).join('')}</div>`;
   }catch(e){}
 }
+
 // Override openUserInfo + partner avatar + contact avatars
 openUserInfo = openFullProfile;
 document.getElementById('partner-avatar').onclick=()=>{ if(activePartner) openFullProfile(activePartner); };
