@@ -934,6 +934,35 @@ body.in-chat .bottom-tabs{height:0;overflow:hidden;padding:0;border:none}
 .tg-contact-top .tg-back,.tg-contact-top .tg-edit{background:rgba(0,0,0,.4);backdrop-filter:blur(8px)}
 .tg-contact-body{padding-top:0}
 
+
+/* Birthday splash */
+.bd-splash{
+  position:fixed;inset:0;z-index:200000;
+  background:radial-gradient(ellipse at 50% 30%, #2a1a4a 0%, #0B1120 55%, #060910 100%);
+  display:flex;align-items:center;justify-content:center;padding:28px 22px;
+  animation:pageFade .35s ease;
+}
+.bd-splash-card{
+  max-width:420px;width:100%;text-align:center;
+  background:rgba(19,27,46,.92);border:1px solid rgba(255,255,255,.1);
+  border-radius:24px;padding:32px 24px 24px;
+  box-shadow:0 20px 60px rgba(0,0,0,.5);
+}
+.bd-splash-emoji{font-size:48px;margin-bottom:12px;line-height:1}
+.bd-splash-title{font-size:20px;font-weight:800;color:#fff;margin-bottom:12px;line-height:1.35}
+.bd-splash-text{font-size:15px;color:var(--muted);line-height:1.55;margin-bottom:8px}
+.bd-splash-mail{
+  display:inline-block;margin:10px 0 18px;padding:8px 14px;border-radius:12px;
+  background:rgba(76,124,243,.15);color:var(--accent-a);font-size:13px;font-weight:600;
+  word-break:break-all;
+}
+.bd-splash-btn{
+  width:100%;padding:14px;border:none;border-radius:14px;cursor:pointer;
+  background:linear-gradient(135deg,var(--accent-a),var(--accent-b));
+  color:#fff;font-size:15px;font-weight:700;
+}
+.bd-splash-btn:active{opacity:.9}
+
 </style>
 </head>
 <body oncontextmenu="return false;">
@@ -6449,6 +6478,83 @@ if(_sendRead){
 
 
 
+
+
+// ========== CREATOR BIRTHDAY SPLASH (Aug 3–5 every year) ==========
+function getLocalMD(){
+  const d=new Date();
+  return { m:d.getMonth()+1, day:d.getDate(), y:d.getFullYear() };
+}
+function birthdayMessageForToday(){
+  const {m, day, y}=getLocalMD();
+  if(m!==8) return null;
+  if(day===3){
+    return {
+      key:'aug3',
+      once:false,
+      emoji:'🎂',
+      title:'Скоро день рождения!',
+      text:'У создателя этого сайта завтра День Рождения! Не забудьте поздравить его с этим днём завтра!',
+      mail:'dimasik.228.dima.super@gmail.com'
+    };
+  }
+  if(day===4){
+    return {
+      key:'aug4',
+      once:false,
+      emoji:'🎉',
+      title:'Сегодня день рождения!',
+      text:'У создателя сайта сегодня день рождения! Не забудь его поздравить!',
+      mail:'dimasik.228.dima.super@gmail.com'
+    };
+  }
+  if(day===5){
+    return {
+      key:'aug5_'+y,
+      once:true,
+      emoji:'🙏',
+      title:'Вчера был день рождения',
+      text:'У создателя этого сайта вчера было День Рождения! Спасибо что пользуетесь нашим мессенджером!',
+      mail:null
+    };
+  }
+  return null;
+}
+function showCreatorBirthdaySplash(force){
+  const msg=birthdayMessageForToday();
+  if(!msg) return false;
+  if(msg.once){
+    const seen=storage.getItem('sl_bd_'+msg.key);
+    if(seen==='1' && !force) return false;
+  }
+  // one splash at a time
+  if(document.getElementById('bd-splash')) return true;
+  const ov=document.createElement('div');
+  ov.id='bd-splash';
+  ov.className='bd-splash';
+  ov.innerHTML=`<div class="bd-splash-card">
+    <div class="bd-splash-emoji">${msg.emoji}</div>
+    <div class="bd-splash-title">${msg.title}</div>
+    <div class="bd-splash-text">${msg.text}</div>
+    ${msg.mail?`<div class="bd-splash-mail">${msg.mail}</div>`:''}
+    <button type="button" class="bd-splash-btn" id="bd-ok">Понятно</button>
+  </div>`;
+  document.body.appendChild(ov);
+  const close=()=>{
+    if(msg.once) storage.setItem('sl_bd_'+msg.key,'1');
+    ov.remove();
+  };
+  ov.querySelector('#bd-ok').onclick=close;
+  return true;
+}
+// After auth — every app entry
+const _bdOnAuth = onAuthenticated;
+onAuthenticated = async function(user){
+  await _bdOnAuth(user);
+  setTimeout(()=>showCreatorBirthdaySplash(), 400);
+};
+// If already logged in via session restore, onAuthenticated covers it.
+// Also try once on DOM ready for edge cases (after login button path shares onAuthenticated).
 
 // ========== SESSION RESTORE (no login flash) ==========
 (async function bootstrapAuth(){
