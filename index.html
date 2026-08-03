@@ -1187,17 +1187,24 @@ function setOfflineQ(q){ storage.setItem(OFFLINE_Q,JSON.stringify(q)); }
   const ov=document.createElement('div');
   ov.id='sl-loader'; ov.className='sl-loader-overlay'; ov.setAttribute('aria-hidden','true');
   ov.innerHTML='<div class="sl-loader-box"><div class="sl-spinner lg"></div></div>';
+  ov.addEventListener('click', ()=>hideLoader(true));
   document.body.appendChild(ov);
 })();
 let _loaderCount=0;
+let _loaderSafety=null;
 function showLoader(){
   _loaderCount++;
   const ov=document.getElementById('sl-loader');
   if(ov){ ov.classList.add('show'); ov.setAttribute('aria-hidden','false'); }
+  // safety: never stick longer than 6s
+  clearTimeout(_loaderSafety);
+  _loaderSafety=setTimeout(()=>hideLoader(true), 6000);
 }
-function hideLoader(){
-  _loaderCount=Math.max(0,_loaderCount-1);
+function hideLoader(force){
+  if(force){ _loaderCount=0; }
+  else { _loaderCount=Math.max(0,_loaderCount-1); }
   if(_loaderCount>0) return;
+  clearTimeout(_loaderSafety); _loaderSafety=null;
   const ov=document.getElementById('sl-loader');
   if(ov){ ov.classList.remove('show'); ov.setAttribute('aria-hidden','true'); }
 }
@@ -1375,13 +1382,17 @@ async function onAuthenticated(user){
   document.getElementById('auth-screen').style.display='none';
   document.getElementById('app-screen').style.display='flex';
   updateAllUIs();
-  showLoader();
+  // inline list spinners only — avoid sticky full-screen overlay on login
   try{
     await loadChats(); await loadGroups(); await loadStories();
     subscribeRealtime(); setupPresence(); setupTyping();
     flushOfflineQueue();
     handleDeepLink();
-  } finally { hideLoader(); }
+  } finally {
+    hideLoader(true);
+    document.documentElement.classList.remove('sl-booting');
+    document.documentElement.classList.add('sl-ready');
+  }
 }
 
 // ========== DEEP LINK ==========
@@ -5941,6 +5952,7 @@ updateCircleIcon();
       await onAuthenticated(data.session.user);
       document.documentElement.classList.remove('sl-booting');
       document.documentElement.classList.add('sl-ready');
+      hideLoader(true);
     } else {
       showAuth();
     }
