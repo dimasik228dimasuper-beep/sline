@@ -174,6 +174,7 @@ body.in-chat .app-pages{
   transition:transform .18s ease;
 }
 .sw-front.swiping{transition:none}
+.sw-front.holding{opacity:.72;transform:scale(.98);transition:opacity .15s,transform .15s}
 .sw-front.active{background:var(--panel-hover)!important;box-shadow:inset 3px 0 0 var(--accent-a)}
 body.theme-light .sw-front,
 body.theme-light .sw-clip,
@@ -304,7 +305,7 @@ body.beta-oled .sw-clip{background:var(--panel)!important}
 .bottom-tab{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:4px 0 2px;cursor:pointer;color:var(--muted);gap:2px;font-size:10px;font-weight:600}
 .bottom-tab.active{color:var(--accent-a)}
 .bottom-tab svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
-.ctx-menu{position:fixed;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:6px;min-width:200px;z-index:1000;box-shadow:0 12px 40px rgba(0,0,0,.45);display:none}
+.ctx-menu{position:fixed;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:6px;min-width:200px;z-index:12000;box-shadow:0 12px 40px rgba(0,0,0,.45);display:none;-webkit-touch-callout:none}
 .ctx-item{padding:10px 14px;border-radius:10px;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:10px;color:var(--text)}
 .ctx-item:hover{background:var(--panel-hover)}
 .ctx-item.danger{color:var(--danger)}
@@ -1932,58 +1933,101 @@ function renderContactsAndGroups(){
       }
 
       let pressTimer=null;
-      let pressMoved=false;
+      let pressStart=0;
       let pressX=0, pressY=0;
+      let didLongPress=false;
+      let activePointer=null;
       const LONG_MS=3000;
+      const MOVE_TOL=24; // px — finger tremor / micro-scroll
 
       function clearPress(){
         if(pressTimer){ clearTimeout(pressTimer); pressTimer=null; }
+        row.classList.remove('holding');
       }
 
-      function startPress(clientX, clientY){
+      function fireLongPress(){
+        pressTimer=null;
+        didLongPress=true;
+        row.classList.remove('holding');
+        try{ navigator.vibrate && navigator.vibrate([20,40,20]); }catch(err){}
+        showChatCtx({clientX:pressX, clientY:pressY, pageX:pressX, pageY:pressY}, type, data);
+      }
+
+      function onDown(clientX, clientY, pointerId){
         if(isSelectMode()) return;
         clearPress();
-        pressMoved=false;
+        didLongPress=false;
         pressX=clientX; pressY=clientY;
-        pressTimer=setTimeout(()=>{
-          pressTimer=null;
-          // haptic if available
-          try{ navigator.vibrate && navigator.vibrate(30); }catch(err){}
-          showChatCtx({clientX:pressX, clientY:pressY, pageX:pressX, pageY:pressY}, type, data);
-        }, LONG_MS);
+        pressStart=Date.now();
+        activePointer=pointerId;
+        row.classList.add('holding');
+        pressTimer=setTimeout(fireLongPress, LONG_MS);
       }
 
-      function movePress(clientX, clientY){
+      function onMove(clientX, clientY){
         if(!pressTimer) return;
-        if(Math.abs(clientX-pressX)>10 || Math.abs(clientY-pressY)>10){
-          pressMoved=true;
+        if(Math.abs(clientX-pressX)>MOVE_TOL || Math.abs(clientY-pressY)>MOVE_TOL){
           clearPress();
         }
       }
 
-      row.addEventListener('touchstart', function(e){
-        if(e.touches.length!==1) return;
-        startPress(e.touches[0].clientX, e.touches[0].clientY);
-      }, {passive:true});
-      row.addEventListener('touchmove', function(e){
-        if(e.touches.length!==1) return;
-        movePress(e.touches[0].clientX, e.touches[0].clientY);
-      }, {passive:true});
-      row.addEventListener('touchend', clearPress, {passive:true});
-      row.addEventListener('touchcancel', clearPress, {passive:true});
+      function onUp(){
+        clearPress();
+        activePointer=null;
+      }
 
-      // desktop: hold mouse 3s
-      row.addEventListener('mousedown', function(e){
-        if(e.button!==0) return;
-        startPress(e.clientX, e.clientY);
+      // Pointer Events (iOS 13+, Android, desktop)
+      clip.addEventListener('pointerdown', function(e){
+        if(e.pointerType==='mouse' && e.button!==0) return;
+        if(e.target.closest && e.target.closest('.sw-act')) return;
+        onDown(e.clientX, e.clientY, e.pointerId);
       });
-      row.addEventListener('mousemove', function(e){
-        movePress(e.clientX, e.clientY);
+      clip.addEventListener('pointermove', function(e){
+        if(activePointer!==null && e.pointerId!==activePointer) return;
+        onMove(e.clientX, e.clientY);
       });
-      row.addEventListener('mouseup', clearPress);
-      row.addEventListener('mouseleave', clearPress);
+      clip.addEventListener('pointerup', function(e){
+        if(activePointer!==null && e.pointerId!==activePointer) return;
+        // if held long enough but timer somehow missed, still open
+        if(!didLongPress && pressStart && (Date.now()-pressStart)>=LONG_MS){
+          fireLongPress();
+        }
+        onUp();
+      });
+      clip.addEventListener('pointercancel', onUp);
+      clip.addEventListener('pointerleave', function(e){
+        // only cancel if primary pointer left the row during hold
+        if(activePointer!==null && e.pointerId===activePointer){
+          // don't cancel on leave for touch — finger may jitter; only for mouse
+          if(e.pointerType==='mouse') onUp();
+        }
+      });
+
+      // Fallback touch for very old WebViews without PointerEvent
+      if(!window.PointerEvent){
+        row.addEventListener('touchstart', function(e){
+          if(e.touches.length!==1) return;
+          onDown(e.touches[0].clientX, e.touches[0].clientY, 'touch');
+        }, {passive:true});
+        row.addEventListener('touchmove', function(e){
+          if(e.touches.length!==1) return;
+          onMove(e.touches[0].clientX, e.touches[0].clientY);
+        }, {passive:true});
+        row.addEventListener('touchend', function(){
+          if(!didLongPress && pressStart && (Date.now()-pressStart)>=LONG_MS){
+            fireLongPress();
+          }
+          onUp();
+        }, {passive:true});
+        row.addEventListener('touchcancel', onUp, {passive:true});
+      }
 
       row.addEventListener('click', function(e){
+        if(didLongPress || window._slCtxOpened){
+          e.preventDefault(); e.stopPropagation();
+          didLongPress=false;
+          return;
+        }
         if(isSelectMode()){
           e.preventDefault(); e.stopPropagation();
           const id=String(data.id);
@@ -1999,7 +2043,6 @@ function renderContactsAndGroups(){
           }catch(err){}
           return;
         }
-        // if context menu open, don't open chat
         const menu=document.getElementById('ctx-menu');
         if(menu && menu.style.display==='block'){
           e.preventDefault(); e.stopPropagation();
@@ -2011,6 +2054,10 @@ function renderContactsAndGroups(){
       const av=row.querySelector('.avatar');
       if(av && type==='user'){
         av.addEventListener('click', async function(e){
+          if(didLongPress || window._slCtxOpened){
+            e.preventDefault(); e.stopPropagation();
+            return;
+          }
           if(document.body.classList.contains('chats-selecting')){
             e.preventDefault();
             e.stopPropagation();
@@ -2031,10 +2078,10 @@ function renderContactsAndGroups(){
           await openStoriesOrProfile(data);
         });
       }
-      // right-click still opens menu (desktop)
       row.addEventListener('contextmenu', function(e){
         e.preventDefault(); e.stopPropagation();
         clearPress();
+        didLongPress=true;
         showChatCtx(e, type, data);
       });
     })(clip, row, data, type);
@@ -2061,6 +2108,7 @@ function bindContactsListSwipe(list){ /* per-row handlers used instead */ }
 
 function showChatCtx(e, type, data){
   const menu=document.getElementById('ctx-menu');
+  if(!menu) return;
   const archived=getArchive().includes(data.id);
   const mutedUntil=(JSON.parse(storage.getItem('sl_muted')||'{}')[data.id]||0);
   const isMuted=mutedUntil===-1||mutedUntil>Date.now();
@@ -2069,9 +2117,18 @@ function showChatCtx(e, type, data){
     <div class="ctx-item" data-a="mute">${isMuted?'Включить звук':'Без звука'}</div>
     <div class="ctx-item" data-a="lock">PIN-защита</div>
     <div class="ctx-item danger" data-a="del">Удалить чат</div>`;
-  menu.style.left=Math.min(e.clientX||e.pageX,innerWidth-200)+'px';
-  menu.style.top=Math.min(e.clientY||e.pageY,innerHeight-160)+'px';
+  let cx = (e && (e.clientX||e.pageX)) || (innerWidth/2);
+  let cy = (e && (e.clientY||e.pageY)) || (innerHeight/3);
+  // keep on screen
   menu.style.display='block';
+  const mw = menu.offsetWidth || 200;
+  const mh = menu.offsetHeight || 160;
+  menu.style.left = Math.max(8, Math.min(cx, innerWidth - mw - 8)) + 'px';
+  menu.style.top  = Math.max(8, Math.min(cy, innerHeight - mh - 8)) + 'px';
+  // prevent the releasing finger / synthetic click from instantly closing the menu
+  window._slCtxIgnoreClickUntil = Date.now() + 600;
+  window._slCtxOpened = true;
+  setTimeout(()=>{ window._slCtxOpened = false; }, 600);
   menu.querySelectorAll('.ctx-item').forEach(it=>{
     it.onclick=async()=>{
       menu.style.display='none';
@@ -2619,7 +2676,13 @@ function showMsgCtx(e, msg){
     };
   });
 }
-document.addEventListener('click', e=>{ if(!e.target.closest('#ctx-menu')) document.getElementById('ctx-menu').style.display='none'; });
+document.addEventListener('click', e=>{
+  if(window._slCtxIgnoreClickUntil && Date.now() < window._slCtxIgnoreClickUntil) return;
+  if(!e.target.closest('#ctx-menu')){
+    const m=document.getElementById('ctx-menu');
+    if(m) m.style.display='none';
+  }
+}, true);
 
 function showPinnedBar(){
   const key=activeGroup?.id||activePartner?.id;
