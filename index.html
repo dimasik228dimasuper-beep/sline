@@ -1855,8 +1855,7 @@ async function loadChats(){
     const ids=[...map.keys()];
     let profiles=[];
     if(ids.length){ const {data:prs}=await sb.from('profiles').select('*').in('id',ids); profiles=prs||[]; }
-    contacts=[{id:'bild_bot',username:'bild_bot',first_name:'Bild',last_name:'Bot',color:'#7C5CFC',isBot:true,isBildBot:true,lastMessage:'Собери своего бота',lastAt:new Date().toISOString()},
-      ...profiles.map(p=>({...p,lastMessage:map.get(p.id)?.lastMessage||'',lastAt:map.get(p.id)?.lastAt}))];
+    contacts=profiles.map(p=>({...p,lastMessage:map.get(p.id)?.lastMessage||'',lastAt:map.get(p.id)?.lastAt}));
     renderContactsAndGroups();
   }catch(e){ list.innerHTML='<div class="empty-state">Ошибка</div>'; }
 }
@@ -1875,9 +1874,10 @@ function renderContactsAndGroups(){
   const srcGroups = showArchive ? groups.filter(g=>archive.includes(g.id)) : groups.filter(g=>!archive.includes(g.id));
   (q?srcGroups.filter(g=>(g.name||'').toLowerCase().includes(q)):srcGroups).forEach(g=>items.push({type:'group',data:g,unread:unread[g.id]||0}));
   (q?srcContacts.filter(p=>{
+    if(p.isBildBot||p.id==='bild_bot') return false;
     const n=((p.first_name||'')+' '+(p.last_name||'')+' '+(p.username||'')+' '+(p.email||'')+' '+(p.phone||'')).toLowerCase();
     return n.includes(q);
-  }):srcContacts).forEach(p=>items.push({type:'user',data:p,unread:p.isBot?0:(unread[p.id]||0)}));
+  }):srcContacts.filter(p=>!(p.isBildBot||p.id==='bild_bot'))).forEach(p=>items.push({type:'user',data:p,unread:p.isBot?0:(unread[p.id]||0)}));
   if(!showArchive && activeFolder && activeFolder!=='Все' && activeFolder!=='Архив'){
     const folders=JSON.parse(storage.getItem('sl_folders')||'{}');
     const ids=new Set(folders[activeFolder]||[]);
@@ -1952,13 +1952,17 @@ function renderContactsAndGroups(){
         clip.dataset.open='1';
         clip.classList.add('is-swiping');
         window._swJustSwiped=true;
-        setTimeout(()=>{ window._swJustSwiped=false; }, 300);
+        setTimeout(()=>{ window._swJustSwiped=false; }, 450);
       }
       function close(){
         paint(0, true);
         opened=false;
         delete clip.dataset.open;
         clip.classList.remove('is-swiping');
+      }
+      function markGesture(){
+        window._swJustSwiped=true;
+        setTimeout(()=>{ window._swJustSwiped=false; }, 450);
       }
       clip._swClose = close;
 
@@ -2000,6 +2004,7 @@ function renderContactsAndGroups(){
       function endTouch(){
         if(!dragging) return;
         if(axis==='h'){
+          markGesture(); // never open chat after a horizontal selection/swipe
           if(cur < -W*0.3) open();
           else close();
         }
@@ -2028,6 +2033,7 @@ function renderContactsAndGroups(){
         }
         function up(){
           if(axis==='h'){
+            markGesture();
             if(cur < -W*0.3) open(); else close();
           }
           dragging=false; axis=null;
@@ -2039,8 +2045,25 @@ function renderContactsAndGroups(){
       });
 
       row.addEventListener('click', function(e){
-        if(opened){ close(); e.preventDefault(); e.stopPropagation(); return; }
-        if(window._swJustSwiped){ e.preventDefault(); e.stopPropagation(); return; }
+        // selection mode: never open chat
+        if(document.body.classList.contains('chats-selecting')){
+          e.preventDefault(); e.stopPropagation();
+          const id=String(data.id);
+          if(clip.classList.contains('selected')){ clip.classList.remove('selected'); }
+          else { clip.classList.add('selected'); }
+          // sync with select set if exposed
+          try{
+            if(window._selectedChats){
+              if(window._selectedChats.has(id)) window._selectedChats.delete(id);
+              else window._selectedChats.add(id);
+              const cnt=document.getElementById('chat-sel-count');
+              if(cnt) cnt.textContent=window._selectedChats.size+' выбрано';
+            }
+          }catch(err){}
+          return;
+        }
+        if(opened || clip.dataset.open){ close(); e.preventDefault(); e.stopPropagation(); return; }
+        if(window._swJustSwiped || axis==='h' || dragging){ e.preventDefault(); e.stopPropagation(); return; }
         if(type==='group') openGroup(data); else openChat(data);
       });
 
@@ -7683,7 +7706,7 @@ function scheduleBirthdayAfterAppReady(){
     return bar;
   }
   function enterChatSelect(){
-    chatSelectMode=true; selectedChats.clear();
+    chatSelectMode=true; selectedChats.clear(); window._selectedChats=selectedChats;
     document.body.classList.add('chats-selecting');
     ensureChatSelectBar().classList.add('show');
     document.getElementById('chat-sel-count').textContent='0 выбрано';
@@ -7706,7 +7729,7 @@ function scheduleBirthdayAfterAppReady(){
     });
   }
   function exitChatSelect(){
-    chatSelectMode=false; selectedChats.clear();
+    chatSelectMode=false; selectedChats.clear(); window._selectedChats=selectedChats;
     document.body.classList.remove('chats-selecting');
     document.getElementById('chat-select-bar')?.classList.remove('show');
     document.querySelectorAll('#contacts-list .sw-clip.selected').forEach(c=>c.classList.remove('selected'));
@@ -7788,65 +7811,13 @@ function scheduleBirthdayAfterAppReady(){
     const composer=document.getElementById('composer');
     let panel=document.getElementById('bild-bot-panel');
     if(panel) panel.remove();
+    // Bild Bot removed
     if(partner?.isBildBot || partner?.id==='bild_bot'){
-      if(composer) composer.style.display='none';
-      const msgs=document.getElementById('messages');
-      panel=document.createElement('div');
-      panel.id='bild-bot-panel';
-      panel.className='bild-bot-panel';
-      const bot=getBildBot();
-      let html=`<div style="font-weight:700;margin-bottom:4px">${escapeHtml(bot.name)}</div>
-        <div style="font-size:12px;color:var(--muted);margin-bottom:8px">Кнопки бота — нажмите, чтобы получить ответ. «Настроить» — свой сценарий.</div>`;
-      (bot.buttons||[]).forEach((b,i)=>{
-        html+=`<button type="button" class="bb-btn" data-i="${i}">${escapeHtml(b.label)}</button>`;
-      });
-      html+=`<button type="button" class="bb-btn" data-i="cfg" style="border-style:dashed">⚙ Настроить бота</button>`;
-      panel.innerHTML=html;
-      const chat=document.getElementById('chat-active');
-      if(chat) chat.appendChild(panel);
-      else msgs?.parentNode?.appendChild(panel);
-      panel.querySelectorAll('.bb-btn').forEach(btn=>{
-        btn.onclick=async()=>{
-          if(btn.dataset.i==='cfg'){
-            const label=await customPrompt('Текст кнопки','Привет');
-            if(label===null) return;
-            const reply=await customPrompt('Ответ бота','Привет!');
-            if(reply===null) return;
-            const b=getBildBot();
-            b.buttons=b.buttons||[];
-            b.buttons.push({label, reply});
-            setBildBot(b);
-            showToast('Кнопка добавлена');
-            openChat(partner);
-            return;
-          }
-          const b=getBildBot();
-          const item=b.buttons[parseInt(btn.dataset.i,10)];
-          if(!item) return;
-          // show as fake messages in list
-          const list=document.getElementById('messages');
-          if(!list) return;
-          const mine=document.createElement('div');
-          mine.className='bubble-row me';
-          mine.innerHTML=`<div class="bubble me">${escapeHtml(item.label)}</div>`;
-          list.appendChild(mine);
-          setTimeout(()=>{
-            const them=document.createElement('div');
-            them.className='bubble-row them';
-            them.innerHTML=`<div class="bubble them">${escapeHtml(item.reply)}</div>`;
-            list.appendChild(them);
-            list.scrollTop=list.scrollHeight;
-          }, 400);
-        };
-      });
-      // clear messages area intro
-      const list=document.getElementById('messages');
-      if(list && !list.querySelector('.bild-intro')){
-        list.innerHTML=`<div class="bild-intro" style="padding:24px;text-align:center;color:var(--muted)">Bild Bot — соберите кнопки и ответы без кода</div>`;
-      }
-    } else {
-      if(composer) composer.style.display='flex';
+      showToast('Bild Bot удалён');
+      try{ document.getElementById('back-btn')?.click(); }catch(e){}
+      return;
     }
+    if(composer) composer.style.display='flex';
 
     // Greeting for empty new chat
     try{
