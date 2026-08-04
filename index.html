@@ -2070,6 +2070,23 @@ function renderContactsAndGroups(){
       const av=row.querySelector('.avatar');
       if(av && type==='user'){
         av.addEventListener('click', async function(e){
+          // during multi-select: do not open profile/stories via avatar
+          if(document.body.classList.contains('chats-selecting')){
+            e.preventDefault();
+            e.stopPropagation();
+            const id=String(data.id);
+            if(clip.classList.contains('selected')){ clip.classList.remove('selected'); }
+            else { clip.classList.add('selected'); }
+            try{
+              if(window._selectedChats){
+                if(window._selectedChats.has(id)) window._selectedChats.delete(id);
+                else window._selectedChats.add(id);
+                const cnt=document.getElementById('chat-sel-count');
+                if(cnt) cnt.textContent=window._selectedChats.size+' выбрано';
+              }
+            }catch(err){}
+            return;
+          }
           e.stopPropagation();
           await openStoriesOrProfile(data);
         });
