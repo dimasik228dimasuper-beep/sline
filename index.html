@@ -1653,7 +1653,19 @@ html.sl-ready.sl-booting::before{display:none!important}
 // ========== CORE ==========
 const SUPABASE_URL = "https://eshbyibuzvoztrsunvul.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVzaGJ5aWJ1enZvenRyc3VudnVsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU0MDk5MzUsImV4cCI6MjEwMDk4NTkzNX0.WVOd2qZ5RJlOrMPlfuIFJEymgfZjtGVB4TJgrDEFnXQ";
-let sb; try { sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY); } catch(e){}
+let sb; try {
+  sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+      storage: localStorage,
+      storageKey: 'sl-auth-token',
+      flowType: 'pkce'
+    },
+    realtime: { params: { eventsPerSecond: 8 } }
+  });
+} catch(e){ try { sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY); } catch(e2){} }
 
 const _mem = {};
 const storage = {
@@ -2644,7 +2656,6 @@ function subscribeNewsGlobal(){
     const ch = sb.channel('signal-line-news-global');
     ch.on('broadcast', {event:'news_post'}, ({payload})=>{
       if(!payload) return;
-      // save locally for offline list
       try{
         const arr=getNewsLocalMsgs();
         if(!arr.some(m=>String(m.id)===String(payload.id))){
@@ -2656,7 +2667,15 @@ function subscribeNewsGlobal(){
         scrollToBottom();
       }
       try{ if(typeof injectNewsChannelLocal==='function') injectNewsChannelLocal(); }catch(e){}
-    }).subscribe();
+    });
+    ch.on('broadcast', {event:'news_del'}, ({payload})=>{
+      if(!payload || !payload.id) return;
+      try{
+        setNewsLocalMsgs(getNewsLocalMsgs().filter(m=>String(m.id)!==String(payload.id)));
+      }catch(e){}
+      document.querySelector(`.bubble-row[data-id="${payload.id}"]`)?.remove();
+    });
+    ch.subscribe();
     window._slNewsSub = ch;
   }catch(e){}
 }
@@ -3236,7 +3255,9 @@ function showMsgCtx(e, msg){
   items+=`<div class="ctx-item" data-a="select"><span class="ico">☑️</span> Выбрать</div>
     <div class="ctx-item" data-a="pin"><span class="ico">📌</span> Закрепить</div>`;
   if(!mine) items+=`<div class="ctx-item danger" data-a="report"><span class="ico">🚩</span> Пожаловаться</div>`;
-  if(mine) items+=`<div class="ctx-item danger" data-a="del"><span class="ico">🗑️</span> Удалить</div>`;
+  const canDelNews = activeGroup && typeof isNewsChannel==='function' && isNewsChannel(activeGroup)
+    && typeof isNewsPublisher==='function' && isNewsPublisher();
+  if(mine || canDelNews) items+=`<div class="ctx-item danger" data-a="del"><span class="ico">🗑️</span> Удалить</div>`;
   items+=`<div class="ctx-sep"></div><div class="ctx-item" data-a="cancel"><span class="ico">✕</span> Отменить</div>`;
 
   menu.className='ctx-menu wa-style';
@@ -3365,7 +3386,36 @@ function showMsgCtx(e, msg){
       else if(a==='edit'){ editingMsgId=msg.id; document.getElementById('message-input').value=msg.content||''; document.getElementById('message-input').focus(); document.getElementById('send-btn').classList.add('visible'); }
       else if(a==='del'){
         if(!(await customConfirm(t('you_sure_delete_msg')||'Удалить сообщение?'))) return;
-        sb.from('messages').delete().eq('id',msg.id).then(()=>document.querySelector(`.bubble-row[data-id="${msg.id}"]`)?.remove());
+        const mid = msg.id;
+        const isNews = activeGroup && typeof isNewsChannel==='function' && isNewsChannel(activeGroup);
+        const canPub = typeof isNewsPublisher==='function' && isNewsPublisher();
+        // Remove from UI immediately
+        document.querySelector(`.bubble-row[data-id="${mid}"]`)?.remove();
+        // Local news storage
+        if(isNews){
+          try{
+            const arr = getNewsLocalMsgs().filter(m => String(m.id)!==String(mid));
+            setNewsLocalMsgs(arr);
+          }catch(e){}
+          // Broadcast delete so others remove it
+          try{
+            const ch = sb.channel('signal-line-news-global');
+            ch.subscribe(st=>{
+              if(st==='SUBSCRIBED'){
+                ch.send({type:'broadcast', event:'news_del', payload:{ id: mid }});
+                setTimeout(()=>{ try{ sb.removeChannel(ch); }catch(e){} }, 1500);
+              }
+            });
+          }catch(e){}
+        }
+        // DB delete (real uuid messages)
+        if(mid && !String(mid).startsWith('news_') && !String(mid).startsWith('local_')){
+          try{
+            const { error } = await sb.from('messages').delete().eq('id', mid);
+            if(error) console.warn('del msg', error);
+          }catch(e){ console.warn(e); }
+        }
+        showToast('Удалено');
       }
       else if(a==='report'){ reportMessage(msg); }
       else if(a==='star'){
@@ -10784,6 +10834,51 @@ window._slTranscribeImpl = window.transcribeVoiceMsg = async function(msg){
   console.log('[SL] real multi-account v3 ready');
 })();
 
+
+
+// ========== Session keep-alive (don't expire) ==========
+(function(){
+  if(!sb || !sb.auth) return;
+  async function refreshNow(){
+    try{
+      // Only refresh when a session already exists (skip login screen)
+      const { data: cur } = await sb.auth.getSession();
+      if(!cur?.session?.refresh_token) return;
+      const { data, error } = await sb.auth.refreshSession();
+      if(error){
+        // Ignore "Auth session missing" and similar when logged out
+        const m = String(error.message||'');
+        if(/session missing|not found|invalid refresh/i.test(m)) return;
+        console.warn('[SL] session refresh:', m);
+        return;
+      }
+      if(data?.session && typeof saveCurrentAccountSession==='function'){
+        try{ await saveCurrentAccountSession(); }catch(e){}
+      }
+    }catch(e){
+      const m = String(e?.message||e||'');
+      if(/session missing|not found/i.test(m)) return;
+      console.warn('[SL] refresh', e);
+    }
+  }
+  // Refresh every 10 minutes
+  setInterval(refreshNow, 10 * 60 * 1000);
+  // Also on visibility
+  document.addEventListener('visibilitychange', ()=>{
+    if(document.visibilityState==='visible') refreshNow();
+  });
+  // Initial after load
+  setTimeout(refreshNow, 5000);
+  // Touch activity keeps session warm
+  let lastTouch = Date.now();
+  ['pointerdown','keydown'].forEach(ev=>{
+    document.addEventListener(ev, ()=>{
+      if(Date.now()-lastTouch > 5*60*1000){ lastTouch=Date.now(); refreshNow(); }
+      else lastTouch=Date.now();
+    }, {passive:true});
+  });
+  console.log('[SL] session keep-alive on');
+})();
 
 </script>
 </body>
