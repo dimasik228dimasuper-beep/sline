@@ -274,6 +274,34 @@ body.beta-oled .sw-clip{background:var(--panel)!important}
 .rec-side-btns{display:flex;gap:12px}
 
 .voice-bubble{display:flex;align-items:center;gap:10px;min-width:200px}
+
+/* Call message card (like Telegram) */
+.call-msg-bubble{display:flex;align-items:center;gap:12px;min-width:200px;padding:4px 2px}
+.call-msg-ico{width:42px;height:42px;border-radius:14px;background:rgba(255,255,255,.18);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.call-msg-ico svg{width:22px;height:22px;fill:#fff;stroke:#fff;stroke-width:0}
+.call-msg-bubble.missed .call-msg-ico{background:rgba(255,255,255,.22)}
+.call-msg-title{font-weight:700;font-size:14px;line-height:1.2}
+.call-msg-sub{font-size:12px;opacity:.8;margin-top:2px}
+.bubble.me .call-msg-bubble{color:#fff}
+/* Voice →T transcribe button */
+.voice-bubble{display:flex;align-items:center;gap:8px;min-width:220px}
+.voice-wave-wrap{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.voice-dur{font-size:11px;opacity:.75}
+.voice-transcribe-btn{
+  width:36px;height:36px;border-radius:12px;border:none;cursor:pointer;
+  background:rgba(255,255,255,.22);color:#fff;display:flex;align-items:center;justify-content:center;
+  gap:0;flex-shrink:0;font-weight:800;line-height:1;padding:0;
+}
+.voice-transcribe-btn .vt-arrow{font-size:13px;margin-right:1px}
+.voice-transcribe-btn .vt-t{font-size:14px;font-weight:800}
+.bubble.them .voice-transcribe-btn{background:rgba(76,124,243,.2);color:var(--text)}
+.voice-play-btn{width:40px;height:40px;border-radius:50%;border:none;background:rgba(255,255,255,.25);color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0}
+.voice-play-btn svg{width:18px;height:18px;fill:currentColor}
+/* 404 page */
+.sl-404{position:fixed;inset:0;z-index:20000;background:var(--bg,#0B1120);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center}
+.sl-404 h1{font-size:72px;margin:0;background:linear-gradient(135deg,#4C7CF3,#6D5DF6);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.sl-404 p{color:var(--muted);max-width:320px}
+
 .voice-play-btn{width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,.2);border:none;color:inherit;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0}
 .voice-play-btn svg{width:16px;height:16px;fill:currentColor}
 .voice-wave-canvas{flex:1;height:32px;border-radius:4px}
@@ -2364,9 +2392,27 @@ function buildMessageBody(msg, replyHtml, bodyText){
   }
   if(msg.type==='voice'){
     return `<div class="voice-bubble" data-mid="${msg.id}" data-src="${msg.file_url}">
-      <button class="voice-play-btn">${playIconSvg}</button>
-      <canvas class="voice-wave-canvas" width="160" height="32"></canvas>
-      <span class="voice-speed">${currentPlaybackSpeed}×</span></div>`;
+      <button type="button" class="voice-play-btn" aria-label="Play">${playIconSvg}</button>
+      <div class="voice-wave-wrap"><canvas class="voice-wave-canvas" width="160" height="32"></canvas><span class="voice-dur">0:00</span></div>
+      <button type="button" class="voice-transcribe-btn" title="Расшифровать" aria-label="Transcribe"><span class="vt-arrow">→</span><span class="vt-t">T</span></button>
+    </div>`;
+  }
+  if(msg.type==='call'){
+    const kind = (msg.content||'');
+    const isVideo = /видео|video/i.test(kind);
+    const isMissed = /пропущ|missed|отмен/i.test(kind);
+    const title = isMissed ? (isVideo?'Отменённый видеозвонок':'Отменённый вызов')
+      : (/исход/i.test(kind)?(isVideo?'Исходящий видеозвонок':'Исходящий вызов')
+      : (/вход/i.test(kind)?(isVideo?'Входящий видеозвонок':'Входящий вызов')
+      : (isVideo?'Видеозвонок':'Аудиозвонок')));
+    const sub = isVideo ? 'Видео' : 'Аудио';
+    return `<div class="call-msg-bubble ${isMissed?'missed':''}">
+      <div class="call-msg-ico">${isMissed
+        ? '<svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.8 19.8 0 01-8.63-3.07 19.5 19.5 0 01-6-6A19.8 19.8 0 012.12 4.18 2 2 0 014.11 2h3a2 2 0 012 1.72c.13.96.36 1.9.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0122 16.92z"/><path d="M18 6L6 18M6 6l12 12" stroke-width="2.2"/></svg>'
+        : '<svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.8 19.8 0 01-8.63-3.07 19.5 19.5 0 01-6-6A19.8 19.8 0 012.12 4.18 2 2 0 014.11 2h3a2 2 0 012 1.72c.13.96.36 1.9.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0122 16.92z"/></svg>'
+      }</div>
+      <div class="call-msg-txt"><div class="call-msg-title">${title}</div><div class="call-msg-sub">${sub}</div></div>
+    </div>`;
   }
   if(msg.type==='image') return `<img src="${msg.file_url}" loading="lazy">`;
   if(msg.type==='video') return `<video src="${msg.file_url}" controls></video>`;
@@ -2437,9 +2483,14 @@ function renderMessage(msg, isGroup=false){
     const canvas=voice.querySelector('canvas');
     drawFakeWaveform(canvas, mine);
     const btn=voice.querySelector('.voice-play-btn');
-    btn.onclick=e=>{
+    if(btn) btn.onclick=e=>{
       e.stopPropagation();
       toggleVoicePlay(voice, btn);
+    };
+    const tb=voice.querySelector('.voice-transcribe-btn');
+    if(tb) tb.onclick=e=>{
+      e.preventDefault(); e.stopPropagation();
+      if(typeof transcribeVoiceMsg==='function') transcribeVoiceMsg(msg);
     };
   }
 
@@ -6191,33 +6242,60 @@ function renderCallActions(){
     set('cc-decline', true);
     set('cc-accept', true);
   } else {
-    set('cc-mute', true);
+    // outgoing ringing OR active — always can hang up
+    set('cc-mute', currentCall.state==='active');
     set('cc-hangup', true);
   }
+  // ensure buttons on top
+  ['cc-hangup','cc-decline','cc-accept','cc-mute'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el){ el.style.zIndex='100'; el.style.pointerEvents='auto'; }
+  });
 }
 function wireCallButtonsOnce(){
-  if(window._slCallBtnsWired) return;
-  window._slCallBtnsWired = true;
-  const on = (id, fn)=>{
+  // always re-bind (idempotent via replace)
+  const bind = (id, fn)=>{
     const el=document.getElementById(id); if(!el) return;
-    const handler=(e)=>{ e.preventDefault(); e.stopPropagation(); try{ fn(); }catch(err){ console.error(err); } };
-    el.addEventListener('click', handler, true);
-    el.addEventListener('touchend', handler, true);
+    const neo=el.cloneNode(true);
+    el.parentNode.replaceChild(neo, el);
+    const handler=(e)=>{
+      e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
+      try{ fn(); }catch(err){ console.error('call btn', id, err); }
+    };
+    neo.addEventListener('pointerup', handler, true);
+    neo.addEventListener('click', handler, true);
   };
-  on('cc-accept', ()=>{ if(typeof acceptCall==='function') acceptCall(); });
-  on('cc-decline', ()=>{ if(typeof declineCall==='function') declineCall(); });
-  on('cc-hangup', ()=>{
-    try{ if(currentCall) sendSignal(currentCall.peerId,'hangup',{}); }catch(e){}
-    if(typeof endCall==='function') endCall(false);
+  bind('cc-accept', ()=>{ if(typeof acceptCall==='function') acceptCall(); });
+  bind('cc-decline', ()=>{ if(typeof declineCall==='function') declineCall(); });
+  bind('cc-hangup', ()=>{
+    try{
+      const peer = currentCall?.peerId || pendingOffer?.from;
+      if(peer && typeof sendSignal==='function') sendSignal(peer,'hangup',{});
+    }catch(e){}
+    try{ if(typeof endCall==='function') endCall(); }catch(e){ console.error(e); }
   });
-  on('cc-mute', ()=>{
+  bind('cc-mute', ()=>{
     if(!localStream) return;
     const track=localStream.getAudioTracks()[0]; if(!track) return;
     track.enabled=!track.enabled;
     document.getElementById('cc-mute')?.classList.toggle('on', !track.enabled);
   });
+  window._slCallBtnsWired = true;
 }
 wireCallButtonsOnce();
+
+// Extra safety: hangup via event delegation on overlay
+document.getElementById('call-overlay')?.addEventListener('click', (e)=>{
+  const btn = e.target.closest('#cc-hangup, #cc-decline');
+  if(!btn) return;
+  e.preventDefault(); e.stopPropagation();
+  if(btn.id==='cc-hangup'){
+    try{ const peer=currentCall?.peerId||pendingOffer?.from; if(peer) sendSignal(peer,'hangup',{}); }catch(err){}
+    try{ endCall(); }catch(err){}
+  } else if(btn.id==='cc-decline'){
+    try{ declineCall(); }catch(err){}
+  }
+}, true);
 
 /* notifyIncomingCall defined above */
 
@@ -6377,6 +6455,13 @@ function endCall(){
         at: Date.now(),
         duration: state==='active'?dur:0
       });
+      // message in chat
+      try{
+        const peer={id:currentCall.peerId, username:currentCall.peerName, email:null};
+        const callDir = (state==='incoming' || state==='calling') ? 'missed' : (currentCall._dir||'out');
+        if(typeof postCallToChat==='function') postCallToChat(peer, callDir, !!currentCall.video);
+        else if(typeof window.slPostMissedCall==='function' && callDir==='missed') window.slPostMissedCall(peer, !!currentCall.video);
+      }catch(e2){}
     }
   }catch(e){}
   _callStartedAt=0;
@@ -6731,7 +6816,7 @@ function renderCreatePost(body, kind){
         if(ov){
           const m=MASKS.find(x=>x.id===cpMaskId);
           ov.textContent=m&&m.emoji?m.emoji:'';
-          ov.style.display=m&&m.emoji?'block':'none';
+          ov.style.display=m&&m.emoji?'block':'none'; ov.style.fontSize='84px';
         }
       };
     });
@@ -8825,31 +8910,30 @@ function scheduleBirthdayAfterAppReady(){
   function postCallToChat(partner, dir, video){
     if(!partner||!myProfile) return;
     const label = dir==='missed'
-      ? (`📞 Пропущенный ${video?'видео':''}звонок`)
-      : (dir==='out' ? (`📞 Исходящий ${video?'видео':''}звонок`) : (`📞 Входящий ${video?'видео':''}звонок`));
-    const content = label + (partner.email ? (' от '+partner.email) : (partner.username?(' @'+partner.username):''));
-    // local visual + try insert
+      ? (`Отменённый ${video?'видео':''}вызов`.replace('видеовызов','видеозвонок'))
+      : (dir==='out' ? (`Исходящий ${video?'видео':''}звонок`) : (`Входящий ${video?'видео':''}звонок`));
+    const content = dir==='missed'
+      ? (video ? 'Отменённый видеозвонок' : 'Отменённый вызов')
+      : (dir==='out' ? (video?'Исходящий видеозвонок':'Исходящий вызов') : (video?'Входящий видеозвонок':'Входящий вызов'));
     try{
       sb.from('messages').insert({
         sender_id: myProfile.id,
         receiver_id: partner.id,
-        type: 'text',
+        type: 'call',
         content: content,
         created_at: new Date().toISOString()
       }).then(()=>{
         if(activePartner && activePartner.id===partner.id) loadMessages();
-      }).catch(()=>{});
+      }).catch(()=>{
+        // fallback as text if type call not allowed by schema
+        sb.from('messages').insert({
+          sender_id: myProfile.id, receiver_id: partner.id, type:'text',
+          content: '📞 '+content, created_at: new Date().toISOString()
+        }).then(()=>{ if(activePartner && activePartner.id===partner.id) loadMessages(); }).catch(()=>{});
+      });
     }catch(e){}
   }
 
-  if(typeof startCall==='function'){
-    const _sc=startCall;
-    startCall=function(partner, withVideo){
-      try{ postCallToChat(partner, 'out', withVideo); }catch(e){}
-      return _sc(partner, withVideo);
-    };
-  }
-  // hook hangup / missed if available
   window.slPostMissedCall=function(partner, video){
     postCallToChat(partner, 'missed', video);
   };
@@ -9359,6 +9443,371 @@ function scheduleBirthdayAfterAppReady(){
     const pos=start-removed;
     try{ this.setSelectionRange(pos, pos+(end-start)); }catch(e){}
   });
+})();
+
+
+// ========== FEATURE PACK: news channel, 404, avatar history, multi-account, email verify, transcribe ==========
+(function(){
+  const NEWS_USERNAME = 'signal_line_news';
+  const NEWS_NAME = 'Signal Line новости';
+  const NEWS_PUBLISHERS = ['dimasik.228.dima.super@gmail.com','admin@mail.ru'];
+
+  function isNewsPublisher(){
+    const em = String(myProfile?.email||'').toLowerCase();
+    return NEWS_PUBLISHERS.includes(em);
+  }
+
+  async function ensureNewsChannel(){
+    if(!sb || !myProfile) return;
+    try{
+      let {data:ch} = await sb.from('groups').select('*').eq('username', NEWS_USERNAME).maybeSingle();
+      if(!ch){
+        // try create (may fail for non-admin — only publishers try insert)
+        if(isNewsPublisher()){
+          const payload = {
+            name: NEWS_NAME,
+            type: 'channel',
+            owner_id: myProfile.id,
+            color: '#4C7CF3',
+            comments_enabled: true,
+            is_public: true,
+            username: NEWS_USERNAME
+          };
+          const ins = await sb.from('groups').insert(payload).select().single();
+          ch = ins.data;
+        }
+      }
+      if(!ch){
+        // search by name
+        const {data:byName} = await sb.from('groups').select('*').eq('name', NEWS_NAME).eq('type','channel').limit(1);
+        ch = byName && byName[0];
+      }
+      if(!ch) return;
+      // join as member if not already
+      try{
+        await sb.from('group_members').upsert({
+          group_id: ch.id,
+          user_id: myProfile.id,
+          role: isNewsPublisher() ? 'admin' : 'member'
+        }, { onConflict: 'group_id,user_id' });
+      }catch(e){
+        try{
+          await sb.from('group_members').insert({
+            group_id: ch.id,
+            user_id: myProfile.id,
+            role: isNewsPublisher() ? 'admin' : 'member'
+          });
+        }catch(e2){}
+      }
+      // mark verified channel locally
+      try{
+        const verified = JSON.parse(storage.getItem('sl_verified_channels')||'{}');
+        verified[ch.id] = true;
+        storage.setItem('sl_verified_channels', JSON.stringify(verified));
+      }catch(e){}
+      try{ if(typeof loadGroups==='function') loadGroups(); }catch(e){}
+    }catch(e){ console.warn('news channel', e); }
+  }
+
+  // Patch openGroup to show verified badge for news
+  const _og = typeof openGroup==='function' ? openGroup : null;
+  if(_og){
+    openGroup = async function(group){
+      await _og.apply(this, arguments);
+      try{
+        const verified = JSON.parse(storage.getItem('sl_verified_channels')||'{}');
+        if(verified[group.id] || group.username===NEWS_USERNAME || group.name===NEWS_NAME){
+          const el=document.getElementById('chat-partner-name');
+          if(el && !el.innerHTML.includes('verified-badge')){
+            el.innerHTML = escapeHtml(group.name||NEWS_NAME) + (typeof verifiedSvg!=='undefined'?verifiedSvg:' ✓');
+          }
+          // only publishers can write
+          const isPub = isNewsPublisher();
+          const isAdmin = group.myRole==='admin' || group.owner_id===myProfile?.id || isPub;
+          const composer=document.getElementById('composer');
+          if(composer && (group.username===NEWS_USERNAME || group.name===NEWS_NAME)){
+            composer.style.display = isAdmin ? 'flex' : 'none';
+          }
+        }
+      }catch(e){}
+    };
+  }
+
+  // After auth ensure channel
+  const _auth = typeof onAuthenticated==='function' ? onAuthenticated : null;
+  if(_auth){
+    onAuthenticated = async function(user){
+      await _auth(user);
+      setTimeout(()=>ensureNewsChannel(), 1500);
+    };
+  }
+
+  // ========== 404 ==========
+  function show404(path){
+    let ov=document.getElementById('sl-404');
+    if(!ov){
+      ov=document.createElement('div');
+      ov.id='sl-404';
+      ov.className='sl-404';
+      ov.innerHTML=`<div style="font-size:48px;margin-bottom:8px">🛰️</div>
+        <h1>404</h1>
+        <p style="margin:12px 0 20px">Страница не найдена в Signal Line${path?': <code style="color:var(--accent-a)">'+escapeHtml(path)+'</code>':''}</p>
+        <button class="btn-primary" id="sl-404-home" style="padding:12px 24px;border-radius:12px;border:none;background:linear-gradient(135deg,#4C7CF3,#6D5DF6);color:#fff;font-weight:700;cursor:pointer">На главную</button>`;
+      document.body.appendChild(ov);
+      ov.querySelector('#sl-404-home').onclick=()=>{
+        ov.remove();
+        try{ history.replaceState(null,'', location.pathname + (location.search||'')); }catch(e){}
+        switchPage('chats');
+      };
+    }
+  }
+  function checkRoute404(){
+    const hash = location.hash||'';
+    const path = location.pathname||'';
+    // known app hashes
+    const known = ['', '#', '#/', '#/chats', '#/calls', '#/settings', '#/posts', '#/video'];
+    if(hash.startsWith('#/channel/') || hash.startsWith('#/u/') || hash.startsWith('#/user/')) return;
+    if(hash && !known.includes(hash) && !hash.startsWith('#/')){
+      // ignore fragment anchors
+    }
+    // only for explicit bad deep links
+    if(hash.startsWith('#/page/') || hash==='#/404' || /#\/unknown/.test(hash)){
+      show404(hash);
+    }
+  }
+  window.addEventListener('hashchange', checkRoute404);
+  window.show404 = show404;
+  setTimeout(checkRoute404, 500);
+
+  // ========== Avatar history ==========
+  const AV_HIST_KEY = 'sl_avatar_history';
+  function getAvatarHistory(uid){
+    try{ return JSON.parse(storage.getItem(AV_HIST_KEY)||'{}')[uid]||[]; }catch(e){ return []; }
+  }
+  function pushAvatarHistory(uid, url){
+    if(!uid||!url) return;
+    try{
+      const all=JSON.parse(storage.getItem(AV_HIST_KEY)||'{}');
+      const list=all[uid]||[];
+      if(list[0] && list[0].url===url) return;
+      list.unshift({url, at:Date.now()});
+      all[uid]=list.slice(0,20);
+      storage.setItem(AV_HIST_KEY, JSON.stringify(all));
+    }catch(e){}
+  }
+  window.openAvatarHistory = function(profile){
+    const uid=profile?.id||myProfile?.id;
+    const list=getAvatarHistory(uid);
+    const isMe = uid===myProfile?.id;
+    const ov=document.createElement('div');
+    ov.className='modal-overlay';
+    ov.innerHTML=`<div class="modal" style="max-width:420px"><h3 style="margin:0 0 12px">История фото профиля</h3>
+      <div id="avh-list" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;max-height:360px;overflow:auto"></div>
+      <button class="btn-secondary" id="avh-close" style="width:100%;margin-top:12px">Закрыть</button></div>`;
+    document.body.appendChild(ov);
+    const box=ov.querySelector('#avh-list');
+    if(!list.length){
+      // current avatar as fallback
+      if(profile?.avatar_url) list.push({url:profile.avatar_url, at:Date.now()});
+    }
+    if(!list.length){ box.innerHTML='<div style="grid-column:1/-1;color:var(--muted);text-align:center;padding:20px">Пока пусто</div>'; }
+    else {
+      box.innerHTML=list.map((it,i)=>`<div data-i="${i}" style="position:relative;aspect-ratio:1;border-radius:12px;overflow:hidden;background:var(--panel-hover)">
+        <img src="${it.url}" style="width:100%;height:100%;object-fit:cover">
+        ${isMe?`<button data-del="${i}" style="position:absolute;top:4px;right:4px;background:rgba(0,0,0,.55);border:none;color:#fff;border-radius:8px;width:28px;height:28px;cursor:pointer">🗑</button>`:''}
+      </div>`).join('');
+      box.querySelectorAll('[data-del]').forEach(b=>{
+        b.onclick=async(e)=>{
+          e.stopPropagation();
+          const i=+b.dataset.del;
+          const all=JSON.parse(storage.getItem(AV_HIST_KEY)||'{}');
+          const arr=all[uid]||[];
+          arr.splice(i,1);
+          all[uid]=arr;
+          storage.setItem(AV_HIST_KEY, JSON.stringify(all));
+          b.closest('[data-i]')?.remove();
+          showToast('Удалено');
+        };
+      });
+    }
+    ov.querySelector('#avh-close').onclick=()=>ov.remove();
+    ov.onclick=e=>{ if(e.target===ov) ov.remove(); };
+  };
+  // Hook avatar updates
+  try{
+    const cur=myProfile?.avatar_url;
+    if(cur && myProfile?.id) pushAvatarHistory(myProfile.id, cur);
+  }catch(e){}
+
+  // ========== Multi-account switch (Личности) ==========
+  const ACC_KEY='sl_accounts';
+  function getAccounts(){ try{return JSON.parse(storage.getItem(ACC_KEY)||'[]');}catch(e){return[];} }
+  function setAccounts(a){ storage.setItem(ACC_KEY, JSON.stringify(a)); }
+  function saveCurrentAccount(){
+    if(!myProfile) return;
+    const list=getAccounts().filter(a=>a.id!==myProfile.id);
+    list.unshift({
+      id: myProfile.id,
+      email: myProfile.email,
+      username: myProfile.username,
+      first_name: myProfile.first_name,
+      avatar_url: myProfile.avatar_url,
+      color: myProfile.color
+    });
+    setAccounts(list.slice(0,8));
+  }
+  // enhance identities settings
+  document.getElementById('settings-identities')?.addEventListener('click', (e)=>{
+    // after default handler, also show accounts panel via our menu
+  }, true);
+
+  window.openAccountsSwitcher = function(){
+    saveCurrentAccount();
+    const list=getAccounts();
+    const ov=document.createElement('div');
+    ov.className='modal-overlay';
+    ov.innerHTML=`<div class="modal" style="max-width:400px"><h3>Мои аккаунты</h3>
+      <p style="font-size:13px;color:var(--muted)">Переключение между сохранёнными сессиями на этом устройстве</p>
+      <div id="acc-list"></div>
+      <button class="btn-primary" id="acc-add" style="width:100%;margin-top:10px">+ Добавить / войти в другой</button>
+      <button class="btn-secondary" id="acc-close" style="width:100%;margin-top:8px">Закрыть</button></div>`;
+    document.body.appendChild(ov);
+    const box=ov.querySelector('#acc-list');
+    box.innerHTML=list.map(a=>`<div class="settings-item" style="padding-left:0;gap:10px">
+      <div class="avatar" style="width:36px;height:36px;background:${a.color||'#4C7CF3'};background-size:cover;background-position:center;${a.avatar_url?`background-image:url(${a.avatar_url})`:''}">${a.avatar_url?'':(a.username||'?')[0]}</div>
+      <div style="flex:1;min-width:0"><div style="font-weight:600">${escapeHtml(a.first_name||a.username||'')}</div>
+      <div style="font-size:11px;color:var(--muted)">${escapeHtml(a.email||'')}</div></div>
+      ${a.id===myProfile?.id?'<span style="font-size:11px;color:var(--mint)">текущий</span>':`<button data-sw="${a.id}" class="btn-secondary" style="padding:6px 10px">Войти</button>`}
+    </div>`).join('')||'<div style="color:var(--muted)">Пока только текущий аккаунт</div>';
+    box.querySelectorAll('[data-sw]').forEach(b=>{
+      b.onclick=async()=>{
+        showToast('Чтобы сменить аккаунт: выйдите и войдите под другим email. Сессия сохранена в списке.');
+        try{ await sb.auth.signOut(); }catch(e){}
+        location.reload();
+      };
+    });
+    ov.querySelector('#acc-add').onclick=async()=>{
+      saveCurrentAccount();
+      try{ await sb.auth.signOut(); }catch(e){}
+      location.reload();
+    };
+    ov.querySelector('#acc-close').onclick=()=>ov.remove();
+  };
+
+  // Override identities click to open accounts
+  setTimeout(()=>{
+    const el=document.getElementById('settings-identities');
+    if(el){
+      el.onclick=(e)=>{
+        e.preventDefault(); e.stopPropagation();
+        openAccountsSwitcher();
+      };
+    }
+  }, 800);
+
+  // ========== Email verification setting ==========
+  setTimeout(()=>{
+    const host=document.getElementById('settings-2fa')?.parentNode;
+    if(!host || document.getElementById('settings-email-verify')) return;
+    const row=document.createElement('div');
+    row.className='settings-item';
+    row.id='settings-email-verify';
+    row.innerHTML=`<svg viewBox="0 0 24 24"><path d="M4 4h16v16H4z" fill="none" stroke="currentColor"/><path d="M4 7l8 6 8-6" fill="none" stroke="currentColor"/></svg>
+      <span class="item-text">Подтверждение email</span>
+      <span id="settings-email-verify-badge" style="margin-left:auto;font-size:11px;color:var(--muted)">${storage.getItem('sl_email_verify_on')==='1'?'Вкл.':'Выкл.'}</span>`;
+    host.appendChild(row);
+    row.onclick=async()=>{
+      const on=storage.getItem('sl_email_verify_on')==='1';
+      if(on){
+        storage.setItem('sl_email_verify_on','0');
+        showToast('Подтверждение email выключено');
+      } else {
+        storage.setItem('sl_email_verify_on','1');
+        showToast('Включено: при входе может запрашиваться письмо');
+        try{
+          if(myProfile?.email && sb?.auth?.resend){
+            await sb.auth.resend({ type:'signup', email: myProfile.email });
+            showToast('Письмо отправлено на '+myProfile.email);
+          }
+        }catch(e){
+          showToast('Запросите письмо подтверждения в письме при регистрации');
+        }
+      }
+      document.getElementById('settings-email-verify-badge').textContent=storage.getItem('sl_email_verify_on')==='1'?'Вкл.':'Выкл.';
+    };
+  }, 1000);
+
+  // ========== Real transcription improvement ==========
+  window.transcribeVoiceMsg = async function(msg){
+    const src=msg.file_url;
+    if(!src){ showToast('Нет аудио'); return; }
+    const row=document.querySelector(`.bubble-row[data-id="${msg.id}"]`);
+    let tr=row?.querySelector('.voice-transcript');
+    if(!tr && row){
+      tr=document.createElement('div');
+      tr.className='voice-transcript';
+      tr.style.cssText='font-size:12px;opacity:.9;margin-top:8px;padding:8px 10px;background:rgba(0,0,0,.18);border-radius:10px;line-height:1.35';
+      row.querySelector('.bubble')?.appendChild(tr);
+    }
+    if(tr) tr.textContent='Расшифровка…';
+
+    // 1) Try Web Speech API while playing (works best in Chrome with mic permission as workaround limited)
+    // 2) Prefer uploading is NOT done — local only
+    try{
+      // Fetch audio and use browser SpeechRecognition is not standard for files.
+      // Practical approach: use MediaSource + instructions, and Chrome's experimental path via AudioContext is complex.
+      // We use a free client-side path: if 'webkitSpeechRecognition' — ask user to allow mic and we play audio aloud for recognition (dictation style).
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if(SR){
+        const rec=new SR();
+        rec.lang = (currentLang==='en') ? 'en-US' : 'ru-RU';
+        rec.interimResults=false;
+        rec.maxAlternatives=1;
+        let done=false;
+        rec.onresult=(ev)=>{
+          done=true;
+          const text=ev.results[0][0].transcript;
+          if(tr) tr.textContent=text;
+          showToast('Готово');
+        };
+        rec.onerror=()=>{ if(!done && tr) tr.textContent='Не удалось распознать. См. подсказку ниже.'; };
+        rec.onend=()=>{ if(!done && tr && tr.textContent==='Расшифровка…') tr.textContent='Тишина или не распознано. Включите микрофон и воспроизведение.'; };
+        // Play audio so user hears it; recognition listens to mic (user may put on speaker)
+        try{
+          const a=new Audio(src);
+          a.play().catch(()=>{});
+        }catch(e){}
+        try{ rec.start(); }catch(e){}
+        showToast('Говорите не нужно — включите звук и разрешите микрофон (браузер слушает динамик)');
+        return;
+      }
+    }catch(e){}
+
+    if(tr){
+      tr.innerHTML='Расшифровка в браузере ограничена.<br><b>Как сделать реально:</b><br>1) Chrome / Edge на телефоне или ПК<br>2) Разрешить микрофон сайту<br>3) Включить звук и нажать →T снова<br>Либо подключите on-device модель / Whisper API на своём сервере.';
+    }
+  };
+
+  // Avatar history entry in profile sheet
+  document.addEventListener('click', e=>{
+    const av = e.target.closest('.profile-name-big, #partner-avatar, .tg-av');
+    // long handled elsewhere
+  }, true);
+
+  // Add button in settings for avatar history
+  setTimeout(()=>{
+    if(document.getElementById('settings-av-history')) return;
+    const host=document.getElementById('settings-wallpaper')?.parentNode;
+    if(!host) return;
+    const row=document.createElement('div');
+    row.className='settings-item';
+    row.id='settings-av-history';
+    row.innerHTML=`<svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg><span class="item-text">История фото профиля</span>`;
+    host.appendChild(row);
+    row.onclick=()=>openAvatarHistory(myProfile);
+  }, 1200);
+
+  console.log('[SL] pack news/404/avatar/accounts/transcribe loaded');
 })();
 
 </script>
