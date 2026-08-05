@@ -5041,22 +5041,69 @@ function openReactionPicker(msg, x, y){
 }
 function attachDoubleTapReaction(row, msg){
   const bubble=row.querySelector('.bubble'); if(!bubble) return;
-  let lastTap=0;
-  const doHeart=(clientX,clientY)=>{
+  // avoid double-binding if re-rendered helpers call again
+  if(bubble.dataset.dblReact==='1') return;
+  bubble.dataset.dblReact='1';
+
+  let lastTap=0, lastX=0, lastY=0;
+  const WINDOW_MS=480;   // was 320 — too strict
+  const MOVE_MAX=40;     // taps must be near same spot
+
+  const doHeart=async (clientX, clientY)=>{
     if(typeof betaOn==='function' && !betaOn('doubleTapHeart')) return;
-    toggleReaction(msg, '❤️');
-    if(typeof haptic==='function') haptic(10);
+    // Don't fight the context menu
+    if(document.body.classList.contains('msg-ctx-open')) return;
+    if(window._slCtxOpened) return;
+
+    const mid=String(msg.id);
+    const r=(typeof getReactionsFor==='function') ? getReactionsFor(mid) : {};
+    const already=r['❤️'] && r['❤️'].has(myProfile?.id);
+
+    // Double-tap always SETS heart (like WhatsApp). Removal only via chip tap.
+    if(!already){
+      try{ await toggleReaction(msg, '❤️'); }
+      catch(e){ try{ applyReactionLocally(mid, '❤️', myProfile.id, false); }catch(e2){} }
+    } else {
+      // already has it — still show float feedback so it never feels "broken"
+      const rowEl=document.querySelector(`.bubble-row[data-id="${mid}"]`);
+      if(rowEl) renderReactionsFor(rowEl, msg);
+    }
+
+    try{ if(typeof haptic==='function') haptic(12); else if(navigator.vibrate) navigator.vibrate(12); }catch(e){}
     const f=document.createElement('div'); f.className='reaction-float'; f.textContent='❤️';
-    f.style.left=clientX+'px'; f.style.top=clientY+'px';
+    f.style.left=(clientX||innerWidth/2)+'px'; f.style.top=(clientY||innerHeight/2)+'px';
     document.body.appendChild(f); setTimeout(()=>f.remove(),800);
   };
-  const fire=(clientX,clientY)=>{
+
+  const fire=(clientX, clientY)=>{
+    // ignore interactive controls (play, links)
+    // caller should pass only bubble taps
     const now=Date.now();
-    if(now-lastTap<320){ doHeart(clientX,clientY); lastTap=0; }
-    else lastTap=now;
+    const near = Math.hypot(clientX-lastX, clientY-lastY) <= MOVE_MAX;
+    if(lastTap && (now-lastTap)<WINDOW_MS && near){
+      doHeart(clientX, clientY);
+      lastTap=0; lastX=0; lastY=0;
+    } else {
+      lastTap=now; lastX=clientX; lastY=clientY;
+    }
   };
-  bubble.addEventListener('dblclick', e=>{ doHeart(e.clientX,e.clientY); });
-  bubble.addEventListener('touchend', e=>{ const t=e.changedTouches[0]; fire(t.clientX,t.clientY); }, {passive:true});
+
+  // Desktop
+  bubble.addEventListener('dblclick', e=>{
+    if(e.target.closest('a,button,video,.voice-play-btn,.circle-msg,.reaction-chip,.reaction-bar')) return;
+    e.preventDefault();
+    doHeart(e.clientX, e.clientY);
+  });
+
+  // Mobile: double-tap via touchend (dblclick is unreliable on phones)
+  bubble.addEventListener('touchend', e=>{
+    if(e.target.closest('a,button,video,.voice-play-btn,.circle-msg,.reaction-chip,.reaction-bar')) return;
+    // if long-press menu is about to open / open — skip
+    if(document.body.classList.contains('msg-ctx-open') || window._slCtxOpened) return;
+    const t=e.changedTouches && e.changedTouches[0];
+    if(!t) return;
+    fire(t.clientX, t.clientY);
+  }, {passive:true});
 }
 // update long-press menu to open the emoji picker anchored at press point
 const _origShowMsgCtx = showMsgCtx;
