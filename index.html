@@ -10539,60 +10539,105 @@ window._slTranscribeImpl = window.transcribeVoiceMsg = async function(msg){
 
 // ========== REAL multi-account (Supabase sessions) ==========
 (function(){
-  const ACC_KEY = 'sl_account_sessions_v2';
+  const ACC_KEY = 'sl_account_sessions_v3';
   function getAccSessions(){
     try{ return JSON.parse(localStorage.getItem(ACC_KEY)||'[]'); }catch(e){ return []; }
   }
   function setAccSessions(arr){
     try{ localStorage.setItem(ACC_KEY, JSON.stringify(arr.slice(0,8))); }catch(e){}
   }
+  function upsertAcc(entry){
+    if(!entry || !entry.id) return;
+    const list = getAccSessions().filter(a => a.id !== entry.id);
+    list.unshift(entry);
+    setAccSessions(list);
+  }
 
   window.saveCurrentAccountSession = async function(){
-    if(!sb || !myProfile) return;
+    if(!sb) return;
     try{
       const { data } = await sb.auth.getSession();
       const session = data?.session;
-      if(!session?.access_token) return;
-      const list = getAccSessions().filter(a => a.id !== myProfile.id);
-      list.unshift({
-        id: myProfile.id,
-        email: myProfile.email || session.user?.email || '',
-        username: myProfile.username || '',
-        first_name: myProfile.first_name || '',
-        avatar_url: myProfile.avatar_url || '',
-        color: myProfile.color || '#4C7CF3',
+      if(!session?.access_token || !session?.user) return;
+      // CRITICAL: need real refresh_token for setSession later
+      if(!session.refresh_token){
+        console.warn('[SL] no refresh_token in session — account switch will need re-login');
+      }
+      const uid = session.user.id;
+      const prof = (typeof myProfile!=='undefined' && myProfile && myProfile.id===uid) ? myProfile : null;
+      upsertAcc({
+        id: uid,
+        email: (prof && prof.email) || session.user.email || '',
+        username: (prof && prof.username) || '',
+        first_name: (prof && prof.first_name) || '',
+        avatar_url: (prof && prof.avatar_url) || '',
+        color: (prof && prof.color) || '#4C7CF3',
         access_token: session.access_token,
-        refresh_token: session.refresh_token || '',
+        refresh_token: session.refresh_token || null,
+        expires_at: session.expires_at || null,
         savedAt: Date.now()
       });
-      setAccSessions(list);
     }catch(e){ console.warn('save session', e); }
   };
 
   window.switchToAccount = async function(accountId){
     const acc = getAccSessions().find(a => a.id === accountId);
     if(!acc){ showToast('Аккаунт не найден'); return; }
-    if(acc.id === myProfile?.id){ showToast('Уже этот аккаунт'); return; }
-    if(!acc.access_token){ showToast('Нет сохранённой сессии — войдите снова'); return; }
+    if(typeof myProfile!=='undefined' && acc.id === myProfile?.id){
+      showToast('Уже этот аккаунт'); return;
+    }
+
+    // Always save current first (with refresh token if present)
+    try{ await saveCurrentAccountSession(); }catch(e){}
+
+    if(!acc.refresh_token){
+      // Cannot setSession without refresh token — go to login for that email
+      try{ localStorage.setItem('sl_pending_login_email', acc.email||''); }catch(e){}
+      showToast('Нужен повторный вход в этот аккаунт');
+      try{ await sb.auth.signOut({ scope: 'local' }); }catch(e){
+        try{ await sb.auth.signOut(); }catch(e2){}
+      }
+      location.reload();
+      return;
+    }
+
     try{
-      // Save current before leaving
-      await saveCurrentAccountSession();
       showToast('Переключение…');
-      const { error } = await sb.auth.setSession({
+      // Do NOT pass access_token as refresh_token — that causes "Refresh Token Not Found"
+      const { data, error } = await sb.auth.setSession({
         access_token: acc.access_token,
-        refresh_token: acc.refresh_token || acc.access_token
+        refresh_token: acc.refresh_token
       });
       if(error) throw error;
-      // Hard reload so all state binds to new user
+      // Update stored tokens from fresh session
+      if(data?.session){
+        upsertAcc({
+          ...acc,
+          access_token: data.session.access_token,
+          refresh_token: data.session.refresh_token || acc.refresh_token,
+          expires_at: data.session.expires_at || null,
+          savedAt: Date.now()
+        });
+      }
       location.reload();
     }catch(e){
-      console.error(e);
-      showToast('Не удалось переключить: '+ (e.message||'ошибка сессии'));
+      console.error('switch account', e);
+      const msg = String(e.message||e||'');
+      if(/refresh token/i.test(msg)){
+        try{ localStorage.setItem('sl_pending_login_email', acc.email||''); }catch(err){}
+        // Drop broken tokens for this account
+        upsertAcc({ ...acc, access_token: null, refresh_token: null });
+        showToast('Сессия истекла — войдите в аккаунт снова');
+        try{ await sb.auth.signOut({ scope: 'local' }); }catch(err){}
+        setTimeout(()=> location.reload(), 600);
+      } else {
+        showToast('Не удалось переключить: ' + msg.slice(0,80));
+      }
     }
   };
 
-  window.openAccountsSwitcher = function(){
-    saveCurrentAccountSession();
+  window.openAccountsSwitcher = async function(){
+    try{ await saveCurrentAccountSession(); }catch(e){}
     const list = getAccSessions();
     const ov = document.createElement('div');
     ov.className = 'modal-overlay';
@@ -10600,29 +10645,31 @@ window._slTranscribeImpl = window.transcribeVoiceMsg = async function(msg){
     ov.innerHTML = `<div class="modal" style="max-width:400px">
       <button class="close-x" id="acc-x">×</button>
       <h3 style="margin:0 0 8px">Аккаунты</h3>
-      <p style="font-size:12px;color:var(--muted);margin:0 0 12px">Переключение между сохранёнными входами на этом устройстве</p>
+      <p style="font-size:12px;color:var(--muted);margin:0 0 12px">Сохраняются после входа. Для переключения нужен повторный вход, если сессия устарела.</p>
       <div id="acc-list"></div>
       <button class="btn-primary" id="acc-add" style="width:100%;margin-top:12px;padding:12px;border:none;border-radius:12px;background:linear-gradient(135deg,#4C7CF3,#6D5DF6);color:#fff;font-weight:700;cursor:pointer">+ Войти в другой аккаунт</button>
     </div>`;
     document.body.appendChild(ov);
     const box = ov.querySelector('#acc-list');
     if(!list.length){
-      box.innerHTML = '<div style="color:var(--muted);padding:12px 0">Пока только текущий. Добавьте другой через кнопку ниже.</div>';
+      box.innerHTML = '<div style="color:var(--muted);padding:12px 0">Пока один аккаунт. Добавьте второй кнопкой ниже — после входа оба сохранятся.</div>';
     } else {
       box.innerHTML = list.map(a => {
-        const cur = a.id === myProfile?.id;
+        const cur = typeof myProfile!=='undefined' && a.id === myProfile?.id;
+        const ok = !!a.refresh_token;
         const av = a.avatar_url
-          ? `<div style="width:40px;height:40px;border-radius:50%;background:url(${a.avatar_url}) center/cover"></div>`
-          : `<div style="width:40px;height:40px;border-radius:50%;background:${a.color||'#4C7CF3'};display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700">${(a.first_name||a.username||'?')[0]}</div>`;
+          ? `<div style="width:40px;height:40px;border-radius:50%;background:url(${a.avatar_url}) center/cover;flex-shrink:0"></div>`
+          : `<div style="width:40px;height:40px;border-radius:50%;background:${a.color||'#4C7CF3'};display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;flex-shrink:0">${(a.first_name||a.username||'?')[0]}</div>`;
         return `<div class="settings-item" style="padding-left:0;gap:10px;align-items:center">
           ${av}
           <div style="flex:1;min-width:0">
             <div style="font-weight:700">${escapeHtml(a.first_name||a.username||'Аккаунт')}</div>
             <div style="font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis">${escapeHtml(a.email||'')}</div>
+            ${!ok && !cur ? '<div style="font-size:10px;color:var(--danger)">нужен повторный вход</div>' : ''}
           </div>
           ${cur
             ? '<span style="font-size:11px;color:var(--mint);font-weight:700">текущий</span>'
-            : `<button type="button" data-sw="${a.id}" style="padding:8px 12px;border-radius:10px;border:none;background:var(--accent-a,#4C7CF3);color:#fff;font-weight:700;cursor:pointer">Войти</button>`}
+            : `<button type="button" data-sw="${a.id}" style="padding:8px 12px;border-radius:10px;border:none;background:var(--accent-a,#4C7CF3);color:#fff;font-weight:700;cursor:pointer">${ok?'Войти':'Войти заново'}</button>`}
           ${!cur?`<button type="button" data-del="${a.id}" title="Удалить" style="padding:6px 8px;border:none;background:transparent;color:var(--danger);cursor:pointer">🗑</button>`:''}
         </div>`;
       }).join('');
@@ -10642,25 +10689,28 @@ window._slTranscribeImpl = window.transcribeVoiceMsg = async function(msg){
       try{ await sb.auth.signOut({ scope: 'local' }); }catch(e){
         try{ await sb.auth.signOut(); }catch(e2){}
       }
-      // keep other sessions in localStorage
       location.reload();
     };
     ov.addEventListener('click', e=>{ if(e.target===ov) ov.remove(); });
   };
 
-  // Settings item: only one "Аккаунты"
   function ensureAccountsSettingsItem(){
-    // Remove old Личности / identity rows
     document.querySelectorAll('#settings-identities, #settings-id-badge').forEach(el=>{
       const row = el.closest('.settings-item') || el;
       try{ row.remove(); }catch(e){}
     });
-    // Also remove any leftover text
     document.querySelectorAll('.settings-item').forEach(it=>{
       const t = (it.textContent||'');
       if(/Личности|identity/i.test(t) && !/Аккаунты/.test(t)) try{ it.remove(); }catch(e){}
     });
-    if(document.getElementById('settings-accounts')) return;
+    if(document.getElementById('settings-accounts')) {
+      try{
+        const n = getAccSessions().length;
+        const badge = document.getElementById('settings-acc-count');
+        if(badge) badge.textContent = n ? String(n) : '';
+      }catch(e){}
+      return;
+    }
     const host = document.getElementById('settings-2fa')?.parentNode
       || document.getElementById('settings-edit-profile')?.parentNode
       || document.querySelector('#page-settings .settings-section, #page-settings');
@@ -10680,17 +10730,50 @@ window._slTranscribeImpl = window.transcribeVoiceMsg = async function(msg){
     }catch(e){}
   }
 
-  // Disable old switchIdentity fake profiles
   window.switchIdentity = function(){ openAccountsSwitcher(); };
   window.getIdentities = function(){ return []; };
   window.setIdentities = function(){};
 
-  // Save session after auth
+  // Keep tokens fresh
+  try{
+    if(sb && sb.auth && sb.auth.onAuthStateChange){
+      sb.auth.onAuthStateChange((event, session)=>{
+        if((event==='SIGNED_IN' || event==='TOKEN_REFRESHED' || event==='INITIAL_SESSION') && session){
+          const uid = session.user?.id;
+          if(!uid) return;
+          const prev = getAccSessions().find(a=>a.id===uid) || {};
+          upsertAcc({
+            ...prev,
+            id: uid,
+            email: prev.email || session.user?.email || '',
+            access_token: session.access_token,
+            refresh_token: session.refresh_token || prev.refresh_token || null,
+            expires_at: session.expires_at || null,
+            savedAt: Date.now()
+          });
+        }
+      });
+    }
+  }catch(e){}
+
+  // Prefill login email if pending re-login
+  setTimeout(()=>{
+    try{
+      const em = localStorage.getItem('sl_pending_login_email');
+      if(em){
+        localStorage.removeItem('sl_pending_login_email');
+        const input = document.querySelector('#login-email, input[type=email], #email');
+        if(input){ input.value = em; input.dispatchEvent(new Event('input',{bubbles:true})); }
+      }
+    }catch(e){}
+  }, 600);
+
   const prevAuth = typeof onAuthenticated === 'function' ? onAuthenticated : null;
   if(prevAuth){
     onAuthenticated = async function(user){
       await prevAuth(user);
-      setTimeout(()=> saveCurrentAccountSession(), 800);
+      setTimeout(()=> saveCurrentAccountSession(), 500);
+      setTimeout(()=> saveCurrentAccountSession(), 2000);
       setTimeout(ensureAccountsSettingsItem, 1000);
     };
   }
@@ -10698,8 +10781,9 @@ window._slTranscribeImpl = window.transcribeVoiceMsg = async function(msg){
   setTimeout(ensureAccountsSettingsItem, 3500);
   setTimeout(()=>{ try{ saveCurrentAccountSession(); }catch(e){} }, 2000);
 
-  console.log('[SL] real multi-account ready');
+  console.log('[SL] real multi-account v3 ready');
 })();
+
 
 </script>
 </body>
