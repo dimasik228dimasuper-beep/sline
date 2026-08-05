@@ -395,6 +395,7 @@ body.theme-light{
 .msg-check{display:inline-flex;align-items:center;margin-left:3px;vertical-align:middle;line-height:1}
 .msg-check svg{width:16px;height:16px;display:block}
 .msg-check.sent{opacity:.75;color:rgba(255,255,255,.85)}
+.bubble.msg-holding{opacity:.88;transform:scale(.98);transition:opacity .15s,transform .15s}
 .msg-check.read{opacity:1;color:#53BDEB} /* WhatsApp-like blue double ticks */
 .bubble.them .msg-check{display:none}
 
@@ -1225,7 +1226,7 @@ body.chats-selecting .sw-clip .sel-check{display:flex}
 
 </style>
 </head>
-<body oncontextmenu="return false;">
+<body>
 
 <script>
 /* Boot: skip login flash if session already stored */
@@ -2400,22 +2401,84 @@ function renderMessage(msg, isGroup=false){
     };
   }
 
-  // Context menu (long press / right click)
+  // Context menu: long-press (mobile) + right-click (PC) — robust
   const bubble=row.querySelector('.bubble');
-  let pressTimer;
-  bubble.addEventListener('touchstart', e=>{ pressTimer=setTimeout(()=>showMsgCtx(e.touches[0], msg), 450); }, {passive:true});
-  bubble.addEventListener('touchend', ()=>clearTimeout(pressTimer));
-  bubble.addEventListener('touchmove', ()=>clearTimeout(pressTimer));
-  bubble.addEventListener('contextmenu', e=>{ e.preventDefault(); showMsgCtx(e, msg); });
+  row.dataset.mid=String(msg.id);
+  bubble.dataset.mid=String(msg.id);
+  // store msg ref for delegation
+  try{ if(!window._slMsgById) window._slMsgById=new Map(); window._slMsgById.set(String(msg.id), msg); }catch(e){}
 
-  // Swipe to reply
-  let startX=0;
-  bubble.addEventListener('touchstart', e=>{ startX=e.touches[0].clientX; }, {passive:true});
-  bubble.addEventListener('touchend', e=>{
-    const dx=e.changedTouches[0].clientX-startX;
-    if(dx < -50){ replyToMsg=msg; document.getElementById('message-input').placeholder='Ответ: '+(msg.content||'вложение').slice(0,40); document.getElementById('message-input').focus(); if(typeof showReplyBar==='function') showReplyBar(msg); row.classList.add('swiped'); setTimeout(()=>row.classList.remove('swiped'),300); }
-    else if(dx > 50){ if(typeof openForwardPicker==='function') openForwardPicker(msg); }
-  });
+  (function bindMsgPress(bubble, row, msg){
+    let pressTimer=null, startX=0, startY=0, startT=0, longFired=false, pointerId=null;
+    const LONG_MS=480;
+    const MOVE_TOL=14; // allow small finger tremor
+
+    function clearPress(){
+      if(pressTimer){ clearTimeout(pressTimer); pressTimer=null; }
+      bubble.classList.remove('msg-holding');
+    }
+    function openMenu(ev){
+      longFired=true;
+      clearPress();
+      try{ navigator.vibrate && navigator.vibrate(18); }catch(e){}
+      const pt = ev.touches ? ev.touches[0] : (ev.changedTouches ? ev.changedTouches[0] : ev);
+      const fake={ clientX: pt.clientX, clientY: pt.clientY, pageX: pt.pageX||pt.clientX, pageY: pt.pageY||pt.clientY, preventDefault(){}, stopPropagation(){} };
+      showMsgCtx(fake, msg);
+      window._slCtxOpened=true;
+      window._slCtxIgnoreClickUntil=Date.now()+400;
+      setTimeout(()=>{ window._slCtxOpened=false; }, 450);
+    }
+
+    bubble.addEventListener('pointerdown', e=>{
+      if(e.button===2) return; // right click handled by contextmenu
+      if(e.pointerType==='mouse' && e.button!==0) return;
+      // ignore interactive children
+      if(e.target.closest('a,button,input,textarea,video,.voice-play-btn,.circle-msg,.channel-post-comments')) return;
+      longFired=false;
+      pointerId=e.pointerId;
+      startX=e.clientX; startY=e.clientY; startT=Date.now();
+      bubble.classList.add('msg-holding');
+      clearPress();
+      pressTimer=setTimeout(()=>{
+        if(pointerId===e.pointerId) openMenu(e);
+      }, LONG_MS);
+      try{ bubble.setPointerCapture(e.pointerId); }catch(err){}
+    });
+    bubble.addEventListener('pointermove', e=>{
+      if(pointerId==null || e.pointerId!==pointerId) return;
+      const dx=e.clientX-startX, dy=e.clientY-startY;
+      if(Math.hypot(dx,dy)>MOVE_TOL) clearPress();
+    });
+    const endPress=e=>{
+      if(pointerId!=null && e.pointerId!==pointerId) return;
+      const wasLong=longFired;
+      clearPress();
+      pointerId=null;
+      // swipe only if not long-press
+      if(!wasLong && e.type==='pointerup'){
+        const dx=e.clientX-startX;
+        if(dx < -55){
+          replyToMsg=msg;
+          document.getElementById('message-input').placeholder='Ответ: '+(msg.content||'вложение').slice(0,40);
+          document.getElementById('message-input').focus();
+          if(typeof showReplyBar==='function') showReplyBar(msg);
+          row.classList.add('swiped'); setTimeout(()=>row.classList.remove('swiped'),300);
+        } else if(dx > 55){
+          if(typeof openForwardPicker==='function') openForwardPicker(msg);
+        }
+      }
+    };
+    bubble.addEventListener('pointerup', endPress);
+    bubble.addEventListener('pointercancel', endPress);
+    bubble.addEventListener('lostpointercapture', ()=>{ clearPress(); pointerId=null; });
+
+    // PC right-click — always open custom menu
+    bubble.addEventListener('contextmenu', e=>{
+      e.preventDefault();
+      e.stopPropagation();
+      openMenu(e);
+    });
+  })(bubble, row, msg);
 
   list.appendChild(row);
 }
@@ -8578,6 +8641,61 @@ function scheduleBirthdayAfterAppReady(){
   };
 
   console.log('[Signal Line] Feature pack v3 loaded: delayed send, report, phone sync, identities, CLI, etc.');
+})();
+
+
+// ========== Reliable message context menu (delegation + PC right-click) ==========
+(function(){
+  // Block only default browser menu inside chat; our custom menu handles it
+  document.addEventListener('contextmenu', function(e){
+    const bubble=e.target.closest('.bubble, .bubble-row');
+    if(bubble && bubble.closest('#messages-list, #messages, .messages')){
+      e.preventDefault();
+      // if showMsgCtx not already opened by bubble handler, open via store
+      if(window._slCtxOpened) return;
+      const mid=bubble.dataset.mid||bubble.dataset.id||bubble.closest('[data-id]')?.dataset.id;
+      let msg=null;
+      try{ msg=window._slMsgById?.get(String(mid))||messageStore.get(String(mid)); }catch(err){}
+      if(msg && typeof showMsgCtx==='function'){
+        showMsgCtx(e, msg);
+        window._slCtxOpened=true;
+        window._slCtxIgnoreClickUntil=Date.now()+400;
+        setTimeout(()=>{ window._slCtxOpened=false; }, 450);
+      }
+    }
+  }, true);
+
+  // Long-press fallback via touch on messages list (capture)
+  let _lpTimer=null, _lpX=0, _lpY=0, _lpTarget=null;
+  const list=()=>document.getElementById('messages-list')||document.getElementById('messages');
+  document.addEventListener('touchstart', function(e){
+    const b=e.target.closest('.bubble');
+    if(!b || !b.closest('#messages-list, #messages, .messages')) return;
+    if(e.target.closest('a,button,input,video,.voice-play-btn')) return;
+    _lpX=e.touches[0].clientX; _lpY=e.touches[0].clientY;
+    _lpTarget=b;
+    clearTimeout(_lpTimer);
+    _lpTimer=setTimeout(()=>{
+      if(!_lpTarget) return;
+      const mid=_lpTarget.dataset.mid||_lpTarget.dataset.id||_lpTarget.closest('[data-id]')?.dataset.id;
+      let msg=null;
+      try{ msg=window._slMsgById?.get(String(mid))||messageStore.get(String(mid)); }catch(err){}
+      if(msg && typeof showMsgCtx==='function'){
+        try{ navigator.vibrate && navigator.vibrate(18); }catch(err){}
+        showMsgCtx({clientX:_lpX,clientY:_lpY,pageX:_lpX,pageY:_lpY}, msg);
+        window._slCtxOpened=true;
+        window._slCtxIgnoreClickUntil=Date.now()+500;
+        setTimeout(()=>{ window._slCtxOpened=false; }, 500);
+      }
+    }, 500);
+  }, {passive:true, capture:true});
+  document.addEventListener('touchmove', function(e){
+    if(!_lpTimer) return;
+    const t=e.touches[0];
+    if(Math.hypot(t.clientX-_lpX, t.clientY-_lpY)>16){ clearTimeout(_lpTimer); _lpTimer=null; _lpTarget=null; }
+  }, {passive:true, capture:true});
+  document.addEventListener('touchend', function(){ clearTimeout(_lpTimer); _lpTimer=null; _lpTarget=null; }, {passive:true, capture:true});
+  document.addEventListener('touchcancel', function(){ clearTimeout(_lpTimer); _lpTimer=null; _lpTarget=null; }, {passive:true, capture:true});
 })();
 
 </script>
