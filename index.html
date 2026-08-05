@@ -396,6 +396,37 @@ body.theme-light{
 .msg-check svg{width:16px;height:16px;display:block}
 .msg-check.sent{opacity:.75;color:rgba(255,255,255,.85)}
 .bubble.msg-holding{opacity:.88;transform:scale(.98);transition:opacity .15s,transform .15s}
+
+/* Message context: blur backdrop like WhatsApp */
+.msg-ctx-backdrop{
+  position:fixed; inset:0; z-index:12000;
+  background:rgba(6,10,18,.55);
+  backdrop-filter:blur(16px) saturate(1.1);
+  -webkit-backdrop-filter:blur(16px) saturate(1.1);
+  opacity:0; pointer-events:none; transition:opacity .2s ease;
+}
+.msg-ctx-backdrop.show{ opacity:1; pointer-events:auto; }
+body.msg-ctx-open{ overflow:hidden; }
+body.msg-ctx-open #app-screen,
+body.msg-ctx-open .sidebar,
+body.msg-ctx-open .chat-active{ /* dim via backdrop */ }
+.bubble.msg-ctx-focus{
+  position:relative; z-index:12005 !important;
+  box-shadow:0 12px 40px rgba(0,0,0,.45), 0 0 0 2px rgba(255,255,255,.12);
+  filter:none !important;
+  transform:scale(1.02);
+  transition:transform .18s ease, box-shadow .18s ease;
+}
+#ctx-menu.wa-style{
+  z-index:12020 !important;
+  max-height:min(62vh, 380px);
+  overflow-y:auto;
+  -webkit-overflow-scrolling:touch;
+  overscroll-behavior:contain;
+  box-shadow:0 16px 48px rgba(0,0,0,.55);
+}
+.msg-react-bar{ z-index:12021 !important; }
+
 .msg-check.read{opacity:1;color:#53BDEB} /* WhatsApp-like blue double ticks */
 .bubble.them .msg-check{display:none}
 
@@ -2705,6 +2736,10 @@ function addLocalStory(story){
 // ========== CONTEXT MENU ==========
 function hideMsgReactBar(){
   document.querySelectorAll('.msg-react-bar').forEach(el=>el.remove());
+  document.querySelectorAll('.bubble.msg-ctx-focus').forEach(el=>{
+    el.classList.remove('msg-ctx-focus');
+    el.style.zIndex='';
+  });
 }
 async function reportMessage(msg){
   // hide for reporter
@@ -2742,43 +2777,56 @@ async function reportMessage(msg){
     });
   }catch(e){}
 }
-function showMsgCtx(e, msg){
+function closeMsgCtxUI(){
   hideMsgReactBar();
   const menu=document.getElementById('ctx-menu');
-  const mine=msg.sender_id===myProfile.id;
-  const x=e.clientX??e.pageX??(e.touches&&e.touches[0]?e.touches[0].clientX:innerWidth/2);
-  const y=e.clientY??e.pageY??(e.touches&&e.touches[0]?e.touches[0].clientY:innerHeight/2);
+  if(menu) menu.style.display='none';
+  document.getElementById('msg-ctx-backdrop')?.remove();
+  document.querySelectorAll('.bubble.msg-ctx-focus').forEach(el=>el.classList.remove('msg-ctx-focus'));
+  document.body.classList.remove('msg-ctx-open');
+}
+function showMsgCtx(e, msg){
+  closeMsgCtxUI();
+  const menu=document.getElementById('ctx-menu');
+  if(!menu || !msg) return;
+  const mine=msg.sender_id===myProfile.id || msg.sender_id==='me';
+  const x=Number(e.clientX??e.pageX??(e.touches&&e.touches[0]?e.touches[0].clientX:innerWidth/2))||innerWidth/2;
+  const y=Number(e.clientY??e.pageY??(e.touches&&e.touches[0]?e.touches[0].clientY:innerHeight/2))||innerHeight/2;
 
-  // Floating reaction bar (like WhatsApp)
+  // Haptic vibration on open
+  try{
+    if(navigator.vibrate) navigator.vibrate([40, 30, 50, 30, 40]);
+  }catch(err){}
+
+  // Blur backdrop (everything except menu + focused bubble)
+  let bd=document.getElementById('msg-ctx-backdrop');
+  if(!bd){
+    bd=document.createElement('div');
+    bd.id='msg-ctx-backdrop';
+    bd.className='msg-ctx-backdrop';
+    document.body.appendChild(bd);
+  }
+  bd.classList.add('show');
+  document.body.classList.add('msg-ctx-open');
+  bd.onclick=()=>closeMsgCtxUI();
+
+  // Highlight the message bubble
+  const row=document.querySelector(`.bubble-row[data-id="${msg.id}"]`);
+  const bubbleEl=row?.querySelector('.bubble');
+  if(bubbleEl){
+    bubbleEl.classList.add('msg-ctx-focus');
+    // ensure bubble is above blur
+    bubbleEl.style.zIndex='12002';
+  }
+
+  // Reaction bar
   const bar=document.createElement('div');
   bar.className='msg-react-bar';
   const reacts=['👍','❤️','😂','😮','😢','🙏'];
   bar.innerHTML=reacts.map(r=>`<span data-r="${r}">${r}</span>`).join('')+'<div class="react-more" data-r="more">+</div>';
   document.body.appendChild(bar);
-  const barW=bar.offsetWidth||280;
-  bar.style.left=Math.max(8, Math.min(x - barW/2, innerWidth - barW - 8))+'px';
-  bar.style.top=Math.max(8, y - 70)+'px';
-  bar.querySelectorAll('[data-r]').forEach(el=>{
-    el.onclick=async(ev)=>{
-      ev.stopPropagation();
-      hideMsgReactBar();
-      menu.style.display='none';
-      if(el.dataset.r==='more'){ openReactionPicker(msg); return; }
-      // quick react
-      try{
-        if(typeof toggleReaction==='function') toggleReaction(msg, el.dataset.r);
-        else if(typeof openReactionPicker==='function'){
-          // fallback insert
-          const reactions=JSON.parse(msg.reactions||'{}');
-          reactions[el.dataset.r]=(reactions[el.dataset.r]||0)+1;
-          await sb.from('messages').update({reactions: JSON.stringify(reactions)}).eq('id', msg.id);
-          loadMessages();
-        }
-      }catch(err){ showToast('Реакция: '+el.dataset.r); }
-    };
-  });
 
-  // Context menu items matching screenshot style
+  // Menu items
   let items=`<div class="ctx-item" data-a="reply"><span class="ico">↩</span> Ответить</div>
     <div class="ctx-item" data-a="forward"><span class="ico">↪</span> Переслать</div>
     <div class="ctx-item" data-a="copy"><span class="ico">📋</span> Копировать</div>`;
@@ -2795,19 +2843,118 @@ function showMsgCtx(e, msg){
     <div class="ctx-item" data-a="pin"><span class="ico">📌</span> Закрепить</div>`;
   if(!mine) items+=`<div class="ctx-item danger" data-a="report"><span class="ico">🚩</span> Пожаловаться</div>`;
   if(mine) items+=`<div class="ctx-item danger" data-a="del"><span class="ico">🗑️</span> Удалить</div>`;
-  items+=`<div class="ctx-sep"></div><div class="ctx-item" data-a="more"><span class="ico">⋯</span> Ещё...</div>`;
+  items+=`<div class="ctx-sep"></div><div class="ctx-item" data-a="cancel"><span class="ico">✕</span> Отменить</div>`;
 
   menu.className='ctx-menu wa-style';
   menu.innerHTML=items;
-  menu.style.left=Math.min(Math.max(8,x-20), innerWidth-250)+'px';
-  menu.style.top=Math.min(Math.max(8,y+12), innerHeight-340)+'px';
   menu.style.display='block';
-  window._slCtxIgnoreClickUntil = Date.now()+300;
+  menu.style.visibility='hidden'; // measure first
+  menu.style.left='0px';
+  menu.style.top='0px';
+  menu.style.maxHeight='';
+  menu.style.overflowY='';
+
+  // Measure after paint — keep menu fully in viewport (esp. bottom messages)
+  requestAnimationFrame(()=>{
+    const pad = 12;
+    const barH = 56;
+    const gap = 8;
+    // Cap height so everything is reachable with scroll if needed
+    const maxMenuH = Math.min(Math.floor(innerHeight * 0.58), 360);
+    menu.style.maxHeight = maxMenuH + 'px';
+    menu.style.overflowY = 'auto';
+
+    const menuH = Math.min(menu.offsetHeight || 280, maxMenuH);
+    const menuW = menu.offsetWidth || 248;
+
+    // Prefer ABOVE the touch when near bottom; BELOW when near top
+    const spaceBelow = innerHeight - y - pad;
+    const spaceAbove = y - pad;
+
+    let menuTop, menuLeft;
+
+    // Default: try place below point
+    if(spaceBelow >= menuH + gap || (spaceBelow >= spaceAbove && spaceBelow >= 120)){
+      menuTop = y + gap;
+      // clamp bottom
+      if(menuTop + menuH > innerHeight - pad){
+        menuTop = innerHeight - menuH - pad;
+      }
+    } else {
+      // place above
+      menuTop = y - menuH - gap;
+      if(menuTop < pad) menuTop = pad;
+      // if still overflows bottom (tiny screens), force top + scroll
+      if(menuTop + menuH > innerHeight - pad){
+        menuTop = pad;
+      }
+    }
+
+    // Final clamp — never leave screen
+    menuTop = Math.max(pad, Math.min(menuTop, innerHeight - menuH - pad));
+
+    // Horizontal
+    menuLeft = x - menuW * 0.4;
+    if(menuLeft < pad) menuLeft = pad;
+    if(menuLeft + menuW > innerWidth - pad) menuLeft = Math.max(pad, innerWidth - menuW - pad);
+
+    menu.style.left = menuLeft + 'px';
+    menu.style.top = menuTop + 'px';
+    menu.style.visibility = 'visible';
+    menu.style.zIndex = '12020';
+
+    // Reaction bar — always fully visible, prefer opposite side of menu
+    const barW = bar.offsetWidth || 280;
+    let barLeft = x - barW / 2;
+    if(barLeft < pad) barLeft = pad;
+    if(barLeft + barW > innerWidth - pad) barLeft = Math.max(pad, innerWidth - barW - pad);
+
+    let barTop;
+    if(menuTop + 20 >= y){
+      // menu mostly below finger → bar above
+      barTop = Math.max(pad, Math.min(y - barH - 10, menuTop - barH - 6));
+    } else {
+      // menu above → bar between finger and menu bottom, or below finger
+      barTop = y + 10;
+      if(barTop + barH > menuTop - 4 && menuTop > pad + barH){
+        barTop = menuTop - barH - 6;
+      }
+      if(barTop + barH > innerHeight - pad) barTop = innerHeight - barH - pad;
+      if(barTop < pad) barTop = pad;
+    }
+    // no overlap with menu
+    if(!(barTop + barH <= menuTop + 2 || barTop >= menuTop + menuH - 2)){
+      if(menuTop > barH + pad) barTop = menuTop - barH - 6;
+      else barTop = Math.min(innerHeight - barH - pad, menuTop + menuH + 6);
+    }
+
+    bar.style.left = barLeft + 'px';
+    bar.style.top = barTop + 'px';
+    bar.style.zIndex = '12021';
+  });
+
+  window._slCtxIgnoreClickUntil = Date.now()+350;
+
+  bar.querySelectorAll('[data-r]').forEach(el=>{
+    el.onclick=async(ev)=>{
+      ev.stopPropagation();
+      closeMsgCtxUI();
+      if(el.dataset.r==='more'){ openReactionPicker(msg); return; }
+      try{
+        if(typeof toggleReaction==='function') toggleReaction(msg, el.dataset.r);
+        else if(typeof openReactionPicker==='function'){
+          const reactions=JSON.parse(msg.reactions||'{}');
+          reactions[el.dataset.r]=(reactions[el.dataset.r]||0)+1;
+          await sb.from('messages').update({reactions: JSON.stringify(reactions)}).eq('id', msg.id);
+          loadMessages();
+        }
+      }catch(err){ showToast('Реакция: '+el.dataset.r); }
+    };
+  });
 
   menu.querySelectorAll('.ctx-item').forEach(it=>{
     it.onclick=async()=>{
-      menu.style.display='none';
-      hideMsgReactBar();
+      closeMsgCtxUI();
       const a=it.dataset.a;
       if(a==='reply'){ replyToMsg=msg; document.getElementById('message-input').placeholder='Ответ: '+(msg.content||'').slice(0,40); document.getElementById('message-input').focus(); if(typeof showReplyBar==='function') showReplyBar(msg); }
       else if(a==='forward'){ openForwardPicker(msg); }
@@ -2841,29 +2988,27 @@ function showMsgCtx(e, msg){
         if(typeof transcribeVoiceMsg==='function') transcribeVoiceMsg(msg);
         else showToast('Расшифровка… (нужен микрофон/AI)');
       }
-      else if(a==='more'){
-        showToast('Дополнительные действия скоро');
+      else if(a==='cancel'){
+        /* already closed */
       }
     };
   });
-  // dismiss bar on outside
-  setTimeout(()=>{
-    const once=(ev)=>{
-      if(!ev.target.closest('.msg-react-bar') && !ev.target.closest('#ctx-menu')){
-        hideMsgReactBar();
-        document.removeEventListener('click', once, true);
-        document.removeEventListener('touchstart', once, true);
-      }
-    };
-    document.addEventListener('click', once, true);
-    document.addEventListener('touchstart', once, true);
-  }, 50);
+
+  // dismiss on outside (backdrop handles click; also escape)
+  const onKey=ev=>{ if(ev.key==='Escape'){ closeMsgCtxUI(); document.removeEventListener('keydown', onKey); } };
+  document.addEventListener('keydown', onKey);
 }
+
 document.addEventListener('click', e=>{
   if(window._slCtxIgnoreClickUntil && Date.now() < window._slCtxIgnoreClickUntil) return;
-  if(!e.target.closest('#ctx-menu')){
-    const m=document.getElementById('ctx-menu');
-    if(m) m.style.display='none';
+  if(e.target.closest('#ctx-menu') || e.target.closest('.msg-react-bar')) return;
+  if(document.body.classList.contains('msg-ctx-open') || document.getElementById('ctx-menu')?.style.display==='block'){
+    if(typeof closeMsgCtxUI==='function') closeMsgCtxUI();
+    else {
+      const m=document.getElementById('ctx-menu');
+      if(m) m.style.display='none';
+      hideMsgReactBar();
+    }
   }
 }, true);
 
