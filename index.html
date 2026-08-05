@@ -3207,6 +3207,35 @@ circleBtn.addEventListener('pointerup', ()=>{
 });
 circleBtn.addEventListener('pointerleave', ()=>clearTimeout(longPressTimer));
 
+
+// Continuous circle recording via canvas so camera flips don't reset the file
+let _circleCanvas=null, _circleRaf=0, _circleDrawLive=null;
+function stopCircleCanvasLoop(){
+  if(_circleRaf){ cancelAnimationFrame(_circleRaf); _circleRaf=0; }
+  _circleDrawLive=null;
+}
+function startCircleCanvasLoop(videoEl){
+  stopCircleCanvasLoop();
+  if(!_circleCanvas){
+    _circleCanvas=document.createElement('canvas');
+    _circleCanvas.width=480; _circleCanvas.height=480;
+  }
+  const ctx=_circleCanvas.getContext('2d');
+  const draw=()=>{
+    _circleRaf=requestAnimationFrame(draw);
+    if(!videoEl || videoEl.readyState<2) return;
+    try{
+      ctx.save();
+      if(circleFacing==='user'){ ctx.translate(480,0); ctx.scale(-1,1); }
+      ctx.drawImage(videoEl, 0, 0, 480, 480);
+      ctx.restore();
+    }catch(e){}
+  };
+  _circleDrawLive=videoEl;
+  draw();
+  return _circleCanvas;
+}
+
 let circleFacing='user';
 async function beginRecording(){
   if(isRecording||(!activePartner&&!activeGroup)) return;
@@ -3245,8 +3274,20 @@ async function beginRecording(){
   ov.style.display='flex';
   let mime = recordMode==='circle' ? 'video/webm;codecs=vp8,opus' : 'audio/webm';
   if(!MediaRecorder.isTypeSupported(mime)) mime = recordMode==='circle' ? 'video/webm' : 'audio/webm';
-  try{ mediaRecorder=new MediaRecorder(circleStream,{mimeType:mime, videoBitsPerSecond:800000}); }
-  catch(e){ mediaRecorder=new MediaRecorder(circleStream); }
+  let recStream = circleStream;
+  if(recordMode==='circle'){
+    const vid=document.getElementById('clp');
+    if(vid){
+      const canvas=startCircleCanvasLoop(vid);
+      try{
+        recStream = canvas.captureStream(30);
+        const at = circleStream.getAudioTracks()[0];
+        if(at) recStream.addTrack(at);
+      }catch(e){ recStream = circleStream; }
+    }
+  }
+  try{ mediaRecorder=new MediaRecorder(recStream,{mimeType:mime, videoBitsPerSecond:800000}); }
+  catch(e){ mediaRecorder=new MediaRecorder(recStream); }
   mediaRecorder.ondataavailable=e=>{ if(e.data&&e.data.size>0) recordedChunks.push(e.data); };
   mediaRecorder.start(250);
   const Ccirc = 2*Math.PI*48;
@@ -3282,13 +3323,16 @@ async function toggleCircleTorch(){
       const v=document.getElementById('clp');
       if(v){ v.srcObject=circleStream; v.classList.remove('mirrored'); v.play().catch(()=>{}); }
       try{ caps = track.getCapabilities ? track.getCapabilities() : {}; }catch(e){}
-      // restart recorder with new stream
+      // restart recorder, KEEP previous chunks
       if(mediaRecorder && mediaRecorder.state!=='inactive'){
+        try{ mediaRecorder.onstop=null; }catch(e){}
+        try{ mediaRecorder.requestData(); }catch(e){}
         try{ mediaRecorder.stop(); }catch(e){}
-        recordedChunks=[];
+        await new Promise(r=>setTimeout(r, 100));
         try{ mediaRecorder=new MediaRecorder(circleStream,{mimeType:'video/webm'}); }
         catch(e){ mediaRecorder=new MediaRecorder(circleStream); }
         mediaRecorder.ondataavailable=e=>{ if(e.data&&e.data.size>0) recordedChunks.push(e.data); };
+        mediaRecorder.onstop=null;
         mediaRecorder.start(250);
       }
     }
@@ -3327,55 +3371,44 @@ function renderRecActions(){
   document.getElementById('rflip')?.addEventListener('click', async ()=>{
     const nextFacing = circleFacing==='user' ? 'environment' : 'user';
     try{
-      // IMPORTANT: clear onstop so stop() does NOT trigger finishRecording / send
-      if(mediaRecorder){
-        try{ mediaRecorder.onstop=null; }catch(e){}
-        try{ if(mediaRecorder.state==='recording' || mediaRecorder.state==='paused') mediaRecorder.requestData(); }catch(e){}
-        try{
-          if(mediaRecorder.state!=='inactive') mediaRecorder.stop();
-        }catch(e){}
-      }
-      // stop old tracks after recorder stopped
-      await new Promise(r=>setTimeout(r, 80));
-      try{ circleStream?.getTracks().forEach(t=>t.stop()); }catch(e){}
-
-      circleFacing = nextFacing;
+      // Continuous canvas recorder: only switch camera input, keep same MediaRecorder
+      const oldStream = circleStream;
       const constraints = {
-        video: {
-          facingMode: { ideal: circleFacing },
-          width: { ideal: 480 },
-          height: { ideal: 480 }
-        },
+        video: { facingMode: { ideal: nextFacing }, width: { ideal: 480 }, height: { ideal: 480 } },
         audio: true
       };
-      try{
-        circleStream = await navigator.mediaDevices.getUserMedia(constraints);
-      }catch(e1){
-        // fallback without ideal object
-        circleStream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: circleFacing, width: { ideal: 480 }, height: { ideal: 480 } },
+      let newStream;
+      try{ newStream = await navigator.mediaDevices.getUserMedia(constraints); }
+      catch(e1){
+        newStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: nextFacing, width: { ideal: 480 }, height: { ideal: 480 } },
           audio: true
         });
       }
+      circleFacing = nextFacing;
+      circleStream = newStream;
       const v=document.getElementById('clp');
       if(v){
         v.srcObject=circleStream;
         v.classList.toggle('mirrored', circleFacing==='user');
         await v.play().catch(()=>{});
+        // canvas loop already draws from #clp — keep MediaRecorder running uninterrupted
+        if(typeof startCircleCanvasLoop==='function') startCircleCanvasLoop(v);
       }
-      // restart recorder on NEW stream; keep recording session alive
-      recordedChunks = [];
-      let mime = 'video/webm;codecs=vp8,opus';
-      if(!MediaRecorder.isTypeSupported(mime)) mime = 'video/webm';
-      try{ mediaRecorder = new MediaRecorder(circleStream, { mimeType: mime, videoBitsPerSecond: 800000 }); }
-      catch(e){ mediaRecorder = new MediaRecorder(circleStream); }
-      mediaRecorder.ondataavailable = e=>{ if(e.data && e.data.size>0) recordedChunks.push(e.data); };
-      mediaRecorder.onstop = null; // only finishRecording sets this
-      mediaRecorder.start(200);
-      recIsPaused = false;
+      // Replace audio track on recording stream if possible (canvas stream audio)
+      try{
+        if(mediaRecorder && mediaRecorder.state!=='inactive' && mediaRecorder.stream){
+          const oldAudio = mediaRecorder.stream.getAudioTracks();
+          oldAudio.forEach(t=>{ try{ mediaRecorder.stream.removeTrack(t); t.stop(); }catch(e){} });
+          const na = circleStream.getAudioTracks()[0];
+          if(na) mediaRecorder.stream.addTrack(na);
+        }
+      }catch(e){}
+      // stop old camera tracks
+      try{ oldStream?.getTracks().forEach(t=>t.stop()); }catch(e){}
       const hint=document.getElementById('rec-hint');
-      if(hint) hint.textContent = circleFacing==='user' ? 'Фронтальная камера' : 'Основная камера';
-      setTimeout(()=>{ if(hint && isRecording) hint.textContent = recordMode==='circle' ? 'Тап — пауза' : 'Запись...'; }, 900);
+      if(hint) hint.textContent = (circleFacing==='user' ? 'Фронтальная' : 'Основная') + ' · без разрыва';
+      setTimeout(()=>{ if(hint && isRecording) hint.textContent = recordMode==='circle' ? 'Тап — пауза' : 'Запись...'; }, 1000);
       renderRecActions();
     }catch(e){
       console.warn('flip camera', e);
@@ -3391,6 +3424,7 @@ function togglePauseRecording(){
 }
 function cancelRecording(){
   circleTorchOn=false;
+  try{ stopCircleCanvasLoop(); }catch(e){}
   try{ mediaRecorder?.stop(); }catch(e){}
   circleStream?.getTracks().forEach(t=>t.stop()); circleStream=null;
   clearInterval(recTickInterval); isRecording=false;
@@ -3414,6 +3448,7 @@ function finishRecording(){
   try{ mediaRecorder.requestData(); }catch(e){}
   mediaRecorder.onstop=async()=>{
     circleTorchOn=false;
+    try{ stopCircleCanvasLoop(); }catch(e){}
     try{ circleStream?.getTracks().forEach(t=>t.stop()); }catch(e){}
     circleStream=null;
     document.getElementById('circle-record-overlay').style.display='none';
