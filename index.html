@@ -2405,7 +2405,9 @@ function renderMessage(msg, isGroup=false){
     v.addEventListener('loadedmetadata',()=>{ if(durEl) durEl.textContent=fmt(v.duration); });
     v.addEventListener('timeupdate',()=>{ if(durEl && !v.paused) durEl.textContent=fmt(v.currentTime); });
     circle.onclick=e=>{
+      e.preventDefault();
       e.stopPropagation();
+      if(typeof e.stopImmediatePropagation==='function') e.stopImmediatePropagation();
       if(v.paused){
         // pause other circles
         document.querySelectorAll('.circle-msg video').forEach(x=>{ if(x!==v){ x.pause(); const p=x.closest('.circle-msg'); const o=p?.querySelector('.circle-play-overlay'); if(o) o.style.display='flex'; }});
@@ -2418,6 +2420,10 @@ function renderMessage(msg, isGroup=false){
         if(muteEl) muteEl.innerHTML='<svg viewBox="0 0 24 24"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M23 9l-6 6M17 9l6 6" stroke="#fff" stroke-width="2" fill="none"/></svg>';
       }
     };
+    // Don't let bubble swipe/forward steal circle taps
+    ['pointerdown','pointerup','touchstart','touchend'].forEach(evn=>{
+      circle.addEventListener(evn, e=>{ e.stopPropagation(); }, {passive:true});
+    });
   }
 
   // Voice waveform + play
@@ -2440,9 +2446,10 @@ function renderMessage(msg, isGroup=false){
   try{ if(!window._slMsgById) window._slMsgById=new Map(); window._slMsgById.set(String(msg.id), msg); }catch(e){}
 
   (function bindMsgPress(bubble, row, msg){
-    let pressTimer=null, startX=0, startY=0, startT=0, longFired=false, pointerId=null;
+    let pressTimer=null, startX=0, startY=0, startT=0, longFired=false, pointerId=null, pressActive=false;
     const LONG_MS=480;
     const MOVE_TOL=14; // allow small finger tremor
+    const SWIPE_MIN=70; // was 55 — too easy to trigger on tap
 
     function clearPress(){
       if(pressTimer){ clearTimeout(pressTimer); pressTimer=null; }
@@ -2460,48 +2467,67 @@ function renderMessage(msg, isGroup=false){
       setTimeout(()=>{ window._slCtxOpened=false; }, 450);
     }
 
+    function isInteractiveTarget(t){
+      return !!(t && t.closest && t.closest('a,button,input,textarea,video,.voice-play-btn,.circle-msg,.voice-bubble,.channel-post-comments'));
+    }
+
     bubble.addEventListener('pointerdown', e=>{
       if(e.button===2) return; // right click handled by contextmenu
       if(e.pointerType==='mouse' && e.button!==0) return;
-      // ignore interactive children
-      if(e.target.closest('a,button,input,textarea,video,.voice-play-btn,.circle-msg,.channel-post-comments')) return;
+      // Circle / voice / media: no swipe-forward, but long-press menu still OK on bubble padding only
+      if(isInteractiveTarget(e.target)){
+        pressActive=false;
+        pointerId=null;
+        return;
+      }
       longFired=false;
+      pressActive=true;
       pointerId=e.pointerId;
       startX=e.clientX; startY=e.clientY; startT=Date.now();
       bubble.classList.add('msg-holding');
-      clearPress();
+      if(pressTimer){ clearTimeout(pressTimer); pressTimer=null; }
       pressTimer=setTimeout(()=>{
-        if(pointerId===e.pointerId) openMenu(e);
+        if(pointerId===e.pointerId && pressActive) openMenu(e);
       }, LONG_MS);
       try{ bubble.setPointerCapture(e.pointerId); }catch(err){}
     });
     bubble.addEventListener('pointermove', e=>{
-      if(pointerId==null || e.pointerId!==pointerId) return;
+      if(!pressActive || pointerId==null || e.pointerId!==pointerId) return;
       const dx=e.clientX-startX, dy=e.clientY-startY;
       if(Math.hypot(dx,dy)>MOVE_TOL) clearPress();
     });
     const endPress=e=>{
+      // CRITICAL: only handle if we started a press on this bubble (not circle/voice click)
+      if(!pressActive){
+        clearPress();
+        return;
+      }
       if(pointerId!=null && e.pointerId!==pointerId) return;
       const wasLong=longFired;
+      const sx=startX, sy=startY;
       clearPress();
+      pressActive=false;
       pointerId=null;
-      // swipe only if not long-press
+      // swipe only if not long-press and intentional horizontal move
       if(!wasLong && e.type==='pointerup'){
-        const dx=e.clientX-startX;
-        if(dx < -55){
+        const dx=e.clientX-sx;
+        const dy=e.clientY-sy;
+        // require mostly horizontal swipe
+        if(Math.abs(dx) < SWIPE_MIN || Math.abs(dx) < Math.abs(dy)*1.2) return;
+        if(dx < -SWIPE_MIN){
           replyToMsg=msg;
           document.getElementById('message-input').placeholder='Ответ: '+(msg.content||'вложение').slice(0,40);
           document.getElementById('message-input').focus();
           if(typeof showReplyBar==='function') showReplyBar(msg);
           row.classList.add('swiped'); setTimeout(()=>row.classList.remove('swiped'),300);
-        } else if(dx > 55){
+        } else if(dx > SWIPE_MIN){
           if(typeof openForwardPicker==='function') openForwardPicker(msg);
         }
       }
     };
     bubble.addEventListener('pointerup', endPress);
     bubble.addEventListener('pointercancel', endPress);
-    bubble.addEventListener('lostpointercapture', ()=>{ clearPress(); pointerId=null; });
+    bubble.addEventListener('lostpointercapture', ()=>{ clearPress(); pressActive=false; pointerId=null; });
 
     // PC right-click — always open custom menu
     bubble.addEventListener('contextmenu', e=>{
