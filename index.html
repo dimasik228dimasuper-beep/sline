@@ -544,8 +544,8 @@ body.beta-oled.theme-light{--bg:#000;--panel:#0A0A0A;--panel-hover:#141414;--lin
 @keyframes reactFloat{0%{opacity:0;transform:translate(-50%,-50%) scale(.4)}30%{opacity:1;transform:translate(-50%,-50%) scale(1.3)}100%{opacity:0;transform:translate(-50%,-120%) scale(1)}}
 
 /* ===== Verified badge (SVG, not emoji) ===== */
-.verified-badge{display:inline-flex;vertical-align:middle;margin-left:3px}
-.verified-badge svg{width:14px;height:14px}
+.verified-badge{display:inline-flex;vertical-align:middle;margin-left:4px;align-items:center;flex-shrink:0;line-height:0}
+.verified-badge svg{width:16px;height:16px;display:block;overflow:visible;flex-shrink:0}
 
 /* ===== Owl assistant ===== */
 .owl-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);backdrop-filter:blur(6px);z-index:9800;display:flex;align-items:center;justify-content:center;padding:20px;animation:owlFadeIn .25s ease}
@@ -3325,26 +3325,62 @@ function renderRecActions(){
   document.getElementById('rflash')?.addEventListener('click', (e)=>{ e.stopPropagation(); toggleCircleTorch(); });
   document.getElementById('rsend').onclick=finishRecording;
   document.getElementById('rflip')?.addEventListener('click', async ()=>{
-    circleFacing = circleFacing==='user' ? 'environment' : 'user';
+    const nextFacing = circleFacing==='user' ? 'environment' : 'user';
     try{
-      circleStream?.getTracks().forEach(t=>t.stop());
-      circleStream = await navigator.mediaDevices.getUserMedia({video:{facingMode:circleFacing,width:{ideal:480},height:{ideal:480}}, audio:true});
+      // IMPORTANT: clear onstop so stop() does NOT trigger finishRecording / send
+      if(mediaRecorder){
+        try{ mediaRecorder.onstop=null; }catch(e){}
+        try{ if(mediaRecorder.state==='recording' || mediaRecorder.state==='paused') mediaRecorder.requestData(); }catch(e){}
+        try{
+          if(mediaRecorder.state!=='inactive') mediaRecorder.stop();
+        }catch(e){}
+      }
+      // stop old tracks after recorder stopped
+      await new Promise(r=>setTimeout(r, 80));
+      try{ circleStream?.getTracks().forEach(t=>t.stop()); }catch(e){}
+
+      circleFacing = nextFacing;
+      const constraints = {
+        video: {
+          facingMode: { ideal: circleFacing },
+          width: { ideal: 480 },
+          height: { ideal: 480 }
+        },
+        audio: true
+      };
+      try{
+        circleStream = await navigator.mediaDevices.getUserMedia(constraints);
+      }catch(e1){
+        // fallback without ideal object
+        circleStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: circleFacing, width: { ideal: 480 }, height: { ideal: 480 } },
+          audio: true
+        });
+      }
       const v=document.getElementById('clp');
       if(v){
         v.srcObject=circleStream;
         v.classList.toggle('mirrored', circleFacing==='user');
-        v.play().catch(()=>{});
+        await v.play().catch(()=>{});
       }
-      // swap tracks into recorder is hard mid-record — restart chunks with new stream is complex; just update preview
-      if(mediaRecorder && mediaRecorder.state==='recording'){
-        try{ mediaRecorder.stop(); }catch(e){}
-        recordedChunks=[];
-        let mime='video/webm';
-        try{ mediaRecorder=new MediaRecorder(circleStream,{mimeType:mime}); }catch(e){ mediaRecorder=new MediaRecorder(circleStream); }
-        mediaRecorder.ondataavailable=e=>{ if(e.data&&e.data.size>0) recordedChunks.push(e.data); };
-        mediaRecorder.start(250);
-      }
-    }catch(e){ showToast('Не удалось переключить камеру'); }
+      // restart recorder on NEW stream; keep recording session alive
+      recordedChunks = [];
+      let mime = 'video/webm;codecs=vp8,opus';
+      if(!MediaRecorder.isTypeSupported(mime)) mime = 'video/webm';
+      try{ mediaRecorder = new MediaRecorder(circleStream, { mimeType: mime, videoBitsPerSecond: 800000 }); }
+      catch(e){ mediaRecorder = new MediaRecorder(circleStream); }
+      mediaRecorder.ondataavailable = e=>{ if(e.data && e.data.size>0) recordedChunks.push(e.data); };
+      mediaRecorder.onstop = null; // only finishRecording sets this
+      mediaRecorder.start(200);
+      recIsPaused = false;
+      const hint=document.getElementById('rec-hint');
+      if(hint) hint.textContent = circleFacing==='user' ? 'Фронтальная камера' : 'Основная камера';
+      setTimeout(()=>{ if(hint && isRecording) hint.textContent = recordMode==='circle' ? 'Тап — пауза' : 'Запись...'; }, 900);
+      renderRecActions();
+    }catch(e){
+      console.warn('flip camera', e);
+      showToast('Не удалось переключить камеру');
+    }
   });
 }
 function togglePauseRecording(){
@@ -3361,19 +3397,38 @@ function cancelRecording(){
   document.getElementById('circle-record-overlay').style.display='none';
 }
 function finishRecording(){
-  if(!mediaRecorder||mediaRecorder.state==='inactive') return;
+  if(!mediaRecorder) return;
+  if(mediaRecorder.state==='inactive'){
+    // already stopped — try send whatever chunks we have
+    if(recordedChunks && recordedChunks.length){
+      const blob=new Blob(recordedChunks,{type:recordMode==='circle'?'video/webm':'audio/webm'});
+      if(blob.size>500){
+        const reader=new FileReader();
+        reader.onload=async ev=> await sendMessage(recordMode==='circle'?'circle':'voice', ev.target.result, '');
+        reader.readAsDataURL(blob);
+      }
+    }
+    return;
+  }
   clearInterval(recTickInterval);
+  try{ mediaRecorder.requestData(); }catch(e){}
   mediaRecorder.onstop=async()=>{
     circleTorchOn=false;
-    circleStream?.getTracks().forEach(t=>t.stop()); circleStream=null;
+    try{ circleStream?.getTracks().forEach(t=>t.stop()); }catch(e){}
+    circleStream=null;
     document.getElementById('circle-record-overlay').style.display='none';
     isRecording=false;
-    const blob=new Blob(recordedChunks,{type:recordMode==='circle'?'video/webm':'audio/webm'});
+    const blob=new Blob(recordedChunks||[],{type:recordMode==='circle'?'video/webm':'audio/webm'});
+    if(!blob.size || blob.size<400){
+      showToast('Пустая запись — попробуйте ещё раз');
+      recordedChunks=[];
+      return;
+    }
     const reader=new FileReader();
     reader.onload=async ev=> await sendMessage(recordMode==='circle'?'circle':'voice', ev.target.result, '');
     reader.readAsDataURL(blob);
   };
-  mediaRecorder.stop();
+  try{ mediaRecorder.stop(); }catch(e){ showToast('Не удалось завершить запись'); }
 }
 
 // ========== PiP ==========
@@ -4975,7 +5030,7 @@ async function searchProfilesSafe(q, excludeId, limit, fields){
 
 // ---------- Verified badge ----------
 const VERIFIED_EMAILS=['admin@mail.ru','dimasik.228.dima.super@gmail.com'];
-const verifiedSvg='<span class="verified-badge" title="Подтверждённый аккаунт"><svg viewBox="0 0 24 24" fill="#4C7CF3" stroke="#fff" stroke-width="1"><path d="M12 2l2.4 1.4 2.7-.5 1.4 2.4 2.4 1.4-.5 2.7.5 2.7-2.4 1.4-1.4 2.4-2.7-.5L12 22l-2.4-1.4-2.7.5-1.4-2.4-2.4-1.4.5-2.7-.5-2.7 2.4-1.4 1.4-2.4 2.7.5z"/><path d="M8.5 12l2.3 2.3L16 9" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>';
+const verifiedSvg='<span class="verified-badge" title="Подтверждённый аккаунт" aria-label="verified"><svg viewBox="0 0 22 22" width="16" height="16" xmlns="http://www.w3.org/2000/svg"><circle cx="11" cy="11" r="11" fill="#4C7CF3"/><path d="M6.2 11.2l2.8 2.8 6.2-6.2" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>';
 function verifiedBadgeIf(email){ return (email && VERIFIED_EMAILS.includes(String(email).toLowerCase())) ? verifiedSvg : ''; }
 
 // ---------- More stickers ----------
@@ -6589,9 +6644,16 @@ async function buildPostCard(p){
 function renderCreatePost(body, kind){
   body.innerHTML = `<div style="padding:16px">
     <div class="field"><label>${kind==='video'?(currentLang==='en'?'Video':'Видео'):(currentLang==='en'?'Photo or video':'Фото или видео')}</label>
-      <button class="btn-secondary" id="cp-pick" type="button">${currentLang==='en'?'Choose file':'Выбрать файл'}</button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+        <button class="btn-secondary" id="cp-pick" type="button">${currentLang==='en'?'Choose file':'Выбрать файл'}</button>
+        ${kind==='video'?`<button class="btn-primary" id="cp-cam" type="button">📷 ${currentLang==='en'?'Record on site':'Снять на сайте'}</button>`:''}
+      </div>
       <input type="file" class="hidden-input" id="cp-file" accept="${kind==='video'?'video/*':'image/*,video/*'}">
       <div id="cp-preview" style="margin-top:10px"></div>
+      ${kind==='video'?`<div id="cp-masks-wrap" style="display:none;margin-top:12px">
+        <div style="font-size:13px;font-weight:600;margin-bottom:8px">Маски (30)</div>
+        <div id="cp-masks" style="display:flex;flex-wrap:wrap;gap:6px;max-height:120px;overflow-y:auto"></div>
+      </div>`:''}
     </div>
     <div class="field"><label>${currentLang==='en'?'Caption':'Подпись'}</label><input class="cd-input" id="cp-caption"></div>
     ${kind==='video'?`<div class="field"><label>${currentLang==='en'?'Hashtags':'Хэштеги'}</label><input class="cd-input" id="cp-hashtags" placeholder="#signal #video"></div>`:''}
@@ -6599,6 +6661,159 @@ function renderCreatePost(body, kind){
   </div>`;
   let mediaData=null, mediaType=kind==='video'?'video':'image', mediaFile=null, mediaObjectUrl=null;
   body.querySelector('#cp-pick').onclick=()=>body.querySelector('#cp-file').click();
+
+  // --- On-site camera record + 30 face masks (Signal Video) ---
+  let cpCamStream=null, cpRecorder=null, cpChunks=[], cpMaskId=0, cpCamFacing='user';
+  const MASKS = [
+    {id:0, label:'Нет', emoji:''},
+    {id:1, label:'Кот', emoji:'🐱'}, {id:2, label:'Собака', emoji:'🐶'}, {id:3, label:'Лис', emoji:'🦊'},
+    {id:4, label:'Panda', emoji:'🐼'}, {id:5, label:'Лев', emoji:'🦁'}, {id:6, label:'Тигр', emoji:'🐯'},
+    {id:7, label:'Единорог', emoji:'🦄'}, {id:8, label:'Инопланетянин', emoji:'👽'}, {id:9, label:'Робот', emoji:'🤖'},
+    {id:10, label:'Очки', emoji:'🕶️'}, {id:11, label:'Сердце', emoji:'😍'}, {id:12, label:'Огонь', emoji:'🔥'},
+    {id:13, label:'Корона', emoji:'👑'}, {id:14, label:'Звезда', emoji:'🌟'}, {id:15, label:'Радуга', emoji:'🌈'},
+    {id:16, label:'Череп', emoji:'💀'}, {id:17, label:'Клоун', emoji:'🤡'}, {id:18, label:'Призрак', emoji:'👻'},
+    {id:19, label:'Тыква', emoji:'🎃'}, {id:20, label:'Ниндзя', emoji:'🥷'}, {id:21, label:'Супергерой', emoji:'🦸'},
+    {id:22, label:'Волшебник', emoji:'🧙'}, {id:23, label:'Фея', emoji:'🧚'}, {id:24, label:'Вампир', emoji:'🧛'},
+    {id:25, label:'Зомби', emoji:'🧟'}, {id:26, label:'Медведь', emoji:'🐻'}, {id:27, label:'Лягушка', emoji:'🐸'},
+    {id:28, label:'Осьминог', emoji:'🐙'}, {id:29, label:'Сердечки', emoji:'💕'}, {id:30, label:'Бриллиант', emoji:'💎'}
+  ];
+  function stopCpCam(){
+    try{ cpRecorder?.stop(); }catch(e){}
+    try{ cpCamStream?.getTracks().forEach(t=>t.stop()); }catch(e){}
+    cpCamStream=null; cpRecorder=null;
+  }
+  function renderMaskBar(){
+    const box=body.querySelector('#cp-masks');
+    const wrap=body.querySelector('#cp-masks-wrap');
+    if(!box||!wrap) return;
+    wrap.style.display='block';
+    box.innerHTML=MASKS.map(m=>`<button type="button" data-mid="${m.id}" class="btn-secondary" style="padding:6px 8px;font-size:18px;min-width:44px;${cpMaskId===m.id?'outline:2px solid var(--accent-a)':''}">${m.emoji||'∅'}</button>`).join('');
+    box.querySelectorAll('[data-mid]').forEach(b=>{
+      b.onclick=()=>{
+        cpMaskId=+b.dataset.mid;
+        renderMaskBar();
+        const ov=body.querySelector('#cp-mask-overlay');
+        if(ov){
+          const m=MASKS.find(x=>x.id===cpMaskId);
+          ov.textContent=m&&m.emoji?m.emoji:'';
+          ov.style.display=m&&m.emoji?'block':'none';
+        }
+      };
+    });
+  }
+  body.querySelector('#cp-cam')?.addEventListener('click', async ()=>{
+    const prev=body.querySelector('#cp-preview');
+    if(cpCamStream){
+      // already open — ignore
+      return;
+    }
+    try{
+      cpCamStream = await navigator.mediaDevices.getUserMedia({
+        video:{ facingMode:{ideal:cpCamFacing}, width:{ideal:720}, height:{ideal:1280} },
+        audio:true
+      });
+    }catch(e){ showToast('Нет доступа к камере'); return; }
+    prev.innerHTML=`
+      <div id="cp-stage" style="position:relative;border-radius:14px;overflow:hidden;background:#000;aspect-ratio:9/16;max-height:420px;margin:0 auto">
+        <video id="cp-live" autoplay muted playsinline style="width:100%;height:100%;object-fit:cover;display:block"></video>
+        <canvas id="cp-canvas" style="display:none"></canvas>
+        <div id="cp-mask-overlay" style="position:absolute;left:50%;top:28%;transform:translate(-50%,-50%);font-size:72px;pointer-events:none;filter:drop-shadow(0 4px 12px rgba(0,0,0,.45));display:none;line-height:1"></div>
+        <div style="position:absolute;left:0;right:0;bottom:10px;display:flex;justify-content:center;gap:10px;z-index:2">
+          <button type="button" class="btn-secondary" id="cp-flip" style="padding:8px 12px">🔄</button>
+          <button type="button" class="btn-primary" id="cp-rec" style="padding:10px 18px">● Запись</button>
+          <button type="button" class="btn-secondary" id="cp-stopcam" style="padding:8px 12px">✕</button>
+        </div>
+      </div>`;
+    const live=body.querySelector('#cp-live');
+    live.srcObject=cpCamStream;
+    live.play().catch(()=>{});
+    renderMaskBar();
+    body.querySelector('#cp-flip').onclick=async()=>{
+      cpCamFacing = cpCamFacing==='user'?'environment':'user';
+      try{
+        cpCamStream.getTracks().forEach(t=>t.stop());
+        cpCamStream = await navigator.mediaDevices.getUserMedia({
+          video:{ facingMode:{ideal:cpCamFacing}, width:{ideal:720}, height:{ideal:1280} },
+          audio:true
+        });
+        live.srcObject=cpCamStream;
+        live.play().catch(()=>{});
+      }catch(e){ showToast('Не удалось переключить камеру'); }
+    };
+    body.querySelector('#cp-stopcam').onclick=()=>{
+      stopCpCam();
+      prev.innerHTML='';
+      const wrap=body.querySelector('#cp-masks-wrap');
+      if(wrap) wrap.style.display='none';
+    };
+    let recording=false;
+    body.querySelector('#cp-rec').onclick=async()=>{
+      const btn=body.querySelector('#cp-rec');
+      if(!recording){
+        // Record canvas with mask overlay composite
+        const canvas=body.querySelector('#cp-canvas');
+        const stage=body.querySelector('#cp-stage');
+        const w=720, h=1280;
+        canvas.width=w; canvas.height=h;
+        const ctx=canvas.getContext('2d');
+        const draw=()=>{
+          if(!recording) return;
+          try{
+            ctx.save();
+            if(cpCamFacing==='user'){ ctx.translate(w,0); ctx.scale(-1,1); }
+            ctx.drawImage(live, 0, 0, w, h);
+            ctx.restore();
+            const m=MASKS.find(x=>x.id===cpMaskId);
+            if(m && m.emoji){
+              ctx.font='120px serif';
+              ctx.textAlign='center';
+              ctx.textBaseline='middle';
+              ctx.fillText(m.emoji, w/2, h*0.28);
+            }
+          }catch(e){}
+          requestAnimationFrame(draw);
+        };
+        // Prefer canvas stream for mask burn-in; fallback to camera stream
+        let recStream;
+        try{
+          recStream = canvas.captureStream(30);
+          // add audio from cam
+          const at=cpCamStream.getAudioTracks()[0];
+          if(at) recStream.addTrack(at);
+        }catch(e){ recStream=cpCamStream; }
+        cpChunks=[];
+        let mime='video/webm;codecs=vp9,opus';
+        if(!MediaRecorder.isTypeSupported(mime)) mime='video/webm';
+        try{ cpRecorder=new MediaRecorder(recStream,{mimeType:mime,videoBitsPerSecond:2500000}); }
+        catch(e){ cpRecorder=new MediaRecorder(recStream); }
+        cpRecorder.ondataavailable=e=>{ if(e.data&&e.data.size) cpChunks.push(e.data); };
+        cpRecorder.onstop=()=>{
+          recording=false;
+          btn.textContent='● Запись';
+          const blob=new Blob(cpChunks,{type:'video/webm'});
+          if(blob.size<500){ showToast('Пустая запись'); return; }
+          try{ if(mediaObjectUrl) URL.revokeObjectURL(mediaObjectUrl); }catch(e){}
+          mediaObjectUrl=URL.createObjectURL(blob);
+          mediaData=mediaObjectUrl;
+          mediaType='video';
+          mediaFile=new File([blob],'signal-video.webm',{type:'video/webm'});
+          // keep preview as recorded video
+          stopCpCam();
+          prev.innerHTML=`<video src="${mediaObjectUrl}" style="max-width:100%;border-radius:12px;max-height:420px" controls playsinline></video>`;
+          showToast('Видео готово — можно публиковать');
+        };
+        recording=true;
+        btn.textContent='■ Стоп';
+        cpRecorder.start(200);
+        draw();
+        // auto stop 60s
+        setTimeout(()=>{ if(recording && cpRecorder && cpRecorder.state==='recording') cpRecorder.stop(); }, 60000);
+      } else {
+        try{ cpRecorder.stop(); }catch(e){}
+      }
+    };
+  });
+
   body.querySelector('#cp-file').onchange=e=>{
     const f=e.target.files[0]; if(!f) return;
     mediaFile=f;
