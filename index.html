@@ -241,6 +241,15 @@ body.beta-oled .sw-clip{background:var(--panel)!important}
 .bubble img,.bubble video{max-width:100%;border-radius:12px;margin-top:4px;display:block;cursor:pointer}
 .reply-quote{border-left:2px solid rgba(255,255,255,.5);padding-left:6px;font-size:12px;opacity:.8;margin-bottom:4px;white-space:pre-wrap}
 .bubble.bubble-circle{background:transparent!important;border:none!important;padding:0!important;box-shadow:none!important;max-width:none}
+.media-with-caption{display:flex;flex-direction:column;gap:6px;max-width:100%}
+.media-with-caption img,.media-with-caption video{border-radius:12px;max-width:100%;display:block}
+.media-caption{font-size:14px;line-height:1.35;padding:2px 4px;white-space:pre-wrap;word-break:break-word}
+.media-caption-modal .mcm-preview{max-height:42vh;overflow:hidden;border-radius:14px;background:#000;margin-bottom:12px;display:flex;align-items:center;justify-content:center}
+.media-caption-modal .mcm-preview img,.media-caption-modal .mcm-preview video{max-width:100%;max-height:42vh;object-fit:contain}
+.media-caption-modal textarea{width:100%;min-height:72px;max-height:140px;resize:vertical;border-radius:12px;border:1px solid var(--line);background:var(--input-bg);color:var(--text);padding:12px;font:inherit;box-sizing:border-box}
+.media-caption-modal .mcm-actions{display:flex;gap:10px;margin-top:12px}
+.media-caption-modal .mcm-actions button{flex:1;padding:12px;border-radius:12px;border:none;font-weight:700;cursor:pointer}
+
 .bubble.bubble-circle .bubble-time{margin-top:6px;padding:0 4px;opacity:.75}
 .bubble.bubble-circle .reaction-bar{margin-top:4px}
 .circle-msg{width:200px;height:200px;border-radius:50%;overflow:hidden;position:relative;background:#111;border:3px solid rgba(255,255,255,.2);cursor:pointer;box-shadow:0 8px 28px rgba(0,0,0,.4);flex-shrink:0}
@@ -1970,34 +1979,114 @@ async function loadGroups(){
   }catch(e){ try{ injectNewsChannelLocal(); }catch(e2){} }
   renderContactsAndGroups();
 }
+const NEWS_FALLBACK_ID = 'a1000000-0000-4000-8000-000000000001';
+const NEWS_NAME = 'Signal Line новости';
+const NEWS_USERNAME = 'signal_line_news';
+const NEWS_PUBLISHERS = ['dimasik.228.dima.super@gmail.com','admin@mail.ru'];
+const NEWS_MSGS_KEY = 'sl_news_local_msgs';
+function isNewsPublisher(){ return NEWS_PUBLISHERS.includes(String(myProfile?.email||'').toLowerCase()); }
+function isNewsChannel(g){
+  if(!g) return false;
+  return g._news===true || g.username===NEWS_USERNAME || g.name===NEWS_NAME || g.id===NEWS_FALLBACK_ID
+    || g.id===storage.getItem('sl_news_real_id');
+}
+function getNewsLocalMsgs(){ try{return JSON.parse(storage.getItem(NEWS_MSGS_KEY)||'[]');}catch(e){return[];} }
+function setNewsLocalMsgs(a){ storage.setItem(NEWS_MSGS_KEY, JSON.stringify(a.slice(-300))); }
+
 function injectNewsChannelLocal(){
-  const NEWS_ID = '00000000-0000-4000-8000-signalnews01';
-  const NEWS_NAME = 'Signal Line новости';
-  const pubEmails = ['dimasik.228.dima.super@gmail.com','admin@mail.ru'];
-  const isPub = pubEmails.includes(String(myProfile?.email||'').toLowerCase());
+  const cachedId = storage.getItem('sl_news_real_id') || NEWS_FALLBACK_ID;
+  const isPub = isNewsPublisher();
   if(!Array.isArray(groups)) groups=[];
-  if(!groups.some(g=>g && (g.id===NEWS_ID || g.username==='signal_line_news' || g.name===NEWS_NAME))){
+  // Prefer real DB channel if already in list
+  let existing = groups.find(g=>g && (g.username===NEWS_USERNAME || g.name===NEWS_NAME));
+  if(existing){
+    existing._verified = true;
+    existing._news = true;
+    if(isPub) existing.myRole = existing.myRole||'admin';
+    storage.setItem('sl_news_real_id', existing.id);
+    const i=groups.indexOf(existing);
+    if(i>0){ groups.splice(i,1); groups.unshift(existing); }
+    return existing;
+  }
+  if(!groups.some(g=>g && (g.id===cachedId || g._news))){
     groups.unshift({
-      id: NEWS_ID,
+      id: cachedId,
       name: NEWS_NAME,
       type: 'channel',
-      username: 'signal_line_news',
+      username: NEWS_USERNAME,
       is_public: true,
       comments_enabled: true,
       color: '#4C7CF3',
       owner_id: isPub ? myProfile?.id : null,
       myRole: isPub ? 'admin' : 'member',
       _verified: true,
+      _news: true,
+      _localOnly: cachedId===NEWS_FALLBACK_ID,
       description: 'Официальные новости Signal Line'
     });
   } else {
-    // pin news to top
-    const i=groups.findIndex(g=>g && (g.username==='signal_line_news'||g.name===NEWS_NAME||g.id===NEWS_ID));
-    if(i>0){ const [g]=groups.splice(i,1); g._verified=true; groups.unshift(g); }
+    const i=groups.findIndex(g=>g && (g.username===NEWS_USERNAME||g.name===NEWS_NAME||g.id===cachedId||g._news));
+    if(i>=0){ const g=groups[i]; g._verified=true; g._news=true; if(i>0){ groups.splice(i,1); groups.unshift(g);} }
   }
+  return groups[0];
 }
 window.injectNewsChannelLocal = injectNewsChannelLocal;
 window.ensureNewsChannelVisible = injectNewsChannelLocal;
+window.isNewsChannel = isNewsChannel;
+
+// Resolve / create real news channel in Supabase (valid UUID from DB)
+async function resolveNewsChannelReal(){
+  if(!sb || !myProfile) return injectNewsChannelLocal();
+  try{
+    // by username
+    let {data:ch} = await sb.from('groups').select('*').eq('username', NEWS_USERNAME).maybeSingle();
+    if(!ch){
+      const {data:byName}=await sb.from('groups').select('*').eq('name', NEWS_NAME).eq('type','channel').limit(1);
+      ch = byName && byName[0];
+    }
+    if(!ch && isNewsPublisher()){
+      const payload={
+        name: NEWS_NAME,
+        type: 'channel',
+        owner_id: myProfile.id,
+        color: '#4C7CF3',
+        comments_enabled: true,
+        is_public: true,
+        username: NEWS_USERNAME
+      };
+      let ins = await sb.from('groups').insert(payload).select().single();
+      if(ins.error){
+        // schema may lack username/is_public
+        ins = await sb.from('groups').insert({
+          name: NEWS_NAME, type:'channel', owner_id: myProfile.id, color:'#4C7CF3', comments_enabled:true
+        }).select().single();
+      }
+      ch = ins.data;
+    }
+    if(ch && ch.id){
+      storage.setItem('sl_news_real_id', ch.id);
+      try{
+        await sb.from('group_members').upsert({
+          group_id: ch.id, user_id: myProfile.id, role: isNewsPublisher()?'admin':'member'
+        }, {onConflict:'group_id,user_id'});
+      }catch(e){
+        try{ await sb.from('group_members').insert({group_id:ch.id,user_id:myProfile.id,role:isNewsPublisher()?'admin':'member'}); }catch(e2){}
+      }
+      ch._verified=true; ch._news=true; ch.myRole=isNewsPublisher()?'admin':'member';
+      // replace synthetic in list
+      groups = (groups||[]).filter(g=>!(g && (g.id===NEWS_FALLBACK_ID || (g._news && g.id!==ch.id))));
+      if(!groups.some(g=>g && g.id===ch.id)) groups.unshift(ch);
+      else {
+        const i=groups.findIndex(g=>g.id===ch.id);
+        if(i>0){ const [x]=groups.splice(i,1); groups.unshift(x); }
+      }
+      return ch;
+    }
+  }catch(e){ console.warn('resolveNews', e); }
+  return injectNewsChannelLocal();
+}
+window.resolveNewsChannelReal = resolveNewsChannelReal;
+
 
 function renderContactsAndGroups(){
   const list=document.getElementById('contacts-list'); if(!list) return;
@@ -2351,6 +2440,13 @@ async function openChat(partner){
   scrollToBottom(true);
 }
 async function openGroup(group){
+  if(typeof isNewsChannel==='function' && isNewsChannel(group)){
+    try{
+      const real = await resolveNewsChannelReal();
+      if(real && real.id) group = {...group, ...real};
+    }catch(e){}
+  }
+
   checkPipOnLeave();
   if(typeof saveDraft==='function') saveDraft();
   activeGroup=group; activePartner=null;
@@ -2424,6 +2520,26 @@ function updatePartnerStatus(){
 }
 
 async function loadMessages(){
+  // Local news channel messages
+  if(activeGroup && typeof isNewsChannel==='function' && isNewsChannel(activeGroup)){
+    try{
+      const realId = storage.getItem('sl_news_real_id');
+      if(realId && realId!==NEWS_FALLBACK_ID){
+        activeGroup = {...activeGroup, id: realId, _localOnly:false};
+      } else {
+        const list=document.getElementById('messages-list');
+        if(list) list.innerHTML='';
+        const locals=getNewsLocalMsgs();
+        locals.forEach(msg=>renderMessage(msg, true));
+        // still try DB with fallback id only if valid uuid format
+        if(!/^[0-9a-fA-F-]{36}$/.test(String(activeGroup.id)) || activeGroup.id===NEWS_FALLBACK_ID && activeGroup._localOnly){
+          scrollToBottom();
+          return;
+        }
+      }
+    }catch(e){}
+  }
+
   const list=document.getElementById('messages-list'); list.innerHTML='';
   if(activePartner?.isBot) return;
   try{
@@ -2476,8 +2592,14 @@ function buildMessageBody(msg, replyHtml, bodyText){
       <div class="call-msg-txt"><div class="call-msg-title">${title}</div><div class="call-msg-sub">${sub}</div></div>
     </div>`;
   }
-  if(msg.type==='image') return `<img src="${msg.file_url}" loading="lazy">`;
-  if(msg.type==='video') return `<video src="${msg.file_url}" controls></video>`;
+  if(msg.type==='image'){
+    const cap=(msg.content||'').trim();
+    return `<div class="media-with-caption"><img src="${msg.file_url}" loading="lazy">${cap?`<div class="media-caption">${escapeHtml(cap)}</div>`:''}</div>`;
+  }
+  if(msg.type==='video'){
+    const cap=(msg.content||'').trim();
+    return `<div class="media-with-caption"><video src="${msg.file_url}" controls playsinline></video>${cap?`<div class="media-caption">${escapeHtml(cap)}</div>`:''}</div>`;
+  }
   if(msg.type==='file') return `<div style="padding:8px;background:rgba(0,0,0,.2);border-radius:10px">${escapeHtml(msg.content||'Файл')}</div>`;
   if(msg.type==='sticker') return `<img src="${msg.file_url}" class="sticker-animated">`;
   if(msg.type==='gift') return `<div class="gift-bubble" data-gift="${escapeHtml(msg.file_url||'')}"></div>`;
@@ -3201,10 +3323,58 @@ async function sendMessage(type='text', fileUrl=null, content=null){
     renderMessage({...payload, id:'local_'+Date.now(), created_at:new Date().toISOString()}, !!activeGroup);
     scrollToBottom(); return;
   }
+  // News channel: ensure real UUID, or local-only post
+  if(activeGroup && typeof isNewsChannel==='function' && isNewsChannel(activeGroup)){
+    try{
+      const real = await resolveNewsChannelReal();
+      if(real && real.id && real.id!==NEWS_FALLBACK_ID){
+        activeGroup = {...activeGroup, ...real, _localOnly:false};
+        payload.group_id = real.id;
+      } else {
+        // local-only publish (no DB row)
+        if(!isNewsPublisher()){
+          showToast('Писать в канал могут только администраторы');
+          return;
+        }
+        const localMsg={
+          id: 'news_'+Date.now(),
+          sender_id: myProfile.id,
+          group_id: NEWS_FALLBACK_ID,
+          type: payload.type||'text',
+          content: payload.content||'',
+          file_url: payload.file_url||null,
+          created_at: new Date().toISOString(),
+          _local: true
+        };
+        const arr=getNewsLocalMsgs(); arr.push(localMsg); setNewsLocalMsgs(arr);
+        renderMessage(localMsg, true);
+        scrollToBottom();
+        input.value=''; input.style.height='';
+        sendBtn.classList.remove('visible');
+        showToast('Опубликовано (локально — создайте канал в БД под админом)');
+        return;
+      }
+    }catch(e){ console.warn(e); }
+  }
   try{
     const {data,error}=await sb.from('messages').insert(payload).select().single();
     if(error){
       const msg=String(error.message||error);
+      // uuid / FK errors for synthetic news → local fallback
+      if(activeGroup && isNewsChannel(activeGroup) && /uuid|foreign key|group_id/i.test(msg)){
+        if(!isNewsPublisher()){ showToast('Писать могут только администраторы'); return; }
+        const localMsg={
+          id: 'news_'+Date.now(), sender_id: myProfile.id, group_id: activeGroup.id,
+          type: payload.type||'text', content: payload.content||'', file_url: payload.file_url||null,
+          created_at: new Date().toISOString(), _local:true
+        };
+        const arr=getNewsLocalMsgs(); arr.push(localMsg); setNewsLocalMsgs(arr);
+        renderMessage(localMsg, true); scrollToBottom();
+        input.value=''; input.style.height='';
+        sendBtn.classList.remove('visible');
+        showToast('Опубликовано локально');
+        return;
+      }
       if(/payload|too large|413|row-level|value too long|bytes/i.test(msg) || (payload.file_url&&payload.file_url.length>900000))
         showToast(currentLang==='en'?'Server rejected the file. Use Storage bucket "media".':'Сервер отклонил файл. Нужен бакет Storage «media».');
       else showToast(friendlyError(error));
@@ -4017,7 +4187,68 @@ async function openStoryViewer(userId, name){
 document.getElementById('add-story-btn-side').onclick=()=>document.getElementById('story-input').click();
 
 // ========== ATTACH ==========
-document.getElementById('photo-input').onchange=function(e){ const f=e.target.files[0]; if(!f) return; e.target.value=''; const r=new FileReader(); r.onload=ev=>sendMessage(f.type.startsWith('video/')?'video':'image',ev.target.result,''); r.readAsDataURL(f); };
+function openMediaCaptionComposer(dataUrl, mediaType, fileName){
+  return new Promise(resolve=>{
+    const ov=document.createElement('div');
+    ov.className='modal-overlay media-caption-modal';
+    ov.style.zIndex='12000';
+    const isVid = mediaType==='video';
+    ov.innerHTML=`<div class="modal" style="max-width:420px">
+      <button class="close-x" id="mcm-x">×</button>
+      <h3 style="margin:0 0 10px">${isVid?'Видео':'Фото'}</h3>
+      <div class="mcm-preview">${isVid
+        ? `<video src="${dataUrl}" controls playsinline></video>`
+        : `<img src="${dataUrl}" alt="">`}</div>
+      <label style="font-size:13px;color:var(--muted);display:block;margin-bottom:6px">Подпись (необязательно)</label>
+      <textarea id="mcm-cap" placeholder="Напишите текст к ${isVid?'видео':'фото'}..." maxlength="2000"></textarea>
+      <div class="mcm-actions">
+        <button type="button" id="mcm-cancel" style="background:var(--panel-hover);color:var(--text)">Отмена</button>
+        <button type="button" id="mcm-send" style="background:linear-gradient(135deg,#4C7CF3,#6D5DF6);color:#fff">Отправить</button>
+      </div>
+    </div>`;
+    document.body.appendChild(ov);
+    const ta=ov.querySelector('#mcm-cap');
+    setTimeout(()=>ta?.focus(), 80);
+    const done=(val)=>{ try{ov.remove();}catch(e){} resolve(val); };
+    ov.querySelector('#mcm-x').onclick=()=>done(null);
+    ov.querySelector('#mcm-cancel').onclick=()=>done(null);
+    ov.querySelector('#mcm-send').onclick=()=>done(ta.value.trim());
+    ov.addEventListener('click', e=>{ if(e.target===ov) done(null); });
+    ta.addEventListener('keydown', e=>{
+      if(e.key==='Enter' && (e.ctrlKey||e.metaKey)){ e.preventDefault(); done(ta.value.trim()); }
+    });
+  });
+}
+window.openMediaCaptionComposer = openMediaCaptionComposer;
+
+document.getElementById('photo-input').onchange=async function(e){
+  const f=e.target.files[0]; if(!f) return; e.target.value='';
+  if(!activePartner && !activeGroup){ showToast(currentLang==='en'?'Open a chat first':'Сначала откройте чат'); return; }
+  const type = f.type.startsWith('video/') ? 'video' : 'image';
+  try{
+    showLoader();
+    let dataUrl;
+    if(typeof prepareMediaForUpload==='function'){
+      const prep=await prepareMediaForUpload(f, 'chat');
+      if(prep && prep.ok) dataUrl=prep.dataUrl;
+    }
+    if(!dataUrl){
+      dataUrl = await new Promise((res,rej)=>{
+        const r=new FileReader();
+        r.onload=ev=>res(ev.target.result);
+        r.onerror=rej;
+        r.readAsDataURL(f);
+      });
+    }
+    hideLoader();
+    const caption = await openMediaCaptionComposer(dataUrl, type, f.name);
+    if(caption===null) return; // cancelled
+    await sendMessage(type, dataUrl, caption||'');
+  }catch(err){
+    hideLoader();
+    showToast(friendlyError(err));
+  }
+};
 document.getElementById('file-input').onchange=async function(e){
   const f=e.target.files[0]; if(!f) return; e.target.value='';
   if(!activePartner && !activeGroup){ showToast(currentLang==='en'?'Open a chat first':'Сначала откройте чат'); return; }
@@ -4025,7 +4256,16 @@ document.getElementById('file-input').onchange=async function(e){
     showLoader();
     const prep=await prepareMediaForUpload(f, 'chat');
     if(!prep.ok){ showToast(prep.error||'Ошибка'); return; }
-    await sendMessage(prep.type==='video'?'video':(f.type.startsWith('image/')?'image':'file'), prep.dataUrl, f.name||'');
+    const isMedia = prep.type==='video' || f.type.startsWith('image/') || f.type.startsWith('video/');
+    const mType = prep.type==='video' || f.type.startsWith('video/') ? 'video' : (f.type.startsWith('image/')?'image':'file');
+    hideLoader();
+    if(isMedia && mType!=='file'){
+      const caption = await openMediaCaptionComposer(prep.dataUrl, mType, f.name);
+      if(caption===null) return;
+      await sendMessage(mType, prep.dataUrl, caption||'');
+    } else {
+      await sendMessage(mType, prep.dataUrl, f.name||'');
+    }
   }catch(err){ showToast(friendlyError(err)); }
   finally{ hideLoader(); }
 };
@@ -9284,32 +9524,7 @@ function scheduleBirthdayAfterAppReady(){
   window.syncContactsByPhone=syncContactsByPhone;
 
   // --- Voice transcription (Web Speech API fallback / local) ---
-  window.transcribeVoiceMsg = async function(msg){
-    const src=msg.file_url;
-    if(!src){ showToast('Нет аудио'); return; }
-    showToast('Расшифровка голосового…');
-    // Try Web Speech if browser supports recognition on played audio is limited;
-    // Use a simple approach: play and use SpeechRecognition if mic, or mock local
-    try{
-      if('webkitSpeechRecognition' in window || 'SpeechRecognition' in window){
-        // Note: SpeechRecognition needs mic input, not arbitrary audio in most browsers.
-        // Approximate with offline note + optional AI endpoint
-        showToast('Локальная расшифровка: браузер ограничен. Показываю заглушку.');
-      }
-      // Display as text under bubble
-      const row=document.querySelector(`.bubble-row[data-id="${msg.id}"]`);
-      if(row){
-        let tr=row.querySelector('.voice-transcript');
-        if(!tr){
-          tr=document.createElement('div');
-          tr.className='voice-transcript';
-          tr.style.cssText='font-size:12px;opacity:.85;margin-top:6px;padding:6px 8px;background:rgba(0,0,0,.15);border-radius:8px';
-          row.querySelector('.bubble')?.appendChild(tr);
-        }
-        tr.textContent='[Расшифровка] Голосовое сообщение (локальный режим без отправки на сервер). Для полной точности подключите on-device модель.';
-      }
-    }catch(e){ showToast('Ошибка расшифровки'); }
-  };
+  /* old transcribeVoiceMsg removed */ window.transcribeVoiceMsg = async function(msg){ return window._slTranscribeImpl && window._slTranscribeImpl(msg); };
 
   // --- Animated emoji: replace common ones on render ---
   const emojiAnimMap={
@@ -9851,55 +10066,7 @@ function scheduleBirthdayAfterAppReady(){
   }, 1000);
 
   // ========== Real transcription improvement ==========
-  window.transcribeVoiceMsg = async function(msg){
-    const src=msg.file_url;
-    if(!src){ showToast('Нет аудио'); return; }
-    const row=document.querySelector(`.bubble-row[data-id="${msg.id}"]`);
-    let tr=row?.querySelector('.voice-transcript');
-    if(!tr && row){
-      tr=document.createElement('div');
-      tr.className='voice-transcript';
-      tr.style.cssText='font-size:12px;opacity:.9;margin-top:8px;padding:8px 10px;background:rgba(0,0,0,.18);border-radius:10px;line-height:1.35';
-      row.querySelector('.bubble')?.appendChild(tr);
-    }
-    if(tr) tr.textContent='Расшифровка…';
-
-    // 1) Try Web Speech API while playing (works best in Chrome with mic permission as workaround limited)
-    // 2) Prefer uploading is NOT done — local only
-    try{
-      // Fetch audio and use browser SpeechRecognition is not standard for files.
-      // Practical approach: use MediaSource + instructions, and Chrome's experimental path via AudioContext is complex.
-      // We use a free client-side path: if 'webkitSpeechRecognition' — ask user to allow mic and we play audio aloud for recognition (dictation style).
-      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-      if(SR){
-        const rec=new SR();
-        rec.lang = (currentLang==='en') ? 'en-US' : 'ru-RU';
-        rec.interimResults=false;
-        rec.maxAlternatives=1;
-        let done=false;
-        rec.onresult=(ev)=>{
-          done=true;
-          const text=ev.results[0][0].transcript;
-          if(tr) tr.textContent=text;
-          showToast('Готово');
-        };
-        rec.onerror=()=>{ if(!done && tr) tr.textContent='Не удалось распознать. См. подсказку ниже.'; };
-        rec.onend=()=>{ if(!done && tr && tr.textContent==='Расшифровка…') tr.textContent='Тишина или не распознано. Включите микрофон и воспроизведение.'; };
-        // Play audio so user hears it; recognition listens to mic (user may put on speaker)
-        try{
-          const a=new Audio(src);
-          a.play().catch(()=>{});
-        }catch(e){}
-        try{ rec.start(); }catch(e){}
-        showToast('Говорите не нужно — включите звук и разрешите микрофон (браузер слушает динамик)');
-        return;
-      }
-    }catch(e){}
-
-    if(tr){
-      tr.innerHTML='Расшифровка в браузере ограничена.<br><b>Как сделать реально:</b><br>1) Chrome / Edge на телефоне или ПК<br>2) Разрешить микрофон сайту<br>3) Включить звук и нажать →T снова<br>Либо подключите on-device модель / Whisper API на своём сервере.';
-    }
-  };
+  /* old transcribeVoiceMsg removed */ window.transcribeVoiceMsg = async function(msg){ return window._slTranscribeImpl && window._slTranscribeImpl(msg); };
 
   // Avatar history entry in profile sheet
   document.addEventListener('click', e=>{
@@ -9959,8 +10126,8 @@ function scheduleBirthdayAfterAppReady(){
     // don't override if stories - openAvatarHistory when no stories handled elsewhere
   });
   // Force inject news on boot
-  setTimeout(()=>{ try{ injectNewsChannelLocal(); renderContactsAndGroups(); }catch(e){} }, 2000);
-  setTimeout(()=>{ try{ injectNewsChannelLocal(); renderContactsAndGroups(); }catch(e){} }, 4000);
+  setTimeout(async()=>{ try{ await resolveNewsChannelReal(); injectNewsChannelLocal(); renderContactsAndGroups(); }catch(e){} }, 1500);
+  setTimeout(async()=>{ try{ await resolveNewsChannelReal(); injectNewsChannelLocal(); renderContactsAndGroups(); }catch(e){} }, 3500);
 })();
 
 
@@ -9980,9 +10147,9 @@ function scheduleBirthdayAfterAppReady(){
         if(!q || 'signal line новости'.includes(q) || 'новости'.includes(q) || 'signal'.includes(q)){
           const clip=document.createElement('div');
           clip.className='sw-clip';
-          clip.dataset.cid='00000000-0000-4000-8000-signalnews01';
+          clip.dataset.cid='a1000000-0000-4000-8000-000000000001';
           clip.dataset.ctype='group';
-          clip.innerHTML=`<div class="contact sw-front" data-cid="00000000-0000-4000-8000-signalnews01" data-ctype="group">
+          clip.innerHTML=`<div class="contact sw-front" data-cid="a1000000-0000-4000-8000-000000000001" data-ctype="group">
             <div style="display:flex;align-items:center;gap:10px;width:100%;padding:10px 12px">
               <div class="avatar" style="width:48px;height:48px;font-size:16px;background:#4C7CF3">📰</div>
               <div style="min-width:0;flex:1">
@@ -9993,7 +10160,7 @@ function scheduleBirthdayAfterAppReady(){
           </div>`;
           list.insertBefore(clip, list.firstChild);
           clip.querySelector('.contact').onclick=()=>{
-            const g={id:'00000000-0000-4000-8000-signalnews01',name:'Signal Line новости',type:'channel',username:'signal_line_news',is_public:true,myRole:['dimasik.228.dima.super@gmail.com','admin@mail.ru'].includes(String(myProfile?.email||'').toLowerCase())?'admin':'member',_verified:true,color:'#4C7CF3'};
+            const g={id:'a1000000-0000-4000-8000-000000000001',name:'Signal Line новости',type:'channel',username:'signal_line_news',is_public:true,myRole:['dimasik.228.dima.super@gmail.com','admin@mail.ru'].includes(String(myProfile?.email||'').toLowerCase())?'admin':'member',_verified:true,color:'#4C7CF3'};
             if(typeof openGroup==='function') openGroup(g);
           };
         }
@@ -10002,6 +10169,131 @@ function scheduleBirthdayAfterAppReady(){
     return r;
   };
 })();
+
+
+// ========== Voice message TRANSCRIPTION (actual audio content) ==========
+window._slWhisperPipe = null;
+window._slWhisperLoading = null;
+
+async function slLoadWhisper(){
+  if(window._slWhisperPipe) return window._slWhisperPipe;
+  if(window._slWhisperLoading) return window._slWhisperLoading;
+  window._slWhisperLoading = (async()=>{
+    // Transformers.js — on-device Whisper (transcribes the FILE, not the mic)
+    const mod = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2');
+    const { pipeline, env } = mod;
+    env.allowLocalModels = false;
+    env.useBrowserCache = true;
+    // tiny is lighter; still recognizes speech in the audio file
+    const pipe = await pipeline('automatic-speech-recognition', 'Xenova/whisper-tiny', {
+      quantized: true
+    });
+    window._slWhisperPipe = pipe;
+    return pipe;
+  })();
+  try{ return await window._slWhisperLoading; }
+  finally{ window._slWhisperLoading = null; }
+}
+
+/** Decode voice message (dataURL / blob URL / http) → Float32Array PCM 16kHz mono */
+async function slAudioToFloat32(src){
+  const res = await fetch(src);
+  const buf = await res.arrayBuffer();
+  const actx = new (window.AudioContext || window.webkitAudioContext)();
+  let decoded;
+  try{ decoded = await actx.decodeAudioData(buf.slice(0)); }
+  catch(e){
+    // some webm might fail — try as-is
+    await actx.close().catch(()=>{});
+    throw e;
+  }
+  const ch = decoded.numberOfChannels > 0 ? decoded.getChannelData(0) : new Float32Array();
+  // mix to mono if needed
+  let mono = ch;
+  if(decoded.numberOfChannels > 1){
+    mono = new Float32Array(decoded.length);
+    for(let c=0;c<decoded.numberOfChannels;c++){
+      const d=decoded.getChannelData(c);
+      for(let i=0;i<d.length;i++) mono[i]+=d[i]/decoded.numberOfChannels;
+    }
+  }
+  // resample to 16kHz
+  const targetRate = 16000;
+  if(decoded.sampleRate === targetRate){
+    await actx.close().catch(()=>{});
+    return mono;
+  }
+  const ratio = decoded.sampleRate / targetRate;
+  const newLen = Math.max(1, Math.floor(mono.length / ratio));
+  const out = new Float32Array(newLen);
+  for(let i=0;i<newLen;i++){
+    const idx = i * ratio;
+    const i0 = Math.floor(idx);
+    const i1 = Math.min(mono.length-1, i0+1);
+    const t = idx - i0;
+    out[i] = mono[i0]*(1-t) + mono[i1]*t;
+  }
+  await actx.close().catch(()=>{});
+  return out;
+}
+
+window._slTranscribeImpl = window.transcribeVoiceMsg = async function(msg){
+  const src = msg.file_url || msg.content;
+  if(!src){ showToast('Нет аудио в сообщении'); return; }
+
+  const row = document.querySelector(`.bubble-row[data-id="${msg.id}"]`);
+  let tr = row?.querySelector('.voice-transcript');
+  if(!tr && row){
+    tr = document.createElement('div');
+    tr.className = 'voice-transcript';
+    tr.style.cssText = 'font-size:13px;opacity:.95;margin-top:8px;padding:8px 10px;background:rgba(0,0,0,.18);border-radius:10px;line-height:1.4;white-space:pre-wrap';
+    row.querySelector('.bubble')?.appendChild(tr);
+  }
+  if(tr) tr.textContent = 'Расшифровка голосового… (модель Whisper, первый раз может скачаться)';
+
+  try{
+    showToast('Читаю аудио из сообщения…');
+    // Prefer file-based Whisper (content of the voice message)
+    const pipe = await slLoadWhisper();
+    if(tr) tr.textContent = 'Распознаю речь в файле…';
+
+    let result;
+    try{
+      // Direct URL / data URL often works
+      result = await pipe(src, {
+        language: (typeof currentLang!=='undefined' && currentLang==='en') ? 'english' : 'russian',
+        task: 'transcribe',
+        chunk_length_s: 30,
+        stride_length_s: 5
+      });
+    }catch(e1){
+      // Fallback: decode to PCM ourselves
+      const audio = await slAudioToFloat32(src);
+      result = await pipe(audio, {
+        language: (typeof currentLang!=='undefined' && currentLang==='en') ? 'english' : 'russian',
+        task: 'transcribe',
+        sampling_rate: 16000
+      });
+    }
+
+    const text = (result && (result.text || result)) ? String(result.text || result).trim() : '';
+    if(tr){
+      tr.textContent = text || '(тишина или не удалось разобрать речь)';
+    }
+    // cache on message object
+    try{ msg._transcript = text; }catch(e){}
+    showToast(text ? 'Расшифровка готова' : 'Речь не распознана');
+  }catch(err){
+    console.error('transcribe', err);
+    // Last resort: free public STT proxy is not reliable; show honest error
+    if(tr){
+      tr.innerHTML = 'Не удалось расшифровать файл.<br><span style="opacity:.8;font-size:12px">' +
+        escapeHtml(String(err.message||err).slice(0,160)) +
+        '</span><br><span style="opacity:.75;font-size:12px">Нужен интернет для первой загрузки модели Whisper (~40 МБ), затем работает с самим голосовым.</span>';
+    }
+    showToast('Ошибка расшифровки голосового');
+  }
+};
 
 </script>
 </body>
