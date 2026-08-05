@@ -1590,6 +1590,7 @@ html.sl-ready.sl-booting::before{display:none!important}
 <div id="pip-circle"><video id="pip-video" playsinline loop></video></div>
 <div id="pip-trash"><svg viewBox="0 0 24 24" style="width:28px;height:28px;fill:none;stroke:#fff;stroke-width:2"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg></div>
 <div class="call-overlay" id="call-overlay">
+  <button type="button" id="cc-hangup-fab" onclick="window.slHangup&&window.slHangup()" style="display:none;position:fixed;bottom:calc(36px + env(safe-area-inset-bottom,0px));left:50%;transform:translateX(-50%);z-index:100010;width:72px;height:72px;border-radius:50%;border:none;background:#e5484d;color:#fff;box-shadow:0 8px 28px rgba(0,0,0,.45);cursor:pointer;align-items:center;justify-content:center;font-size:28px;line-height:1;pointer-events:auto!important;-webkit-tap-highlight-color:transparent" aria-label="Hang up">✕</button>
   <div class="call-ring-pulse" id="call-pulse"></div>
   <video class="call-remote-video" id="call-remote-video" autoplay playsinline webkit-playsinline></video>
   <video class="call-local-video" id="call-local-video" autoplay playsinline muted></video>
@@ -2000,14 +2001,27 @@ window.ensureNewsChannelVisible = injectNewsChannelLocal;
 
 function renderContactsAndGroups(){
   const list=document.getElementById('contacts-list'); if(!list) return;
+  // ALWAYS inject official news channel before building list
+  try{ if(typeof injectNewsChannelLocal==='function') injectNewsChannelLocal(); }catch(e){}
   const q=(document.getElementById('search-input')?.value||'').trim().toLowerCase();
   const archive=getArchive();
   const unread=getUnread();
   let items=[];
   const showArchive = activeFolder==='Архив';
   const srcContacts = showArchive ? contacts.filter(c=>archive.includes(c.id)) : contacts.filter(c=>!archive.includes(c.id));
-  const srcGroups = showArchive ? groups.filter(g=>archive.includes(g.id)) : groups.filter(g=>!archive.includes(g.id));
-  (q?srcGroups.filter(g=>(g.name||'').toLowerCase().includes(q)):srcGroups).forEach(g=>items.push({type:'group',data:g,unread:unread[g.id]||0}));
+  let srcGroups = showArchive ? groups.filter(g=>archive.includes(g.id)) : groups.filter(g=>!archive.includes(g.id));
+  // Never hide news channel unless searching something else
+  const NEWS_NAME='Signal Line новости';
+  if(!srcGroups.some(g=>g && (g.name===NEWS_NAME || g.username==='signal_line_news'))){
+    try{ injectNewsChannelLocal(); srcGroups = showArchive ? groups.filter(g=>archive.includes(g.id)) : groups.filter(g=>!archive.includes(g.id)); }catch(e){}
+  }
+  // Pin news first
+  srcGroups = [...srcGroups].sort((a,b)=>{
+    const an=(a.name===NEWS_NAME||a.username==='signal_line_news')?0:1;
+    const bn=(b.name===NEWS_NAME||b.username==='signal_line_news')?0:1;
+    return an-bn;
+  });
+  (q?srcGroups.filter(g=>(g.name||'').toLowerCase().includes(q) || 'signal line новости'.includes(q) || 'новости'.includes(q)):srcGroups).forEach(g=>items.push({type:'group',data:g,unread:unread[g.id]||0}));
   (q?srcContacts.filter(p=>{
     if(p.isBildBot||p.id==='bild_bot') return false;
     const n=((p.first_name||'')+' '+(p.last_name||'')+' '+(p.username||'')+' '+(p.email||'')+' '+(p.phone||'')).toLowerCase();
@@ -6288,6 +6302,11 @@ function showCallUI(){
       hang.style.zIndex='100001';
       hang.onclick=function(e){ e&&e.preventDefault(); window.slHangup(); };
     }
+    const fab=document.getElementById('cc-hangup-fab');
+    if(fab){
+      fab.style.display = (currentCall && currentCall.state!=='incoming') ? 'flex' : 'none';
+      fab.onclick=function(e){ e&&e.preventDefault(); e&&e.stopPropagation(); window.slHangup&&window.slHangup(); };
+    }
   }catch(e){}
   const av=document.getElementById('call-avatar-big');
   if(av && currentCall){
@@ -6551,6 +6570,7 @@ function endCall(){
   pc=null; localStream=null; remoteMediaStream=null; pendingOffer=null; currentCall=null;
   const _cov=document.getElementById('call-overlay');
   if(_cov){ _cov.classList.remove('show'); _cov.style.display='none'; }
+  try{ const fab=document.getElementById('cc-hangup-fab'); if(fab) fab.style.display='none'; }catch(e){}
   const rv=document.getElementById('call-remote-video');
   if(rv){
     rv.style.display='none';
@@ -7602,6 +7622,20 @@ async function openFullProfile(profileLike){
       </div>
     </div>`;
   document.body.appendChild(sheet);
+  // History of profile photos on avatar tap
+  try{
+    const avEl = sheet.querySelector('#ps-av, .profile-av-big');
+    if(avEl){
+      avEl.style.cursor='pointer';
+      avEl.title='История фото профиля';
+      avEl.addEventListener('click', function(ev){
+        ev.preventDefault(); ev.stopPropagation();
+        if(typeof openAvatarHistory==='function') openAvatarHistory(p);
+        else showToast('История фото');
+      });
+    }
+  }catch(e){}
+  /*__AV_HIST_BOUND__*/;
   renderAvatarInto(sheet.querySelector('#ps-av'), p.avatar_url, (p.username||'?')[0].toUpperCase(), p.color||colorFor(p.id));
   const big=sheet.querySelector('#ps-av');
   if(big){
@@ -9927,6 +9961,46 @@ function scheduleBirthdayAfterAppReady(){
   // Force inject news on boot
   setTimeout(()=>{ try{ injectNewsChannelLocal(); renderContactsAndGroups(); }catch(e){} }, 2000);
   setTimeout(()=>{ try{ injectNewsChannelLocal(); renderContactsAndGroups(); }catch(e){} }, 4000);
+})();
+
+
+// FINAL: force news channel into list on every render
+(function(){
+  const prev = renderContactsAndGroups;
+  renderContactsAndGroups = function(){
+    try{ injectNewsChannelLocal(); }catch(e){}
+    const r = prev.apply(this, arguments);
+    // DOM fallback: if row missing, prepend synthetic row
+    try{
+      const list=document.getElementById('contacts-list');
+      if(!list) return r;
+      const exists=[...list.querySelectorAll('.contact-name')].some(n=>/Signal Line новости/i.test(n.textContent||''));
+      if(!exists && activeFolder!=='Архив'){
+        const q=(document.getElementById('search-input')?.value||'').trim().toLowerCase();
+        if(!q || 'signal line новости'.includes(q) || 'новости'.includes(q) || 'signal'.includes(q)){
+          const clip=document.createElement('div');
+          clip.className='sw-clip';
+          clip.dataset.cid='00000000-0000-4000-8000-signalnews01';
+          clip.dataset.ctype='group';
+          clip.innerHTML=`<div class="contact sw-front" data-cid="00000000-0000-4000-8000-signalnews01" data-ctype="group">
+            <div style="display:flex;align-items:center;gap:10px;width:100%;padding:10px 12px">
+              <div class="avatar" style="width:48px;height:48px;font-size:16px;background:#4C7CF3">📰</div>
+              <div style="min-width:0;flex:1">
+                <div class="contact-name">Signal Line новости${typeof verifiedSvg!=='undefined'?verifiedSvg:' <span style="color:#4C7CF3">✓</span>'}</div>
+                <div class="contact-sub">Официальный канал</div>
+              </div>
+            </div>
+          </div>`;
+          list.insertBefore(clip, list.firstChild);
+          clip.querySelector('.contact').onclick=()=>{
+            const g={id:'00000000-0000-4000-8000-signalnews01',name:'Signal Line новости',type:'channel',username:'signal_line_news',is_public:true,myRole:['dimasik.228.dima.super@gmail.com','admin@mail.ru'].includes(String(myProfile?.email||'').toLowerCase())?'admin':'member',_verified:true,color:'#4C7CF3'};
+            if(typeof openGroup==='function') openGroup(g);
+          };
+        }
+      }
+    }catch(e){ console.warn('news row', e); }
+    return r;
+  };
 })();
 
 </script>
