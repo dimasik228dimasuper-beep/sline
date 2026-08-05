@@ -252,7 +252,16 @@ body.beta-oled .sw-clip{background:var(--panel)!important}
 
 .bubble.bubble-circle .bubble-time{margin-top:6px;padding:0 4px;opacity:.75}
 .bubble.bubble-circle .reaction-bar{margin-top:4px}
+.circle-msg-wrap{position:relative;display:inline-block;flex-shrink:0}
 .circle-msg{width:200px;height:200px;border-radius:50%;overflow:hidden;position:relative;background:#111;border:3px solid rgba(255,255,255,.2);cursor:pointer;box-shadow:0 8px 28px rgba(0,0,0,.4);flex-shrink:0}
+.circle-transcribe-btn{
+  position:absolute!important;top:8px;right:-4px;z-index:6;
+  width:36px;height:36px;border-radius:12px;border:none;cursor:pointer;
+  background:rgba(30,30,40,.75);backdrop-filter:blur(8px);color:#fff;
+  display:flex;align-items:center;justify-content:center;box-shadow:0 2px 10px rgba(0,0,0,.35);
+}
+.bubble.them .circle-transcribe-btn{background:rgba(76,124,243,.35);color:var(--text)}
+
 .circle-msg video{width:100%;height:100%;object-fit:cover;border-radius:50%;display:block}
 .circle-msg .circle-mute{position:absolute;right:12px;bottom:14px;width:32px;height:32px;border-radius:50%;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;z-index:3;pointer-events:none;border:1.5px solid rgba(255,255,255,.35)}
 .circle-msg .circle-mute svg{width:16px;height:16px;fill:#fff;stroke:none}
@@ -1151,6 +1160,23 @@ body.in-chat .bottom-tabs{
 .tg-row svg{width:22px;height:22px;fill:none;stroke:rgba(255,255,255,.55);stroke-width:1.8;flex-shrink:0}
 .tg-row .tg-muted{margin-left:auto;color:rgba(255,255,255,.35);font-size:14px}
 .tg-row .tg-chevron{color:rgba(255,255,255,.25);font-size:18px;margin-left:4px}
+
+/* Channel post comments (Telegram-style) */
+.ch-post-comments-btn{
+  display:inline-flex;align-items:center;gap:6px;margin-top:6px;padding:6px 10px;
+  border-radius:10px;border:1px solid rgba(255,255,255,.15);background:rgba(0,0,0,.15);
+  color:inherit;font-size:12px;font-weight:600;cursor:pointer;
+}
+.bubble.them .ch-post-comments-btn{border-color:var(--line);background:var(--panel-hover)}
+.ch-comments-sheet{position:fixed;inset:0;z-index:13000;background:rgba(0,0,0,.55);display:flex;align-items:flex-end;justify-content:center}
+.ch-comments-panel{width:100%;max-width:520px;max-height:70vh;background:var(--bg);border-radius:16px 16px 0 0;display:flex;flex-direction:column;padding-bottom:env(safe-area-inset-bottom,0)}
+.ch-comments-panel h3{margin:0;padding:14px 16px;border-bottom:1px solid var(--line);font-size:16px}
+.ch-comments-list{flex:1;overflow-y:auto;padding:10px 14px}
+.ch-comment-row{padding:8px 0;border-bottom:1px solid var(--line);font-size:13px}
+.ch-comment-row .cc-meta{font-size:11px;color:var(--muted);margin-bottom:2px}
+.ch-comments-input{display:flex;gap:8px;padding:10px 12px;border-top:1px solid var(--line)}
+.ch-comments-input input{flex:1;padding:10px 12px;border-radius:20px;border:1px solid var(--line);background:var(--input-bg);color:var(--text);outline:none}
+
 .channel-post-comments{
   display:inline-flex;align-items:center;gap:6px;margin-top:6px;padding:4px 10px;border-radius:12px;
   background:rgba(76,124,243,.15);color:var(--accent-a);font-size:12px;font-weight:600;cursor:pointer
@@ -2015,7 +2041,7 @@ function injectNewsChannelLocal(){
       type: 'channel',
       username: NEWS_USERNAME,
       is_public: true,
-      comments_enabled: true,
+      comments_enabled: false,
       color: '#4C7CF3',
       owner_id: isPub ? myProfile?.id : null,
       myRole: isPub ? 'admin' : 'member',
@@ -2050,7 +2076,7 @@ async function resolveNewsChannelReal(){
         type: 'channel',
         owner_id: myProfile.id,
         color: '#4C7CF3',
-        comments_enabled: true,
+        comments_enabled: false,
         is_public: true,
         username: NEWS_USERNAME
       };
@@ -2058,13 +2084,19 @@ async function resolveNewsChannelReal(){
       if(ins.error){
         // schema may lack username/is_public
         ins = await sb.from('groups').insert({
-          name: NEWS_NAME, type:'channel', owner_id: myProfile.id, color:'#4C7CF3', comments_enabled:true
+          name: NEWS_NAME, type:'channel', owner_id: myProfile.id, color:'#4C7CF3', comments_enabled:false
         }).select().single();
+      }
+      // force comments off if created earlier with comments on
+      if(ins.data?.id){
+        try{ await sb.from('groups').update({comments_enabled:false}).eq('id', ins.data.id); }catch(e){}
       }
       ch = ins.data;
     }
     if(ch && ch.id){
       storage.setItem('sl_news_real_id', ch.id);
+      try{ await sb.from('groups').update({comments_enabled:false, name: NEWS_NAME}).eq('id', ch.id); }catch(e){}
+      ch.comments_enabled = false;
       try{
         await sb.from('group_members').upsert({
           group_id: ch.id, user_id: myProfile.id, role: isNewsPublisher()?'admin':'member'
@@ -2463,8 +2495,26 @@ async function openGroup(group){
   pav.style.background=group.color||colorFor(group.id); pav.textContent=(group.name||'G')[0].toUpperCase();
   if(innerWidth<=768) document.getElementById('sidebar').classList.add('hidden');
   clearUnread(group.id);
-  document.getElementById('composer').style.display=(group.type==='channel'&&!isAdmin)?'none':'flex';
-  document.getElementById('comment-bar').classList.toggle('show', group.type==='channel' && group.comments_enabled && !isAdmin);
+  const isNews = typeof isNewsChannel==='function' && isNewsChannel(group);
+  // News channel: publishers write, no bottom comment-bar (Telegram-style)
+  if(isNews){
+    group.comments_enabled = false;
+    const isPub = typeof isNewsPublisher==='function' && isNewsPublisher();
+    document.getElementById('composer').style.display = isPub ? 'flex' : 'none';
+    document.getElementById('comment-bar').classList.remove('show');
+    document.getElementById('comment-bar').style.display = 'none';
+    try{
+      const nm=document.getElementById('chat-partner-name');
+      if(nm && !nm.innerHTML.includes('verified')){
+        nm.innerHTML = escapeHtml(group.name||NEWS_NAME) + (typeof verifiedSvg!=='undefined'?verifiedSvg:'');
+      }
+    }catch(e){}
+  } else {
+    document.getElementById('composer').style.display=(group.type==='channel'&&!isAdmin)?'none':'flex';
+    // Channel comments are per-post, not a bottom bar
+    document.getElementById('comment-bar').classList.remove('show');
+    document.getElementById('comment-bar').style.display = 'none';
+  }
   document.getElementById('invite-btn').style.display=isAdmin?'flex':'none';
   document.getElementById('group-settings-btn').style.display='flex';
   document.getElementById('call-btn').style.display='none';
@@ -2552,20 +2602,90 @@ async function loadMessages(){
 }
 async function loadGroupMessages(){
   const list=document.getElementById('messages-list'); list.innerHTML='';
+  const isNews = activeGroup && typeof isNewsChannel==='function' && isNewsChannel(activeGroup);
+  // Ensure real id for news
+  if(isNews){
+    try{
+      const real = await resolveNewsChannelReal();
+      if(real && real.id) activeGroup = {...activeGroup, ...real, comments_enabled:false};
+    }catch(e){}
+  }
   try{
-    const {data}=await sb.from('messages').select('*,profiles:sender_id(username,first_name)').eq('group_id',activeGroup.id).order('created_at',{ascending:true}).limit(200);
-    (data||[]).forEach(m=>renderMessage(m,true));
+    let rows=[];
+    if(activeGroup?.id && activeGroup.id !== NEWS_FALLBACK_ID){
+      const {data}=await sb.from('messages').select('*,profiles:sender_id(username,first_name)').eq('group_id',activeGroup.id).order('created_at',{ascending:true}).limit(200);
+      rows = data||[];
+    }
+    // Merge local news posts so publisher sees what they posted offline
+    if(isNews){
+      const locals = getNewsLocalMsgs();
+      const ids = new Set(rows.map(m=>String(m.id)));
+      for(const m of locals){ if(!ids.has(String(m.id))) rows.push(m); }
+      rows.sort((a,b)=> new Date(a.created_at)-new Date(b.created_at));
+    }
+    // Telegram-style: hide comment-thread messages from main channel feed
+    rows = rows.filter(m=>{
+      if(m.type==='comment') return false;
+      if(m.reply_to_msg_id && m.is_comment) return false;
+      if(m.content && String(m.content).startsWith('__comment__:')) return false;
+      return true;
+    });
+    rows.forEach(m=>renderMessage(m,true));
+  }catch(e){ console.warn(e); }
+  // Subscribe to global news broadcast so everyone sees posts
+  if(isNews){
+    try{ subscribeNewsGlobal(); }catch(e){}
+  }
+}
+
+function subscribeNewsGlobal(){
+  if(window._slNewsSub) return;
+  try{
+    const ch = sb.channel('signal-line-news-global');
+    ch.on('broadcast', {event:'news_post'}, ({payload})=>{
+      if(!payload) return;
+      // save locally for offline list
+      try{
+        const arr=getNewsLocalMsgs();
+        if(!arr.some(m=>String(m.id)===String(payload.id))){
+          arr.push(payload); setNewsLocalMsgs(arr);
+        }
+      }catch(e){}
+      if(activeGroup && isNewsChannel(activeGroup)){
+        renderMessage(payload, true);
+        scrollToBottom();
+      }
+      try{ if(typeof injectNewsChannelLocal==='function') injectNewsChannelLocal(); }catch(e){}
+    }).subscribe();
+    window._slNewsSub = ch;
   }catch(e){}
 }
+function broadcastNewsPost(msg){
+  try{
+    const ch = sb.channel('signal-line-news-global');
+    ch.subscribe(st=>{
+      if(st==='SUBSCRIBED'){
+        ch.send({type:'broadcast', event:'news_post', payload:msg});
+        setTimeout(()=>{ try{ sb.removeChannel(ch); }catch(e){} }, 2000);
+      }
+    });
+  }catch(e){}
+}
+window.subscribeNewsGlobal = subscribeNewsGlobal;
+window.broadcastNewsPost = broadcastNewsPost;
+
 
 // ========== RENDER MESSAGE ==========
 function buildMessageBody(msg, replyHtml, bodyText){
   if(msg.type==='circle'){
-    return `<div class="circle-msg" data-src="${msg.file_url}">
-      <video src="${msg.file_url}" playsinline loop muted></video>
-      <div class="circle-play-overlay"><svg viewBox="0 0 24 24" style="width:48px;height:48px;fill:#fff"><path d="M8 5v14l11-7z"/></svg></div>
-      <div class="circle-mute"><svg viewBox="0 0 24 24"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M23 9l-6 6M17 9l6 6" stroke="#fff" stroke-width="2" fill="none"/></svg></div>
-      <div class="circle-dur">0:00</div>
+    return `<div class="circle-msg-wrap" data-mid="${msg.id}">
+      <div class="circle-msg" data-src="${msg.file_url}">
+        <video src="${msg.file_url}" playsinline loop muted></video>
+        <div class="circle-play-overlay"><svg viewBox="0 0 24 24" style="width:48px;height:48px;fill:#fff"><path d="M8 5v14l11-7z"/></svg></div>
+        <div class="circle-mute"><svg viewBox="0 0 24 24"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M23 9l-6 6M17 9l6 6" stroke="#fff" stroke-width="2" fill="none"/></svg></div>
+        <div class="circle-dur">0:00</div>
+      </div>
+      <button type="button" class="voice-transcribe-btn circle-transcribe-btn" title="Расшифровать" aria-label="Transcribe"><span class="vt-arrow">→</span><span class="vt-t">T</span></button>
     </div>`;
   }
   if(msg.type==='voice'){
@@ -2673,6 +2793,14 @@ function renderMessage(msg, isGroup=false){
     };
     const tb=voice.querySelector('.voice-transcribe-btn');
     if(tb) tb.onclick=e=>{
+      e.preventDefault(); e.stopPropagation();
+      if(typeof transcribeVoiceMsg==='function') transcribeVoiceMsg(msg);
+    };
+  }
+  // Circle →T
+  const ctb=row.querySelector('.circle-transcribe-btn');
+  if(ctb){
+    ctb.onclick=e=>{
       e.preventDefault(); e.stopPropagation();
       if(typeof transcribeVoiceMsg==='function') transcribeVoiceMsg(msg);
     };
@@ -3351,7 +3479,8 @@ async function sendMessage(type='text', fileUrl=null, content=null){
         scrollToBottom();
         input.value=''; input.style.height='';
         sendBtn.classList.remove('visible');
-        showToast('Опубликовано (локально — создайте канал в БД под админом)');
+        try{ broadcastNewsPost(localMsg); }catch(e){}
+        showToast('Опубликовано');
         return;
       }
     }catch(e){ console.warn(e); }
@@ -3372,7 +3501,8 @@ async function sendMessage(type='text', fileUrl=null, content=null){
         renderMessage(localMsg, true); scrollToBottom();
         input.value=''; input.style.height='';
         sendBtn.classList.remove('visible');
-        showToast('Опубликовано локально');
+        try{ broadcastNewsPost(localMsg); }catch(e){}
+        showToast('Опубликовано');
         return;
       }
       if(/payload|too large|413|row-level|value too long|bytes/i.test(msg) || (payload.file_url&&payload.file_url.length>900000))
@@ -3383,6 +3513,13 @@ async function sendMessage(type='text', fileUrl=null, content=null){
     if(data){
       renderMessage(data, !!activeGroup);
       scrollToBottom();
+      if(activeGroup && typeof isNewsChannel==='function' && isNewsChannel(activeGroup)){
+        try{
+          const arr=getNewsLocalMsgs();
+          if(!arr.some(m=>String(m.id)===String(data.id))){ arr.push(data); setNewsLocalMsgs(arr); }
+          broadcastNewsPost(data);
+        }catch(e){}
+      }
       // Broadcast so peer gets it instantly even if postgres_changes lag/RLS
       try{
         const peerId = activeGroup ? null : activePartner?.id;
@@ -9553,51 +9690,7 @@ function scheduleBirthdayAfterAppReady(){
     try{return JSON.parse(storage.getItem('sl_identities')||'[]');}catch(e){return [];}
   };
   window.setIdentities=function(arr){ storage.setItem('sl_identities', JSON.stringify(arr)); };
-  window.switchIdentity=function(idx){
-    const list=getIdentities();
-    if(!list[idx]) return;
-    const idn=list[idx];
-    // local override display only
-    storage.setItem('sl_active_identity', String(idx));
-    if(myProfile){
-      myProfile._displayName=idn.name;
-      myProfile._displayAvatar=idn.avatar;
-    }
-    showToast('Профиль: '+idn.name);
-    try{ updateAllUIs(); }catch(e){}
-  };
-  // settings entry injection
-  document.getElementById('settings-2fa')?.parentNode?.insertAdjacentHTML('beforeend',
-    `<div class="settings-item" id="settings-identities"><span class="item-text">Личности (identity)</span><span class="item-value" id="settings-id-badge">0</span></div>`);
-  document.getElementById('settings-identities')?.addEventListener('click', ()=>{
-    const list=getIdentities();
-    const ov=document.createElement('div');
-    ov.className='modal-overlay';
-    ov.innerHTML=`<div class="modal" style="max-width:400px"><h3>Публичные личности</h3>
-      <p style="font-size:13px;color:var(--muted)">Переключайте ник/аватар внутри одного аккаунта</p>
-      <div id="id-list"></div>
-      <button class="btn-primary" id="id-add" style="margin-top:12px;width:100%">+ Добавить</button>
-      <button class="btn-secondary" id="id-close" style="margin-top:8px;width:100%">Закрыть</button></div>`;
-    document.body.appendChild(ov);
-    const box=ov.querySelector('#id-list');
-    function render(){
-      const L=getIdentities();
-      box.innerHTML=L.map((x,i)=>`<div class="settings-item" style="padding-left:0"><span>${x.name}</span>
-        <button data-i="${i}" class="id-sw" style="margin-left:auto">Выбрать</button></div>`).join('')||'<div style="color:var(--muted)">Пока нет</div>';
-      box.querySelectorAll('.id-sw').forEach(b=>b.onclick=()=>{ switchIdentity(+b.dataset.i); ov.remove(); });
-    }
-    render();
-    ov.querySelector('#id-add').onclick=async()=>{
-      const name=await customPrompt('Имя личности','');
-      if(!name) return;
-      const L=getIdentities(); L.push({name, avatar:null}); setIdentities(L);
-      document.getElementById('settings-id-badge').textContent=String(L.length);
-      render();
-    };
-    ov.querySelector('#id-close').onclick=()=>ov.remove();
-    ov.onclick=e=>{ if(e.target===ov) ov.remove(); };
-    document.getElementById('settings-id-badge').textContent=String(list.length);
-  });
+  /* old identities UI fully removed */
 
   // --- Custom sound packs (local) ---
   window.playCustomSound=function(name){
@@ -10243,13 +10336,36 @@ window._slTranscribeImpl = window.transcribeVoiceMsg = async function(msg){
 
   const row = document.querySelector(`.bubble-row[data-id="${msg.id}"]`);
   let tr = row?.querySelector('.voice-transcript');
+
+  // Toggle: second press hides transcript
+  if(tr && tr.style.display!=='none' && (tr.dataset.done==='1' || msg._transcript)){
+    tr.style.display = 'none';
+    showToast('Расшифровка скрыта');
+    return;
+  }
+  if(tr && tr.style.display==='none' && (tr.dataset.done==='1' || msg._transcript)){
+    tr.style.display = '';
+    tr.textContent = msg._transcript || tr.textContent;
+    return;
+  }
+  // Cached: show without re-running model
+  if(msg._transcript && !tr){
+    tr = document.createElement('div');
+    tr.className = 'voice-transcript';
+    tr.dataset.done = '1';
+    tr.style.cssText = 'font-size:13px;opacity:.95;margin-top:8px;padding:8px 10px;background:rgba(0,0,0,.18);border-radius:10px;line-height:1.4;white-space:pre-wrap';
+    row?.querySelector('.bubble')?.appendChild(tr);
+    tr.textContent = msg._transcript;
+    return;
+  }
+
   if(!tr && row){
     tr = document.createElement('div');
     tr.className = 'voice-transcript';
     tr.style.cssText = 'font-size:13px;opacity:.95;margin-top:8px;padding:8px 10px;background:rgba(0,0,0,.18);border-radius:10px;line-height:1.4;white-space:pre-wrap';
     row.querySelector('.bubble')?.appendChild(tr);
   }
-  if(tr) tr.textContent = 'Расшифровка голосового… (модель Whisper, первый раз может скачаться)';
+  if(tr){ tr.style.display=''; tr.textContent = 'Расшифровка… (Whisper, первый раз может скачаться ~40 МБ)'; }
 
   try{
     showToast('Читаю аудио из сообщения…');
@@ -10278,10 +10394,11 @@ window._slTranscribeImpl = window.transcribeVoiceMsg = async function(msg){
 
     const text = (result && (result.text || result)) ? String(result.text || result).trim() : '';
     if(tr){
+      tr.dataset.done = '1';
+      tr.style.display = '';
       tr.textContent = text || '(тишина или не удалось разобрать речь)';
     }
-    // cache on message object
-    try{ msg._transcript = text; }catch(e){}
+    try{ msg._transcript = text || '(тишина)'; }catch(e){}
     showToast(text ? 'Расшифровка готова' : 'Речь не распознана');
   }catch(err){
     console.error('transcribe', err);
@@ -10294,6 +10411,295 @@ window._slTranscribeImpl = window.transcribeVoiceMsg = async function(msg){
     showToast('Ошибка расшифровки голосового');
   }
 };
+
+
+// ========== Channel posts: Comments button (Telegram-style), news visibility ==========
+(function(){
+  function isChannelFeed(){
+    return activeGroup && activeGroup.type==='channel';
+  }
+  function commentsEnabledForGroup(){
+    if(!activeGroup) return false;
+    if(typeof isNewsChannel==='function' && isNewsChannel(activeGroup)) return false; // news: no comments
+    return !!activeGroup.comments_enabled;
+  }
+  window.openChannelPostComments = async function(postMsg){
+    if(!postMsg || !activeGroup) return;
+    if(typeof isNewsChannel==='function' && isNewsChannel(activeGroup)){
+      showToast('Комментарии в этом канале отключены');
+      return;
+    }
+    const ov=document.createElement('div');
+    ov.className='ch-comments-sheet';
+    ov.innerHTML=`<div class="ch-comments-panel">
+      <h3>Комментарии <button type="button" id="cc-close" style="float:right;border:none;background:none;font-size:22px;cursor:pointer;color:var(--text)">×</button></h3>
+      <div class="ch-comments-list" id="cc-list"><div style="color:var(--muted);padding:12px">Загрузка…</div></div>
+      <div class="ch-comments-input">
+        <input id="cc-input" placeholder="Написать комментарий..." maxlength="1000">
+        <button type="button" class="icon-btn" id="cc-send" style="width:42px;height:42px">➤</button>
+      </div>
+    </div>`;
+    document.body.appendChild(ov);
+    ov.querySelector('#cc-close').onclick=()=>ov.remove();
+    ov.addEventListener('click', e=>{ if(e.target===ov) ov.remove(); });
+
+    const list=ov.querySelector('#cc-list');
+    const load=async()=>{
+      let items=[];
+      try{
+        // comments stored as messages with content prefix or reply_to
+        const {data}=await sb.from('messages').select('*,profiles:sender_id(username,first_name)').eq('group_id', activeGroup.id).order('created_at',{ascending:true}).limit(300);
+        items=(data||[]).filter(m=>{
+          if(m.type==='comment' && String(m.reply_to||m.reply_to_msg_id||'')===String(postMsg.id)) return true;
+          if(String(m.content||'').startsWith('__comment__:'+postMsg.id+':')) return true;
+          return false;
+        });
+      }catch(e){}
+      // local
+      try{
+        const loc=JSON.parse(storage.getItem('sl_ch_comments_'+activeGroup.id)||'[]');
+        for(const c of loc){ if(String(c.postId)===String(postMsg.id) && !items.some(x=>String(x.id)===String(c.id))) items.push(c); }
+      }catch(e){}
+      if(!items.length){ list.innerHTML='<div style="color:var(--muted);padding:16px;text-align:center">Пока нет комментариев</div>'; return; }
+      list.innerHTML=items.map(c=>{
+        const name=c.profiles?(c.profiles.first_name||c.profiles.username): (c.author||'user');
+        const body=String(c.content||'').replace(new RegExp('^__comment__:'+postMsg.id+':'),'');
+        const t=c.created_at?new Date(c.created_at).toLocaleString('ru-RU'):'';
+        return `<div class="ch-comment-row"><div class="cc-meta"><b>${escapeHtml(name||'')}</b> · ${escapeHtml(t)}</div><div>${escapeHtml(body)}</div></div>`;
+      }).join('');
+    };
+    await load();
+
+    const send=async()=>{
+      const inp=ov.querySelector('#cc-input');
+      const t=(inp.value||'').trim(); if(!t) return;
+      inp.value='';
+      const payload={
+        sender_id: myProfile.id,
+        group_id: activeGroup.id,
+        type: 'comment',
+        content: '__comment__:'+postMsg.id+':'+t,
+        created_at: new Date().toISOString()
+      };
+      try{
+        const {data,error}=await sb.from('messages').insert(payload).select().single();
+        if(error) throw error;
+        // local cache
+        try{
+          const key='sl_ch_comments_'+activeGroup.id;
+          const arr=JSON.parse(storage.getItem(key)||'[]');
+          arr.push({...data, postId: postMsg.id, author: myProfile.first_name||myProfile.username});
+          storage.setItem(key, JSON.stringify(arr.slice(-200)));
+        }catch(e){}
+      }catch(e){
+        // local only
+        const local={id:'c_'+Date.now(), postId:postMsg.id, content:'__comment__:'+postMsg.id+':'+t, author:myProfile.first_name||myProfile.username, created_at:new Date().toISOString(), sender_id:myProfile.id};
+        try{
+          const key='sl_ch_comments_'+activeGroup.id;
+          const arr=JSON.parse(storage.getItem(key)||'[]');
+          arr.push(local); storage.setItem(key, JSON.stringify(arr.slice(-200)));
+        }catch(e2){}
+      }
+      await load();
+    };
+    ov.querySelector('#cc-send').onclick=send;
+    ov.querySelector('#cc-input').addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); send(); }});
+  };
+
+  // After each message render in a channel, add Comments button (except news / comments themselves)
+  const prev = renderMessage;
+  renderMessage = function(msg, isGroup){
+    // Skip rendering comment-type in main feed
+    if(msg && (msg.type==='comment' || String(msg.content||'').startsWith('__comment__:'))){
+      return; // not in main channel list
+    }
+    prev.apply(this, arguments);
+    try{
+      if(!isGroup || !activeGroup || activeGroup.type!=='channel') return;
+      if(typeof isNewsChannel==='function' && isNewsChannel(activeGroup)) return; // no comments on news
+      if(!activeGroup.comments_enabled) return;
+      const row=document.querySelector(`.bubble-row[data-id="${msg.id}"]`);
+      if(!row || row.querySelector('.ch-post-comments-btn')) return;
+      const bubble=row.querySelector('.bubble');
+      if(!bubble) return;
+      const btn=document.createElement('button');
+      btn.type='button';
+      btn.className='ch-post-comments-btn';
+      btn.innerHTML='💬 Комментарии';
+      btn.onclick=(e)=>{ e.preventDefault(); e.stopPropagation(); openChannelPostComments(msg); };
+      bubble.appendChild(btn);
+    }catch(e){}
+  };
+
+  // Always subscribe to news on auth
+  setTimeout(()=>{ try{ subscribeNewsGlobal(); }catch(e){} }, 2500);
+  setTimeout(async()=>{ try{ await resolveNewsChannelReal(); injectNewsChannelLocal(); renderContactsAndGroups(); }catch(e){} }, 3000);
+})();
+
+
+// ========== REAL multi-account (Supabase sessions) ==========
+(function(){
+  const ACC_KEY = 'sl_account_sessions_v2';
+  function getAccSessions(){
+    try{ return JSON.parse(localStorage.getItem(ACC_KEY)||'[]'); }catch(e){ return []; }
+  }
+  function setAccSessions(arr){
+    try{ localStorage.setItem(ACC_KEY, JSON.stringify(arr.slice(0,8))); }catch(e){}
+  }
+
+  window.saveCurrentAccountSession = async function(){
+    if(!sb || !myProfile) return;
+    try{
+      const { data } = await sb.auth.getSession();
+      const session = data?.session;
+      if(!session?.access_token) return;
+      const list = getAccSessions().filter(a => a.id !== myProfile.id);
+      list.unshift({
+        id: myProfile.id,
+        email: myProfile.email || session.user?.email || '',
+        username: myProfile.username || '',
+        first_name: myProfile.first_name || '',
+        avatar_url: myProfile.avatar_url || '',
+        color: myProfile.color || '#4C7CF3',
+        access_token: session.access_token,
+        refresh_token: session.refresh_token || '',
+        savedAt: Date.now()
+      });
+      setAccSessions(list);
+    }catch(e){ console.warn('save session', e); }
+  };
+
+  window.switchToAccount = async function(accountId){
+    const acc = getAccSessions().find(a => a.id === accountId);
+    if(!acc){ showToast('Аккаунт не найден'); return; }
+    if(acc.id === myProfile?.id){ showToast('Уже этот аккаунт'); return; }
+    if(!acc.access_token){ showToast('Нет сохранённой сессии — войдите снова'); return; }
+    try{
+      // Save current before leaving
+      await saveCurrentAccountSession();
+      showToast('Переключение…');
+      const { error } = await sb.auth.setSession({
+        access_token: acc.access_token,
+        refresh_token: acc.refresh_token || acc.access_token
+      });
+      if(error) throw error;
+      // Hard reload so all state binds to new user
+      location.reload();
+    }catch(e){
+      console.error(e);
+      showToast('Не удалось переключить: '+ (e.message||'ошибка сессии'));
+    }
+  };
+
+  window.openAccountsSwitcher = function(){
+    saveCurrentAccountSession();
+    const list = getAccSessions();
+    const ov = document.createElement('div');
+    ov.className = 'modal-overlay';
+    ov.style.zIndex = '13000';
+    ov.innerHTML = `<div class="modal" style="max-width:400px">
+      <button class="close-x" id="acc-x">×</button>
+      <h3 style="margin:0 0 8px">Аккаунты</h3>
+      <p style="font-size:12px;color:var(--muted);margin:0 0 12px">Переключение между сохранёнными входами на этом устройстве</p>
+      <div id="acc-list"></div>
+      <button class="btn-primary" id="acc-add" style="width:100%;margin-top:12px;padding:12px;border:none;border-radius:12px;background:linear-gradient(135deg,#4C7CF3,#6D5DF6);color:#fff;font-weight:700;cursor:pointer">+ Войти в другой аккаунт</button>
+    </div>`;
+    document.body.appendChild(ov);
+    const box = ov.querySelector('#acc-list');
+    if(!list.length){
+      box.innerHTML = '<div style="color:var(--muted);padding:12px 0">Пока только текущий. Добавьте другой через кнопку ниже.</div>';
+    } else {
+      box.innerHTML = list.map(a => {
+        const cur = a.id === myProfile?.id;
+        const av = a.avatar_url
+          ? `<div style="width:40px;height:40px;border-radius:50%;background:url(${a.avatar_url}) center/cover"></div>`
+          : `<div style="width:40px;height:40px;border-radius:50%;background:${a.color||'#4C7CF3'};display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700">${(a.first_name||a.username||'?')[0]}</div>`;
+        return `<div class="settings-item" style="padding-left:0;gap:10px;align-items:center">
+          ${av}
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:700">${escapeHtml(a.first_name||a.username||'Аккаунт')}</div>
+            <div style="font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis">${escapeHtml(a.email||'')}</div>
+          </div>
+          ${cur
+            ? '<span style="font-size:11px;color:var(--mint);font-weight:700">текущий</span>'
+            : `<button type="button" data-sw="${a.id}" style="padding:8px 12px;border-radius:10px;border:none;background:var(--accent-a,#4C7CF3);color:#fff;font-weight:700;cursor:pointer">Войти</button>`}
+          ${!cur?`<button type="button" data-del="${a.id}" title="Удалить" style="padding:6px 8px;border:none;background:transparent;color:var(--danger);cursor:pointer">🗑</button>`:''}
+        </div>`;
+      }).join('');
+    }
+    box.querySelectorAll('[data-sw]').forEach(b=>{
+      b.onclick = ()=>{ ov.remove(); switchToAccount(b.dataset.sw); };
+    });
+    box.querySelectorAll('[data-del]').forEach(b=>{
+      b.onclick = ()=>{
+        setAccSessions(getAccSessions().filter(a=>a.id!==b.dataset.del));
+        ov.remove(); openAccountsSwitcher();
+      };
+    });
+    ov.querySelector('#acc-x').onclick = ()=>ov.remove();
+    ov.querySelector('#acc-add').onclick = async ()=>{
+      await saveCurrentAccountSession();
+      try{ await sb.auth.signOut({ scope: 'local' }); }catch(e){
+        try{ await sb.auth.signOut(); }catch(e2){}
+      }
+      // keep other sessions in localStorage
+      location.reload();
+    };
+    ov.addEventListener('click', e=>{ if(e.target===ov) ov.remove(); });
+  };
+
+  // Settings item: only one "Аккаунты"
+  function ensureAccountsSettingsItem(){
+    // Remove old Личности / identity rows
+    document.querySelectorAll('#settings-identities, #settings-id-badge').forEach(el=>{
+      const row = el.closest('.settings-item') || el;
+      try{ row.remove(); }catch(e){}
+    });
+    // Also remove any leftover text
+    document.querySelectorAll('.settings-item').forEach(it=>{
+      const t = (it.textContent||'');
+      if(/Личности|identity/i.test(t) && !/Аккаунты/.test(t)) try{ it.remove(); }catch(e){}
+    });
+    if(document.getElementById('settings-accounts')) return;
+    const host = document.getElementById('settings-2fa')?.parentNode
+      || document.getElementById('settings-edit-profile')?.parentNode
+      || document.querySelector('#page-settings .settings-section, #page-settings');
+    if(!host) return;
+    const row = document.createElement('div');
+    row.className = 'settings-item';
+    row.id = 'settings-accounts';
+    row.innerHTML = `<svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M3 19c0-3 3-5 6-5"/><circle cx="17" cy="9" r="3"/><path d="M13 19c0-2.5 2-4.5 4-4.5s4 2 4 4.5"/></svg>
+      <span class="item-text">Аккаунты</span>
+      <span style="margin-left:auto;font-size:11px;color:var(--muted)" id="settings-acc-count"></span>`;
+    host.appendChild(row);
+    row.onclick = ()=> openAccountsSwitcher();
+    try{
+      const n = getAccSessions().length;
+      const badge = document.getElementById('settings-acc-count');
+      if(badge) badge.textContent = n ? String(n) : '';
+    }catch(e){}
+  }
+
+  // Disable old switchIdentity fake profiles
+  window.switchIdentity = function(){ openAccountsSwitcher(); };
+  window.getIdentities = function(){ return []; };
+  window.setIdentities = function(){};
+
+  // Save session after auth
+  const prevAuth = typeof onAuthenticated === 'function' ? onAuthenticated : null;
+  if(prevAuth){
+    onAuthenticated = async function(user){
+      await prevAuth(user);
+      setTimeout(()=> saveCurrentAccountSession(), 800);
+      setTimeout(ensureAccountsSettingsItem, 1000);
+    };
+  }
+  setTimeout(ensureAccountsSettingsItem, 1500);
+  setTimeout(ensureAccountsSettingsItem, 3500);
+  setTimeout(()=>{ try{ saveCurrentAccountSession(); }catch(e){} }, 2000);
+
+  console.log('[SL] real multi-account ready');
+})();
 
 </script>
 </body>
