@@ -1165,9 +1165,22 @@ body.in-chat .bottom-tabs{
 }
 .call-overlay .call-btn-round{
   pointer-events:auto!important;touch-action:manipulation;
-  width:68px;height:68px;z-index:51;position:relative;
+  width:68px;height:68px;z-index:100001!important;position:relative;
   -webkit-tap-highlight-color:transparent;
 }
+/* HANGUP FIX */
+.call-overlay .call-actions{
+  position:fixed!important;left:0;right:0;bottom:0;
+  padding:20px 16px calc(28px + env(safe-area-inset-bottom,0px))!important;
+  z-index:100000!important;pointer-events:auto!important;
+  background:linear-gradient(to top, rgba(0,0,0,.65), transparent);
+}
+.call-overlay video.call-remote-video{
+  pointer-events:none!important;z-index:1!important;
+  position:absolute!important;inset:0;width:100%!important;height:100%!important;object-fit:cover;
+}
+.call-overlay video.call-local-video{pointer-events:none!important;z-index:2!important;}
+
 /* Contact profile with cover */
 .tg-contact-sheet{background:#0a0a0a}
 .tg-cover{
@@ -1586,10 +1599,10 @@ html.sl-ready.sl-booting::before{display:none!important}
     <div class="call-status-text" id="call-status-text"></div>
   </div>
   <div class="call-actions" id="call-actions">
-    <button type="button" class="call-btn-round decline" id="cc-decline" style="display:none" aria-label="Decline"><svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+    <button type="button" class="call-btn-round decline" id="cc-decline" style="display:none;z-index:100001;position:relative" aria-label="Decline" onclick="try{window.slDecline&&window.slDecline()}catch(e){}"><svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
     <button type="button" class="call-btn-round accept" id="cc-accept" style="display:none" aria-label="Accept"><svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2A19.8 19.8 0 0111.19 18a19.5 19.5 0 01-6-6A19.8 19.8 0 012.12 3.38 2 2 0 014.11 2h3a2 2 0 012 1.72c.13.96.36 1.9.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0122 16.92z"/></svg></button>
     <button type="button" class="call-btn-round mute" id="cc-mute" style="display:none" aria-label="Mute"><svg viewBox="0 0 24 24"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4"/></svg></button>
-    <button type="button" class="call-btn-round decline" id="cc-hangup" style="display:none" aria-label="Hang up"><svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+    <button type="button" class="call-btn-round decline" id="cc-hangup" style="display:none;z-index:100001;position:relative" aria-label="Hang up" onclick="try{window.slHangup&&window.slHangup()}catch(e){}"><svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
   </div>
 </div>
 <div class="fmt-toolbar" id="fmt-toolbar">
@@ -1949,8 +1962,42 @@ async function loadChats(){
 }
 async function loadGroups(){
   try{ const {data}=await sb.from('group_members').select('group_id,role,groups(*)').eq('user_id',myProfile.id); groups=(data||[]).map(m=>({...m.groups,myRole:m.role})).filter(g=>g?.id); }catch(e){ groups=[]; }
+  // Always show official news channel
+  try{
+    if(typeof ensureNewsChannelVisible==='function') ensureNewsChannelVisible();
+    else injectNewsChannelLocal();
+  }catch(e){ try{ injectNewsChannelLocal(); }catch(e2){} }
   renderContactsAndGroups();
 }
+function injectNewsChannelLocal(){
+  const NEWS_ID = '00000000-0000-4000-8000-signalnews01';
+  const NEWS_NAME = 'Signal Line новости';
+  const pubEmails = ['dimasik.228.dima.super@gmail.com','admin@mail.ru'];
+  const isPub = pubEmails.includes(String(myProfile?.email||'').toLowerCase());
+  if(!Array.isArray(groups)) groups=[];
+  if(!groups.some(g=>g && (g.id===NEWS_ID || g.username==='signal_line_news' || g.name===NEWS_NAME))){
+    groups.unshift({
+      id: NEWS_ID,
+      name: NEWS_NAME,
+      type: 'channel',
+      username: 'signal_line_news',
+      is_public: true,
+      comments_enabled: true,
+      color: '#4C7CF3',
+      owner_id: isPub ? myProfile?.id : null,
+      myRole: isPub ? 'admin' : 'member',
+      _verified: true,
+      description: 'Официальные новости Signal Line'
+    });
+  } else {
+    // pin news to top
+    const i=groups.findIndex(g=>g && (g.username==='signal_line_news'||g.name===NEWS_NAME||g.id===NEWS_ID));
+    if(i>0){ const [g]=groups.splice(i,1); g._verified=true; groups.unshift(g); }
+  }
+}
+window.injectNewsChannelLocal = injectNewsChannelLocal;
+window.ensureNewsChannelVisible = injectNewsChannelLocal;
+
 function renderContactsAndGroups(){
   const list=document.getElementById('contacts-list'); if(!list) return;
   const q=(document.getElementById('search-input')?.value||'').trim().toLowerCase();
@@ -1980,6 +2027,7 @@ function renderContactsAndGroups(){
     row.className='contact'+(isActive?' active':'');
     const isSelf=data.id===myProfile?.id;
     const name=type==='group'?data.name:(isSelf?t('it_favorites'):(data.first_name?`${data.first_name} ${data.last_name||''}`:data.username));
+    const newsVerified = type==='group' && (data._verified || data.username==='signal_line_news' || data.name==='Signal Line новости');
     const sub=type==='group'?(data.description||'Группа'):(data.lastMessage||'@'+data.username);
     const online=onlineUsers.has(data.id);
     const lastAt = data.lastAt ? new Date(data.lastAt) : null;
@@ -1989,7 +2037,7 @@ function renderContactsAndGroups(){
     row.innerHTML=`<div style="display:flex;align-items:center;gap:10px;width:100%;padding:10px 12px">
       <div class="avatar" style="width:48px;height:48px;font-size:16px"></div>
       <div style="min-width:0;flex:1">
-        <div class="contact-name">${escapeHtml(name)}${verifiedBadgeIf(data.email)}${online&&type==='user'&&!data.isBot?' <span style="color:var(--mint);font-size:10px">●</span>':''}</div>
+        <div class="contact-name">${escapeHtml(name)}${newsVerified?(typeof verifiedSvg!=='undefined'?verifiedSvg:' <span style="color:#4C7CF3">✓</span>'):verifiedBadgeIf(data.email)}${online&&type==='user'&&!data.isBot?' <span style="color:var(--mint);font-size:10px">●</span>':''}</div>
         <div class="contact-sub">${escapeHtml(sub)}</div>
       </div>
       <div class="contact-meta">
@@ -3487,10 +3535,10 @@ function finishRecording(){
     // already stopped — try send whatever chunks we have
     if(recordedChunks && recordedChunks.length){
       const blob=new Blob(recordedChunks,{type:recordMode==='circle'?'video/webm':'audio/webm'});
-      if(blob.size>500){
+      if(blob.size>0 || recordMode==='voice'){
         const reader=new FileReader();
         reader.onload=async ev=> await sendMessage(recordMode==='circle'?'circle':'voice', ev.target.result, '');
-        reader.readAsDataURL(blob);
+        reader.readAsDataURL(blob.size?blob:new Blob([new Uint8Array([0])],{type:'audio/webm'}));
       }
     }
     return;
@@ -3505,7 +3553,16 @@ function finishRecording(){
     document.getElementById('circle-record-overlay').style.display='none';
     isRecording=false;
     const blob=new Blob(recordedChunks||[],{type:recordMode==='circle'?'video/webm':'audio/webm'});
-    if(!blob.size || blob.size<400){
+    // Allow short voice notes; only block completely empty
+    if(!blob.size){
+      // still try to send a tiny placeholder for voice so UX isn't blocked
+      if(recordMode==='voice'){
+        const silent = new Blob([new Uint8Array([0])], {type:'audio/webm'});
+        const reader=new FileReader();
+        reader.onload=async ev=> await sendMessage('voice', ev.target.result, '');
+        reader.readAsDataURL(silent);
+        return;
+      }
       showToast('Пустая запись — попробуйте ещё раз');
       recordedChunks=[];
       return;
@@ -6221,8 +6278,17 @@ function setupLocalVideo(){
 }
 function showCallUI(){
   const ov=document.getElementById('call-overlay');
-  if(ov){ ov.classList.add('show'); ov.style.display='flex'; ov.style.zIndex='99999'; }
+  if(ov){ ov.classList.add('show'); ov.style.display='flex'; ov.style.zIndex='100000'; }
   try{ wireCallButtonsOnce(); }catch(e){}
+  // force hangup visible for non-incoming
+  try{
+    const hang=document.getElementById('cc-hangup');
+    if(hang && currentCall && currentCall.state!=='incoming'){
+      hang.style.display='flex';
+      hang.style.zIndex='100001';
+      hang.onclick=function(e){ e&&e.preventDefault(); window.slHangup(); };
+    }
+  }catch(e){}
   const av=document.getElementById('call-avatar-big');
   if(av && currentCall){
     if(currentCall.peerAvatar){ av.style.backgroundImage='url('+currentCall.peerAvatar+')'; av.textContent=''; }
@@ -6436,6 +6502,18 @@ document.getElementById('calls-clear-btn')?.addEventListener('click', async()=>{
 // Track call start time for duration
 let _callStartedAt=0;
 
+window.slHangup = function(){
+  console.log('[SL] hangup pressed', typeof currentCall, currentCall);
+  try{
+    const peer = (typeof currentCall!=='undefined' && currentCall && currentCall.peerId) ? currentCall.peerId
+      : (typeof pendingOffer!=='undefined' && pendingOffer && pendingOffer.from) ? pendingOffer.from : null;
+    if(peer && typeof sendSignal==='function') sendSignal(peer, 'hangup', {});
+  }catch(e){ console.warn(e); }
+  try{ endCall(); }catch(e){ console.error(e); }
+};
+window.slDecline = function(){
+  try{ if(typeof declineCall==='function') declineCall(); else window.slHangup(); }catch(e){}
+};
 function endCall(){
   try{
     if(currentCall && currentCall.peerId){
@@ -6471,7 +6549,8 @@ function endCall(){
   localStream?.getTracks().forEach(t=>t.stop());
   remoteMediaStream?.getTracks().forEach(t=>{ try{t.stop();}catch(e){} });
   pc=null; localStream=null; remoteMediaStream=null; pendingOffer=null; currentCall=null;
-  document.getElementById('call-overlay').classList.remove('show');
+  const _cov=document.getElementById('call-overlay');
+  if(_cov){ _cov.classList.remove('show'); _cov.style.display='none'; }
   const rv=document.getElementById('call-remote-video');
   if(rv){
     rv.style.display='none';
@@ -7499,7 +7578,7 @@ async function openFullProfile(profileLike){
         <div class="profile-av-stretch" id="ps-av-stretch"></div>
         <div class="profile-cover-overlay"></div>
         <div class="profile-header-content">
-          <div class="avatar profile-av-big" id="ps-av"></div>
+          <div class="avatar profile-av-big" id="ps-av" style="cursor:pointer" title="История фото"></div>
           <div class="profile-name-big">${escapeHtml(name)}${verifiedBadgeIf(p.email)}</div>
           <div class="profile-sub-big">@${escapeHtml(p.username||'')}</div>
           <div class="profile-online-big" id="ps-online"></div>
@@ -9808,6 +9887,46 @@ function scheduleBirthdayAfterAppReady(){
   }, 1200);
 
   console.log('[SL] pack news/404/avatar/accounts/transcribe loaded');
+})();
+
+
+// Avatar history on profile icon + ensure news channel on load
+(function(){
+  const _ofp = typeof openFullProfile==='function' ? openFullProfile : null;
+  if(_ofp){
+    openFullProfile = async function(profileLike){
+      await _ofp.apply(this, arguments);
+      setTimeout(()=>{
+        const av=document.querySelector('.profile-sheet #ps-av, .profile-sheet #ps-av-stretch, .profile-sheet .profile-av-big');
+        if(av && !av.dataset.histBound){
+          av.dataset.histBound='1';
+          av.style.cursor='pointer';
+          av.title='История фото профиля';
+          av.addEventListener('click', (e)=>{
+            e.stopPropagation();
+            if(typeof openAvatarHistory==='function') openAvatarHistory(profileLike||myProfile);
+          });
+        }
+        // also collapsed mini avatar
+        const mini=document.querySelector('.profile-sheet #ps-av-mini');
+        if(mini && !mini.dataset.histBound){
+          mini.dataset.histBound='1';
+          mini.style.cursor='pointer';
+          mini.addEventListener('click', (e)=>{
+            e.stopPropagation();
+            if(typeof openAvatarHistory==='function') openAvatarHistory(profileLike||myProfile);
+          });
+        }
+      }, 200);
+    };
+  }
+  // Partner avatar in chat header → history via long? simple click for additional info already - hook chat partner avatar
+  document.getElementById('partner-avatar')?.addEventListener('click', ()=>{
+    // don't override if stories - openAvatarHistory when no stories handled elsewhere
+  });
+  // Force inject news on boot
+  setTimeout(()=>{ try{ injectNewsChannelLocal(); renderContactsAndGroups(); }catch(e){} }, 2000);
+  setTimeout(()=>{ try{ injectNewsChannelLocal(); renderContactsAndGroups(); }catch(e){} }, 4000);
 })();
 
 </script>
