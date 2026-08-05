@@ -392,8 +392,11 @@ body.theme-light{
 .messages{background-size:cover;background-position:center;background-repeat:no-repeat}
 
 /* ===== Read status checkmarks (SVG, not emoji) ===== */
-.msg-check{display:inline-flex;align-items:center;margin-left:2px}
-.msg-check svg{width:14px;height:14px}
+.msg-check{display:inline-flex;align-items:center;margin-left:3px;vertical-align:middle;line-height:1}
+.msg-check svg{width:16px;height:16px;display:block}
+.msg-check.sent{opacity:.75;color:rgba(255,255,255,.85)}
+.msg-check.read{opacity:1;color:#53BDEB} /* WhatsApp-like blue double ticks */
+.bubble.them .msg-check{display:none}
 
 /* ===== Text formatting ===== */
 .fmt-toolbar{position:fixed;display:none;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:4px;gap:2px;box-shadow:0 8px 24px rgba(0,0,0,.4);z-index:5000}
@@ -4049,35 +4052,118 @@ setupPresence = function(){
 // ---------- Read receipts (single / double check, no emoji) ----------
 let readsChannel=null;
 let lastReadFromPartner={};
+const READS_STORE_KEY='sl_last_reads';
+function loadLastReads(){
+  try{ lastReadFromPartner=JSON.parse(storage.getItem(READS_STORE_KEY)||'{}')||{}; }catch(e){ lastReadFromPartner={}; }
+}
+function saveLastReads(){
+  try{ storage.setItem(READS_STORE_KEY, JSON.stringify(lastReadFromPartner)); }catch(e){}
+}
+loadLastReads();
 function setupReads(){
-  if(readsChannel) sb.removeChannel(readsChannel);
-  readsChannel=sb.channel('reads').on('broadcast',{event:'read'},({payload})=>{
-    if(payload.to===myProfile.id){ lastReadFromPartner[payload.from]=payload.at; updateCheckmarksFor(payload.from); }
-  }).subscribe();
+  if(readsChannel) try{ sb.removeChannel(readsChannel); }catch(e){}
+  if(!myProfile?.id) return;
+  // Personal inbox channel + shared reads channel for reliability
+  readsChannel=sb.channel('reads-'+myProfile.id)
+    .on('broadcast',{event:'read'},({payload})=>{
+      if(!payload) return;
+      // someone read OUR messages
+      if(payload.to===myProfile.id && payload.from){
+        const prev=lastReadFromPartner[payload.from];
+        if(!prev || new Date(payload.at)>=new Date(prev)){
+          lastReadFromPartner[payload.from]=payload.at;
+          saveLastReads();
+          updateCheckmarksFor(payload.from);
+        }
+      }
+    })
+    .subscribe();
+  // also listen on global 'reads' for older clients
+  try{
+    sb.channel('reads').on('broadcast',{event:'read'},({payload})=>{
+      if(payload && payload.to===myProfile.id && payload.from){
+        lastReadFromPartner[payload.from]=payload.at;
+        saveLastReads();
+        updateCheckmarksFor(payload.from);
+      }
+    }).subscribe();
+  }catch(e){}
 }
 function sendReadReceipt(partnerId){
-  if(getAnon().hideRead) return;
-  readsChannel?.send({type:'broadcast',event:'read',payload:{from:myProfile.id,to:partnerId,at:new Date().toISOString()}});
+  if(!partnerId || !myProfile?.id) return;
+  try{ if(typeof getAnon==='function' && getAnon().hideRead) return; }catch(e){}
+  const at=new Date().toISOString();
+  const payload={from:myProfile.id,to:partnerId,at};
+  // send to partner's personal channel
+  try{
+    const ch=sb.channel('reads-'+partnerId);
+    ch.subscribe(st=>{
+      if(st==='SUBSCRIBED'){
+        ch.send({type:'broadcast',event:'read',payload});
+        setTimeout(()=>{ try{ sb.removeChannel(ch); }catch(e){} }, 1200);
+      }
+    });
+  }catch(e){}
+  // and global
+  try{ readsChannel?.send({type:'broadcast',event:'read',payload}); }catch(e){}
+  try{
+    sb.channel('reads').send({type:'broadcast',event:'read',payload});
+  }catch(e){}
+  // optional server mark (if column exists)
+  try{
+    sb.from('messages').update({read_at:at})
+      .eq('sender_id', partnerId)
+      .eq('receiver_id', myProfile.id)
+      .is('read_at', null)
+      .then(()=>{}).catch(()=>{});
+  }catch(e){}
 }
 function checkSvg(read){
-  return read
-    ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12l5 5L13 8"/><path d="M9 12l5 5L23 8"/></svg>'
-    : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l6 6L20 6"/></svg>';
+  // Double tick = read, single = sent/delivered
+  if(read){
+    return '<svg viewBox="0 0 16 11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M1 5.5L4.5 9L10.5 1.5"/><path d="M5.5 5.5L9 9L15 1.5"/></svg>';
+  }
+  return '<svg viewBox="0 0 12 11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M1 5.5L4.5 9L10.5 1.5"/></svg>';
+}
+function isMsgReadByPartner(msg, partnerId){
+  if(!partnerId || !msg?.created_at) return false;
+  const at=lastReadFromPartner[partnerId];
+  if(!at) return false;
+  return new Date(msg.created_at) <= new Date(at);
 }
 function updateCheckmarksFor(partnerId){
+  if(!partnerId) return;
+  // update even if chat not active (for when user switches later) — but DOM only if active
   if(activePartner?.id!==partnerId) return;
   document.querySelectorAll('.bubble-row.me').forEach(row=>{
-    const msg=messageStore.get(String(row.dataset.id)); if(!msg) return;
+    const mid=row.dataset.id||row.dataset.mid;
+    let msg=null;
+    try{ msg=messageStore.get(String(mid)); }catch(e){}
+    if(!msg){
+      // fallback: use data-created if present
+      const t=row.dataset.created;
+      msg={created_at:t, id:mid};
+    }
     const el=row.querySelector('.msg-check'); if(!el) return;
-    const read = lastReadFromPartner[partnerId] && msg.created_at && new Date(msg.created_at)<=new Date(lastReadFromPartner[partnerId]);
+    const read=isMsgReadByPartner(msg, partnerId);
+    el.classList.toggle('read', !!read);
+    el.classList.toggle('sent', !read);
     el.innerHTML=checkSvg(!!read);
+    el.title=read?'Прочитано':'Доставлено';
   });
 }
 const _origOpenChat = openChat;
 openChat = async function(partner){
   await _origOpenChat(partner);
   applyWallpaperPreset();
-  if(!partner.isBot && partner.id!==myProfile.id) sendReadReceipt(partner.id);
+  if(!partner.isBot && partner.id!==myProfile.id){
+    // apply stored read times immediately so double ticks appear after reload
+    updateCheckmarksFor(partner.id);
+    sendReadReceipt(partner.id);
+    // after messages render, re-apply
+    setTimeout(()=>updateCheckmarksFor(partner.id), 400);
+    setTimeout(()=>updateCheckmarksFor(partner.id), 1200);
+  }
 };
 const _origOpenGroup = openGroup;
 openGroup = async function(group){ await _origOpenGroup(group); applyWallpaperPreset(); };
@@ -4250,12 +4336,20 @@ renderMessage = function(msg, isGroup=false){
   const row=document.querySelector(`.bubble-row[data-id="${msg.id}"]`); if(!row) return;
   const mine=msg.sender_id===myProfile.id||msg.sender_id==='me';
   if(mine && !isGroup){
+    if(msg.created_at) row.dataset.created=msg.created_at;
     const timeEl=row.querySelector('.bubble-time');
-    if(timeEl && !timeEl.querySelector('.msg-check')){
-      const span=document.createElement('span'); span.className='msg-check';
-      const read=activePartner && lastReadFromPartner[activePartner.id] && msg.created_at && new Date(msg.created_at)<=new Date(lastReadFromPartner[activePartner.id]);
+    if(timeEl){
+      let span=timeEl.querySelector('.msg-check');
+      const read=activePartner && isMsgReadByPartner(msg, activePartner.id);
+      if(!span){
+        span=document.createElement('span');
+        span.className='msg-check';
+        timeEl.appendChild(span);
+      }
+      span.classList.toggle('read', !!read);
+      span.classList.toggle('sent', !read);
       span.innerHTML=checkSvg(!!read);
-      timeEl.appendChild(span);
+      span.title=read?'Прочитано':'Доставлено';
     }
   }
   applyTextFormatting(row);
