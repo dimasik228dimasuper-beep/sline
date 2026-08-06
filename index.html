@@ -1452,44 +1452,82 @@ html.sl-ready.sl-booting::before{display:none!important}
 <div id="auth-screen">
   <div class="auth-card">
     <div class="brand"><div class="brand-mark" aria-label="Signal Line"></div><div class="brand-name">Signal Line</div></div>
-    <div class="auth-sub" data-i18n="auth_sub">Современный мессенджер</div>
-    <div class="tabs">
-      <div class="tab active" data-tab="login" data-i18n="auth_login_tab">Вход</div>
-      <div class="tab" data-tab="register" data-i18n="auth_register_tab">Регистрация</div>
+    <div class="auth-sub" id="auth-sub-text">Современный мессенджер</div>
+
+    <div id="auth-choice">
+      <button type="button" class="btn-primary" id="auth-go-login" style="margin-top:8px">Вход</button>
+      <button type="button" class="btn-secondary" id="auth-go-register">Регистрация</button>
     </div>
-    <div class="tabs" id="method-tabs" style="margin-bottom:16px">
-      <div class="tab active" data-method="email" data-i18n="auth_method_email">Почта</div>
-      <div class="tab" data-method="phone" data-i18n="auth_method_phone">Телефон</div>
+
+    <div id="login-form" style="display:none">
+      <div class="field"><label>Email или телефон</label><input type="text" id="login-email" placeholder="you@example.com или +79001234567" autocomplete="username" inputmode="email"></div>
+      <div class="field"><label>Пароль</label><input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password"></div>
+      <button type="button" class="btn-primary" id="login-btn">Войти</button>
+      <button type="button" class="btn-secondary" id="login-forgot-btn" style="margin-top:10px">Забыли пароль?</button>
+      <button type="button" class="btn-secondary" id="login-back-choice" style="margin-top:8px;border:none;color:var(--muted)">← Назад</button>
     </div>
-    <div id="login-form">
-      <div id="login-email-fields">
-        <div class="field"><label data-i18n="field_email">Email</label><input type="email" id="login-email" placeholder="you@example.com"></div>
-        <div class="field"><label data-i18n="field_password">Пароль</label><input type="password" id="login-password" placeholder="••••••••"></div>
-      </div>
-      <div id="login-phone-fields" style="display:none">
-        <div class="field"><label data-i18n="field_phone">Телефон</label><input type="tel" id="login-phone" placeholder="+79001234567"></div>
-        <div class="field"><label data-i18n="field_password">Пароль</label><input type="password" id="login-phone-password" placeholder="••••••••"></div>
-      </div>
-      <button type="button" class="btn-primary" id="login-btn" data-i18n="auth_login_btn">Войти</button>
+
+    <div id="forgot-form" style="display:none">
+      <p style="font-size:13px;color:var(--muted);margin-bottom:14px;line-height:1.45">Введите ключ восстановления, который вы получили при регистрации.</p>
+      <div class="field"><label>Ключ восстановления</label><input type="text" id="forgot-key" placeholder="signal_line_key_…" autocomplete="off" spellcheck="false" style="font-family:monospace;font-size:13px"></div>
+      <button type="button" class="btn-primary" id="forgot-submit-btn">Далее</button>
+      <button type="button" class="btn-secondary" id="forgot-back-btn" style="margin-top:8px">← Назад ко входу</button>
     </div>
+
     <div id="register-form" style="display:none">
-      <div class="field"><label data-i18n="field_firstname">Имя</label><input type="text" id="reg-firstname" placeholder="Иван"></div>
-      <div class="field"><label data-i18n="field_lastname">Фамилия</label><input type="text" id="reg-lastname" placeholder="Иванов"></div>
-      <div class="field"><label data-i18n="field_username">Имя пользователя</label><input type="text" id="reg-username" placeholder="ivanov"></div>
-      <div class="field"><label data-i18n="field_birth">Дата рождения</label><input type="date" id="reg-birth"></div>
-      <div id="reg-email-fields">
-        <div class="field"><label data-i18n="field_email">Email</label><input type="email" id="reg-email" placeholder="you@example.com"></div>
-        <div class="field"><label data-i18n="field_password">Пароль</label><input type="password" id="reg-password" placeholder="Минимум 6 символов" data-i18n-placeholder="field_password_min"></div>
+      <div id="reg-progress" style="display:flex;gap:6px;margin-bottom:18px">
+        <div class="reg-dot" data-step="1" style="flex:1;height:4px;border-radius:4px;background:var(--accent-a)"></div>
+        <div class="reg-dot" data-step="2" style="flex:1;height:4px;border-radius:4px;background:var(--line)"></div>
+        <div class="reg-dot" data-step="3" style="flex:1;height:4px;border-radius:4px;background:var(--line)"></div>
+        <div class="reg-dot" data-step="4" style="flex:1;height:4px;border-radius:4px;background:var(--line)"></div>
+        <div class="reg-dot" data-step="5" style="flex:1;height:4px;border-radius:4px;background:var(--line)"></div>
       </div>
-      <div id="reg-phone-fields" style="display:none">
-        <div class="field"><label data-i18n="field_phone">Телефон</label><input type="tel" id="reg-phone" placeholder="+79001234567"></div>
-        <div class="field"><label data-i18n="field_password">Пароль</label><input type="password" id="reg-phone-password" placeholder="Минимум 6 символов" data-i18n-placeholder="field_password_min"></div>
+
+      <div class="reg-step" data-step="1">
+        <div class="field"><label>Имя</label><input type="text" id="reg-firstname" placeholder="Иван" autocomplete="given-name"></div>
+        <div class="field"><label>Фамилия</label><input type="text" id="reg-lastname" placeholder="Иванов" autocomplete="family-name"></div>
+        <button type="button" class="btn-primary" id="reg-next-1">Далее</button>
       </div>
-      <button type="button" class="btn-primary" id="register-btn" data-i18n="auth_register_btn">Создать аккаунт</button>
+
+      <div class="reg-step" data-step="2" style="display:none">
+        <div class="field"><label>Имя пользователя</label><input type="text" id="reg-username" placeholder="ivanov" autocomplete="username"></div>
+        <p style="font-size:12px;color:var(--muted);margin:-4px 0 12px">Только латиница, цифры и _</p>
+        <button type="button" class="btn-primary" id="reg-next-2">Далее</button>
+        <button type="button" class="btn-secondary" id="reg-back-2" style="margin-top:8px">← Назад</button>
+      </div>
+
+      <div class="reg-step" data-step="3" style="display:none">
+        <div class="field"><label>Дата рождения</label><input type="date" id="reg-birth"></div>
+        <button type="button" class="btn-primary" id="reg-next-3">Далее</button>
+        <button type="button" class="btn-secondary" id="reg-back-3" style="margin-top:8px">← Назад</button>
+      </div>
+
+      <div class="reg-step" data-step="4" style="display:none">
+        <div class="field"><label>Email или телефон</label><input type="text" id="reg-contact" placeholder="you@example.com или +79001234567" autocomplete="username"></div>
+        <div class="field"><label>Пароль</label><input type="password" id="reg-password" placeholder="Минимум 6 символов" autocomplete="new-password"></div>
+        <div class="field"><label>Повторите пароль</label><input type="password" id="reg-password2" placeholder="Ещё раз" autocomplete="new-password"></div>
+        <button type="button" class="btn-primary" id="reg-next-4">Далее</button>
+        <button type="button" class="btn-secondary" id="reg-back-4" style="margin-top:8px">← Назад</button>
+      </div>
+
+      <div class="reg-step" data-step="5" style="display:none">
+        <div style="text-align:center;margin-bottom:8px;font-size:28px">🔑</div>
+        <p style="font-size:14px;font-weight:700;margin-bottom:8px;text-align:center">Ключ восстановления</p>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:14px;line-height:1.45;text-align:center">Скопируйте, мы потом его показывать не будем.</p>
+        <div id="reg-recovery-key" style="font-family:monospace;font-size:12px;word-break:break-all;background:var(--input-bg);border:1px solid var(--line);border-radius:12px;padding:14px;text-align:center;user-select:all;-webkit-user-select:all;margin-bottom:12px;line-height:1.4"></div>
+        <button type="button" class="btn-secondary" id="reg-copy-key" style="margin-top:0">Скопировать ключ</button>
+        <button type="button" class="btn-primary" id="reg-enter-app" style="margin-top:10px">Войти в мессенджер</button>
+      </div>
+
+      <button type="button" class="btn-secondary" id="reg-back-choice" style="margin-top:10px;border:none;color:var(--muted)">← К выбору</button>
     </div>
+
     <div class="auth-msg" id="auth-msg"></div>
   </div>
 </div>
+
+
+
 
 <div id="app-screen">
   <nav class="nav-rail" id="nav-rail" aria-label="Main">
@@ -1800,16 +1838,43 @@ window.addEventListener('unhandledrejection', function(ev){
 });
 
 const _mem = {};
+let _lsOk = null;
+function _probeLS(){
+  if(_lsOk !== null) return _lsOk;
+  try{
+    const k = '__sl_probe__';
+    localStorage.setItem(k, '1');
+    localStorage.removeItem(k);
+    _lsOk = true;
+  }catch(e){ _lsOk = false; }
+  return _lsOk;
+}
 const storage = {
-  getItem(k){ try{ return localStorage.getItem(k); }catch(e){ return _mem[k]??null; } },
-  setItem(k,v){ try{ localStorage.setItem(k,v); }catch(e){ _mem[k]=String(v); } },
-  removeItem(k){ try{ localStorage.removeItem(k); }catch(e){ delete _mem[k]; } }
+  getItem(k){
+    try{ if(_probeLS()) return localStorage.getItem(k); }catch(e){}
+    return Object.prototype.hasOwnProperty.call(_mem, k) ? _mem[k] : null;
+  },
+  setItem(k, v){
+    const val = String(v);
+    _mem[k] = val;
+    try{ if(_probeLS()) localStorage.setItem(k, val); }catch(e){}
+  },
+  removeItem(k){
+    try{ delete _mem[k]; }catch(e){}
+    try{ if(_probeLS()) localStorage.removeItem(k); }catch(e){}
+  }
 };
 
 // Disable copy
-document.addEventListener('copy', e => e.preventDefault());
-document.addEventListener('cut', e => e.preventDefault());
-document.addEventListener('selectstart', e => { if(!e.target.closest('input,textarea')) e.preventDefault(); });
+document.addEventListener('copy', e => {
+  if(e.target.closest && e.target.closest('#reg-recovery-key,input,textarea')) return;
+  e.preventDefault();
+});
+document.addEventListener('cut', e => {
+  if(e.target.closest && e.target.closest('input,textarea')) return;
+  e.preventDefault();
+});
+document.addEventListener('selectstart', e => { if(!e.target.closest('input,textarea,#reg-recovery-key,[contenteditable]')) e.preventDefault(); });
 
 let authMethod = 'email';
 let currentUser=null, myProfile=null, contacts=[], groups=[], activePartner=null, activeGroup=null;
@@ -1950,98 +2015,467 @@ function renderAvatarInto(el, url, ch, color){
 }
 
 // ========== AUTH ==========
-async function doLogin(){
-  const am=document.getElementById('auth-msg'); am.textContent='';
-  const btn=document.getElementById('login-btn');
-  if(authMethod==='phone'){
-    const phone=document.getElementById('login-phone').value.trim();
-    const password=document.getElementById('login-phone-password').value;
-    if(!phone||!password){ am.textContent='Заполните поля'; return; }
-    setBtnLoading(btn,true);
-    try{
-      const {data,error}=await sb.auth.signInWithPassword({email:phone.replace(/\s/g,'')+'@phone.local', password});
-      if(error){ am.textContent='Неверный телефон/пароль'; setBtnLoading(btn,false); return; }
-      if(data?.user) onAuthenticated(data.user);
-      else setBtnLoading(btn,false);
-    }catch(e){ am.textContent='Ошибка сети'; setBtnLoading(btn,false); }
-    return;
-  }
-  const email=document.getElementById('login-email').value.trim().toLowerCase();
-  const password=document.getElementById('login-password').value;
-  if(!email||!password){ am.textContent='Введите email и пароль'; return; }
-  setBtnLoading(btn,true);
-  try{
-    let {data,error}=await sb.auth.signInWithPassword({email,password});
-    if(error){
-      const up=await sb.auth.signUp({email,password});
-      if(!up.error && up.data?.session?.user){ data=up.data; error=null; }
-      else if(!up.error && up.data?.user){ const a=await sb.auth.signInWithPassword({email,password}); if(a.data?.user){data=a.data;error=null;} else error=a.error||error; }
-    }
-    if(error){ am.textContent=/invalid/i.test(error.message)?'Неверный email/пароль':error.message; setBtnLoading(btn,false); return; }
-    if(data?.user) onAuthenticated(data.user);
-    else setBtnLoading(btn,false);
-  }catch(e){ am.textContent='Ошибка сети'; setBtnLoading(btn,false); }
+let _regStep = 1;
+let _pendingRegUser = null;
+let _pendingRegSession = null;
+let _pendingRegContact = null; // email used for supabase
+let _awaitingRecoveryKey = false; // block auto-login until user sees recovery key
+
+function authMsg(text){
+  const am = document.getElementById('auth-msg');
+  if(am) am.textContent = text || '';
 }
-async function doRegister(){
-  const am=document.getElementById('auth-msg'); am.textContent='';
-  const btn=document.getElementById('register-btn');
-  const first=document.getElementById('reg-firstname').value.trim();
-  const last=document.getElementById('reg-lastname').value.trim();
-  const username=document.getElementById('reg-username').value.trim().toLowerCase();
-  const birth=document.getElementById('reg-birth').value;
-  if(!first||!last||!username||!birth){ am.textContent='Заполните все поля'; return; }
-  if(authMethod==='phone'){
-    const phone=document.getElementById('reg-phone').value.trim();
-    const password=document.getElementById('reg-phone-password').value;
-    if(!phone||password.length<6){ am.textContent='Телефон и пароль (мин.6)'; return; }
-    setBtnLoading(btn,true);
+
+/** Canonical phone digits for RU/intl (8XXXXXXXXXX → 7XXXXXXXXXX) */
+function canonicalizePhoneDigits(digits){
+  let d = String(digits||'').replace(/\D/g,'');
+  if(!d) return '';
+  // Russia: 8 + 10 digits → 7 + 10 digits
+  if(d.length === 11 && d.startsWith('8')) d = '7' + d.slice(1);
+  // 10-digit local mobile → assume RU
+  if(d.length === 10 && /^9/.test(d)) d = '7' + d;
+  return d;
+}
+
+/** Normalize contact: returns { email, phone, display, emails[] } for Supabase */
+function normalizeContact(raw){
+  const v = String(raw||'').trim();
+  if(!v) return null;
+  const digitsRaw = v.replace(/\D/g,'');
+  const isPhone = !v.includes('@') && digitsRaw.length >= 10 && /^[\d\s+\-()]+$/.test(v);
+  if(isPhone){
+    const canon = canonicalizePhoneDigits(digitsRaw);
+    const variants = Array.from(new Set([
+      canon,
+      digitsRaw,
+      // also keep leading-8 form for accounts created before normalization
+      (canon.length===11 && canon.startsWith('7')) ? ('8'+canon.slice(1)) : null,
+      (digitsRaw.length===11 && digitsRaw.startsWith('7')) ? ('8'+digitsRaw.slice(1)) : null
+    ].filter(Boolean)));
+    const phone = '+' + canon;
+    // Primary synthetic email uses canonical international digits
+    const emails = variants.map(d => d + '@phone.signal-line.local');
+    return {
+      email: emails[0],
+      emails,
+      phone,
+      phoneVariants: variants.map(d => '+'+d).concat(variants),
+      display: phone,
+      isPhone: true
+    };
+  }
+  const email = v.toLowerCase();
+  if(!email.includes('@') || email.length < 5) return null;
+  return { email, emails: [email], phone: null, phoneVariants: [], display: email, isPhone: false };
+}
+
+function showAuthPanel(which){
+  ['auth-choice','login-form','register-form','forgot-form'].forEach(id=>{
+    const el = document.getElementById(id);
+    if(el) el.style.display = (id===which) ? 'block' : 'none';
+  });
+  const sub = document.getElementById('auth-sub-text');
+  if(sub){
+    if(which==='auth-choice') sub.textContent = 'Современный мессенджер';
+    else if(which==='login-form') sub.textContent = 'Вход в аккаунт';
+    else if(which==='forgot-form') sub.textContent = 'Восстановление доступа';
+    else if(which==='register-form') sub.textContent = 'Регистрация';
+  }
+  authMsg('');
+  const backChoice = document.getElementById('reg-back-choice');
+  if(backChoice) backChoice.style.display = (which==='register-form' && _regStep < 5) ? 'block' : 'none';
+}
+
+function generateRecoveryKey(){
+  const alphabet = 'abcdefghijklmnopqrstuvwxyz';
+  let s = '';
+  const arr = new Uint8Array(18);
+  try{ crypto.getRandomValues(arr); }catch(e){ for(let i=0;i<18;i++) arr[i]=Math.floor(Math.random()*256); }
+  for(let i=0;i<18;i++) s += alphabet[arr[i] % alphabet.length];
+  return 'signal_line_key_' + s;
+}
+
+function saveRecoveryRecord(key, record){
+  try{
+    // Safe storage with memory fallback — prevents SecurityError on file:// / sandbox
+    const store = (typeof storage!=='undefined' && storage) ? storage : null;
+    let map = {};
     try{
-      const emailLocal=phone.replace(/\s/g,'')+'@phone.local';
-      const {data,error}=await sb.auth.signUp({email:emailLocal, password, options:{data:{username,first_name:first,last_name:last,birth_date:birth,phone}}});
-      if(error){ am.textContent=error.message; setBtnLoading(btn,false); return; }
-      let user=data.session?.user;
-      if(!user){
-        // no email confirm — immediate sign-in
-        try{
-          const a=await sb.auth.signInWithPassword({email:emailLocal, password});
-          user=a.data?.session?.user||a.data?.user;
-        }catch(e){}
+      const raw = store ? store.getItem('sl_recovery_map') : (function(){ try{ return localStorage.getItem('sl_recovery_map'); }catch(e){ return null; } })();
+      map = JSON.parse(raw||'{}') || {};
+    }catch(e){ map = {}; }
+    map[key] = record;
+    const payload = JSON.stringify(map);
+    if(store) store.setItem('sl_recovery_map', payload);
+    else {
+      try{ localStorage.setItem('sl_recovery_map', payload); }catch(e){}
+    }
+  }catch(e){
+    try{ console.warn('recovery save', e && e.name ? e.name : e); }catch(e2){}
+  }
+}
+function findRecoveryRecord(key){
+  try{
+    const store = (typeof storage!=='undefined' && storage) ? storage : null;
+    let map = {};
+    try{
+      const raw = store ? store.getItem('sl_recovery_map') : (function(){ try{ return localStorage.getItem('sl_recovery_map'); }catch(e){ return null; } })();
+      map = JSON.parse(raw||'{}') || {};
+    }catch(e){ map = {}; }
+    const k = String(key||'').trim().toLowerCase();
+    if(map[key]) return map[key];
+    for(const x of Object.keys(map)){
+      if(x.toLowerCase()===k) return map[x];
+    }
+  }catch(e){}
+  return null;
+}
+
+function setRegStep(step){
+  _regStep = step;
+  const form = document.getElementById('register-form');
+  if(form && step >= 1){
+    try{ form.style.display = 'block'; }catch(e){}
+  }
+  document.querySelectorAll('#register-form .reg-step').forEach(el=>{
+    const show = (+el.dataset.step === step);
+    el.style.display = show ? 'block' : 'none';
+  });
+  document.querySelectorAll('#reg-progress .reg-dot').forEach(d=>{
+    d.style.background = (+d.dataset.step <= step) ? 'var(--accent-a)' : 'var(--line)';
+  });
+  const backChoice = document.getElementById('reg-back-choice');
+  if(backChoice) backChoice.style.display = step < 5 ? 'block' : 'none';
+  if(step !== 5) authMsg('');
+  // Ensure recovery key container is visible on last step
+  if(step === 5){
+    const keyEl = document.getElementById('reg-recovery-key');
+    if(keyEl){
+      keyEl.style.display = 'block';
+      if(!keyEl.textContent || !keyEl.textContent.trim()){
+        // fallback if key not yet written
+        try{ keyEl.textContent = generateRecoveryKey(); }catch(e){}
       }
-      if(user) onAuthenticated(user);
-      else { am.textContent='Аккаунт создан! Войдите.'; document.querySelector('.tab[data-tab="login"]').click(); }
-      setBtnLoading(btn,false);
-    }catch(e){ am.textContent='Ошибка'; setBtnLoading(btn,false); }
+    }
+  }
+}
+
+function setAuthMethod(m){ authMethod = m || 'email'; }
+
+async function doLogin(){
+  authMsg('');
+  const btn = document.getElementById('login-btn');
+  const contact = normalizeContact(document.getElementById('login-email')?.value);
+  const password = document.getElementById('login-password')?.value || '';
+  if(!contact){ authMsg('Введите email или номер телефона'); return; }
+  if(!password){ authMsg('Введите пароль'); return; }
+  if(!sb){ authMsg('Сервис входа недоступен'); return; }
+  setBtnLoading(btn, true);
+  try{
+    // Build candidate emails: normalized variants + profile lookup by phone
+    let candidates = Array.from(new Set([...(contact.emails||[contact.email]).filter(Boolean)]));
+    if(contact.isPhone && contact.phoneVariants && contact.phoneVariants.length){
+      try{
+        // Find profile linked to this phone (any format) and use its email for auth
+        const ors = [];
+        for(const p of contact.phoneVariants.slice(0,8)){
+          const s = String(p).replace(/"/g,'');
+          ors.push('phone.eq.'+s);
+          if(!s.startsWith('+')) ors.push('phone.eq.+' + s);
+        }
+        // also match synthetic emails stored in profiles.email
+        for(const em of candidates.slice(0,4)){
+          ors.push('email.eq.'+em);
+        }
+        if(ors.length){
+          const {data: rows} = await sb.from('profiles').select('email,phone').or(ors.join(',')).limit(5);
+          (rows||[]).forEach(r=>{
+            if(r && r.email) candidates.push(String(r.email).toLowerCase());
+          });
+        }
+      }catch(e){ console.warn('phone lookup', e); }
+    }
+    candidates = Array.from(new Set(candidates.map(e=>String(e).toLowerCase()).filter(Boolean)));
+
+    let lastError = null;
+    let data = null;
+    for(const email of candidates){
+      try{
+        const res = await sb.auth.signInWithPassword({email, password});
+        if(!res.error && res.data?.user){
+          data = res.data;
+          lastError = null;
+          break;
+        }
+        if(res.error) lastError = res.error;
+      }catch(e){ lastError = e; }
+    }
+
+    if(!data?.user){
+      const msg = (lastError && lastError.message) || '';
+      authMsg(/invalid|credentials|email/i.test(msg) ? 'Неверный логин или пароль' : (msg || 'Неверный логин или пароль'));
+      setBtnLoading(btn, false);
+      return;
+    }
+    if(data?.user) onAuthenticated(data.user);
+    else setBtnLoading(btn, false);
+  }catch(e){
+    console.warn('login', e);
+    authMsg('Ошибка сети');
+    setBtnLoading(btn, false);
+  }
+}
+
+async function doForgotRecover(){
+  authMsg('');
+  const key = (document.getElementById('forgot-key')?.value||'').trim();
+  if(!key){ authMsg('Введите ключ восстановления'); return; }
+  if(!key.startsWith('signal_line_key_')){ authMsg('Неверный формат ключа'); return; }
+  const rec = findRecoveryRecord(key);
+  if(!rec || !rec.email || !rec.password){
+    authMsg('Ключ не найден на этом устройстве');
     return;
   }
-  const email=document.getElementById('reg-email').value.trim().toLowerCase();
-  const password=document.getElementById('reg-password').value;
-  if(!email||password.length<6){ am.textContent='Email и пароль (мин.6)'; return; }
-  setBtnLoading(btn,true);
+  const btn = document.getElementById('forgot-submit-btn');
+  setBtnLoading(btn, true);
   try{
-    const {data,error}=await sb.auth.signUp({email,password,options:{data:{username,first_name:first,last_name:last,birth_date:birth}, emailRedirectTo: undefined}});
-    if(error){ am.textContent=error.message; setBtnLoading(btn,false); return; }
-    let user=data.session?.user;
-    if(!user){
-      // Registration without confirmation: try immediate login
+    if(!sb){ authMsg('Сервис недоступен'); setBtnLoading(btn,false); return; }
+    const {data, error} = await sb.auth.signInWithPassword({email: rec.email, password: rec.password});
+    if(error){
+      authMsg('Не удалось войти по ключу');
+      setBtnLoading(btn, false);
+      return;
+    }
+    if(data?.user) onAuthenticated(data.user);
+    else setBtnLoading(btn, false);
+  }catch(e){
+    authMsg('Ошибка сети');
+    setBtnLoading(btn, false);
+  }
+}
+
+async function doRegisterFinish(){
+  authMsg('');
+  const first = (document.getElementById('reg-firstname')?.value||'').trim();
+  const last = (document.getElementById('reg-lastname')?.value||'').trim();
+  const username = (document.getElementById('reg-username')?.value||'').trim().toLowerCase();
+  const birth = document.getElementById('reg-birth')?.value || '';
+  const contact = normalizeContact(document.getElementById('reg-contact')?.value);
+  const password = document.getElementById('reg-password')?.value || '';
+  const password2 = document.getElementById('reg-password2')?.value || '';
+
+  if(!first || !last){ authMsg('Укажите имя и фамилию'); setRegStep(1); return; }
+  if(!username || !/^[a-z0-9_]{3,24}$/.test(username)){ authMsg('Username: 3–24 символа, a-z, 0-9, _'); setRegStep(2); return; }
+  if(!birth){ authMsg('Укажите дату рождения'); setRegStep(3); return; }
+  if(!contact){ authMsg('Укажите email или номер телефона'); return; }
+  if(password.length < 6){ authMsg('Пароль не короче 6 символов'); return; }
+  if(password !== password2){ authMsg('Пароли не совпадают'); return; }
+  if(!sb){ authMsg('Сервис регистрации недоступен'); return; }
+
+  const btn = document.getElementById('reg-next-4');
+  setBtnLoading(btn, true);
+  try{
+    try{
+      const {data: exists} = await sb.from('profiles').select('id').eq('username', username).maybeSingle();
+      if(exists){ authMsg('Это имя пользователя уже занято'); setBtnLoading(btn,false); setRegStep(2); return; }
+    }catch(e){}
+
+    const recoveryKey = generateRecoveryKey();
+    // Show key UI immediately so user always sees it (even if network is slow)
+    _awaitingRecoveryKey = true;
+    const keyElEarly = document.getElementById('reg-recovery-key');
+    if(keyElEarly) keyElEarly.textContent = recoveryKey;
+    showAuthPanel('register-form');
+    setRegStep(5);
+
+    const {data, error} = await sb.auth.signUp({
+      email: contact.email,
+      password,
+      options: {
+        data: {
+          username,
+          first_name: first,
+          last_name: last,
+          birth_date: birth,
+          phone: contact.phone || null,
+          recovery_key: recoveryKey
+        },
+        emailRedirectTo: undefined
+      }
+    });
+    if(error){
+      _awaitingRecoveryKey = false;
+      authMsg(error.message || 'Ошибка регистрации');
+      setBtnLoading(btn, false);
+      setRegStep(4); // back to form so user can fix
+      return;
+    }
+
+    let user = data?.user || null;
+    let session = data?.session || null;
+    // Prefer NOT auto-signing-in here — session may already exist from signUp;
+    // auto sign-in would fire SIGNED_IN and skip the key screen without our flag.
+    if(user && !session){
       try{
-        const a=await sb.auth.signInWithPassword({email, password});
-        user=a.data?.session?.user||a.data?.user;
+        const a = await sb.auth.signInWithPassword({email: contact.email, password});
+        if(a.data?.session){ session = a.data.session; user = a.data.user || user; }
       }catch(e){}
     }
-    if(user) onAuthenticated(user);
-    else { am.textContent='Аккаунт создан. Войдите (в Supabase отключите Confirm email).'; document.querySelector('.tab[data-tab="login"]').click(); }
-    setBtnLoading(btn,false);
-  }catch(e){ am.textContent='Ошибка'; setBtnLoading(btn,false); }
+
+    saveRecoveryRecord(recoveryKey, {
+      email: contact.email,
+      password,
+      phone: contact.phone,
+      display: contact.display,
+      username,
+      first_name: first,
+      last_name: last,
+      birth_date: birth,
+      user_id: user?.id || null,
+      created_at: Date.now()
+    });
+
+    if(user?.id){
+      try{
+        await sb.from('profiles').upsert({
+          id: user.id,
+          email: contact.email,
+          username,
+          first_name: first,
+          last_name: last,
+          birth_date: birth,
+          phone: contact.phone || null,
+          color: '#4C7CF3'
+        }, { onConflict: 'id' });
+      }catch(e){ console.warn('profile upsert', e); }
+    }
+
+    _pendingRegUser = user;
+    _pendingRegSession = session;
+    _pendingRegContact = contact;
+    _awaitingRecoveryKey = true;
+    const keyEl = document.getElementById('reg-recovery-key');
+    if(keyEl) keyEl.textContent = recoveryKey;
+    // Keep auth screen visible on step 5
+    try{
+      document.getElementById('auth-screen').style.display = 'flex';
+      document.getElementById('app-screen').style.display = 'none';
+    }catch(e){}
+    showAuthPanel('register-form');
+    setRegStep(5);
+    setBtnLoading(btn, false);
+    if(!user){
+      authMsg('Аккаунт создан. Сохраните ключ — затем войдите.');
+    } else {
+      authMsg('Сохраните ключ восстановления — без него аккаунт не восстановить.');
+    }
+  }catch(e){
+    authMsg('Ошибка сети');
+    setBtnLoading(btn, false);
+  }
 }
-function setAuthMethod(m){
-  authMethod=m;
-  document.querySelectorAll('#method-tabs .tab').forEach(t=>t.classList.toggle('active',t.dataset.method===m));
-  document.getElementById('login-email-fields').style.display=m==='email'?'block':'none';
-  document.getElementById('login-phone-fields').style.display=m==='phone'?'block':'none';
-  document.getElementById('reg-email-fields').style.display=m==='email'?'block':'none';
-  document.getElementById('reg-phone-fields').style.display=m==='phone'?'block':'none';
+
+async function enterMessengerAfterReg(){
+  authMsg('');
+  _awaitingRecoveryKey = false;
+  _regStep = 1;
+  if(_pendingRegUser){
+    const u = _pendingRegUser;
+    _pendingRegUser = null;
+    _pendingRegSession = null;
+    onAuthenticated(u);
+    return;
+  }
+  const contact = normalizeContact(document.getElementById('reg-contact')?.value) || _pendingRegContact;
+  const password = document.getElementById('reg-password')?.value || '';
+  if(contact && password && sb){
+    try{
+      const {data, error} = await sb.auth.signInWithPassword({email: contact.email, password});
+      if(!error && data?.user){ onAuthenticated(data.user); return; }
+    }catch(e){}
+  }
+  authMsg('Сохраните ключ и войдите через «Вход»');
+  showAuthPanel('login-form');
 }
+
+function wireAuthUI(){
+  document.getElementById('auth-go-login')?.addEventListener('click', ()=> showAuthPanel('login-form'));
+  document.getElementById('auth-go-register')?.addEventListener('click', ()=>{
+    _regStep = 1;
+    setRegStep(1);
+    showAuthPanel('register-form');
+  });
+  document.getElementById('login-back-choice')?.addEventListener('click', ()=> showAuthPanel('auth-choice'));
+  document.getElementById('reg-back-choice')?.addEventListener('click', ()=> showAuthPanel('auth-choice'));
+
+  document.getElementById('login-btn')?.addEventListener('click', e=>{ e.preventDefault(); doLogin(); });
+  document.getElementById('login-password')?.addEventListener('keydown', e=>{ if(e.key==='Enter') doLogin(); });
+  document.getElementById('login-email')?.addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('login-password')?.focus(); });
+
+  document.getElementById('login-forgot-btn')?.addEventListener('click', ()=>{
+    showAuthPanel('forgot-form');
+    const inp = document.getElementById('forgot-key');
+    if(inp) inp.value = '';
+  });
+  document.getElementById('forgot-back-btn')?.addEventListener('click', ()=> showAuthPanel('login-form'));
+  document.getElementById('forgot-submit-btn')?.addEventListener('click', e=>{ e.preventDefault(); doForgotRecover(); });
+  document.getElementById('forgot-key')?.addEventListener('keydown', e=>{ if(e.key==='Enter') doForgotRecover(); });
+
+  document.getElementById('reg-next-1')?.addEventListener('click', ()=>{
+    const first = (document.getElementById('reg-firstname')?.value||'').trim();
+    const last = (document.getElementById('reg-lastname')?.value||'').trim();
+    if(!first || !last){ authMsg('Введите имя и фамилию'); return; }
+    setRegStep(2);
+  });
+  document.getElementById('reg-next-2')?.addEventListener('click', ()=>{
+    const username = (document.getElementById('reg-username')?.value||'').trim().toLowerCase();
+    if(!username || !/^[a-z0-9_]{3,24}$/.test(username)){ authMsg('3–24 символа: a-z, 0-9, _'); return; }
+    document.getElementById('reg-username').value = username;
+    setRegStep(3);
+  });
+  document.getElementById('reg-next-3')?.addEventListener('click', ()=>{
+    const birth = document.getElementById('reg-birth')?.value;
+    if(!birth){ authMsg('Укажите дату рождения'); return; }
+    try{
+      const d = new Date(birth);
+      const age = (Date.now() - d.getTime()) / (365.25*24*3600*1000);
+      if(age < 13){ authMsg('Регистрация с 13 лет'); return; }
+    }catch(e){}
+    setRegStep(4);
+  });
+  document.getElementById('reg-next-4')?.addEventListener('click', e=>{ e.preventDefault(); doRegisterFinish(); });
+  document.getElementById('reg-back-2')?.addEventListener('click', ()=> setRegStep(1));
+  document.getElementById('reg-back-3')?.addEventListener('click', ()=> setRegStep(2));
+  document.getElementById('reg-back-4')?.addEventListener('click', ()=> setRegStep(3));
+
+  document.getElementById('reg-copy-key')?.addEventListener('click', async ()=>{
+    const key = document.getElementById('reg-recovery-key')?.textContent || '';
+    try{
+      await navigator.clipboard.writeText(key);
+      authMsg('Ключ скопирован');
+      try{ typeof showToast==='function' && showToast('Ключ скопирован'); }catch(e){}
+    }catch(e){
+      try{
+        const el = document.getElementById('reg-recovery-key');
+        const range = document.createRange();
+        range.selectNodeContents(el);
+        const sel = window.getSelection();
+        sel.removeAllRanges(); sel.addRange(range);
+        authMsg('Выделите ключ и скопируйте вручную');
+      }catch(e2){ authMsg('Скопируйте ключ вручную'); }
+    }
+  });
+  document.getElementById('reg-enter-app')?.addEventListener('click', ()=> enterMessengerAfterReg());
+}
+
+async function doRegister(){ return doRegisterFinish(); }
+
 async function onAuthenticated(user){
+  // Don't skip recovery-key screen during registration
+  if(_awaitingRecoveryKey || _regStep === 5){
+    _pendingRegUser = user || _pendingRegUser;
+    return;
+  }
   currentUser=user;
   let profile;
   try{ const r=await sb.from('profiles').select('*').eq('id',user.id).maybeSingle(); profile=r.data; }catch(e){}
@@ -2059,6 +2493,12 @@ async function onAuthenticated(user){
     if(!profile) profile={id:user.id, username:meta.username||'user', first_name:'', last_name:'', color:colorFor(user.id), email:user.email};
   }
   myProfile=profile;
+  try{
+    if(!myProfile.favorite_music){
+      const lf = JSON.parse(storage.getItem('sl_fav_track')||'null');
+      if(lf) myProfile.favorite_music = (lf.artist?lf.artist+' — ':'')+(lf.title||'');
+    }
+  }catch(e){}
   try{ storage.setItem('sl_logged_in','1'); }catch(e){}
   document.documentElement.classList.remove('sl-booting');
   document.documentElement.classList.add('sl-ready');
@@ -5184,16 +5624,8 @@ function scrollToBottom(i=false){ const l=document.getElementById('messages-list
 
 // ========== TABS ==========
 document.querySelectorAll('.bottom-tab').forEach(t=>t.onclick=function(){ switchPage(this.dataset.tab); });
-document.querySelectorAll('.tab[data-tab]').forEach(t=>t.onclick=function(){
-  document.querySelectorAll('.tab[data-tab]').forEach(x=>x.classList.remove('active')); this.classList.add('active');
-  const login=this.dataset.tab==='login';
-  document.getElementById('login-form').style.display=login?'block':'none';
-  document.getElementById('register-form').style.display=login?'none':'block';
-});
-document.querySelectorAll('#method-tabs .tab').forEach(t=>t.onclick=function(){ setAuthMethod(this.dataset.method); });
-document.getElementById('login-btn').onclick=e=>{ e.preventDefault(); doLogin(); };
-document.getElementById('register-btn').onclick=e=>{ e.preventDefault(); doRegister(); };
-document.getElementById('login-password')?.addEventListener('keydown',e=>{ if(e.key==='Enter') doLogin(); });
+try{ wireAuthUI(); }catch(e){ console.warn('wireAuthUI', e); }
+
 
 // ============================================================
 // ================= FEATURE PATCH MODULE ======================
@@ -8368,9 +8800,26 @@ document.querySelectorAll('.bottom-tab').forEach(t=>{
 
 // Fullscreen profile when tapping avatar / contact
 async function openFullProfile(profileLike){
-  let p=profileLike;
-  try{ const {data}=await sb.from('profiles').select('*').eq('id',profileLike.id).maybeSingle(); if(data) p=data; }catch(e){}
+  let p=profileLike||{};
+  try{
+    const {data}=await sb.from('profiles').select('*').eq('id',profileLike.id).maybeSingle();
+    if(data) p={...profileLike, ...data};
+  }catch(e){}
+  // Fallback: explicit favorite_music column (some schemas omit it from *)
+  if(p && p.id && !p.favorite_music && sb){
+    try{
+      const {data:fm}=await sb.from('profiles').select('favorite_music').eq('id', p.id).maybeSingle();
+      if(fm && fm.favorite_music) p.favorite_music = fm.favorite_music;
+    }catch(e){}
+  }
   const isMe = p.id===myProfile?.id;
+  if(isMe && myProfile){
+    if(!p.favorite_music && myProfile.favorite_music) p.favorite_music = myProfile.favorite_music;
+    try{
+      const lf = JSON.parse((typeof storage!=='undefined'?storage:localStorage).getItem('sl_fav_track')||'null');
+      if(!p.favorite_music && lf) p.favorite_music = (lf.artist?lf.artist+' — ':'')+(lf.title||'');
+    }catch(e){}
+  }
   const name=p.first_name?`${p.first_name} ${p.last_name||''}`.trim():(p.username||'');
   const coverUrl = p.cover_url || (isMe && myProfile?.cover_url) || '';
   const sheet=document.createElement('div');
@@ -8393,6 +8842,7 @@ async function openFullProfile(profileLike){
           <div class="profile-name-big">${escapeHtml(name)}${verifiedBadgeIf(p.email)}</div>
           <div class="profile-sub-big">@${escapeHtml(p.username||'')}</div>
           <div class="profile-online-big" id="ps-online"></div>
+          ${(p.favorite_music||(isMe && myProfile && myProfile.favorite_music))?`<div class="profile-fav-music" id="ps-fav-music" style="margin-top:10px;padding:8px 14px;border-radius:999px;background:rgba(0,0,0,.28);backdrop-filter:blur(8px);font-size:13px;display:inline-flex;gap:8px;align-items:center;max-width:90%"><span>🎵</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(p.favorite_music||myProfile.favorite_music||'')}</span></div>`:''}
         </div>
         ${isMe?`<button type="button" class="profile-cover-btn" id="ps-cover-btn"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>Обложка</button>`:''}
       </div>
@@ -9379,6 +9829,11 @@ function scheduleBirthdayAfterAppReady(){
         }
       } else if((event==='SIGNED_IN' || event==='TOKEN_REFRESHED') && session?.user){
         try{ storage.setItem('sl_logged_in','1'); }catch(e){}
+        // During registration we must show recovery key first — do not auto-enter app
+        if(_awaitingRecoveryKey || _regStep === 5 || _pendingRegUser){
+          if(! _pendingRegUser) _pendingRegUser = session.user;
+          return;
+        }
         if(!myProfile) await onAuthenticated(session.user);
       }
     });
@@ -11054,10 +11509,15 @@ window._slTranscribeImpl = window.transcribeVoiceMsg = async function(msg){
 (function(){
   const ACC_KEY = 'sl_account_sessions_v3';
   function getAccSessions(){
-    try{ return JSON.parse(localStorage.getItem(ACC_KEY)||'[]'); }catch(e){ return []; }
+    try{
+      const raw = (typeof storage!=='undefined' ? storage : localStorage).getItem(ACC_KEY);
+      return JSON.parse(raw||'[]');
+    }catch(e){ return []; }
   }
   function setAccSessions(arr){
-    try{ localStorage.setItem(ACC_KEY, JSON.stringify(arr.slice(0,8))); }catch(e){}
+    try{
+      (typeof storage!=='undefined' ? storage : localStorage).setItem(ACC_KEY, JSON.stringify(arr.slice(0,8)));
+    }catch(e){}
   }
   function upsertAcc(entry){
     if(!entry || !entry.id) return;
@@ -11422,8 +11882,33 @@ window._slTranscribeImpl = window.transcribeVoiceMsg = async function(msg){
   function setCustomArtists(arr){
     try{ localStorage.setItem(ARTISTS_KEY, JSON.stringify(arr)); }catch(e){ showToast('Не хватает места'); }
   }
-  function getFav(){ try{ return JSON.parse(localStorage.getItem(FAV_KEY)||'null'); }catch(e){ return null; } }
-  function setFav(t){ localStorage.setItem(FAV_KEY, JSON.stringify(t)); }
+  function getFav(){
+    try{
+      const raw = (typeof storage!=='undefined'?storage:localStorage).getItem(FAV_KEY);
+      return JSON.parse(raw||'null');
+    }catch(e){ return null; }
+  }
+  function setFav(track){
+    try{
+      (typeof storage!=='undefined'?storage:localStorage).setItem(FAV_KEY, JSON.stringify(track));
+    }catch(e){}
+    // Persist for other accounts to see
+    try{
+      if(myProfile && myProfile.id && track){
+        const label = (track.artist?track.artist+' — ':'')+(track.title||'');
+        myProfile.favorite_music = label;
+        if(sb){
+          sb.from('profiles').update({ favorite_music: label }).eq('id', myProfile.id).then(({error})=>{
+            if(error){
+              console.warn('favorite_music save', error);
+              // fallback: store in emoji_status-like free text is bad; try music_lib json
+              sb.from('profiles').update({ music_lib: { favorite: label, at: Date.now() } }).eq('id', myProfile.id).then(()=>{});
+            }
+          });
+        }
+      }
+    }catch(e){ console.warn('setFav persist', e); }
+  }
 
   function buildCatalog(){
     const overrides = getOverrides(); // { [id]: { url, cover, title, artist, _user } }
@@ -11977,19 +12462,30 @@ window._slTranscribeImpl = window.transcribeVoiceMsg = async function(msg){
           }
           const body = sheet.querySelector('.profile-body-inner') || sheet.querySelector('.profile-sheet-body');
           if(!body) return;
-          let label = profileLike?.favorite_music || (isMe && getFav() ? ((getFav().artist?getFav().artist+' — ':'')+getFav().title) : null);
-          if(label){
+          let label = profileLike?.favorite_music
+            || (meta && meta.favorite)
+            || (isMe && getFav() ? ((getFav().artist?getFav().artist+' — ':'')+getFav().title) : null);
+          // Avoid duplicate if already in template
+          if(label && !sheet.querySelector('.profile-fav-music')){
             const el = document.createElement('div');
             el.className = 'profile-fav-music';
             el.style.cssText = 'margin:8px 16px 0;padding:10px 12px;border-radius:12px;background:var(--panel-hover);font-size:13px;display:flex;gap:8px;align-items:center;cursor:pointer';
-            el.innerHTML = '<span style="display:flex;color:var(--accent-a)">'+ICO.music+'</span><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">'+escapeHtml(label)+'</span>';
+            const ico = (typeof ICO!=='undefined' && ICO.music) ? ICO.music : '🎵';
+            el.innerHTML = '<span style="display:flex;color:var(--accent-a)">'+ico+'</span><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">'+escapeHtml(label)+'</span>';
             el.onclick = ()=>{
               const f = isMe ? getFav() : null;
-              if(f && f.url) playUrl(f.url, label, f);
-              else if(f && f.artist) openMusicSettings(f.artist);
-              else showToast('Нет локального файла');
+              if(f && f.url && typeof playUrl==='function') playUrl(f.url, label, f);
+              else if(f && f.artist && typeof openMusicSettings==='function') openMusicSettings(f.artist);
+              else showToast(label);
             };
             body.insertBefore(el, body.firstChild);
+          } else if(label){
+            // Update existing badge text
+            const existing = sheet.querySelector('.profile-fav-music');
+            if(existing){
+              const span = existing.querySelector('span:last-child') || existing;
+              if(span) span.textContent = label;
+            }
           }
           if(meta && meta.artists && meta.artists.length){
             const box = document.createElement('div');
