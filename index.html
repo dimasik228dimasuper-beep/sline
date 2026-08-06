@@ -11973,64 +11973,156 @@ function scheduleBirthdayAfterAppReady(){
 
 
 // ========== Voice message TRANSCRIPTION (actual audio content) ==========
+// Faster + more accurate: Whisper-base (quantized), background preload, transcript cache.
 window._slWhisperPipe = null;
 window._slWhisperLoading = null;
+window._slWhisperModelId = null;
+window._slWhisperReady = false;
 
-async function slLoadWhisper(){
-  if(window._slWhisperPipe) return window._slWhisperPipe;
+const SL_WHISPER_MODEL = 'Xenova/whisper-base';
+const SL_WHISPER_FALLBACK = 'Xenova/whisper-tiny';
+
+function slWhisperLang(){
+  try{
+    if(typeof currentLang!=='undefined' && currentLang==='en') return 'english';
+    const ui = (document.documentElement.lang||navigator.language||'').toLowerCase();
+    if(ui.startsWith('en')) return 'english';
+    if(ui.startsWith('uk')) return 'ukrainian';
+    if(ui.startsWith('de')) return 'german';
+    if(ui.startsWith('fr')) return 'french';
+    if(ui.startsWith('es')) return 'spanish';
+    if(ui.startsWith('tr')) return 'turkish';
+    if(ui.startsWith('zh')) return 'chinese';
+  }catch(e){}
+  return 'russian';
+}
+
+async function slLoadWhisper(preferBase){
+  if(window._slWhisperPipe && window._slWhisperModelId){
+    if(preferBase!==false && window._slWhisperModelId===SL_WHISPER_MODEL) return window._slWhisperPipe;
+    if(preferBase===false && window._slWhisperModelId===SL_WHISPER_FALLBACK) return window._slWhisperPipe;
+    if(window._slWhisperModelId===SL_WHISPER_MODEL) return window._slWhisperPipe;
+  }
   if(window._slWhisperLoading) return window._slWhisperLoading;
+
   window._slWhisperLoading = (async()=>{
-    // Transformers.js — on-device Whisper (transcribes the FILE, not the mic)
     let mod;
     try{
       mod = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2');
     }catch(impErr){
-      console.warn('[SL] whisper CDN failed', impErr);
-      throw new Error('Не удалось загрузить модель Whisper (сеть/CDN)');
+      try{
+        mod = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.15.1');
+      }catch(e2){
+        console.warn('[SL] whisper CDN failed', impErr);
+        throw new Error('Не удалось загрузить модель Whisper (сеть/CDN)');
+      }
     }
     const { pipeline, env } = mod;
     env.allowLocalModels = false;
     env.useBrowserCache = true;
-    // tiny is lighter; still recognizes speech in the audio file
-    const pipe = await pipeline('automatic-speech-recognition', 'Xenova/whisper-tiny', {
-      quantized: true
-    });
-    window._slWhisperPipe = pipe;
-    return pipe;
+    try{
+      if(typeof navigator!=='undefined' && navigator.gpu){
+        env.backends = env.backends || {};
+      }
+    }catch(e){}
+
+    const tryLoad = async (modelId)=>{
+      const opts = { quantized: true };
+      try{ opts.dtype = 'q8'; }catch(e){}
+      const pipe = await pipeline('automatic-speech-recognition', modelId, opts);
+      window._slWhisperPipe = pipe;
+      window._slWhisperModelId = modelId;
+      window._slWhisperReady = true;
+      return pipe;
+    };
+
+    try{
+      return await tryLoad(preferBase===false ? SL_WHISPER_FALLBACK : SL_WHISPER_MODEL);
+    }catch(e1){
+      console.warn('[SL] whisper model failed, fallback tiny', e1);
+      if(preferBase===false) throw e1;
+      return await tryLoad(SL_WHISPER_FALLBACK);
+    }
   })();
+
   try{ return await window._slWhisperLoading; }
   finally{ window._slWhisperLoading = null; }
 }
 
-/** Decode voice message (dataURL / blob URL / http) → Float32Array PCM 16kHz mono */
+window.slPreloadWhisper = function(){
+  try{
+    if(window._slWhisperReady || window._slWhisperLoading) return;
+    setTimeout(()=>{
+      slLoadWhisper(true).then(()=>{
+        console.log('[SL] Whisper preloaded:', window._slWhisperModelId);
+      }).catch(e=>console.warn('[SL] Whisper preload', e));
+    }, 4500);
+  }catch(e){}
+};
+
+(function(){
+  try{
+    const _oa = typeof onAuthenticated==='function' ? onAuthenticated : null;
+    if(_oa && !_oa._slWhisperHooked){
+      const wrapped = async function(){
+        const r = await _oa.apply(this, arguments);
+        try{ window.slPreloadWhisper(); }catch(e){}
+        return r;
+      };
+      wrapped._slWhisperHooked = true;
+      if(window.onAuthenticated === _oa || typeof onAuthenticated==='function'){
+        try{ window.onAuthenticated = wrapped; }catch(e){}
+        try{ onAuthenticated = wrapped; }catch(e){}
+      }
+    } else {
+      if(document.readyState==='complete') setTimeout(()=>{ try{ if(typeof myProfile!=='undefined'&&myProfile) window.slPreloadWhisper(); }catch(e){} }, 6000);
+      else window.addEventListener('load', ()=> setTimeout(()=>{ try{ if(typeof myProfile!=='undefined'&&myProfile) window.slPreloadWhisper(); }catch(e){} }, 6000));
+    }
+  }catch(e){}
+})();
+
 async function slAudioToFloat32(src){
   const res = await fetch(src);
   const buf = await res.arrayBuffer();
-  const actx = new (window.AudioContext || window.webkitAudioContext)();
+  let actx;
+  try{
+    const Offline = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+    actx = Offline ? new Offline(1, 16000, 16000) : new (window.AudioContext || window.webkitAudioContext)();
+  }catch(e){
+    actx = new (window.AudioContext || window.webkitAudioContext)();
+  }
   let decoded;
   try{ decoded = await actx.decodeAudioData(buf.slice(0)); }
   catch(e){
-    // some webm might fail — try as-is
-    await actx.close().catch(()=>{});
-    throw e;
-  }
-  const ch = decoded.numberOfChannels > 0 ? decoded.getChannelData(0) : new Float32Array();
-  // mix to mono if needed
-  let mono = ch;
-  if(decoded.numberOfChannels > 1){
-    mono = new Float32Array(decoded.length);
-    for(let c=0;c<decoded.numberOfChannels;c++){
-      const d=decoded.getChannelData(c);
-      for(let i=0;i<d.length;i++) mono[i]+=d[i]/decoded.numberOfChannels;
+    try{ if(actx.close) await actx.close(); }catch(_){}
+    const live = new (window.AudioContext || window.webkitAudioContext)();
+    try{
+      decoded = await live.decodeAudioData(buf.slice(0));
+    }finally{
+      try{ await live.close(); }catch(_){}
     }
   }
-  // resample to 16kHz
+
+  const nCh = decoded.numberOfChannels|0;
+  const len = decoded.length|0;
+  let mono;
+  if(nCh <= 1){
+    mono = decoded.getChannelData(0).slice(0);
+  }else{
+    mono = new Float32Array(len);
+    for(let c=0;c<nCh;c++){
+      const d = decoded.getChannelData(c);
+      for(let i=0;i<len;i++) mono[i] += d[i] / nCh;
+    }
+  }
+
   const targetRate = 16000;
-  if(decoded.sampleRate === targetRate){
-    await actx.close().catch(()=>{});
+  const sr = decoded.sampleRate || 48000;
+  if(sr === targetRate){
+    try{ if(actx.close) await actx.close(); }catch(_){}
     return mono;
   }
-  const ratio = decoded.sampleRate / targetRate;
+  const ratio = sr / targetRate;
   const newLen = Math.max(1, Math.floor(mono.length / ratio));
   const out = new Float32Array(newLen);
   for(let i=0;i<newLen;i++){
@@ -12040,8 +12132,48 @@ async function slAudioToFloat32(src){
     const t = idx - i0;
     out[i] = mono[i0]*(1-t) + mono[i1]*t;
   }
-  await actx.close().catch(()=>{});
+  try{ if(actx.close) await actx.close(); }catch(_){}
   return out;
+}
+
+function slPrepSpeech(pcm){
+  if(!pcm || !pcm.length) return pcm;
+  let peak = 0;
+  for(let i=0;i<pcm.length;i++){
+    const a = Math.abs(pcm[i]);
+    if(a>peak) peak=a;
+  }
+  if(peak > 1e-5 && peak < 0.35){
+    const g = Math.min(0.9 / peak, 4.5);
+    const out = new Float32Array(pcm.length);
+    for(let i=0;i<pcm.length;i++) out[i] = Math.max(-1, Math.min(1, pcm[i]*g));
+    return out;
+  }
+  return pcm;
+}
+
+function slTranscriptCacheKey(msg){
+  try{
+    const id = msg.id || msg.file_url || '';
+    return 'sl_tr_'+String(id).slice(0,120);
+  }catch(e){ return null; }
+}
+function slLoadCachedTranscript(msg){
+  try{
+    if(msg._transcript) return msg._transcript;
+    const k = slTranscriptCacheKey(msg);
+    if(!k) return null;
+    const t = localStorage.getItem(k);
+    if(t){ msg._transcript = t; return t; }
+  }catch(e){}
+  return null;
+}
+function slSaveCachedTranscript(msg, text){
+  try{
+    msg._transcript = text;
+    const k = slTranscriptCacheKey(msg);
+    if(k && text && text.length < 8000) localStorage.setItem(k, text);
+  }catch(e){}
 }
 
 window._slTranscribeImpl = window.transcribeVoiceMsg = async function(msg){
@@ -12051,7 +12183,6 @@ window._slTranscribeImpl = window.transcribeVoiceMsg = async function(msg){
   const row = document.querySelector(`.bubble-row[data-id="${msg.id}"]`);
   let tr = row?.querySelector('.voice-transcript');
 
-  // Toggle: second press hides transcript
   if(tr && tr.style.display!=='none' && (tr.dataset.done==='1' || msg._transcript)){
     tr.style.display = 'none';
     showToast('Расшифровка скрыта');
@@ -12062,14 +12193,21 @@ window._slTranscribeImpl = window.transcribeVoiceMsg = async function(msg){
     tr.textContent = msg._transcript || tr.textContent;
     return;
   }
-  // Cached: show without re-running model
-  if(msg._transcript && !tr){
-    tr = document.createElement('div');
-    tr.className = 'voice-transcript';
-    tr.dataset.done = '1';
-    tr.style.cssText = 'font-size:13px;opacity:.95;margin-top:8px;padding:8px 10px;background:rgba(0,0,0,.18);border-radius:10px;line-height:1.4;white-space:pre-wrap';
-    row?.querySelector('.bubble')?.appendChild(tr);
-    tr.textContent = msg._transcript;
+
+  const cached = slLoadCachedTranscript(msg);
+  if(cached){
+    if(!tr && row){
+      tr = document.createElement('div');
+      tr.className = 'voice-transcript';
+      tr.dataset.done = '1';
+      tr.style.cssText = 'font-size:13px;opacity:.95;margin-top:8px;padding:8px 10px;background:rgba(0,0,0,.18);border-radius:10px;line-height:1.4;white-space:pre-wrap';
+      row.querySelector('.bubble')?.appendChild(tr);
+    }
+    if(tr){
+      tr.dataset.done = '1';
+      tr.style.display = '';
+      tr.textContent = cached;
+    }
     return;
   }
 
@@ -12079,52 +12217,68 @@ window._slTranscribeImpl = window.transcribeVoiceMsg = async function(msg){
     tr.style.cssText = 'font-size:13px;opacity:.95;margin-top:8px;padding:8px 10px;background:rgba(0,0,0,.18);border-radius:10px;line-height:1.4;white-space:pre-wrap';
     row.querySelector('.bubble')?.appendChild(tr);
   }
-  if(tr){ tr.style.display=''; tr.textContent = 'Расшифровка… (Whisper, первый раз может скачаться ~40 МБ)'; }
+  const modelHint = window._slWhisperReady
+    ? 'Распознаю…'
+    : 'Загрузка модели Whisper (~75 МБ, один раз)…';
+  if(tr){ tr.style.display=''; tr.textContent = modelHint; }
 
   try{
-    showToast('Читаю аудио из сообщения…');
-    // Prefer file-based Whisper (content of the voice message)
-    const pipe = await slLoadWhisper();
-    if(tr) tr.textContent = 'Распознаю речь в файле…';
+    showToast(window._slWhisperReady ? 'Расшифровка…' : 'Готовлю модель (первый раз дольше)…');
+    const pipe = await slLoadWhisper(true);
+    const lang = slWhisperLang();
+    if(tr) tr.textContent = 'Читаю аудио…';
 
     let result;
     try{
-      // Direct URL / data URL often works
-      result = await pipe(src, {
-        language: (typeof currentLang!=='undefined' && currentLang==='en') ? 'english' : 'russian',
-        task: 'transcribe',
-        chunk_length_s: 30,
-        stride_length_s: 5
-      });
-    }catch(e1){
-      // Fallback: decode to PCM ourselves
-      const audio = await slAudioToFloat32(src);
+      const audio = slPrepSpeech(await slAudioToFloat32(src));
+      if(tr) tr.textContent = 'Распознаю речь…';
       result = await pipe(audio, {
-        language: (typeof currentLang!=='undefined' && currentLang==='en') ? 'english' : 'russian',
+        language: lang,
         task: 'transcribe',
-        sampling_rate: 16000
+        sampling_rate: 16000,
+        chunk_length_s: 20,
+        stride_length_s: 3,
+        return_timestamps: false
+      });
+    }catch(pcmErr){
+      console.warn('[SL] PCM path failed, try URL', pcmErr);
+      if(tr) tr.textContent = 'Распознаю речь…';
+      result = await pipe(src, {
+        language: lang,
+        task: 'transcribe',
+        chunk_length_s: 20,
+        stride_length_s: 3,
+        return_timestamps: false
       });
     }
 
-    const text = (result && (result.text || result)) ? String(result.text || result).trim() : '';
+    let text = '';
+    if(result){
+      if(typeof result === 'string') text = result;
+      else if(result.text) text = String(result.text);
+      else if(Array.isArray(result)) text = result.map(r=>r.text||'').join(' ');
+    }
+    text = String(text||'').replace(/\s+/g,' ').trim();
+    text = text.replace(/\[?(BLANK_AUDIO|Music|music|♪)\]?/gi,'').trim();
+
     if(tr){
       tr.dataset.done = '1';
       tr.style.display = '';
       tr.textContent = text || '(тишина или не удалось разобрать речь)';
     }
-    try{ msg._transcript = text || '(тишина)'; }catch(e){}
+    slSaveCachedTranscript(msg, text || '(тишина)');
     showToast(text ? 'Расшифровка готова' : 'Речь не распознана');
   }catch(err){
     console.error('transcribe', err);
-    // Last resort: free public STT proxy is not reliable; show honest error
     if(tr){
       tr.innerHTML = 'Не удалось расшифровать файл.<br><span style="opacity:.8;font-size:12px">' +
         escapeHtml(String(err.message||err).slice(0,160)) +
-        '</span><br><span style="opacity:.75;font-size:12px">Нужен интернет для первой загрузки модели Whisper (~40 МБ), затем работает с самим голосовым.</span>';
+        '</span><br><span style="opacity:.75;font-size:12px">Нужен интернет для первой загрузки модели Whisper (~75 МБ). Дальше работает офлайн с самим голосовым/кружком.</span>';
     }
     showToast('Ошибка расшифровки голосового');
   }
 };
+
 
 
 // ========== Channel posts: Comments button (Telegram-style), news visibility ==========
