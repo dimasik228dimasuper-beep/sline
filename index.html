@@ -335,6 +335,10 @@ body.beta-oled .sw-clip{background:var(--panel)!important}
 .call-msg-title{font-weight:700;font-size:14px;line-height:1.2}
 .call-msg-sub{font-size:12px;opacity:.8;margin-top:2px}
 .bubble.me .call-msg-bubble{color:#fff}
+.msg-link{color:var(--accent-a);text-decoration:underline;word-break:break-all;cursor:pointer}
+.bubble.me .msg-link{color:#cfe0ff;text-decoration:underline}
+.msg-link:hover{opacity:.9}
+
 /* Voice →T transcribe button */
 .voice-bubble{display:flex;align-items:center;gap:8px;min-width:220px}
 .voice-wave-wrap{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
@@ -1394,6 +1398,9 @@ body.chats-selecting .sw-clip .sel-check{display:flex}
 .sl-app-icon{width:40px;height:40px;border-radius:12px;background:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%20192%20192%22%3E%3Cdefs%3E%3ClinearGradient%20id%3D%22slg%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%221%22%3E%3Cstop%20offset%3D%220%22%20stop-color%3D%22%234C7CF3%22/%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%236D5DF6%22/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect%20width%3D%22192%22%20height%3D%22192%22%20rx%3D%2240%22%20fill%3D%22url%28%23slg%29%22/%3E%3Cpath%20d%3D%22M96%2042c-30%200-54%2020-54%2046%200%2016%208%2030%2022%2038l-7%2024%2026-15c4%201%208%202%2013%202%2030%200%2054-21%2054-49S126%2042%2096%2042z%22%20fill%3D%22none%22%20stroke%3D%22%23ffffff%22%20stroke-width%3D%2210%22%20stroke-linejoin%3D%22round%22%20stroke-linecap%3D%22round%22/%3E%3C/svg%3E") center/cover no-repeat;flex-shrink:0;display:inline-block}
 .sl-app-icon.lg{width:64px;height:64px;border-radius:16px}
 .sl-app-icon.sm{width:28px;height:28px;border-radius:8px}
+
+.story-caption-bar{position:absolute;left:12px;right:12px;bottom:calc(64px + env(safe-area-inset-bottom,0px));z-index:8;pointer-events:none}
+.story-caption-text{display:inline-block;max-width:100%;padding:10px 14px;border-radius:14px;background:rgba(0,0,0,.45);backdrop-filter:blur(8px);color:#fff;font-size:15px;font-weight:600;line-height:1.35;word-break:break-word;text-shadow:0 1px 3px rgba(0,0,0,.4)}
 </style>
 </head>
 <body>
@@ -3549,11 +3556,11 @@ function buildMessageBody(msg, replyHtml, bodyText){
   }
   if(msg.type==='image'){
     const cap=(msg.content||'').trim();
-    return `<div class="media-with-caption"><img src="${msg.file_url}" loading="lazy">${cap?`<div class="media-caption">${escapeHtml(cap)}</div>`:''}</div>`;
+    return `<div class="media-with-caption"><img src="${msg.file_url}" loading="lazy">${cap?`<div class="media-caption">${formatInlineTokens(cap)}</div>`:''}</div>`;
   }
   if(msg.type==='video'){
     const cap=(msg.content||'').trim();
-    return `<div class="media-with-caption"><video src="${msg.file_url}" controls playsinline></video>${cap?`<div class="media-caption">${escapeHtml(cap)}</div>`:''}</div>`;
+    return `<div class="media-with-caption"><video src="${msg.file_url}" controls playsinline></video>${cap?`<div class="media-caption">${formatInlineTokens(cap)}</div>`:''}</div>`;
   }
   if(msg.type==='file') return `<div style="padding:8px;background:rgba(0,0,0,.2);border-radius:10px">${escapeHtml(msg.content||'Файл')}</div>`;
   if(msg.type==='sticker') return `<img src="${msg.file_url}" class="sticker-animated">`;
@@ -5129,6 +5136,55 @@ async function openStoryViewer(userId, name){
       img.style.display='block';
       startTicker(7, 0);
     }
+    // Overlay layers (for video stories edited with text/photo)
+    try{
+      let ovWrap = viewer.querySelector('#story-overlays');
+      if(!ovWrap){
+        ovWrap = document.createElement('div');
+        ovWrap.id = 'story-overlays';
+        ovWrap.style.cssText = 'position:absolute;inset:0;z-index:4;pointer-events:none;overflow:hidden';
+        const mediaBox = viewer.querySelector('#story-media') || img.parentElement || viewer;
+        mediaBox.appendChild(ovWrap);
+      }
+      ovWrap.innerHTML = '';
+      const ovs = s.overlays || s.meta?.overlays || null;
+      if(ovs && ovs.length){
+        ovs.forEach(L=>{
+          const el = document.createElement('div');
+          el.style.cssText = 'position:absolute;left:'+L.x+'%;top:'+L.y+'%;transform:translate(-50%,-50%);max-width:90%;text-align:center;';
+          if(L.type==='text'){
+            el.style.fontWeight = '800';
+            el.style.fontSize = (L.size||36)+'px';
+            el.style.color = L.color||'#fff';
+            el.style.textShadow = '0 2px 8px rgba(0,0,0,.55)';
+            el.style.whiteSpace = 'pre-wrap';
+            el.textContent = L.text||'';
+          } else if(L.type==='image' && L.url){
+            el.innerHTML = '<img src="'+L.url+'" style="width:'+(L.w||160)+'px;max-width:70vw;border-radius:8px" alt="">';
+          }
+          ovWrap.appendChild(el);
+        });
+      }
+    }catch(e){}
+    // Caption under the story (above reply bar)
+    try{
+      let capBar = viewer.querySelector('#story-caption-bar');
+      if(!capBar){
+        capBar = document.createElement('div');
+        capBar.id = 'story-caption-bar';
+        capBar.className = 'story-caption-bar';
+        viewer.appendChild(capBar);
+      }
+      const cap = (s.caption || s.content || '').trim();
+      if(cap){
+        capBar.style.display = 'block';
+        capBar.innerHTML = '<span class="story-caption-text"></span>';
+        capBar.querySelector('.story-caption-text').textContent = cap;
+      } else {
+        capBar.style.display = 'none';
+        capBar.innerHTML = '';
+      }
+    }catch(e){}
   };
 
   // --- Hold to pause (hide chrome) ---
@@ -6193,18 +6249,47 @@ fmtToolbar.querySelectorAll('.fmt-btn').forEach(btn=>{
     sendBtn.classList.toggle('visible', ta.value.trim().length>0);
   };
 });
+function linkifyHtml(s){
+  // s is already HTML-escaped text
+  function trimTrail(u){
+    return u.replace(/[.,;:!?)]+$/g, '');
+  }
+  // https:// or http://
+  s = s.replace(/https?:\/\/[^\s<]+/gi, function(url){
+    const clean = trimTrail(url);
+    const trail = url.slice(clean.length);
+    return '<a class="msg-link" href="'+clean+'" target="_blank" rel="noopener noreferrer">'+clean+'</a>'+trail;
+  });
+  // www.
+  s = s.replace(/(^|[\s>(])(www\.[^\s<]+)/gi, function(_, pre, url){
+    const clean = trimTrail(url);
+    const trail = url.slice(clean.length);
+    return pre+'<a class="msg-link" href="https://'+clean+'" target="_blank" rel="noopener noreferrer">'+clean+'</a>'+trail;
+  });
+  return s;
+}
 function formatInlineTokens(raw){
   let s=escapeHtml(raw);
   s=s.replace(/\|\|([\s\S]+?)\|\|/g,'<span class="spoiler hidden-spoiler" onclick="this.classList.toggle(\'hidden-spoiler\')">$1</span>');
   s=s.replace(/\*\*([\s\S]+?)\*\*/g,'<b>$1</b>');
   s=s.replace(/~~([\s\S]+?)~~/g,'<s>$1</s>');
   s=s.replace(/\*([\s\S]+?)\*/g,'<i>$1</i>');
+  s=linkifyHtml(s);
   return s;
 }
 function applyTextFormatting(row){
   const el=row.querySelector('.msg-text'); if(!el) return;
-  const raw=decodeURIComponent(el.dataset.raw||'');
-  if(/\*\*|~~|\|\|/.test(raw) || /(^|[^*])\*([^*]|$)/.test(raw)) el.innerHTML=formatInlineTokens(raw);
+  let raw='';
+  try{ raw=decodeURIComponent(el.dataset.raw||''); }catch(e){ raw=el.dataset.raw||''; }
+  // Always format: links + markdown
+  el.innerHTML=formatInlineTokens(raw);
+  // Make sure link clicks open and don't trigger message menu
+  el.querySelectorAll('a.msg-link').forEach(a=>{
+    a.addEventListener('click', function(e){
+      e.stopPropagation();
+      // allow default navigation for target=_blank
+    });
+  });
 }
 
 // ---------- Gifts ----------
@@ -6456,41 +6541,277 @@ sendMessage = async function(type='text', fileUrl=null, content=null){
 // ---------- Story privacy ----------
 document.getElementById('story-input').onchange=function(e){
   const f=e.target.files[0]; if(!f||!myProfile) return; e.target.value='';
-  chooseStoryAudience().then(async audience=>{
+  openStoryEditor(f);
+};
+
+/** Story editor: text + photo overlays, then publish */
+async function openStoryEditor(file){
+  if(!file || !myProfile) return;
+  const isVideo = /^video\//.test(file.type);
+  let bgUrl = null;
+  try{
+    bgUrl = await new Promise((resolve,reject)=>{
+      const r=new FileReader();
+      r.onload=()=>resolve(r.result);
+      r.onerror=reject;
+      r.readAsDataURL(file);
+    });
+  }catch(e){ showToast('Не удалось открыть файл'); return; }
+
+  const layers = []; // {type:'text'|'image', ...}
+  let selected = -1;
+  let drag = null;
+
+  const ov = document.createElement('div');
+  ov.id = 'story-editor';
+  ov.style.cssText = 'position:fixed;inset:0;z-index:13000;background:#0a0a0a;display:flex;flex-direction:column;color:#fff;';
+  ov.innerHTML = `
+    <div style="display:flex;align-items:center;gap:10px;padding:calc(10px + env(safe-area-inset-top,0px)) 12px 8px;background:rgba(0,0,0,.55);z-index:2">
+      <button type="button" id="se-close" style="width:40px;height:40px;border:none;border-radius:50%;background:rgba(255,255,255,.12);color:#fff;font-size:20px;cursor:pointer">×</button>
+      <div style="flex:1;font-weight:700;font-size:15px">Редактор истории</div>
+      <button type="button" id="se-publish" style="padding:10px 16px;border:none;border-radius:999px;background:linear-gradient(135deg,#4C7CF3,#6D5DF6);color:#fff;font-weight:700;cursor:pointer">Готово</button>
+    </div>
+    <div id="se-stage" style="flex:1;position:relative;overflow:hidden;background:#111;touch-action:none;user-select:none">
+      ${isVideo
+        ? `<video id="se-bg" src="${bgUrl}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover" playsinline muted loop autoplay></video>`
+        : `<img id="se-bg" src="${bgUrl}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;pointer-events:none" alt="">`
+      }
+      <div id="se-layers" style="position:absolute;inset:0;z-index:2"></div>
+    </div>
+    <div style="padding:8px 12px;background:rgba(0,0,0,.65);z-index:2">
+      <input type="text" id="se-caption" maxlength="200" placeholder="Подпись под историей…" style="width:100%;box-sizing:border-box;padding:12px 14px;border-radius:12px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.08);color:#fff;font-size:15px;outline:none">
+    </div>
+    <div style="padding:10px 12px calc(12px + env(safe-area-inset-bottom,0px));background:rgba(0,0,0,.7);display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:center;z-index:2">
+      <button type="button" class="se-tool" id="se-add-text" style="padding:10px 14px;border-radius:12px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.08);color:#fff;font-weight:600;cursor:pointer">Aa Текст</button>
+      <button type="button" class="se-tool" id="se-add-photo" style="padding:10px 14px;border-radius:12px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.08);color:#fff;font-weight:600;cursor:pointer">🖼 Фото</button>
+      <button type="button" class="se-tool" id="se-color" style="padding:10px 14px;border-radius:12px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.08);color:#fff;font-weight:600;cursor:pointer">🎨 Цвет</button>
+      <button type="button" class="se-tool" id="se-size" style="padding:10px 14px;border-radius:12px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.08);color:#fff;font-weight:600;cursor:pointer">↕ Размер</button>
+      <button type="button" class="se-tool" id="se-del" style="padding:10px 14px;border-radius:12px;border:1px solid rgba(240,112,138,.5);background:rgba(240,112,138,.15);color:#f8a;font-weight:600;cursor:pointer">Удалить</button>
+    </div>
+    <input type="file" id="se-photo-input" accept="image/*" style="display:none">
+  `;
+  document.body.appendChild(ov);
+
+  const stage = ov.querySelector('#se-stage');
+  const layersEl = ov.querySelector('#se-layers');
+  const colors = ['#ffffff','#000000','#FF4D6D','#F7B955','#2DD4BF','#4C7CF3','#6D5DF6','#7B2CBF','#FFE66D','#00E5FF'];
+  let colorIdx = 0;
+
+  function pct(n){ return Math.round(n*10)/10; }
+
+  function renderLayers(){
+    layersEl.innerHTML = '';
+    layers.forEach((L, i)=>{
+      const el = document.createElement('div');
+      el.dataset.i = i;
+      el.style.cssText = 'position:absolute;left:'+L.x+'%;top:'+L.y+'%;transform:translate(-50%,-50%);cursor:move;touch-action:none;max-width:90%;z-index:'+(3+i)+';'
+        +(i===selected?'outline:2px solid #4C7CF3;outline-offset:4px;border-radius:8px;':'');
+      if(L.type==='text'){
+        el.contentEditable = 'true';
+        el.spellcheck = false;
+        el.style.cssText += 'font-weight:800;font-size:'+L.size+'px;color:'+L.color+';text-shadow:0 2px 8px rgba(0,0,0,.55);padding:4px 8px;white-space:pre-wrap;word-break:break-word;text-align:center;min-width:40px;';
+        el.textContent = L.text || 'Текст';
+        el.addEventListener('input', ()=>{ L.text = el.textContent; });
+        el.addEventListener('pointerdown', e=>{ if(e.target===el){ /* allow edit */ }});
+      } else if(L.type==='image'){
+        el.innerHTML = '<img src="'+L.url+'" style="width:'+L.w+'px;height:auto;max-width:70vw;border-radius:8px;pointer-events:none;box-shadow:0 4px 20px rgba(0,0,0,.4)" alt="">';
+      }
+      el.addEventListener('pointerdown', e=>{
+        if(L.type==='text' && e.target===el && !e.shiftKey){
+          // select + maybe drag
+        }
+        selected = i;
+        renderLayers();
+        const re = layersEl.querySelector('[data-i="'+i+'"]');
+        if(!re) return;
+        const rect = stage.getBoundingClientRect();
+        drag = {
+          i,
+          startX: e.clientX,
+          startY: e.clientY,
+          origX: L.x,
+          origY: L.y,
+          moved: false
+        };
+        try{ re.setPointerCapture(e.pointerId); }catch(err){}
+        e.preventDefault();
+      });
+      layersEl.appendChild(el);
+    });
+  }
+
+  stage.addEventListener('pointermove', e=>{
+    if(!drag) return;
+    const rect = stage.getBoundingClientRect();
+    const dx = ((e.clientX - drag.startX) / rect.width) * 100;
+    const dy = ((e.clientY - drag.startY) / rect.height) * 100;
+    if(Math.abs(dx)+Math.abs(dy) > 0.5) drag.moved = true;
+    const L = layers[drag.i];
+    if(!L) return;
+    L.x = Math.max(2, Math.min(98, drag.origX + dx));
+    L.y = Math.max(2, Math.min(98, drag.origY + dy));
+    const el = layersEl.querySelector('[data-i="'+drag.i+'"]');
+    if(el){ el.style.left = L.x+'%'; el.style.top = L.y+'%'; }
+  });
+  stage.addEventListener('pointerup', ()=>{ drag = null; });
+  stage.addEventListener('pointercancel', ()=>{ drag = null; });
+
+  ov.querySelector('#se-close').onclick = ()=> ov.remove();
+  ov.querySelector('#se-add-text').onclick = ()=>{
+    layers.push({ type:'text', text:'Текст', x:50, y:50, size:36, color: colors[colorIdx] });
+    selected = layers.length - 1;
+    renderLayers();
+    setTimeout(()=>{
+      const el = layersEl.querySelector('[data-i="'+selected+'"]');
+      if(el){ el.focus(); try{ document.execCommand('selectAll', false, null); }catch(e){} }
+    }, 50);
+  };
+  ov.querySelector('#se-add-photo').onclick = ()=> ov.querySelector('#se-photo-input').click();
+  ov.querySelector('#se-photo-input').onchange = async (ev)=>{
+    const f2 = ev.target.files && ev.target.files[0];
+    ev.target.value = '';
+    if(!f2) return;
+    try{
+      const url = await new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(f2); });
+      // compress overlay a bit
+      let final = url;
+      try{
+        final = await new Promise((resolve)=>{
+          const img = new Image();
+          img.onload = ()=>{
+            const max = 640;
+            let w=img.width, h=img.height;
+            if(w>max||h>max){ if(w>h){h=Math.round(h*max/w);w=max;} else {w=Math.round(w*max/h);h=max;} }
+            const c=document.createElement('canvas'); c.width=w; c.height=h;
+            c.getContext('2d').drawImage(img,0,0,w,h);
+            resolve(c.toDataURL('image/jpeg', 0.85));
+          };
+          img.onerror=()=>resolve(url);
+          img.src=url;
+        });
+      }catch(e){}
+      layers.push({ type:'image', url: final, x:50, y:40, w: 160 });
+      selected = layers.length - 1;
+      renderLayers();
+    }catch(e){ showToast('Не удалось добавить фото'); }
+  };
+  ov.querySelector('#se-color').onclick = ()=>{
+    if(selected < 0 || !layers[selected] || layers[selected].type!=='text'){
+      showToast('Выберите текстовый слой');
+      return;
+    }
+    colorIdx = (colorIdx + 1) % colors.length;
+    layers[selected].color = colors[colorIdx];
+    renderLayers();
+  };
+  ov.querySelector('#se-size').onclick = ()=>{
+    if(selected < 0 || !layers[selected]){ showToast('Выберите слой'); return; }
+    const L = layers[selected];
+    if(L.type==='text'){
+      L.size = L.size >= 56 ? 24 : L.size + 8;
+    } else if(L.type==='image'){
+      L.w = L.w >= 280 ? 100 : L.w + 40;
+    }
+    renderLayers();
+  };
+  ov.querySelector('#se-del').onclick = ()=>{
+    if(selected < 0){ showToast('Выберите слой'); return; }
+    layers.splice(selected, 1);
+    selected = -1;
+    renderLayers();
+  };
+
+  async function compositeImage(){
+    // Draw background + layers to canvas (1080x1920 story aspect)
+    const W = 1080, H = 1920;
+    const c = document.createElement('canvas');
+    c.width = W; c.height = H;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0,0,W,H);
+    const bg = await new Promise((resolve,reject)=>{
+      const img = new Image();
+      img.onload=()=>resolve(img);
+      img.onerror=reject;
+      img.src = bgUrl;
+    });
+    // object-fit: cover
+    const scale = Math.max(W/bg.width, H/bg.height);
+    const bw = bg.width*scale, bh = bg.height*scale;
+    ctx.drawImage(bg, (W-bw)/2, (H-bh)/2, bw, bh);
+
+    for(const L of layers){
+      if(L.type==='text'){
+        const text = (L.text||'').trim() || ' ';
+        ctx.font = '800 '+Math.round(L.size * (W/Math.min(stage.clientWidth||360, 420))) + 'px system-ui,sans-serif';
+        // approximate scale: editor size relative to stage
+        const fontPx = Math.max(20, Math.round((L.size/ (stage.clientWidth||360)) * W * 1.1));
+        ctx.font = '800 '+fontPx+'px system-ui, -apple-system, sans-serif';
+        ctx.fillStyle = L.color || '#fff';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.shadowColor = 'rgba(0,0,0,0.55)';
+        ctx.shadowBlur = 12;
+        ctx.shadowOffsetY = 3;
+        const x = (L.x/100)*W;
+        const y = (L.y/100)*H;
+        // multiline
+        const lines = text.split('\n');
+        const lh = fontPx * 1.2;
+        const startY = y - ((lines.length-1)*lh)/2;
+        lines.forEach((line,i)=> ctx.fillText(line, x, startY + i*lh));
+        ctx.shadowBlur = 0;
+      } else if(L.type==='image'){
+        try{
+          const im = await new Promise((resolve,reject)=>{
+            const img=new Image(); img.onload=()=>resolve(img); img.onerror=reject; img.src=L.url;
+          });
+          const targetW = (L.w / (stage.clientWidth||360)) * W;
+          const targetH = targetW * (im.height/(im.width||1));
+          const x = (L.x/100)*W - targetW/2;
+          const y = (L.y/100)*H - targetH/2;
+          ctx.drawImage(im, x, y, targetW, targetH);
+        }catch(e){}
+      }
+    }
+    return c.toDataURL('image/jpeg', 0.88);
+  }
+
+  async function publishStory(mediaUrl, mediaType, overlays, caption){
+    const audience = await chooseStoryAudience();
     if(!audience) return;
     try{
       showLoader();
-      const prep = await prepareMediaForUpload(f, 'story');
-      if(!prep.ok){ showToast(prep.error||'Ошибка файла'); return; }
       const expires = new Date(Date.now()+86400000).toISOString();
+      const cap = (caption||'').trim().slice(0, 200);
       const localStory = {
         id: 'local_'+Date.now(),
         user_id: myProfile.id,
-        media_url: prep.dataUrl,
-        type: prep.type,
+        media_url: mediaUrl,
+        type: mediaType,
         expires_at: expires,
         created_at: new Date().toISOString(),
-        audience
+        audience,
+        overlays: overlays || null,
+        caption: cap || null
       };
-      // Always keep local copy so it is visible even if DB rejects large payload / RLS
       addLocalStory(localStory);
-      storage.setItem('sl_story_audience_'+myProfile.id, JSON.stringify(audience));
-      let dbOk=false;
+      try{ storage.setItem('sl_story_audience_'+myProfile.id, JSON.stringify(audience)); }catch(e){}
       try{
-        const ins=await sb.from('stories').insert({
-          user_id:myProfile.id,
-          media_url:prep.dataUrl,
-          type:prep.type,
-          expires_at:expires
-        }).select();
+        const payload = {
+          user_id: myProfile.id,
+          media_url: mediaUrl,
+          type: mediaType,
+          expires_at: expires
+        };
+        // optional columns if present in schema
+        if(cap) payload.caption = cap;
+        const ins = await sb.from('stories').insert(payload).select();
         if(ins.error){
           console.warn('story insert', ins.error);
-          // still visible locally
-          showToast((currentLang==='en'?'Story saved on this device':'История сохранена на устройстве')+(ins.error.message?': '+String(ins.error.message).slice(0,60):''));
+          showToast((currentLang==='en'?'Story saved on this device':'История сохранена на устройстве'));
         } else {
-          dbOk=true;
           if(ins.data?.[0]?.id){
-            // replace local id with server id
             const arr=getLocalStories().map(s=>s.id===localStory.id?{...s,id:ins.data[0].id}:s);
             setLocalStories(arr);
           }
@@ -6501,11 +6822,42 @@ document.getElementById('story-input').onchange=function(e){
         showToast(currentLang==='en'?'Story saved on this device':'История сохранена на устройстве');
       }
       await loadStories();
-      // Stories stay only in stories bar / avatar — do NOT cross-post to feed
     }catch(err){ showToast(friendlyError(err)); }
     finally{ hideLoader(); }
-  });
-};
+  }
+
+  ov.querySelector('#se-publish').onclick = async ()=>{
+    try{
+      const caption = (ov.querySelector('#se-caption')?.value || '').trim();
+      if(isVideo){
+        const overlays = layers.map(L=>({...L}));
+        ov.remove();
+        await publishStory(bgUrl, 'video', overlays.length ? overlays : null, caption);
+      } else {
+        showLoader();
+        let out;
+        if(layers.length){
+          out = await compositeImage();
+        } else {
+          try{
+            const prep = await prepareMediaForUpload(file, 'story');
+            out = prep.ok ? prep.dataUrl : bgUrl;
+          }catch(e){ out = bgUrl; }
+        }
+        ov.remove();
+        hideLoader();
+        await publishStory(out, 'image', null, caption);
+      }
+    }catch(e){
+      hideLoader();
+      showToast('Ошибка сохранения');
+      console.warn(e);
+    }
+  };
+}
+
+window.openStoryEditor = openStoryEditor;
+
 function chooseStoryAudience(){
   return new Promise(res=>{
     const ov=document.createElement('div'); ov.className='modal-overlay';
