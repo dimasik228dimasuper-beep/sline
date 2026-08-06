@@ -339,18 +339,50 @@ body.beta-oled .sw-clip{background:var(--panel)!important}
 .bubble.me .msg-link{color:#cfe0ff;text-decoration:underline}
 .msg-link:hover{opacity:.9}
 
-/* Voice →T transcribe button */
-.voice-bubble{display:flex;align-items:center;gap:8px;min-width:220px}
-.voice-wave-wrap{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+/* Voice →T transcribe button (MAX-style) */
+.voice-bubble{display:flex;align-items:center;gap:8px;min-width:220px;max-width:100%;transition:min-width .35s cubic-bezier(.2,.8,.2,1), width .35s cubic-bezier(.2,.8,.2,1), transform .25s ease}
+.voice-bubble.transcribing{min-width:min(92%,320px)}
+.voice-bubble.transcribed{min-width:min(92%,300px)}
+.voice-wave-wrap{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;transition:flex .3s ease}
 .voice-dur{font-size:11px;opacity:.75}
 .voice-transcribe-btn{
   width:36px;height:36px;border-radius:12px;border:none;cursor:pointer;
   background:rgba(255,255,255,.22);color:#fff;display:flex;align-items:center;justify-content:center;
   gap:0;flex-shrink:0;font-weight:800;line-height:1;padding:0;
+  transition:background .2s, transform .2s, opacity .2s;
+  position:relative;
 }
+.voice-transcribe-btn:active{transform:scale(.92)}
 .voice-transcribe-btn .vt-arrow{font-size:13px;margin-right:1px}
 .voice-transcribe-btn .vt-t{font-size:14px;font-weight:800}
+.voice-transcribe-btn .vt-x{display:none;font-size:18px;font-weight:600;line-height:1}
+.voice-transcribe-btn.is-loading .vt-arrow,
+.voice-transcribe-btn.is-loading .vt-t{display:none}
+.voice-transcribe-btn.is-loading .vt-x{display:block}
+.voice-transcribe-btn.is-loading{background:rgba(255,255,255,.28)}
 .bubble.them .voice-transcribe-btn{background:rgba(76,124,243,.2);color:var(--text)}
+.bubble.them .voice-transcribe-btn.is-loading{background:rgba(76,124,243,.32)}
+/* spinner ring while loading */
+.voice-transcribe-btn.is-loading::after{
+  content:"";position:absolute;inset:3px;border-radius:10px;
+  border:2px solid transparent;border-top-color:currentColor;opacity:.55;
+  animation:vtSpin .7s linear infinite;pointer-events:none;
+}
+@keyframes vtSpin{to{transform:rotate(360deg)}}
+/* transcript under voice / circle — MAX style */
+.voice-transcript{
+  font-size:14px;line-height:1.35;margin-top:6px;padding:2px 4px 0;
+  opacity:0;transform:translateY(6px);max-height:0;overflow:hidden;
+  transition:opacity .28s ease, transform .28s cubic-bezier(.2,.8,.2,1), max-height .35s ease;
+  white-space:pre-wrap;word-break:break-word;color:inherit;
+}
+.voice-transcript.show{
+  opacity:.95;transform:translateY(0);max-height:240px;overflow:visible;
+}
+.bubble.me .voice-transcript{color:rgba(255,255,255,.95)}
+.bubble.them .voice-transcript{color:var(--text);opacity:.9}
+.circle-msg-wrap{position:relative;display:inline-block;flex-shrink:0}
+.circle-msg-wrap .voice-transcript{display:block;max-width:220px}
 .voice-play-btn{width:40px;height:40px;border-radius:50%;border:none;background:rgba(255,255,255,.25);color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0}
 .voice-play-btn svg{width:18px;height:18px;fill:currentColor}
 /* 404 page */
@@ -3528,14 +3560,14 @@ function buildMessageBody(msg, replyHtml, bodyText){
         <div class="circle-mute"><svg viewBox="0 0 24 24"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M23 9l-6 6M17 9l6 6" stroke="#fff" stroke-width="2" fill="none"/></svg></div>
         <div class="circle-dur">0:00</div>
       </div>
-      <button type="button" class="voice-transcribe-btn circle-transcribe-btn" title="Расшифровать" aria-label="Transcribe"><span class="vt-arrow">→</span><span class="vt-t">T</span></button>
+      <button type="button" class="voice-transcribe-btn circle-transcribe-btn" title="Расшифровать" aria-label="Transcribe"><span class="vt-arrow">→</span><span class="vt-t">T</span><span class="vt-x">×</span></button>
     </div>`;
   }
   if(msg.type==='voice'){
     return `<div class="voice-bubble" data-mid="${msg.id}" data-src="${msg.file_url}">
       <button type="button" class="voice-play-btn" aria-label="Play">${playIconSvg}</button>
       <div class="voice-wave-wrap"><canvas class="voice-wave-canvas" width="160" height="32"></canvas><span class="voice-dur">0:00</span></div>
-      <button type="button" class="voice-transcribe-btn" title="Расшифровать" aria-label="Transcribe"><span class="vt-arrow">→</span><span class="vt-t">T</span></button>
+      <button type="button" class="voice-transcribe-btn" title="Расшифровать" aria-label="Transcribe"><span class="vt-arrow">→</span><span class="vt-t">T</span><span class="vt-x">×</span></button>
     </div>`;
   }
   if(msg.type==='call'){
@@ -11973,14 +12005,14 @@ function scheduleBirthdayAfterAppReady(){
 
 
 // ========== Voice message TRANSCRIPTION (actual audio content) ==========
-// Faster + more accurate: Whisper-base (quantized), background preload, transcript cache.
+// FASTEST: Whisper-tiny + MAX-style UI (→T → × → text expand animation)
 window._slWhisperPipe = null;
 window._slWhisperLoading = null;
-window._slWhisperModelId = null;
 window._slWhisperReady = false;
+window._slTranscribeBusy = false;
+window._slTranscribeAbort = null;
 
-const SL_WHISPER_MODEL = 'Xenova/whisper-base';
-const SL_WHISPER_FALLBACK = 'Xenova/whisper-tiny';
+const SL_WHISPER_MODEL = 'Xenova/whisper-tiny';
 
 function slWhisperLang(){
   try{
@@ -11991,60 +12023,28 @@ function slWhisperLang(){
     if(ui.startsWith('de')) return 'german';
     if(ui.startsWith('fr')) return 'french';
     if(ui.startsWith('es')) return 'spanish';
-    if(ui.startsWith('tr')) return 'turkish';
-    if(ui.startsWith('zh')) return 'chinese';
   }catch(e){}
   return 'russian';
 }
 
-async function slLoadWhisper(preferBase){
-  if(window._slWhisperPipe && window._slWhisperModelId){
-    if(preferBase!==false && window._slWhisperModelId===SL_WHISPER_MODEL) return window._slWhisperPipe;
-    if(preferBase===false && window._slWhisperModelId===SL_WHISPER_FALLBACK) return window._slWhisperPipe;
-    if(window._slWhisperModelId===SL_WHISPER_MODEL) return window._slWhisperPipe;
-  }
+async function slLoadWhisper(){
+  if(window._slWhisperPipe) return window._slWhisperPipe;
   if(window._slWhisperLoading) return window._slWhisperLoading;
-
   window._slWhisperLoading = (async()=>{
     let mod;
-    try{
-      mod = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2');
-    }catch(impErr){
-      try{
-        mod = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.15.1');
-      }catch(e2){
-        console.warn('[SL] whisper CDN failed', impErr);
-        throw new Error('Не удалось загрузить модель Whisper (сеть/CDN)');
-      }
+    try{ mod = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2'); }
+    catch(impErr){
+      try{ mod = await import('https://unpkg.com/@xenova/transformers@2.17.2'); }
+      catch(e2){ throw new Error('Не удалось загрузить Whisper (сеть/CDN)'); }
     }
     const { pipeline, env } = mod;
     env.allowLocalModels = false;
     env.useBrowserCache = true;
-    try{
-      if(typeof navigator!=='undefined' && navigator.gpu){
-        env.backends = env.backends || {};
-      }
-    }catch(e){}
-
-    const tryLoad = async (modelId)=>{
-      const opts = { quantized: true };
-      try{ opts.dtype = 'q8'; }catch(e){}
-      const pipe = await pipeline('automatic-speech-recognition', modelId, opts);
-      window._slWhisperPipe = pipe;
-      window._slWhisperModelId = modelId;
-      window._slWhisperReady = true;
-      return pipe;
-    };
-
-    try{
-      return await tryLoad(preferBase===false ? SL_WHISPER_FALLBACK : SL_WHISPER_MODEL);
-    }catch(e1){
-      console.warn('[SL] whisper model failed, fallback tiny', e1);
-      if(preferBase===false) throw e1;
-      return await tryLoad(SL_WHISPER_FALLBACK);
-    }
+    const pipe = await pipeline('automatic-speech-recognition', SL_WHISPER_MODEL, { quantized: true });
+    window._slWhisperPipe = pipe;
+    window._slWhisperReady = true;
+    return pipe;
   })();
-
   try{ return await window._slWhisperLoading; }
   finally{ window._slWhisperLoading = null; }
 }
@@ -12052,99 +12052,74 @@ async function slLoadWhisper(preferBase){
 window.slPreloadWhisper = function(){
   try{
     if(window._slWhisperReady || window._slWhisperLoading) return;
+    try{ if(navigator.deviceMemory && navigator.deviceMemory < 3) return; }catch(e){}
     setTimeout(()=>{
-      slLoadWhisper(true).then(()=>{
-        console.log('[SL] Whisper preloaded:', window._slWhisperModelId);
-      }).catch(e=>console.warn('[SL] Whisper preload', e));
-    }, 4500);
+      if(document.hidden) return;
+      slLoadWhisper().then(()=>console.log('[SL] Whisper-tiny ready')).catch(()=>{});
+    }, 8000);
   }catch(e){}
 };
-
 (function(){
   try{
-    const _oa = typeof onAuthenticated==='function' ? onAuthenticated : null;
-    if(_oa && !_oa._slWhisperHooked){
-      const wrapped = async function(){
-        const r = await _oa.apply(this, arguments);
-        try{ window.slPreloadWhisper(); }catch(e){}
-        return r;
-      };
-      wrapped._slWhisperHooked = true;
-      if(window.onAuthenticated === _oa || typeof onAuthenticated==='function'){
-        try{ window.onAuthenticated = wrapped; }catch(e){}
-        try{ onAuthenticated = wrapped; }catch(e){}
-      }
-    } else {
-      if(document.readyState==='complete') setTimeout(()=>{ try{ if(typeof myProfile!=='undefined'&&myProfile) window.slPreloadWhisper(); }catch(e){} }, 6000);
-      else window.addEventListener('load', ()=> setTimeout(()=>{ try{ if(typeof myProfile!=='undefined'&&myProfile) window.slPreloadWhisper(); }catch(e){} }, 6000));
-    }
+    if(document.readyState==='complete') setTimeout(()=>{ try{ if(typeof myProfile!=='undefined'&&myProfile) window.slPreloadWhisper(); }catch(e){} }, 8000);
+    else window.addEventListener('load', ()=> setTimeout(()=>{ try{ if(typeof myProfile!=='undefined'&&myProfile) window.slPreloadWhisper(); }catch(e){} }, 8000));
   }catch(e){}
 })();
 
 async function slAudioToFloat32(src){
   const res = await fetch(src);
+  if(!res.ok) throw new Error('Не удалось скачать медиа');
   const buf = await res.arrayBuffer();
-  let actx;
-  try{
-    const Offline = window.OfflineAudioContext || window.webkitOfflineAudioContext;
-    actx = Offline ? new Offline(1, 16000, 16000) : new (window.AudioContext || window.webkitAudioContext)();
-  }catch(e){
-    actx = new (window.AudioContext || window.webkitAudioContext)();
-  }
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if(!AC) throw new Error('AudioContext недоступен');
+  const actx = new AC();
   let decoded;
   try{ decoded = await actx.decodeAudioData(buf.slice(0)); }
   catch(e){
-    try{ if(actx.close) await actx.close(); }catch(_){}
-    const live = new (window.AudioContext || window.webkitAudioContext)();
-    try{
-      decoded = await live.decodeAudioData(buf.slice(0));
-    }finally{
-      try{ await live.close(); }catch(_){}
+    try{ await actx.close(); }catch(_){}
+    throw new Error('Не удалось декодировать аудио');
+  }
+  try{
+    const nCh = decoded.numberOfChannels|0;
+    const len = decoded.length|0;
+    let mono;
+    if(nCh <= 1) mono = decoded.getChannelData(0).slice(0);
+    else {
+      mono = new Float32Array(len);
+      for(let c=0;c<nCh;c++){
+        const d = decoded.getChannelData(c);
+        for(let i=0;i<len;i++) mono[i] += d[i] / nCh;
+      }
     }
-  }
-
-  const nCh = decoded.numberOfChannels|0;
-  const len = decoded.length|0;
-  let mono;
-  if(nCh <= 1){
-    mono = decoded.getChannelData(0).slice(0);
-  }else{
-    mono = new Float32Array(len);
-    for(let c=0;c<nCh;c++){
-      const d = decoded.getChannelData(c);
-      for(let i=0;i<len;i++) mono[i] += d[i] / nCh;
+    const targetRate = 16000;
+    const sr = decoded.sampleRate || 48000;
+    const maxSamplesSrc = Math.floor(sr * 60);
+    if(mono.length > maxSamplesSrc) mono = mono.subarray(0, maxSamplesSrc);
+    if(sr === targetRate){ try{ await actx.close(); }catch(_){} return mono; }
+    const ratio = sr / targetRate;
+    const newLen = Math.max(1, Math.floor(mono.length / ratio));
+    const out = new Float32Array(newLen);
+    for(let i=0;i<newLen;i++){
+      const idx = i * ratio;
+      const i0 = Math.floor(idx);
+      const i1 = Math.min(mono.length-1, i0+1);
+      const t = idx - i0;
+      out[i] = mono[i0]*(1-t) + mono[i1]*t;
     }
+    try{ await actx.close(); }catch(_){}
+    return out;
+  }catch(e){
+    try{ await actx.close(); }catch(_){}
+    throw e;
   }
-
-  const targetRate = 16000;
-  const sr = decoded.sampleRate || 48000;
-  if(sr === targetRate){
-    try{ if(actx.close) await actx.close(); }catch(_){}
-    return mono;
-  }
-  const ratio = sr / targetRate;
-  const newLen = Math.max(1, Math.floor(mono.length / ratio));
-  const out = new Float32Array(newLen);
-  for(let i=0;i<newLen;i++){
-    const idx = i * ratio;
-    const i0 = Math.floor(idx);
-    const i1 = Math.min(mono.length-1, i0+1);
-    const t = idx - i0;
-    out[i] = mono[i0]*(1-t) + mono[i1]*t;
-  }
-  try{ if(actx.close) await actx.close(); }catch(_){}
-  return out;
 }
 
 function slPrepSpeech(pcm){
   if(!pcm || !pcm.length) return pcm;
   let peak = 0;
-  for(let i=0;i<pcm.length;i++){
-    const a = Math.abs(pcm[i]);
-    if(a>peak) peak=a;
-  }
-  if(peak > 1e-5 && peak < 0.35){
-    const g = Math.min(0.9 / peak, 4.5);
+  for(let i=0;i<pcm.length;i++){ const a=Math.abs(pcm[i]); if(a>peak) peak=a; }
+  if(peak > 1e-5 && peak < 0.4){
+    const g = Math.min(0.85 / peak, 3.5);
     const out = new Float32Array(pcm.length);
     for(let i=0;i<pcm.length;i++) out[i] = Math.max(-1, Math.min(1, pcm[i]*g));
     return out;
@@ -12153,10 +12128,8 @@ function slPrepSpeech(pcm){
 }
 
 function slTranscriptCacheKey(msg){
-  try{
-    const id = msg.id || msg.file_url || '';
-    return 'sl_tr_'+String(id).slice(0,120);
-  }catch(e){ return null; }
+  try{ return 'sl_tr_'+String(msg.id || msg.file_url || '').slice(0,120); }
+  catch(e){ return null; }
 }
 function slLoadCachedTranscript(msg){
   try{
@@ -12176,106 +12149,195 @@ function slSaveCachedTranscript(msg, text){
   }catch(e){}
 }
 
-window._slTranscribeImpl = window.transcribeVoiceMsg = async function(msg){
-  const src = msg.file_url || msg.content;
-  if(!src){ showToast('Нет аудио в сообщении'); return; }
-
+/** Find voice/circle UI pieces for a message row */
+function slVoiceUi(msg){
   const row = document.querySelector(`.bubble-row[data-id="${msg.id}"]`);
-  let tr = row?.querySelector('.voice-transcript');
+  if(!row) return {};
+  const bubble = row.querySelector('.bubble');
+  const voice = row.querySelector('.voice-bubble');
+  const circleWrap = row.querySelector('.circle-msg-wrap');
+  const btn = row.querySelector('.voice-transcribe-btn');
+  return { row, bubble, voice, circleWrap, btn };
+}
 
-  if(tr && tr.style.display!=='none' && (tr.dataset.done==='1' || msg._transcript)){
-    tr.style.display = 'none';
-    showToast('Расшифровка скрыта');
-    return;
+function slSetBtnLoading(btn, on){
+  if(!btn) return;
+  if(on){
+    btn.classList.add('is-loading');
+    btn.title = 'Отменить';
+    btn.setAttribute('aria-label','Cancel');
+  }else{
+    btn.classList.remove('is-loading');
+    btn.title = 'Расшифровать';
+    btn.setAttribute('aria-label','Transcribe');
   }
-  if(tr && tr.style.display==='none' && (tr.dataset.done==='1' || msg._transcript)){
-    tr.style.display = '';
-    tr.textContent = msg._transcript || tr.textContent;
-    return;
-  }
+}
 
-  const cached = slLoadCachedTranscript(msg);
-  if(cached){
-    if(!tr && row){
-      tr = document.createElement('div');
-      tr.className = 'voice-transcript';
-      tr.dataset.done = '1';
-      tr.style.cssText = 'font-size:13px;opacity:.95;margin-top:8px;padding:8px 10px;background:rgba(0,0,0,.18);border-radius:10px;line-height:1.4;white-space:pre-wrap';
-      row.querySelector('.bubble')?.appendChild(tr);
-    }
-    if(tr){
-      tr.dataset.done = '1';
-      tr.style.display = '';
-      tr.textContent = cached;
-    }
-    return;
+function slEnsureTranscriptEl(host){
+  if(!host) return null;
+  let tr = host.parentElement?.querySelector?.(':scope > .voice-transcript')
+    || host.querySelector?.('.voice-transcript')
+    || host.closest?.('.bubble')?.querySelector?.('.voice-transcript');
+  // Prefer sibling after voice-bubble / circle-msg-wrap inside .bubble
+  const bubble = host.closest?.('.bubble') || host;
+  tr = bubble.querySelector('.voice-transcript');
+  if(tr) return tr;
+  tr = document.createElement('div');
+  tr.className = 'voice-transcript';
+  // insert after voice/circle block
+  if(host.classList?.contains('voice-bubble') || host.classList?.contains('circle-msg-wrap')){
+    host.insertAdjacentElement('afterend', tr);
+  } else {
+    bubble.appendChild(tr);
   }
+  return tr;
+}
 
-  if(!tr && row){
-    tr = document.createElement('div');
-    tr.className = 'voice-transcript';
-    tr.style.cssText = 'font-size:13px;opacity:.95;margin-top:8px;padding:8px 10px;background:rgba(0,0,0,.18);border-radius:10px;line-height:1.4;white-space:pre-wrap';
-    row.querySelector('.bubble')?.appendChild(tr);
+function slShowTranscript(tr, text, animate){
+  if(!tr) return;
+  tr.dataset.done = '1';
+  tr.textContent = text;
+  tr.style.display = '';
+  if(animate){
+    tr.classList.remove('show');
+    // force reflow for animation restart
+    void tr.offsetWidth;
+    requestAnimationFrame(()=> tr.classList.add('show'));
+  } else {
+    tr.classList.add('show');
   }
-  const modelHint = window._slWhisperReady
-    ? 'Распознаю…'
-    : 'Загрузка модели Whisper (~75 МБ, один раз)…';
-  if(tr){ tr.style.display=''; tr.textContent = modelHint; }
+}
 
+function slHideTranscript(tr){
+  if(!tr) return;
+  tr.classList.remove('show');
+  setTimeout(()=>{ try{ if(!tr.classList.contains('show')) tr.style.display='none'; }catch(e){} }, 280);
+}
+
+window._slTranscribeImpl = window.transcribeVoiceMsg = async function(msg){
   try{
-    showToast(window._slWhisperReady ? 'Расшифровка…' : 'Готовлю модель (первый раз дольше)…');
-    const pipe = await slLoadWhisper(true);
-    const lang = slWhisperLang();
-    if(tr) tr.textContent = 'Читаю аудио…';
+    const src = msg && (msg.file_url || msg.content);
+    if(!src){ showToast('Нет аудио в сообщении'); return; }
 
-    let result;
+    const ui = slVoiceUi(msg);
+    const { row, voice, circleWrap, btn } = ui;
+    const host = voice || circleWrap;
+    let tr = row?.querySelector?.('.voice-transcript');
+
+    // If loading — second tap cancels (like MAX ×)
+    if(btn && btn.classList.contains('is-loading')){
+      try{ if(window._slTranscribeAbort) window._slTranscribeAbort.aborted = true; }catch(e){}
+      window._slTranscribeBusy = false;
+      slSetBtnLoading(btn, false);
+      if(voice) voice.classList.remove('transcribing');
+      if(tr && !tr.dataset.done){ tr.textContent=''; slHideTranscript(tr); }
+      showToast('Отменено');
+      return;
+    }
+
+    // Toggle hide if already shown
+    if(tr && tr.classList.contains('show') && (tr.dataset.done==='1' || msg._transcript)){
+      slHideTranscript(tr);
+      if(voice) voice.classList.remove('transcribed');
+      showToast('Расшифровка скрыта');
+      return;
+    }
+    // Show cached
+    const cached = slLoadCachedTranscript(msg);
+    if(cached){
+      if(host) tr = slEnsureTranscriptEl(host);
+      if(voice) voice.classList.add('transcribed');
+      slShowTranscript(tr, cached, true);
+      return;
+    }
+    if(tr && tr.style.display==='none' && (tr.dataset.done==='1' || msg._transcript)){
+      if(voice) voice.classList.add('transcribed');
+      slShowTranscript(tr, msg._transcript || tr.textContent, true);
+      return;
+    }
+
+    if(window._slTranscribeBusy){
+      showToast('Уже расшифровываю…');
+      return;
+    }
+    window._slTranscribeBusy = true;
+    const token = { aborted: false };
+    window._slTranscribeAbort = token;
+
+    // MAX UI: →T becomes ×, bubble expands
+    slSetBtnLoading(btn, true);
+    if(voice) voice.classList.add('transcribing');
+    if(host) tr = slEnsureTranscriptEl(host);
+    if(tr){
+      tr.dataset.done = '';
+      tr.textContent = '';
+      tr.style.display = '';
+      tr.classList.remove('show');
+    }
+
     try{
+      const pipe = await slLoadWhisper();
+      if(token.aborted) return;
+
+      const lang = slWhisperLang();
       const audio = slPrepSpeech(await slAudioToFloat32(src));
-      if(tr) tr.textContent = 'Распознаю речь…';
-      result = await pipe(audio, {
+      if(token.aborted) return;
+
+      const durSec = audio.length / 16000;
+      const opts = {
         language: lang,
         task: 'transcribe',
         sampling_rate: 16000,
-        chunk_length_s: 20,
-        stride_length_s: 3,
         return_timestamps: false
-      });
-    }catch(pcmErr){
-      console.warn('[SL] PCM path failed, try URL', pcmErr);
-      if(tr) tr.textContent = 'Распознаю речь…';
-      result = await pipe(src, {
-        language: lang,
-        task: 'transcribe',
-        chunk_length_s: 20,
-        stride_length_s: 3,
-        return_timestamps: false
-      });
-    }
+      };
+      if(durSec > 25){
+        opts.chunk_length_s = 20;
+        opts.stride_length_s = 3;
+      }
 
-    let text = '';
-    if(result){
-      if(typeof result === 'string') text = result;
-      else if(result.text) text = String(result.text);
-      else if(Array.isArray(result)) text = result.map(r=>r.text||'').join(' ');
-    }
-    text = String(text||'').replace(/\s+/g,' ').trim();
-    text = text.replace(/\[?(BLANK_AUDIO|Music|music|♪)\]?/gi,'').trim();
+      const result = await pipe(audio, opts);
+      if(token.aborted) return;
 
-    if(tr){
-      tr.dataset.done = '1';
-      tr.style.display = '';
-      tr.textContent = text || '(тишина или не удалось разобрать речь)';
+      let text = '';
+      if(result){
+        if(typeof result === 'string') text = result;
+        else if(result.text) text = String(result.text);
+        else if(Array.isArray(result)) text = result.map(r=>r.text||'').join(' ');
+      }
+      text = String(text||'').replace(/\s+/g,' ').trim();
+      text = text.replace(/\[?(BLANK_AUDIO|Music|music|♪|Silence|silence)\]?/gi,'').trim();
+      const finalText = text || '(тишина или не удалось разобрать речь)';
+
+      slSaveCachedTranscript(msg, finalText);
+      if(voice){
+        voice.classList.remove('transcribing');
+        voice.classList.add('transcribed');
+      }
+      if(host) tr = slEnsureTranscriptEl(host);
+      slShowTranscript(tr, finalText, true);
+      showToast(text ? 'Расшифровка готова' : 'Речь не распознана');
+    }catch(err){
+      if(token.aborted) return;
+      console.error('transcribe', err);
+      if(host) tr = slEnsureTranscriptEl(host);
+      if(tr){
+        const msgText = String(err && (err.message||err) || '').slice(0,140);
+        tr.dataset.done = '1';
+        tr.textContent = 'Не удалось расшифровать: ' + msgText;
+        slShowTranscript(tr, tr.textContent, true);
+      }
+      try{ showToast('Ошибка расшифровки'); }catch(e){}
+      if(voice) voice.classList.remove('transcribing');
+    }finally{
+      slSetBtnLoading(btn, false);
+      if(voice) voice.classList.remove('transcribing');
+      window._slTranscribeBusy = false;
+      if(window._slTranscribeAbort === token) window._slTranscribeAbort = null;
     }
-    slSaveCachedTranscript(msg, text || '(тишина)');
-    showToast(text ? 'Расшифровка готова' : 'Речь не распознана');
-  }catch(err){
-    console.error('transcribe', err);
-    if(tr){
-      tr.innerHTML = 'Не удалось расшифровать файл.<br><span style="opacity:.8;font-size:12px">' +
-        escapeHtml(String(err.message||err).slice(0,160)) +
-        '</span><br><span style="opacity:.75;font-size:12px">Нужен интернет для первой загрузки модели Whisper (~75 МБ). Дальше работает офлайн с самим голосовым/кружком.</span>';
-    }
-    showToast('Ошибка расшифровки голосового');
+  }catch(outer){
+    window._slTranscribeBusy = false;
+    console.error('transcribe outer', outer);
+    try{ showToast('Ошибка расшифровки'); }catch(e){}
   }
 };
 
