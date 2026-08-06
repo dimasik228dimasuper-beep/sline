@@ -1481,39 +1481,87 @@ html.sl-ready.sl-booting::before{display:none!important}
         <div class="reg-dot" data-step="3" style="flex:1;height:4px;border-radius:4px;background:var(--line)"></div>
         <div class="reg-dot" data-step="4" style="flex:1;height:4px;border-radius:4px;background:var(--line)"></div>
         <div class="reg-dot" data-step="5" style="flex:1;height:4px;border-radius:4px;background:var(--line)"></div>
+        <div class="reg-dot" data-step="6" style="flex:1;height:4px;border-radius:4px;background:var(--line)"></div>
       </div>
 
+      <!-- Step 1: Phone OR Email contact + password -->
       <div class="reg-step" data-step="1">
-        <div class="field"><label>Имя</label><input type="text" id="reg-firstname" placeholder="Иван" autocomplete="given-name"></div>
-        <div class="field"><label>Фамилия</label><input type="text" id="reg-lastname" placeholder="Иванов" autocomplete="family-name"></div>
+        <div id="reg-mode-phone">
+          <p style="font-size:13px;color:var(--muted);margin-bottom:12px;text-align:center">Введите номер телефона</p>
+          <div style="display:flex;gap:8px;align-items:stretch;margin-bottom:12px">
+            <div style="position:relative;flex-shrink:0">
+              <button type="button" id="reg-cc-btn" style="min-width:88px;height:100%;padding:12px 10px;border-radius:12px;border:1px solid var(--line);background:var(--input-bg);color:var(--text);font-weight:700;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:4px">
+                <span id="reg-cc-flag">🇷🇺</span> <span id="reg-cc-code">+7</span>
+              </button>
+              <div id="reg-cc-list" style="display:none;position:absolute;top:100%;left:0;margin-top:6px;background:var(--panel);border:1px solid var(--line);border-radius:14px;max-height:220px;overflow-y:auto;z-index:50;min-width:220px;box-shadow:0 12px 32px rgba(0,0,0,.4)">
+              </div>
+            </div>
+            <input type="tel" id="reg-phone" placeholder="912 345-67-89" inputmode="tel" autocomplete="tel-national" style="flex:1;padding:12px 14px;border-radius:12px;border:1px solid var(--line);background:var(--input-bg);color:var(--text);font-size:15px;outline:none">
+          </div>
+          <p id="reg-cc-label" style="font-size:12px;color:var(--muted);margin:-4px 0 12px">Россия</p>
+        </div>
+        <div id="reg-mode-email" style="display:none">
+          <p style="font-size:13px;color:var(--muted);margin-bottom:12px;text-align:center">Регистрация по email</p>
+          <div style="display:flex;gap:0;align-items:stretch;margin-bottom:12px;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--input-bg)">
+            <input type="text" id="reg-email-local" placeholder="name" autocomplete="username" style="flex:1;min-width:0;padding:12px 12px;border:none;background:transparent;color:var(--text);font-size:15px;outline:none">
+            <button type="button" id="reg-domain-btn" style="flex-shrink:0;padding:12px 12px;border:none;border-left:1px solid var(--line);background:var(--panel-hover);color:var(--text);font-weight:600;font-size:13px;cursor:pointer;max-width:42%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">@gmail.com ▾</button>
+          </div>
+          <div id="reg-domain-list" style="display:none;margin:-4px 0 12px;background:var(--panel);border:1px solid var(--line);border-radius:12px;max-height:200px;overflow-y:auto">
+          </div>
+          <p style="font-size:12px;color:var(--muted);margin:-4px 0 12px">Можно выбрать домен почты</p>
+        </div>
+        <div class="field"><label>Пароль</label><input type="password" id="reg-password" placeholder="Минимум 6 символов" autocomplete="new-password"></div>
+        <div class="field"><label>Повторите пароль</label><input type="password" id="reg-password2" placeholder="Ещё раз" autocomplete="new-password"></div>
         <button type="button" class="btn-primary" id="reg-next-1">Далее</button>
+        <button type="button" class="btn-secondary" id="reg-switch-mode" style="margin-top:10px">Регистрация по email</button>
+        <!-- hidden full contact for compatibility -->
+        <input type="hidden" id="reg-contact" value="">
       </div>
 
+      <!-- Step 2: Avatar + name -->
       <div class="reg-step" data-step="2" style="display:none">
-        <div class="field"><label>Имя пользователя</label><input type="text" id="reg-username" placeholder="ivanov" autocomplete="username"></div>
-        <p style="font-size:12px;color:var(--muted);margin:-4px 0 12px">Только латиница, цифры и _</p>
+        <div style="text-align:center;margin-bottom:16px">
+          <div id="reg-avatar-pick" style="width:88px;height:88px;border-radius:50%;margin:0 auto 10px;background:linear-gradient(135deg,#7B2CBF,#4C7CF3);display:flex;align-items:center;justify-content:center;font-size:36px;color:#fff;cursor:pointer;border:3px solid rgba(255,255,255,.2);overflow:hidden;background-size:cover;background-position:center" title="Выбрать иконку">+</div>
+          <p style="font-size:12px;color:var(--muted)">Иконка профиля</p>
+          <input type="file" id="reg-avatar-file" accept="image/*" class="hidden-input">
+        </div>
+        <div class="field"><label>Имя</label><input type="text" id="reg-firstname" placeholder="Имя" autocomplete="given-name"></div>
+        <div class="field"><label>Фамилия</label><input type="text" id="reg-lastname" placeholder="Фамилия" autocomplete="family-name"></div>
         <button type="button" class="btn-primary" id="reg-next-2">Далее</button>
         <button type="button" class="btn-secondary" id="reg-back-2" style="margin-top:8px">← Назад</button>
       </div>
 
+      <!-- Step 3: Username -->
       <div class="reg-step" data-step="3" style="display:none">
-        <div class="field"><label>Дата рождения</label><input type="date" id="reg-birth"></div>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:12px;text-align:center">Придумайте имя пользователя</p>
+        <div style="display:flex;align-items:center;gap:0;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--input-bg);margin-bottom:12px">
+          <span style="padding:12px 4px 12px 14px;color:var(--muted);font-weight:700">@</span>
+          <input type="text" id="reg-username" placeholder="username" autocomplete="username" style="flex:1;padding:12px 14px 12px 4px;border:none;background:transparent;color:var(--text);font-size:15px;outline:none">
+        </div>
+        <p style="font-size:12px;color:var(--muted);margin:-4px 0 12px">Латиница, цифры и _ · 3–24 символа</p>
         <button type="button" class="btn-primary" id="reg-next-3">Далее</button>
         <button type="button" class="btn-secondary" id="reg-back-3" style="margin-top:8px">← Назад</button>
       </div>
 
+      <!-- Step 4: Birth (skippable) -->
       <div class="reg-step" data-step="4" style="display:none">
-        <div class="field"><label>Email или телефон</label><input type="text" id="reg-contact" placeholder="you@example.com или +79001234567" autocomplete="username"></div>
-        <div class="field"><label>Пароль</label><input type="password" id="reg-password" placeholder="Минимум 6 символов" autocomplete="new-password"></div>
-        <div class="field"><label>Повторите пароль</label><input type="password" id="reg-password2" placeholder="Ещё раз" autocomplete="new-password"></div>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:12px;text-align:center">Дата рождения <span style="opacity:.7">(необязательно)</span></p>
+        <div class="field"><input type="date" id="reg-birth"></div>
         <button type="button" class="btn-primary" id="reg-next-4">Далее</button>
-        <button type="button" class="btn-secondary" id="reg-back-4" style="margin-top:8px">← Назад</button>
+        <button type="button" class="btn-secondary" id="reg-skip-birth" style="margin-top:8px">Пропустить</button>
+        <button type="button" class="btn-secondary" id="reg-back-4" style="margin-top:8px;border:none;color:var(--muted)">← Назад</button>
       </div>
 
+      <!-- Step 5: Creating / intermediate (unused, kept for dots) - recovery is step 6 -->
       <div class="reg-step" data-step="5" style="display:none">
+        <p style="text-align:center;color:var(--muted)">Создаём аккаунт…</p>
+      </div>
+
+      <!-- Step 6: Recovery key -->
+      <div class="reg-step" data-step="6" style="display:none">
         <div style="text-align:center;margin-bottom:8px;font-size:28px">🔑</div>
         <p style="font-size:14px;font-weight:700;margin-bottom:8px;text-align:center">Ключ восстановления</p>
-        <p style="font-size:13px;color:var(--muted);margin-bottom:14px;line-height:1.45;text-align:center">Скопируйте, мы потом его показывать не будем.</p>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:14px;line-height:1.45;text-align:center">Скопируйте — мы потом его не покажем.</p>
         <div id="reg-recovery-key" style="font-family:monospace;font-size:12px;word-break:break-all;background:var(--input-bg);border:1px solid var(--line);border-radius:12px;padding:14px;text-align:center;user-select:all;-webkit-user-select:all;margin-bottom:12px;line-height:1.4"></div>
         <button type="button" class="btn-secondary" id="reg-copy-key" style="margin-top:0">Скопировать ключ</button>
         <button type="button" class="btn-primary" id="reg-enter-app" style="margin-top:10px">Войти в мессенджер</button>
@@ -2083,7 +2131,7 @@ function showAuthPanel(which){
   }
   authMsg('');
   const backChoice = document.getElementById('reg-back-choice');
-  if(backChoice) backChoice.style.display = (which==='register-form' && _regStep < 5) ? 'block' : 'none';
+  if(backChoice) backChoice.style.display = (which==='register-form' && _regStep < 6) ? 'block' : 'none';
 }
 
 function generateRecoveryKey(){
@@ -2145,15 +2193,13 @@ function setRegStep(step){
     d.style.background = (+d.dataset.step <= step) ? 'var(--accent-a)' : 'var(--line)';
   });
   const backChoice = document.getElementById('reg-back-choice');
-  if(backChoice) backChoice.style.display = step < 5 ? 'block' : 'none';
-  if(step !== 5) authMsg('');
-  // Ensure recovery key container is visible on last step
-  if(step === 5){
+  if(backChoice) backChoice.style.display = step < 6 ? 'block' : 'none';
+  if(step !== 6) authMsg('');
+  if(step === 6){
     const keyEl = document.getElementById('reg-recovery-key');
     if(keyEl){
       keyEl.style.display = 'block';
       if(!keyEl.textContent || !keyEl.textContent.trim()){
-        // fallback if key not yet written
         try{ keyEl.textContent = generateRecoveryKey(); }catch(e){}
       }
     }
@@ -2260,24 +2306,25 @@ async function doRegisterFinish(){
   const last = (document.getElementById('reg-lastname')?.value||'').trim();
   const username = (document.getElementById('reg-username')?.value||'').trim().toLowerCase();
   const birth = document.getElementById('reg-birth')?.value || '';
-  const contact = normalizeContact(document.getElementById('reg-contact')?.value);
+  let contact = null;
+  try{ contact = (typeof buildContactFromReg==='function' ? buildContactFromReg() : null) || normalizeContact(document.getElementById('reg-contact')?.value); }catch(e){ contact = normalizeContact(document.getElementById('reg-contact')?.value); }
   const password = document.getElementById('reg-password')?.value || '';
   const password2 = document.getElementById('reg-password2')?.value || '';
 
-  if(!first || !last){ authMsg('Укажите имя и фамилию'); setRegStep(1); return; }
-  if(!username || !/^[a-z0-9_]{3,24}$/.test(username)){ authMsg('Username: 3–24 символа, a-z, 0-9, _'); setRegStep(2); return; }
-  if(!birth){ authMsg('Укажите дату рождения'); setRegStep(3); return; }
-  if(!contact){ authMsg('Укажите email или номер телефона'); return; }
-  if(password.length < 6){ authMsg('Пароль не короче 6 символов'); return; }
-  if(password !== password2){ authMsg('Пароли не совпадают'); return; }
+  if(!contact){ authMsg('Укажите email или номер телефона'); setRegStep(1); return; }
+  if(password.length < 6){ authMsg('Пароль не короче 6 символов'); setRegStep(1); return; }
+  if(password !== password2){ authMsg('Пароли не совпадают'); setRegStep(1); return; }
+  if(!first){ authMsg('Укажите имя'); setRegStep(2); return; }
+  if(!username || !/^[a-z0-9_]{3,24}$/.test(username)){ authMsg('Username: 3–24 символа, a-z, 0-9, _'); setRegStep(3); return; }
+  // birth optional
   if(!sb){ authMsg('Сервис регистрации недоступен'); return; }
 
-  const btn = document.getElementById('reg-next-4');
+  const btn = document.getElementById('reg-next-4') || document.getElementById('reg-skip-birth');
   setBtnLoading(btn, true);
   try{
     try{
       const {data: exists} = await sb.from('profiles').select('id').eq('username', username).maybeSingle();
-      if(exists){ authMsg('Это имя пользователя уже занято'); setBtnLoading(btn,false); setRegStep(2); return; }
+      if(exists){ authMsg('Это имя пользователя уже занято'); setBtnLoading(btn,false); setRegStep(3); return; }
     }catch(e){}
 
     const recoveryKey = generateRecoveryKey();
@@ -2286,7 +2333,7 @@ async function doRegisterFinish(){
     const keyElEarly = document.getElementById('reg-recovery-key');
     if(keyElEarly) keyElEarly.textContent = recoveryKey;
     showAuthPanel('register-form');
-    setRegStep(5);
+    setRegStep(6);
 
     const {data, error} = await sb.auth.signUp({
       email: contact.email,
@@ -2307,7 +2354,7 @@ async function doRegisterFinish(){
       _awaitingRecoveryKey = false;
       authMsg(error.message || 'Ошибка регистрации');
       setBtnLoading(btn, false);
-      setRegStep(4); // back to form so user can fix
+      setRegStep(1); // back to contact form
       return;
     }
 
@@ -2337,16 +2384,31 @@ async function doRegisterFinish(){
 
     if(user?.id){
       try{
-        await sb.from('profiles').upsert({
+        const av = window._regAvatarDataUrl || (function(){ try{ return storage.getItem('sl_pending_reg_avatar'); }catch(e){ return null; } })();
+        const payload = {
           id: user.id,
           email: contact.email,
           username,
           first_name: first,
           last_name: last,
-          birth_date: birth,
+          birth_date: birth || null,
           phone: contact.phone || null,
           color: '#4C7CF3'
-        }, { onConflict: 'id' });
+        };
+        if(av) payload.avatar_url = av;
+        const {error: upErr} = await sb.from('profiles').upsert(payload, { onConflict: 'id' });
+        if(upErr) console.warn('profile upsert', upErr);
+        if(av){
+          // Second try: dedicated update (in case upsert ignored large field)
+          try{
+            const {error: avErr} = await sb.from('profiles').update({ avatar_url: av }).eq('id', user.id);
+            if(avErr) console.warn('reg avatar update', avErr);
+            else {
+              try{ storage.setItem('sl_pending_reg_avatar_uid', user.id); }catch(e){}
+              try{ if(typeof pushAvatarHistory==='function') pushAvatarHistory(user.id, av); }catch(e){}
+            }
+          }catch(e){ console.warn('reg avatar', e); }
+        }
       }catch(e){ console.warn('profile upsert', e); }
     }
 
@@ -2362,7 +2424,7 @@ async function doRegisterFinish(){
       document.getElementById('app-screen').style.display = 'none';
     }catch(e){}
     showAuthPanel('register-form');
-    setRegStep(5);
+    setRegStep(6);
     setBtnLoading(btn, false);
     if(!user){
       authMsg('Аккаунт создан. Сохраните ключ — затем войдите.');
@@ -2379,6 +2441,10 @@ async function enterMessengerAfterReg(){
   authMsg('');
   _awaitingRecoveryKey = false;
   _regStep = 1;
+  // keep registration avatar for onAuthenticated
+  try{
+    if(window._regAvatarDataUrl) storage.setItem('sl_pending_reg_avatar', window._regAvatarDataUrl);
+  }catch(e){}
   if(_pendingRegUser){
     const u = _pendingRegUser;
     _pendingRegUser = null;
@@ -2402,6 +2468,7 @@ function wireAuthUI(){
   document.getElementById('auth-go-login')?.addEventListener('click', ()=> showAuthPanel('login-form'));
   document.getElementById('auth-go-register')?.addEventListener('click', ()=>{
     _regStep = 1;
+    try{ if(typeof setRegMode==='function') setRegMode('phone'); else window._regMode='phone'; }catch(e){}
     setRegStep(1);
     showAuthPanel('register-form');
   });
@@ -2421,29 +2488,187 @@ function wireAuthUI(){
   document.getElementById('forgot-submit-btn')?.addEventListener('click', e=>{ e.preventDefault(); doForgotRecover(); });
   document.getElementById('forgot-key')?.addEventListener('keydown', e=>{ if(e.key==='Enter') doForgotRecover(); });
 
+  // Registration country / domain data
+  window._regMode = 'phone';
+  window._regCc = { code: '+7', digits: '7', label: 'Россия', flag: '🇷🇺' };
+  window._regDomain = 'gmail.com';
+  window._regAvatarDataUrl = null;
+  const REG_COUNTRIES = [
+    {code:'+7', digits:'7', label:'Россия', flag:'🇷🇺'},
+    {code:'+7', digits:'7', label:'Казахстан', flag:'🇰🇿'},
+    {code:'+375', digits:'375', label:'Беларусь', flag:'🇧🇾'},
+    {code:'+380', digits:'380', label:'Украина', flag:'🇺🇦'},
+    {code:'+1', digits:'1', label:'США / Канада', flag:'🇺🇸'},
+    {code:'+44', digits:'44', label:'Великобритания', flag:'🇬🇧'},
+    {code:'+49', digits:'49', label:'Германия', flag:'🇩🇪'},
+    {code:'+33', digits:'33', label:'Франция', flag:'🇫🇷'},
+    {code:'+90', digits:'90', label:'Турция', flag:'🇹🇷'},
+    {code:'+86', digits:'86', label:'Китай', flag:'🇨🇳'},
+    {code:'+998', digits:'998', label:'Узбекистан', flag:'🇺🇿'},
+    {code:'+992', digits:'992', label:'Таджикистан', flag:'🇹🇯'},
+    {code:'+996', digits:'996', label:'Кыргызстан', flag:'🇰🇬'},
+    {code:'+994', digits:'994', label:'Азербайджан', flag:'🇦🇿'},
+    {code:'+995', digits:'995', label:'Грузия', flag:'🇬🇪'},
+    {code:'+374', digits:'374', label:'Армения', flag:'🇦🇲'},
+    {code:'+48', digits:'48', label:'Польша', flag:'🇵🇱'},
+    {code:'+39', digits:'39', label:'Италия', flag:'🇮🇹'},
+    {code:'+34', digits:'34', label:'Испания', flag:'🇪🇸'},
+    {code:'+971', digits:'971', label:'ОАЭ', flag:'🇦🇪'},
+    {code:'+61', digits:'61', label:'Австралия', flag:'🇦🇺'},
+    {code:'+55', digits:'55', label:'Бразилия', flag:'🇧🇷'}
+  ];
+  const REG_DOMAINS = ['gmail.com','mail.ru','yandex.ru','yandex.com','outlook.com','hotmail.com','icloud.com','yahoo.com','bk.ru','inbox.ru','list.ru','ya.ru','proton.me','protonmail.com','rambler.ru','live.com','me.com','msn.com','aol.com','zoho.com'];
+
+  window.setRegMode = function(mode){
+    window._regMode = mode;
+    const ph = document.getElementById('reg-mode-phone');
+    const em = document.getElementById('reg-mode-email');
+    const sw = document.getElementById('reg-switch-mode');
+    if(ph) ph.style.display = mode==='phone' ? 'block' : 'none';
+    if(em) em.style.display = mode==='email' ? 'block' : 'none';
+    if(sw) sw.textContent = mode==='phone' ? 'Регистрация по email' : 'Регистрация по телефону';
+  };
+  window.buildContactFromReg = function(){
+    if(window._regMode === 'email'){
+      const local = (document.getElementById('reg-email-local')?.value||'').trim().toLowerCase().replace(/@/g,'');
+      if(!local) return null;
+      const email = local + '@' + (window._regDomain||'gmail.com');
+      const hc = document.getElementById('reg-contact');
+      if(hc) hc.value = email;
+      return normalizeContact(email);
+    }
+    const raw = (document.getElementById('reg-phone')?.value||'').trim();
+    const digits = raw.replace(/\D/g,'');
+    if(digits.length < 6) return null;
+    const cc = window._regCc || {code:'+7', digits:'7'};
+    let national = digits;
+    if(digits.startsWith(cc.digits) && digits.length > cc.digits.length + 5){
+      national = digits.slice(cc.digits.length);
+    }
+    const full = cc.code + national;
+    const hc = document.getElementById('reg-contact');
+    if(hc) hc.value = full;
+    return normalizeContact(full);
+  };
+  (function(){
+    const list = document.getElementById('reg-cc-list');
+    if(!list) return;
+    list.innerHTML = REG_COUNTRIES.map((c,i)=>'<div class="suggest-item" data-i="'+i+'" style="padding:10px 12px;cursor:pointer;display:flex;gap:8px;align-items:center"><span>'+c.flag+'</span><span style="font-weight:700">'+c.code+'</span><span style="color:var(--muted);font-size:12px">'+c.label+'</span></div>').join('');
+    list.querySelectorAll('[data-i]').forEach(el=>{
+      el.onclick = ()=>{
+        const c = REG_COUNTRIES[+el.dataset.i];
+        window._regCc = c;
+        const f=document.getElementById('reg-cc-flag'); if(f) f.textContent = c.flag;
+        const co=document.getElementById('reg-cc-code'); if(co) co.textContent = c.code;
+        const lb=document.getElementById('reg-cc-label'); if(lb) lb.textContent = c.label;
+        list.style.display = 'none';
+      };
+    });
+  })();
+  (function(){
+    const list = document.getElementById('reg-domain-list');
+    if(!list) return;
+    list.innerHTML = REG_DOMAINS.map(d=>'<div class="suggest-item" data-d="'+d+'" style="padding:10px 14px;cursor:pointer;font-size:14px">@'+d+'</div>').join('');
+    list.querySelectorAll('[data-d]').forEach(el=>{
+      el.onclick = ()=>{
+        window._regDomain = el.dataset.d;
+        const b=document.getElementById('reg-domain-btn');
+        if(b) b.textContent = '@' + el.dataset.d + ' ▾';
+        list.style.display = 'none';
+      };
+    });
+  })();
+  document.getElementById('reg-cc-btn')?.addEventListener('click', ()=>{
+    const list = document.getElementById('reg-cc-list');
+    if(list) list.style.display = (list.style.display==='block') ? 'none' : 'block';
+  });
+  document.getElementById('reg-domain-btn')?.addEventListener('click', ()=>{
+    const list = document.getElementById('reg-domain-list');
+    if(list) list.style.display = (list.style.display==='block') ? 'none' : 'block';
+  });
+  document.getElementById('reg-switch-mode')?.addEventListener('click', ()=>{
+    setRegMode(window._regMode==='phone' ? 'email' : 'phone');
+  });
+  document.getElementById('reg-avatar-pick')?.addEventListener('click', ()=> document.getElementById('reg-avatar-file')?.click());
+  document.getElementById('reg-avatar-file')?.addEventListener('change', (e)=>{
+    const f = e.target.files && e.target.files[0];
+    if(!f) return;
+    const r = new FileReader();
+    r.onload = ()=>{
+      const raw = r.result;
+      // Compress to ~512px JPEG so Supabase/profile can store it
+      (async ()=>{
+        let dataUrl = raw;
+        try{
+          if(typeof compressImageDataUrl==='function'){
+            dataUrl = await compressImageDataUrl(raw, 512, 0.82);
+          } else {
+            dataUrl = await new Promise((resolve)=>{
+              const img = new Image();
+              img.onload = ()=>{
+                const max = 512;
+                let w = img.width, h = img.height;
+                if(w > max || h > max){
+                  if(w > h){ h = Math.round(h * max / w); w = max; }
+                  else { w = Math.round(w * max / h); h = max; }
+                }
+                const c = document.createElement('canvas');
+                c.width = w; c.height = h;
+                c.getContext('2d').drawImage(img, 0, 0, w, h);
+                resolve(c.toDataURL('image/jpeg', 0.82));
+              };
+              img.onerror = ()=> resolve(raw);
+              img.src = raw;
+            });
+          }
+        }catch(err){ dataUrl = raw; }
+        window._regAvatarDataUrl = dataUrl;
+        try{ storage.setItem('sl_pending_reg_avatar', dataUrl); }catch(e){}
+        const el = document.getElementById('reg-avatar-pick');
+        if(el){ el.style.backgroundImage = 'url('+dataUrl+')'; el.textContent = ''; }
+      })();
+    };
+    r.readAsDataURL(f);
+  });
+
   document.getElementById('reg-next-1')?.addEventListener('click', ()=>{
-    const first = (document.getElementById('reg-firstname')?.value||'').trim();
-    const last = (document.getElementById('reg-lastname')?.value||'').trim();
-    if(!first || !last){ authMsg('Введите имя и фамилию'); return; }
+    const contact = buildContactFromReg();
+    if(!contact){ authMsg(window._regMode==='email'?'Введите email':'Введите номер телефона'); return; }
+    const password = document.getElementById('reg-password')?.value || '';
+    const password2 = document.getElementById('reg-password2')?.value || '';
+    if(password.length < 6){ authMsg('Пароль не короче 6 символов'); return; }
+    if(password !== password2){ authMsg('Пароли не совпадают'); return; }
     setRegStep(2);
   });
   document.getElementById('reg-next-2')?.addEventListener('click', ()=>{
-    const username = (document.getElementById('reg-username')?.value||'').trim().toLowerCase();
-    if(!username || !/^[a-z0-9_]{3,24}$/.test(username)){ authMsg('3–24 символа: a-z, 0-9, _'); return; }
-    document.getElementById('reg-username').value = username;
+    const first = (document.getElementById('reg-firstname')?.value||'').trim();
+    if(!first){ authMsg('Укажите имя'); return; }
     setRegStep(3);
   });
   document.getElementById('reg-next-3')?.addEventListener('click', ()=>{
-    const birth = document.getElementById('reg-birth')?.value;
-    if(!birth){ authMsg('Укажите дату рождения'); return; }
-    try{
-      const d = new Date(birth);
-      const age = (Date.now() - d.getTime()) / (365.25*24*3600*1000);
-      if(age < 13){ authMsg('Регистрация с 13 лет'); return; }
-    }catch(e){}
+    const username = (document.getElementById('reg-username')?.value||'').trim().toLowerCase();
+    if(!username || !/^[a-z0-9_]{3,24}$/.test(username)){ authMsg('3–24 символа: a-z, 0-9, _'); return; }
+    document.getElementById('reg-username').value = username;
     setRegStep(4);
   });
-  document.getElementById('reg-next-4')?.addEventListener('click', e=>{ e.preventDefault(); doRegisterFinish(); });
+  document.getElementById('reg-next-4')?.addEventListener('click', e=>{
+    e.preventDefault();
+    const birth = document.getElementById('reg-birth')?.value;
+    if(birth){
+      try{
+        const d = new Date(birth);
+        const age = (Date.now() - d.getTime()) / (365.25*24*3600*1000);
+        if(age < 13){ authMsg('Регистрация с 13 лет'); return; }
+      }catch(err){}
+    }
+    doRegisterFinish();
+  });
+  document.getElementById('reg-skip-birth')?.addEventListener('click', e=>{
+    e.preventDefault();
+    const birthEl = document.getElementById('reg-birth');
+    if(birthEl) birthEl.value = '';
+    doRegisterFinish();
+  });
   document.getElementById('reg-back-2')?.addEventListener('click', ()=> setRegStep(1));
   document.getElementById('reg-back-3')?.addEventListener('click', ()=> setRegStep(2));
   document.getElementById('reg-back-4')?.addEventListener('click', ()=> setRegStep(3));
@@ -2472,7 +2697,7 @@ async function doRegister(){ return doRegisterFinish(); }
 
 async function onAuthenticated(user){
   // Don't skip recovery-key screen during registration
-  if(_awaitingRecoveryKey || _regStep === 5){
+  if(_awaitingRecoveryKey || _regStep === 6){
     _pendingRegUser = user || _pendingRegUser;
     return;
   }
@@ -2499,6 +2724,25 @@ async function onAuthenticated(user){
       if(lf) myProfile.favorite_music = (lf.artist?lf.artist+' — ':'')+(lf.title||'');
     }
   }catch(e){}
+  // Apply avatar chosen at registration if still missing
+  try{
+    let pendingAv = window._regAvatarDataUrl || storage.getItem('sl_pending_reg_avatar');
+    const pendingUid = storage.getItem('sl_pending_reg_avatar_uid');
+    if(pendingAv && myProfile && myProfile.id){
+      if(!myProfile.avatar_url || myProfile.avatar_url.length < 32){
+        myProfile.avatar_url = pendingAv;
+        sb.from('profiles').update({ avatar_url: pendingAv }).eq('id', myProfile.id).then(({error})=>{
+          if(error) console.warn('apply pending avatar', error);
+          else {
+            try{ storage.removeItem('sl_pending_reg_avatar'); storage.removeItem('sl_pending_reg_avatar_uid'); }catch(e){}
+          }
+        });
+        try{ if(typeof pushAvatarHistory==='function') pushAvatarHistory(myProfile.id, pendingAv); }catch(e){}
+      } else if(pendingUid === myProfile.id){
+        try{ storage.removeItem('sl_pending_reg_avatar'); storage.removeItem('sl_pending_reg_avatar_uid'); }catch(e){}
+      }
+    }
+  }catch(e){ console.warn('pending avatar', e); }
   try{ storage.setItem('sl_logged_in','1'); }catch(e){}
   document.documentElement.classList.remove('sl-booting');
   document.documentElement.classList.add('sl-ready');
@@ -4684,10 +4928,10 @@ async function openStoriesOrProfile(profileLike){
     ov.querySelector('#ch-photo') && (ov.querySelector('#ch-photo').onclick=()=>{ ov.remove(); if(typeof openAvatarHistory==='function') openAvatarHistory(profileLike); });
     return;
   }
-  // Tap avatar → fullscreen profile photos (swipe + delete for owner)
-  if(typeof openAvatarHistory==='function') openAvatarHistory(profileLike);
-  else if(typeof openFullProfile==='function') openFullProfile(profileLike);
+  // Tap avatar → additional profile info (photo history only from inside profile)
+  if(typeof openFullProfile==='function') openFullProfile(profileLike);
   else if(typeof openUserInfo==='function') openUserInfo(profileLike);
+  else if(typeof openAvatarHistory==='function') openAvatarHistory(profileLike);
 }
 
 async function openStoryViewer(userId, name){
@@ -9212,7 +9456,7 @@ notifyIncomingMessage = function(msg){
 };
 
 
-document.getElementById('me-avatar-chats')?.addEventListener('click',()=>{ if(myProfile) openStoriesOrProfile(myProfile); });
+document.getElementById('me-avatar-chats')?.addEventListener('click',()=>{ if(myProfile) openFullProfile(myProfile); });
 document.getElementById('settings-avatar')?.addEventListener('click',()=>{ if(myProfile) openFullProfile(myProfile); });
 
 
@@ -9864,7 +10108,7 @@ function scheduleBirthdayAfterAppReady(){
       } else if((event==='SIGNED_IN' || event==='TOKEN_REFRESHED') && session?.user){
         try{ storage.setItem('sl_logged_in','1'); }catch(e){}
         // During registration we must show recovery key first — do not auto-enter app
-        if(_awaitingRecoveryKey || _regStep === 5 || _pendingRegUser){
+        if(_awaitingRecoveryKey || _regStep === 6 || _pendingRegUser){
           if(! _pendingRegUser) _pendingRegUser = session.user;
           return;
         }
@@ -12926,6 +13170,52 @@ html.sl-tv .composer textarea { min-height: 52px; font-size: 17px; }
   console.log('[SL] TV + no-answer + avatar UX pack ready');
 })();
 
+
+// Click chat header (avatar/name) → additional info, not photo gallery
+(function(){
+  function openPartnerInfo(){
+    try{
+      if(activePartner){
+        if(typeof openFullProfile==='function') openFullProfile(activePartner);
+        else if(typeof openStoriesOrProfile==='function') openStoriesOrProfile(activePartner);
+      } else if(activeGroup){
+        if(typeof openGroupInfo==='function') openGroupInfo(activeGroup);
+        else if(typeof openFullProfile==='function') openFullProfile(activeGroup);
+      }
+    }catch(e){ console.warn(e); }
+  }
+  function bind(){
+    const pav = document.getElementById('partner-avatar');
+    if(pav && !pav.dataset.infoBound2){
+      pav.dataset.infoBound2 = '1';
+      pav.addEventListener('click', function(e){
+        e.preventDefault(); e.stopPropagation();
+        openPartnerInfo();
+      }, true);
+    }
+    const name = document.getElementById('chat-partner-name');
+    if(name && !name.dataset.infoBound2){
+      name.dataset.infoBound2 = '1';
+      name.style.cursor = 'pointer';
+      name.addEventListener('click', function(e){
+        e.preventDefault(); e.stopPropagation();
+        openPartnerInfo();
+      });
+    }
+    const status = document.getElementById('chat-partner-status');
+    if(status && !status.dataset.infoBound2){
+      status.dataset.infoBound2 = '1';
+      status.style.cursor = 'pointer';
+      status.addEventListener('click', function(e){
+        e.preventDefault(); e.stopPropagation();
+        openPartnerInfo();
+      });
+    }
+  }
+  bind();
+  setTimeout(bind, 1500);
+  setTimeout(bind, 4000);
+})();
 </script>
 </body>
 </html>
