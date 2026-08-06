@@ -371,9 +371,10 @@ body.beta-oled .sw-clip{background:var(--panel)!important}
 }
 .sl-primary-btn:disabled,.sl-sheet-footer .btn-primary:disabled{opacity:.4;cursor:default}
 .sl-secondary-btn{width:100%;padding:14px;border:none;border-radius:14px;background:rgba(255,255,255,.08);color:var(--text);font-size:15px;font-weight:600;cursor:pointer;margin-top:8px}
-.sl-create-avatar{width:96px;height:96px;border-radius:50%;background:rgba(255,255,255,.08);margin:24px auto 8px;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;overflow:hidden;border:2px dashed rgba(255,255,255,.15)}
+.sl-create-avatar{width:100px;height:100px;border-radius:50%;background:rgba(40,42,48,.95);margin:24px auto 8px;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;overflow:hidden;border:none;box-shadow:inset 0 0 0 1px rgba(255,255,255,.06)}
 .sl-create-avatar img{width:100%;height:100%;object-fit:cover}
 .sl-create-avatar .cam{font-size:28px;opacity:.7}
+.sl-create-avatar .cam-ico{display:block;pointer-events:none}
 .sl-create-hint{text-align:center;color:var(--muted);font-size:13px;padding:0 24px 16px;line-height:1.4}
 .sl-field{margin:10px 16px}
 .sl-field input,.sl-field textarea{
@@ -3108,7 +3109,16 @@ function renderContactsAndGroups(){
     const isSelf=data.id===myProfile?.id;
     const name=type==='group'?data.name:(isSelf?t('it_favorites'):(data.first_name?`${data.first_name} ${data.last_name||''}`:data.username));
     const newsVerified = type==='group' && (data._verified || data.username==='signal_line_news' || data.name==='Signal Line новости');
-    const sub=type==='group'?(data.description||'Группа'):(data.lastMessage||'@'+data.username);
+    let sub;
+    if(type==='group'){
+      if(data.type==='channel'){
+        sub = data.description || (data.is_public ? 'Канал' : 'Приватный канал');
+      } else {
+        sub = data.description || 'Группа';
+      }
+    } else {
+      sub = data.lastMessage || ('@'+(data.username||''));
+    }
     const online=onlineUsers.has(data.id);
     const lastAt = data.lastAt ? new Date(data.lastAt) : null;
     const timeStr = lastAt && lastAt.getTime()>0
@@ -3525,6 +3535,17 @@ function buildPinKeypad(){
 
 function updatePartnerStatus(){
   const el=document.getElementById('chat-partner-status');
+  if(!el) return;
+  // Groups / channels never show online presence
+  if(activeGroup){
+    if(activeGroup.type==='channel'){
+      el.textContent = activeGroup.is_public ? 'публичный канал' : 'приватный канал';
+    } else {
+      el.textContent = 'группа';
+    }
+    el.className = 'chat-status';
+    return;
+  }
   if(!activePartner||activePartner.isBot){ el.textContent=activePartner?.isBot?t('bot'):''; return; }
   if(activePartner.id===myProfile.id){ el.textContent=t('notes'); return; }
   el.textContent=onlineUsers.has(activePartner.id)?t('online'):t('offline');
@@ -6060,6 +6081,7 @@ function setupPresence(){
   presenceChannel.on('presence',{event:'sync'},()=>{
     onlineUsers.clear();
     Object.keys(presenceChannel.presenceState()).forEach(id=>onlineUsers.add(id));
+    try{ if(typeof updatePartnerStatus==='function') updatePartnerStatus(); }catch(e){}
     updatePartnerStatus(); renderContactsAndGroups();
   });
   presenceChannel.subscribe(async s=>{ if(s==='SUBSCRIBED') await presenceChannel.track({user_id:myProfile.id}); });
@@ -6262,6 +6284,7 @@ setupPresence = function(){
   presenceChannel.on('presence',{event:'sync'},()=>{
     onlineUsers.clear();
     Object.keys(presenceChannel.presenceState()).forEach(id=>onlineUsers.add(id));
+    try{ if(typeof updatePartnerStatus==='function') updatePartnerStatus(); }catch(e){}
     updatePartnerStatus(); renderContactsAndGroups();
   });
   presenceChannel.subscribe(async s=>{ if(s==='SUBSCRIBED' && !getAnon().hideOnline) await presenceChannel.track({user_id:myProfile.id}); });
@@ -8011,7 +8034,7 @@ window.openCreateGroupFlow = function(){
       </div>
       <div class="sl-sheet-body">
         <div class="sl-create-hint">Добавьте фото, чтобы чат узнавали с первого взгляда</div>
-        <div class="sl-create-avatar" id="cg-av"><span class="cam">📷+</span></div>
+        <div class="sl-create-avatar" id="cg-av"><svg class="cam-ico" viewBox="0 0 48 48" width="40" height="40" fill="none"><circle cx="24" cy="24" r="22" fill="rgba(255,255,255,0.06)" stroke="rgba(255,255,255,0.12)" stroke-width="1"/><path d="M16 20h3.2l1.6-2.4h6.4L28.8 20H32a2 2 0 012 2v10a2 2 0 01-2 2H16a2 2 0 01-2-2V22a2 2 0 012-2z" stroke="rgba(255,255,255,0.55)" stroke-width="1.8" stroke-linejoin="round"/><circle cx="24" cy="27" r="4.2" stroke="rgba(255,255,255,0.55)" stroke-width="1.8"/><path d="M33 16v5M30.5 18.5h5" stroke="rgba(255,255,255,0.55)" stroke-width="1.8" stroke-linecap="round"/></svg></div>
         <input type="file" id="cg-file" accept="image/*" style="display:none">
         <div class="sl-field"><input id="cg-name" placeholder="Название группы" maxlength="64" autocomplete="off"></div>
       </div>
@@ -8066,7 +8089,7 @@ window.openCreateChannelFlow = function(){
     <div class="sl-sheet-body">
       <div style="padding:8px 18px 0;font-size:20px;font-weight:700">Каким будет новый канал?</div>
       <div class="sl-create-hint">Добавьте фото, чтобы канал узнавали с первого взгляда</div>
-      <div class="sl-create-avatar" id="cc-av"><span class="cam">📷+</span></div>
+      <div class="sl-create-avatar" id="cc-av"><svg class="cam-ico" viewBox="0 0 48 48" width="40" height="40" fill="none"><circle cx="24" cy="24" r="22" fill="rgba(255,255,255,0.06)" stroke="rgba(255,255,255,0.12)" stroke-width="1"/><path d="M16 20h3.2l1.6-2.4h6.4L28.8 20H32a2 2 0 012 2v10a2 2 0 01-2 2H16a2 2 0 01-2-2V22a2 2 0 012-2z" stroke="rgba(255,255,255,0.55)" stroke-width="1.8" stroke-linejoin="round"/><circle cx="24" cy="27" r="4.2" stroke="rgba(255,255,255,0.55)" stroke-width="1.8"/><path d="M33 16v5M30.5 18.5h5" stroke="rgba(255,255,255,0.55)" stroke-width="1.8" stroke-linecap="round"/></svg></div>
       <input type="file" id="cc-file" accept="image/*" style="display:none">
       <div class="sl-field">
         <input id="cc-name" placeholder="Название" maxlength="200" autocomplete="off">
