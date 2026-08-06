@@ -2935,6 +2935,33 @@ async function loadChats(){
 }
 async function loadGroups(){
   try{ const {data}=await sb.from('group_members').select('group_id,role,groups(*)').eq('user_id',myProfile.id); groups=(data||[]).map(m=>({...m.groups,myRole:m.role})).filter(g=>g?.id); }catch(e){ groups=[]; }
+  // Merge local backups (avatar + is_public / username) when DB columns missing
+  try{
+    (groups||[]).forEach(g=>{
+      if(!g||!g.id) return;
+      try{
+        const la=localStorage.getItem('sl_group_av_'+g.id);
+        if(la && !g.avatar_url) g.avatar_url=la;
+      }catch(e){}
+      try{
+        const raw=localStorage.getItem('sl_group_meta_'+g.id);
+        if(raw){
+          const meta=JSON.parse(raw);
+          if(meta.type) g.type = g.type || meta.type;
+          // Prefer explicit true from DB; otherwise use local
+          if(g.is_public==null || g.is_public===false){
+            if(meta.is_public===true) g.is_public=true;
+          }
+          if(meta.is_public===true) g.is_public=true;
+          if(meta.username && !g.username) g.username=meta.username;
+          if(meta.invite_code && !g.invite_code) g.invite_code=meta.invite_code;
+          if(meta.description && !g.description) g.description=meta.description;
+        }
+      }catch(e){}
+      // Heuristic: has public username → public channel
+      if(g.type==='channel' && g.username && g.is_public==null) g.is_public=true;
+    });
+  }catch(e){}
   // Always show official news channel
   try{
     if(typeof ensureNewsChannelVisible==='function') ensureNewsChannelVisible();
@@ -3112,7 +3139,8 @@ function renderContactsAndGroups(){
     let sub;
     if(type==='group'){
       if(data.type==='channel'){
-        sub = data.description || (data.is_public ? 'Канал' : 'Приватный канал');
+        const pub = !!(data.is_public || data.username);
+        sub = data.description || (pub ? 'Канал' : 'Приватный канал');
       } else {
         sub = data.description || 'Группа';
       }
@@ -3444,7 +3472,7 @@ async function openGroup(group){
   if(typeof startChatLiveSync==='function') startChatLiveSync();
   const isAdmin=group.myRole==='admin'||group.owner_id===myProfile.id;
   document.getElementById('chat-partner-name').textContent=group.name;
-  document.getElementById('chat-partner-status').textContent=group.type==='channel'?(group.is_public?'публичный канал':'приватный канал'):'группа';
+  document.getElementById('chat-partner-status').textContent=group.type==='channel'?((group.is_public||group.username)?'публичный канал':'приватный канал'):'группа';
   document.getElementById('chat-partner-status').className='chat-status';
   const pav=document.getElementById('partner-avatar');
   try{
@@ -3539,7 +3567,7 @@ function updatePartnerStatus(){
   // Groups / channels never show online presence
   if(activeGroup){
     if(activeGroup.type==='channel'){
-      el.textContent = activeGroup.is_public ? 'публичный канал' : 'приватный канал';
+      el.textContent = (activeGroup.is_public || activeGroup.username) ? 'публичный канал' : 'приватный канал';
     } else {
       el.textContent = 'группа';
     }
@@ -8318,6 +8346,23 @@ window.slDoCreateGroup = async function({name, description, memberIds, avatarDat
     try{ localStorage.setItem('sl_group_av_'+data.id, avFinal); }catch(e){}
     data.avatar_url = data.avatar_url || avFinal;
   }
+  // Persist channel flags locally (DB may lack is_public / username columns)
+  if(data?.id && isChannel){
+    try{
+      const meta = {
+        type: 'channel',
+        is_public: !!isPublic,
+        username: username || null,
+        invite_code: inviteCode || null,
+        description: description || null
+      };
+      localStorage.setItem('sl_group_meta_'+data.id, JSON.stringify(meta));
+      data.is_public = !!isPublic;
+      data.type = 'channel';
+      if(username) data.username = username;
+      if(inviteCode) data.invite_code = inviteCode;
+    }catch(e){}
+  }
 
   // owner as admin
   try{ await sb.from('group_members').insert({group_id:data.id, user_id:myProfile.id, role:'admin'}); }catch(e){}
@@ -8328,7 +8373,16 @@ window.slDoCreateGroup = async function({name, description, memberIds, avatarDat
   }
 
   try{ await loadGroups(); }catch(e){}
-  const g = {...data, myRole:'admin', is_public:!!isPublic};
+  const g = {...data, myRole:'admin', type: isChannel?'channel':(data.type||'group'), is_public: isChannel ? !!isPublic : !!data.is_public};
+  if(isChannel && isPublic && username) g.username = username;
+  if(isChannel && !isPublic && inviteCode) g.invite_code = inviteCode;
+  // Keep flags on the in-memory list entry
+  try{
+    const idx=(groups||[]).findIndex(x=>x && String(x.id)===String(g.id));
+    if(idx>=0){ groups[idx]={...groups[idx], ...g}; }
+    else { groups=groups||[]; groups.unshift(g); }
+  }catch(e){}
+  try{ if(typeof renderContactsAndGroups==='function') renderContactsAndGroups(); }catch(e){}
   try{ await openGroup(g); }catch(e){ console.warn(e); }
 
   // Ready card overlay briefly for empty groups (MAX style)
