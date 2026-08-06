@@ -1723,6 +1723,7 @@ html.sl-ready.sl-booting::before{display:none!important}
         <div class="settings-item" id="settings-edit-profile"><svg viewBox="0 0 24 24"><path d="M20 14.66V20a2 2 0 01-2 2H4a2 2 0 01-2-2V6a2 2 0 012-2h5.34"/><path d="M18 2l4 4-10 10H8v-4L18 2z"/></svg><span class="item-text" data-i18n="it_edit_profile">Изменить профиль</span></div>
         <div class="settings-item" id="settings-favorites"><svg viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg><span class="item-text" data-i18n="it_favorites">Избранное</span></div>
         <div class="settings-item" id="settings-devices"><svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg><span class="item-text" data-i18n="it_devices">Устройства</span></div>
+        <div class="settings-item" id="settings-mail"><svg viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><path d="M22 6l-10 7L2 6"/></svg><span class="item-text" data-i18n="it_mail">Почта</span></div>
         <div class="settings-item" id="settings-pin-lock"><svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg><span class="item-text" data-i18n="it_pinlock">Защита чатов (PIN)</span></div>
         <div class="settings-item" id="settings-passkey"><svg viewBox="0 0 24 24"><path d="M12 2a5 5 0 015 5v3h1a2 2 0 012 2v8a2 2 0 01-2 2H6a2 2 0 01-2-2v-8a2 2 0 012-2h1V7a5 5 0 015-5z"/><circle cx="12" cy="15" r="2"/></svg><span class="item-text">Ключ входа (Face ID / PIN)</span><span id="settings-passkey-badge" style="margin-left:auto;font-size:11px;color:var(--muted)"></span></div>
         <div class="settings-item" id="settings-2fa"><svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg><span class="item-text">Двухфакторная защита</span><span id="settings-2fa-badge" style="margin-left:auto;font-size:11px;color:var(--muted)"></span></div>
@@ -13655,6 +13656,351 @@ html.sl-tv .composer textarea { min-height: 52px; font-size: 17px; }
   bind();
   setTimeout(bind, 1500);
   setTimeout(bind, 4000);
+})();
+
+
+
+// ========== SIGLI MAIL @sigli.gleeze.com ==========
+(function(){
+  const MAIL_DOMAIN = 'sigli.gleeze.com';
+  const MAIL_BOX_KEY = 'sl_sigli_mailbox';
+  const MAIL_LOCAL_IN_KEY = 'sl_sigli_inbox';
+  const MAIL_LOCAL_OUT_KEY = 'sl_sigli_outbox';
+
+  function getMailbox(){
+    try{
+      const fromProf = myProfile?.sigli_mail || myProfile?.sigli_email;
+      if(fromProf) return String(fromProf).toLowerCase();
+      const local = storage.getItem(MAIL_BOX_KEY);
+      if(local) return String(local).toLowerCase();
+    }catch(e){}
+    return '';
+  }
+  function setMailboxLocal(addr){
+    try{ storage.setItem(MAIL_BOX_KEY, addr); }catch(e){}
+  }
+  function getLocalInbox(){ try{ return JSON.parse(storage.getItem(MAIL_LOCAL_IN_KEY)||'[]'); }catch(e){ return []; } }
+  function setLocalInbox(a){ try{ storage.setItem(MAIL_LOCAL_IN_KEY, JSON.stringify(a.slice(0,200))); }catch(e){} }
+  function getLocalOutbox(){ try{ return JSON.parse(storage.getItem(MAIL_LOCAL_OUT_KEY)||'[]'); }catch(e){ return []; } }
+  function setLocalOutbox(a){ try{ storage.setItem(MAIL_LOCAL_OUT_KEY, JSON.stringify(a.slice(0,200))); }catch(e){} }
+
+  function normalizeLocalPart(s){
+    return String(s||'').trim().toLowerCase().replace(/[^a-z0-9._-]/g,'').replace(/^\.+|\.+$/g,'').slice(0,32);
+  }
+  function fullAddress(local){ return local + '@' + MAIL_DOMAIN; }
+
+  async function registerSigliMail(localPart){
+    const local = normalizeLocalPart(localPart);
+    if(local.length < 3) return { ok:false, error:'Минимум 3 символа (a-z, 0-9, . _ -)' };
+    if(!/^[a-z0-9]/.test(local)) return { ok:false, error:'Должен начинаться с буквы или цифры' };
+    const addr = fullAddress(local);
+    // uniqueness check via profiles
+    if(sb){
+      try{
+        const {data} = await sb.from('profiles').select('id').eq('sigli_mail', addr).maybeSingle();
+        if(data && data.id !== myProfile?.id) return { ok:false, error:'Этот адрес уже занят' };
+      }catch(e){
+        // column may not exist — try sigli_email
+        try{
+          const {data} = await sb.from('profiles').select('id').eq('sigli_email', addr).maybeSingle();
+          if(data && data.id !== myProfile?.id) return { ok:false, error:'Этот адрес уже занят' };
+        }catch(e2){}
+      }
+      try{
+        const {error} = await sb.from('profiles').update({ sigli_mail: addr }).eq('id', myProfile.id);
+        if(error){
+          const r2 = await sb.from('profiles').update({ sigli_email: addr }).eq('id', myProfile.id);
+          if(r2.error) console.warn('sigli save', r2.error);
+        }
+      }catch(e){ console.warn(e); }
+    }
+    if(myProfile){ myProfile.sigli_mail = addr; myProfile.sigli_email = addr; }
+    setMailboxLocal(addr);
+    return { ok:true, addr };
+  }
+
+  async function fetchMail(){
+    const box = getMailbox();
+    let inbox = [], outbox = [];
+    if(sb && box){
+      try{
+        const {data: inc} = await sb.from('sigli_mail').select('*').eq('to_addr', box).order('created_at',{ascending:false}).limit(100);
+        if(inc) inbox = inc;
+      }catch(e){ console.warn('sigli_mail inbox', e); }
+      try{
+        const {data: out} = await sb.from('sigli_mail').select('*').eq('from_addr', box).order('created_at',{ascending:false}).limit(100);
+        if(out) outbox = out;
+      }catch(e){ console.warn('sigli_mail outbox', e); }
+    }
+    // merge local
+    const li = getLocalInbox().filter(m => !inbox.some(x => String(x.id)===String(m.id)));
+    const lo = getLocalOutbox().filter(m => !outbox.some(x => String(x.id)===String(m.id)));
+    inbox = [...li, ...inbox].sort((a,b)=> new Date(b.created_at||0)-new Date(a.created_at||0));
+    outbox = [...lo, ...outbox].sort((a,b)=> new Date(b.created_at||0)-new Date(a.created_at||0));
+    return { inbox, outbox };
+  }
+
+  async function sendSigliMail({ to, subject, body }){
+    const from = getMailbox();
+    if(!from) return { ok:false, error:'Сначала создайте ящик @'+MAIL_DOMAIN };
+    let toAddr = String(to||'').trim().toLowerCase();
+    if(!toAddr.includes('@')) toAddr = fullAddress(normalizeLocalPart(toAddr));
+    if(!toAddr.endsWith('@'+MAIL_DOMAIN)){
+      // external — still store + offer mailto
+      return { ok:false, error:'external', to: toAddr, subject, body, from };
+    }
+    const row = {
+      id: 'local_'+Date.now()+'_'+Math.random().toString(36).slice(2,7),
+      from_addr: from,
+      to_addr: toAddr,
+      subject: (subject||'').slice(0,200),
+      body: (body||'').slice(0,10000),
+      created_at: new Date().toISOString(),
+      from_user_id: myProfile?.id || null,
+      read: false
+    };
+    // resolve recipient user
+    if(sb){
+      try{
+        let uid = null;
+        try{
+          const {data} = await sb.from('profiles').select('id').eq('sigli_mail', toAddr).maybeSingle();
+          uid = data?.id;
+        }catch(e){
+          try{
+            const {data} = await sb.from('profiles').select('id').eq('sigli_email', toAddr).maybeSingle();
+            uid = data?.id;
+          }catch(e2){}
+        }
+        row.to_user_id = uid;
+        const payload = {
+          from_addr: row.from_addr,
+          to_addr: row.to_addr,
+          subject: row.subject,
+          body: row.body,
+          from_user_id: row.from_user_id,
+          to_user_id: uid,
+          read: false
+        };
+        const {data: ins, error} = await sb.from('sigli_mail').insert(payload).select();
+        if(error){
+          console.warn('sigli send', error);
+          // local delivery only
+        } else if(ins?.[0]?.id){
+          row.id = ins[0].id;
+          row.created_at = ins[0].created_at || row.created_at;
+        }
+      }catch(e){ console.warn(e); }
+    }
+    // local outbox + if same device testing, inbox
+    const out = getLocalOutbox(); out.unshift(row); setLocalOutbox(out);
+    if(toAddr === from){
+      const inn = getLocalInbox(); inn.unshift({...row, read:false}); setLocalInbox(inn);
+    }
+    // notify via Signal Line message if we know user
+    try{
+      if(sb && row.to_user_id && row.to_user_id !== myProfile?.id){
+        await sb.from('messages').insert({
+          sender_id: myProfile.id,
+          receiver_id: row.to_user_id,
+          content: '📧 '+from+' → '+toAddr+'\n'+(row.subject?row.subject+'\n':'')+(row.body||'').slice(0,500),
+          type: 'text'
+        });
+      }
+    }catch(e){}
+    return { ok:true, row };
+  }
+
+  window.openMailCenter = async function(){
+    try{ document.getElementById('sl-mail-center')?.remove(); }catch(e){}
+    if(!myProfile){ showToast('Войдите в аккаунт'); return; }
+
+    let box = getMailbox();
+    const ov = document.createElement('div');
+    ov.id = 'sl-mail-center';
+    ov.className = 'modal-overlay';
+    ov.style.zIndex = '12050';
+
+    function shell(inner){
+      ov.innerHTML = `<div class="modal" style="max-width:460px;max-height:92vh;overflow:auto;padding:0">
+        <div style="padding:14px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px;position:sticky;top:0;background:var(--panel);z-index:2">
+          <button type="button" id="mail-x" style="width:36px;height:36px;border:none;border-radius:50%;background:var(--panel-hover);color:var(--text);font-size:18px;cursor:pointer">×</button>
+          <div style="flex:1;font-weight:800;font-size:17px">Почта Sigli</div>
+        </div>
+        <div style="padding:16px">${inner}</div>
+      </div>`;
+      document.body.appendChild(ov);
+      ov.onclick = e=>{ if(e.target===ov) ov.remove(); };
+      ov.querySelector('#mail-x').onclick = ()=> ov.remove();
+    }
+
+    // Registration screen
+    if(!box){
+      shell(`
+        <div style="text-align:center;margin-bottom:12px;font-size:40px">📧</div>
+        <h3 style="margin:0 0 8px;text-align:center">Создайте почту Sigli</h3>
+        <p style="font-size:13px;color:var(--muted);text-align:center;line-height:1.45;margin:0 0 16px">
+          Адрес вида <b>имя@${MAIL_DOMAIN}</b> привязывается к вашему аккаунту Signal Line.
+          Письма между пользователями Sigli доставляются в приложении.
+        </p>
+        <div style="display:flex;align-items:center;gap:0;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--input-bg);margin-bottom:12px">
+          <input type="text" id="sigli-local" placeholder="username" maxlength="32" style="flex:1;min-width:0;padding:12px 12px;border:none;background:transparent;color:var(--text);font-size:15px;outline:none">
+          <span style="padding:12px 12px;color:var(--muted);font-size:13px;border-left:1px solid var(--line);white-space:nowrap">@${MAIL_DOMAIN}</span>
+        </div>
+        <button type="button" class="btn-primary" id="sigli-reg">Зарегистрировать</button>
+        <p style="font-size:11px;color:var(--muted);margin:12px 0 0;line-height:1.4;text-align:center">
+          Для приёма писем с Gmail/iCloud на этот домен нужны DNS MX-записи на сервере домена.
+          Внутри Signal Line почта работает сразу.
+        </p>
+      `);
+      ov.querySelector('#sigli-reg').onclick = async ()=>{
+        const local = ov.querySelector('#sigli-local')?.value;
+        const r = await registerSigliMail(local);
+        if(!r.ok){ showToast(r.error||'Ошибка'); return; }
+        showToast('Почта создана: '+r.addr);
+        ov.remove();
+        openMailCenter();
+      };
+      return;
+    }
+
+    // Main mailbox UI
+    shell(`
+      <div style="padding:12px;border-radius:14px;background:var(--input-bg);border:1px solid var(--line);margin-bottom:14px">
+        <div style="font-size:11px;color:var(--muted)">Ваш ящик</div>
+        <div style="display:flex;gap:8px;align-items:center;margin-top:4px">
+          <div style="flex:1;font-weight:800;font-size:15px;word-break:break-all" id="sigli-addr">${escapeHtml(box)}</div>
+          <button type="button" class="btn-secondary" id="sigli-copy" style="width:auto;margin:0;padding:8px 10px;font-size:12px">Копировать</button>
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin-top:6px">Привязан к аккаунту Signal Line</div>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:14px">
+        <button type="button" class="btn-primary" id="sigli-compose" style="flex:1;margin:0">Написать</button>
+        <button type="button" class="btn-secondary" id="sigli-refresh" style="width:auto;margin:0;padding:0 14px">↻</button>
+      </div>
+      <div id="sigli-compose-box" style="display:none;padding:12px;border:1px solid var(--line);border-radius:14px;margin-bottom:14px;background:var(--panel-hover)">
+        <div class="field"><label>Кому</label>
+          <input type="text" id="sigli-to" placeholder="user@${MAIL_DOMAIN}" style="width:100%;box-sizing:border-box;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--input-bg);color:var(--text)">
+        </div>
+        <div class="field"><label>Тема</label>
+          <input type="text" id="sigli-subj" placeholder="Тема" style="width:100%;box-sizing:border-box;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--input-bg);color:var(--text)">
+        </div>
+        <div class="field"><label>Письмо</label>
+          <textarea id="sigli-body" rows="4" placeholder="Текст…" style="width:100%;box-sizing:border-box;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--input-bg);color:var(--text);font-family:inherit;resize:vertical"></textarea>
+        </div>
+        <button type="button" class="btn-primary" id="sigli-send" style="margin:0">Отправить</button>
+      </div>
+      <div style="display:flex;gap:6px;margin-bottom:10px">
+        <button type="button" class="btn-secondary sigli-tab" data-tab="in" style="flex:1;margin:0;padding:10px;font-size:13px">Входящие</button>
+        <button type="button" class="btn-secondary sigli-tab" data-tab="out" style="flex:1;margin:0;padding:10px;font-size:13px">Исходящие</button>
+      </div>
+      <div id="sigli-list" style="display:flex;flex-direction:column;gap:8px;min-height:80px"></div>
+    `);
+
+    let tab = 'in';
+    let cache = { inbox:[], outbox:[] };
+
+    async function reload(){
+      const list = ov.querySelector('#sigli-list');
+      if(list) list.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:12px;text-align:center">Загрузка…</div>';
+      cache = await fetchMail();
+      renderList();
+    }
+    function renderList(){
+      const list = ov.querySelector('#sigli-list');
+      if(!list) return;
+      const rows = tab==='in' ? cache.inbox : cache.outbox;
+      if(!rows.length){
+        list.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:16px;text-align:center">Пусто</div>';
+        return;
+      }
+      list.innerHTML = rows.map(m=>{
+        const peer = tab==='in' ? (m.from_addr||'') : (m.to_addr||'');
+        const when = m.created_at ? new Date(m.created_at).toLocaleString('ru-RU') : '';
+        return `<div class="sigli-msg" data-id="${escapeHtml(String(m.id))}" style="padding:12px;border-radius:12px;border:1px solid var(--line);background:var(--input-bg);cursor:pointer">
+          <div style="display:flex;justify-content:space-between;gap:8px">
+            <div style="font-weight:700;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(peer)}</div>
+            <div style="font-size:11px;color:var(--muted);flex-shrink:0">${escapeHtml(when)}</div>
+          </div>
+          <div style="font-size:13px;margin-top:4px;font-weight:600">${escapeHtml(m.subject||'(без темы)')}</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml((m.body||'').slice(0,120))}</div>
+        </div>`;
+      }).join('');
+      list.querySelectorAll('.sigli-msg').forEach(el=>{
+        el.onclick = ()=>{
+          const id = el.dataset.id;
+          const m = [...cache.inbox, ...cache.outbox].find(x=>String(x.id)===id);
+          if(!m) return;
+          const peer = tab==='in' ? m.from_addr : m.to_addr;
+          alert((tab==='in'?'От: ':'Кому: ')+(peer||'')+'\nТема: '+(m.subject||'')+'\n\n'+(m.body||''));
+        };
+      });
+    }
+
+    ov.querySelector('#sigli-copy').onclick = async ()=>{
+      try{ await navigator.clipboard.writeText(box); showToast('Скопировано'); }catch(e){ showToast(box); }
+    };
+    ov.querySelector('#sigli-compose').onclick = ()=>{
+      const b = ov.querySelector('#sigli-compose-box');
+      b.style.display = b.style.display==='none'?'block':'none';
+    };
+    ov.querySelector('#sigli-refresh').onclick = ()=> reload();
+    ov.querySelectorAll('.sigli-tab').forEach(btn=>{
+      btn.onclick = ()=>{
+        tab = btn.dataset.tab;
+        ov.querySelectorAll('.sigli-tab').forEach(b=>{
+          b.style.background = b.dataset.tab===tab ? 'var(--accent-a)' : '';
+          b.style.color = b.dataset.tab===tab ? '#fff' : '';
+        });
+        renderList();
+      };
+    });
+    // highlight inbox tab
+    const inTab = ov.querySelector('.sigli-tab[data-tab="in"]');
+    if(inTab){ inTab.style.background='var(--accent-a)'; inTab.style.color='#fff'; }
+
+    ov.querySelector('#sigli-send').onclick = async ()=>{
+      const to = ov.querySelector('#sigli-to')?.value;
+      const subject = ov.querySelector('#sigli-subj')?.value;
+      const body = ov.querySelector('#sigli-body')?.value;
+      const r = await sendSigliMail({ to, subject, body });
+      if(r.error === 'external'){
+        // open system mail for external domains
+        const mailto = 'mailto:'+encodeURIComponent(r.to)
+          +'?subject='+encodeURIComponent(r.subject||'')
+          +'&body='+encodeURIComponent((r.body||'')+'\n\n—\nОт: '+r.from);
+        window.location.href = mailto;
+        showToast('Внешний адрес — откроется системная почта');
+        return;
+      }
+      if(!r.ok){ showToast(r.error||'Ошибка'); return; }
+      showToast('Письмо отправлено');
+      ov.querySelector('#sigli-to').value='';
+      ov.querySelector('#sigli-subj').value='';
+      ov.querySelector('#sigli-body').value='';
+      ov.querySelector('#sigli-compose-box').style.display='none';
+      reload();
+    };
+
+    reload();
+  };
+
+  function bindMailSetting(){
+    const el = document.getElementById('settings-mail');
+    if(!el || el.dataset.bound2) return;
+    el.dataset.bound2 = '1';
+    el.addEventListener('click', ()=> openMailCenter());
+  }
+  bindMailSetting();
+  setTimeout(bindMailSetting, 1500);
+  setTimeout(bindMailSetting, 4000);
+
+  // Restore mailbox from profile on login
+  try{
+    const _oa = typeof onAuthenticated==='function' ? onAuthenticated : null;
+    // light sync only — don't wrap again if too many wraps
+  }catch(e){}
+  console.log('[SL] sigli mail @'+MAIL_DOMAIN+' ready');
 })();
 </script>
 </body>
