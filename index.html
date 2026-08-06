@@ -3872,6 +3872,23 @@ async function readFileAsDataURL(file){
 }
 
 /** Upload large media to Supabase Storage (supports multi-GB if bucket allows). */
+function dataUrlToFile(dataUrl, filename){
+  try{
+    const m = String(dataUrl).match(/^data:([^;]+);base64,(.+)$/);
+    if(!m) return null;
+    const mime = m[1] || 'application/octet-stream';
+    const bstr = atob(m[2]);
+    const n = bstr.length;
+    const u8 = new Uint8Array(n);
+    for(let i=0;i<n;i++) u8[i] = bstr.charCodeAt(i);
+    return new File([u8], filename || ('file.'+(mime.split('/')[1]||'bin')), { type: mime });
+  }catch(e){ return null; }
+}
+async function uploadDataUrlToStorage(dataUrl, folder, filename){
+  const f = dataUrlToFile(dataUrl, filename);
+  if(!f) return { ok:false, error:'Bad data URL' };
+  return uploadFileToStorage(f, folder);
+}
 async function uploadFileToStorage(file, folder){
   if(!sb?.storage) return { ok:false, error:'Storage unavailable' };
   const uid = myProfile?.id || 'anon';
@@ -3915,6 +3932,16 @@ async function prepareMediaForUpload(file, kind){
     let out = await compressImageDataUrl(dataUrl, kind==='story'?1080:1600, kind==='story'?0.7:0.78);
     if(dataUrlBytes(out) > maxBytes) out = await compressImageDataUrl(out, 900, 0.6);
     if(dataUrlBytes(out) > maxBytes) out = await compressImageDataUrl(out, 640, 0.5);
+    // Stories/posts: prefer Storage URL so others can see the media
+    if(kind==='story' || kind==='post'){
+      try{
+        const f = dataUrlToFile(out, 'image.jpg');
+        if(f){
+          const up = await uploadFileToStorage(f, kind==='story'?'stories':'posts');
+          if(up.ok && up.url) return { ok:true, type:'image', dataUrl: up.url, bytes: f.size, via:'storage' };
+        }
+      }catch(e){ console.warn('image storage', e); }
+    }
     return { ok:true, type:'image', dataUrl:out, bytes:dataUrlBytes(out) };
   }
   // Video: NO client size cap — upload File/Blob to Storage (not base64)
@@ -6777,17 +6804,54 @@ async function openStoryEditor(file){
     return c.toDataURL('image/jpeg', 0.88);
   }
 
-  async function publishStory(mediaUrl, mediaType, overlays, caption){
+  async function publishStory(mediaUrl, mediaType, overlays, caption, sourceFile){
     const audience = await chooseStoryAudience();
     if(!audience) return;
     try{
       showLoader();
       const expires = new Date(Date.now()+86400000).toISOString();
       const cap = (caption||'').trim().slice(0, 200);
+
+      // 1) Upload media to Supabase Storage so everyone can load the URL
+      let publicUrl = mediaUrl;
+      const isData = typeof mediaUrl === 'string' && mediaUrl.startsWith('data:');
+      try{
+        if(sourceFile && sourceFile instanceof Blob){
+          const up = await uploadFileToStorage(sourceFile, 'stories');
+          if(up.ok && up.url) publicUrl = up.url;
+          else console.warn('story storage file', up.error);
+        } else if(isData){
+          const name = mediaType==='video' ? 'story.mp4' : 'story.jpg';
+          // compress image data URL further before upload if huge
+          let toUp = mediaUrl;
+          if(mediaType==='image' && dataUrlBytes(mediaUrl) > 900*1024){
+            try{ toUp = await compressImageDataUrl(mediaUrl, 1080, 0.72); }catch(e){}
+          }
+          const up = await uploadDataUrlToStorage(toUp, 'stories', name);
+          if(up.ok && up.url) publicUrl = up.url;
+          else {
+            console.warn('story storage dataurl', up.error);
+            // last resort: tiny image as data url in DB (may still fail if too large)
+            if(mediaType==='image'){
+              try{ publicUrl = await compressImageDataUrl(mediaUrl, 720, 0.55); }catch(e){}
+            }
+          }
+        } else if(typeof mediaUrl === 'string' && /^https?:\/\//i.test(mediaUrl)){
+          publicUrl = mediaUrl; // already remote
+        }
+      }catch(upErr){ console.warn('story upload', upErr); }
+
+      // Prefer never storing multi-MB data URLs in DB
+      if(typeof publicUrl === 'string' && publicUrl.startsWith('data:') && dataUrlBytes(publicUrl) > 600*1024){
+        showToast(currentLang==='en'
+          ? 'Create public Storage bucket «media» in Supabase so stories are visible to everyone'
+          : 'Создайте публичный бакет Storage «media» в Supabase — иначе история только у вас');
+      }
+
       const localStory = {
         id: 'local_'+Date.now(),
         user_id: myProfile.id,
-        media_url: mediaUrl,
+        media_url: publicUrl,
         type: mediaType,
         expires_at: expires,
         created_at: new Date().toISOString(),
@@ -6797,31 +6861,42 @@ async function openStoryEditor(file){
       };
       addLocalStory(localStory);
       try{ storage.setItem('sl_story_audience_'+myProfile.id, JSON.stringify(audience)); }catch(e){}
+
+      let published = false;
       try{
         const payload = {
           user_id: myProfile.id,
-          media_url: mediaUrl,
+          media_url: publicUrl,
           type: mediaType,
           expires_at: expires
         };
-        // optional columns if present in schema
         if(cap) payload.caption = cap;
-        const ins = await sb.from('stories').insert(payload).select();
+        let ins = await sb.from('stories').insert(payload).select();
+        // Retry without caption if column missing
+        if(ins.error && /caption|column/i.test(String(ins.error.message||''))){
+          delete payload.caption;
+          ins = await sb.from('stories').insert(payload).select();
+        }
         if(ins.error){
           console.warn('story insert', ins.error);
-          showToast((currentLang==='en'?'Story saved on this device':'История сохранена на устройстве'));
+          // RLS / size — try without huge data
+          showToast((currentLang==='en'?'Could not publish to server: ':'Не удалось опубликовать: ')+String(ins.error.message||ins.error).slice(0,80));
         } else {
+          published = true;
           if(ins.data?.[0]?.id){
-            const arr=getLocalStories().map(s=>s.id===localStory.id?{...s,id:ins.data[0].id}:s);
+            const arr=getLocalStories().map(s=>s.id===localStory.id?{...s,id:ins.data[0].id, media_url: publicUrl}:s);
             setLocalStories(arr);
           }
-          showToast(currentLang==='en'?'Story published':'История опубликована');
+          showToast(currentLang==='en'?'Story published — everyone can see it':'История опубликована — её видят все');
         }
       }catch(err){
         console.warn(err);
-        showToast(currentLang==='en'?'Story saved on this device':'История сохранена на устройстве');
+        showToast(currentLang==='en'?'Publish error':'Ошибка публикации');
       }
       await loadStories();
+      if(!published){
+        console.warn('story stayed local only');
+      }
     }catch(err){ showToast(friendlyError(err)); }
     finally{ hideLoader(); }
   }
@@ -6832,21 +6907,34 @@ async function openStoryEditor(file){
       if(isVideo){
         const overlays = layers.map(L=>({...L}));
         ov.remove();
-        await publishStory(bgUrl, 'video', overlays.length ? overlays : null, caption);
+        // Upload original File to Storage (not base64)
+        await publishStory(bgUrl, 'video', overlays.length ? overlays : null, caption, file);
       } else {
         showLoader();
         let out;
+        let srcFile = null;
         if(layers.length){
           out = await compositeImage();
+          srcFile = dataUrlToFile(out, 'story.jpg');
         } else {
           try{
             const prep = await prepareMediaForUpload(file, 'story');
-            out = prep.ok ? prep.dataUrl : bgUrl;
+            if(prep.ok){
+              out = prep.dataUrl;
+              // if already uploaded via storage in prepareMedia
+              if(prep.via==='storage' && prep.dataUrl && /^https?:/i.test(prep.dataUrl)){
+                ov.remove();
+                hideLoader();
+                await publishStory(prep.dataUrl, 'image', null, caption, null);
+                return;
+              }
+            } else out = bgUrl;
           }catch(e){ out = bgUrl; }
+          srcFile = file;
         }
         ov.remove();
         hideLoader();
-        await publishStory(out, 'image', null, caption);
+        await publishStory(out, 'image', null, caption, srcFile);
       }
     }catch(e){
       hideLoader();
