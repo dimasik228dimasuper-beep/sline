@@ -405,6 +405,7 @@ body.beta-oled .sw-clip{background:var(--panel)!important}
 .sl-ready-card .big-av{width:72px;height:72px;border-radius:50%;margin:0 auto 12px;display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:800;color:#fff;background:linear-gradient(135deg,#4C7CF3,#6D5DF6)}
 .sl-ready-card h3{margin:0 0 6px;font-size:18px}
 .sl-ready-card p{margin:0;color:var(--muted);font-size:13px;line-height:1.4}
+@keyframes spin{to{transform:rotate(360deg)}}
 
 /* Voice →T transcribe button (MAX-style) */
 .voice-bubble{display:flex;align-items:center;gap:8px;min-width:220px;max-width:100%;transition:min-width .35s cubic-bezier(.2,.8,.2,1), width .35s cubic-bezier(.2,.8,.2,1), transform .25s ease}
@@ -3059,6 +3060,15 @@ function renderContactsAndGroups(){
   const list=document.getElementById('contacts-list'); if(!list) return;
   // ALWAYS inject official news channel before building list
   try{ if(typeof injectNewsChannelLocal==='function') injectNewsChannelLocal(); }catch(e){}
+  // Restore group/channel avatars from local backup if DB column missing
+  try{
+    (groups||[]).forEach(g=>{
+      if(g && g.id && !g.avatar_url){
+        const la=localStorage.getItem('sl_group_av_'+g.id);
+        if(la) g.avatar_url=la;
+      }
+    });
+  }catch(e){}
   const q=(document.getElementById('search-input')?.value||'').trim().toLowerCase();
   const archive=getArchive();
   const unread=getUnread();
@@ -3427,7 +3437,24 @@ async function openGroup(group){
   document.getElementById('chat-partner-status').textContent=group.type==='channel'?(group.is_public?'публичный канал':'приватный канал'):'группа';
   document.getElementById('chat-partner-status').className='chat-status';
   const pav=document.getElementById('partner-avatar');
-  pav.style.background=group.color||colorFor(group.id); pav.textContent=(group.name||'G')[0].toUpperCase();
+  try{
+    // Prefer saved avatar (DB or local backup)
+    let avUrl = group.avatar_url || null;
+    try{
+      const localAv = localStorage.getItem('sl_group_av_'+group.id);
+      if(localAv) avUrl = localAv;
+    }catch(e){}
+    if(avUrl && typeof renderAvatarInto==='function'){
+      renderAvatarInto(pav, avUrl, (group.name||'G')[0].toUpperCase(), group.color||colorFor(group.id));
+    } else {
+      pav.style.background=group.color||colorFor(group.id);
+      pav.textContent=(group.name||'G')[0].toUpperCase();
+      // clear previous img if any
+      const img=pav.querySelector('img'); if(img) img.remove();
+    }
+  }catch(e){
+    pav.style.background=group.color||colorFor(group.id); pav.textContent=(group.name||'G')[0].toUpperCase();
+  }
   if(innerWidth<=768) document.getElementById('sidebar').classList.add('hidden');
   clearUnread(group.id);
   const isNews = typeof isNewsChannel==='function' && isNewsChannel(group);
@@ -3532,7 +3559,11 @@ async function loadMessages(){
     if(activePartner.id===myProfile.id) q=q.eq('sender_id',myProfile.id).eq('receiver_id',myProfile.id);
     else q=q.or(`and(sender_id.eq.${myProfile.id},receiver_id.eq.${activePartner.id}),and(sender_id.eq.${activePartner.id},receiver_id.eq.${myProfile.id})`);
     const {data}=await q;
-    (data||[]).forEach(m=>renderMessage(m));
+    const rows=data||[];
+    rows.forEach(m=>renderMessage(m));
+    if(!rows.length && activePartner && activePartner.id!==myProfile?.id){
+      if(typeof window.slShowEmptyChatHint==='function') window.slShowEmptyChatHint();
+    }
   }catch(e){}
 }
 async function loadGroupMessages(){
@@ -3566,6 +3597,9 @@ async function loadGroupMessages(){
       return true;
     });
     rows.forEach(m=>renderMessage(m,true));
+    if(!rows.length && activeGroup && activeGroup.type!=='channel'){
+      if(typeof window.slShowEmptyChatHint==='function') window.slShowEmptyChatHint(true);
+    }
   }catch(e){ console.warn(e); }
   // Subscribe to global news broadcast so everyone sees posts
   if(isNews){
@@ -6610,9 +6644,165 @@ document.getElementById('partner-avatar').addEventListener('click',()=>{ if(acti
 // ---------- Anti-spam / banned words (channels & groups) ----------
 function getBannedWords(gid){ try{ return JSON.parse(storage.getItem('sl_banned_'+gid)||'[]'); }catch(e){ return []; } }
 function setBannedWords(gid,arr){ storage.setItem('sl_banned_'+gid, JSON.stringify(arr)); }
-document.getElementById('group-settings-btn').onclick=()=>{
+
+window.openChannelProfile = async function(group){
+  group = group || activeGroup;
+  if(!group) return;
+  let memberCount = 0;
+  try{
+    const {count}=await sb.from('group_members').select('*',{count:'exact',head:true}).eq('group_id',group.id);
+    memberCount = count||0;
+  }catch(e){}
+  let avUrl = group.avatar_url;
+  try{ const la=localStorage.getItem('sl_group_av_'+group.id); if(la) avUrl=la; }catch(e){}
+  const isAdmin = group.myRole==='admin'||group.owner_id===myProfile?.id;
+  const isMember = !!group.myRole || isAdmin;
+  const origin = (typeof slSiteOrigin==='function'?slSiteOrigin(): (location.origin||'https://my-site.com'));
+  const link = (group.is_public && group.username)
+    ? (origin+'/#/channel/'+group.username)
+    : (group.invite_code ? (origin+'/#/join/'+group.invite_code) : (origin+'/#/group/'+group.id));
+  const letter = (group.name||'C')[0].toUpperCase();
+  const col = group.color||(typeof colorFor==='function'?colorFor(group.id):'#4C7CF3');
+  const esc = (s)=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+  // Russian plural for subscribers
+  function subLabel(n){
+    n=n|0; const n10=n%10, n100=n%100;
+    if(n10===1 && n100!==11) return n+' подписчик';
+    if(n10>=2 && n10<=4 && (n100<12||n100>14)) return n+' подписчика';
+    return n+' подписчиков';
+  }
+  const prev=document.getElementById('sl-channel-profile'); if(prev) prev.remove();
+  const sheet=document.createElement('div');
+  sheet.className='sl-sheet'; sheet.id='sl-channel-profile';
+  sheet.innerHTML=`
+    <div class="sl-sheet-hdr">
+      <button type="button" class="sl-sheet-back" id="cp-back">‹</button>
+      <h2></h2>
+      <span style="width:40px"></span>
+    </div>
+    <div class="sl-sheet-body" style="padding-bottom:40px">
+      <div style="display:flex;flex-direction:column;align-items:center;padding:12px 16px 8px">
+        <div id="cp-av" style="width:88px;height:88px;border-radius:50%;overflow:hidden;background:${col};display:flex;align-items:center;justify-content:center;font-size:34px;font-weight:800;color:#fff;margin-bottom:12px">
+          ${avUrl?`<img src="${esc(avUrl)}" style="width:100%;height:100%;object-fit:cover" alt="">`:esc(letter)}
+        </div>
+        <div style="font-size:22px;font-weight:800;text-align:center">${esc(group.name)}</div>
+        <div style="color:var(--muted);font-size:14px;margin-top:4px">${memberCount?subLabel(memberCount):(group.is_public?'публичный канал':'приватный канал')}</div>
+      </div>
+      <div style="display:flex;gap:10px;padding:12px 16px;justify-content:center">
+        <button type="button" id="cp-sound" style="flex:1;max-width:110px;padding:12px 8px;border:none;border-radius:14px;background:rgba(255,255,255,.08);color:var(--text);font-size:13px;cursor:pointer">🔔<br>Звук</button>
+        <button type="button" id="cp-search" style="flex:1;max-width:110px;padding:12px 8px;border:none;border-radius:14px;background:rgba(255,255,255,.08);color:var(--text);font-size:13px;cursor:pointer">🔍<br>Найти</button>
+        <button type="button" id="cp-more" style="flex:1;max-width:110px;padding:12px 8px;border:none;border-radius:14px;background:rgba(255,255,255,.08);color:var(--text);font-size:13px;cursor:pointer">⋯<br>Ещё</button>
+      </div>
+      ${!isMember?`<div style="padding:8px 16px"><button type="button" id="cp-sub" style="width:100%;padding:14px;border:none;border-radius:14px;background:var(--accent-a,#4C7CF3);color:#fff;font-size:16px;font-weight:700;cursor:pointer">Подписаться</button></div>`:''}
+      <div style="margin:10px 16px;padding:14px;border-radius:14px;background:var(--panel);border:1px solid var(--line)">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:4px">Ссылка</div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div style="flex:1;color:var(--accent-a,#4C7CF3);font-size:14px;word-break:break-all" id="cp-link">${esc(link)}</div>
+          <button type="button" id="cp-share" style="border:none;background:transparent;font-size:18px;cursor:pointer;color:var(--text)">↗</button>
+          <button type="button" id="cp-qr" style="border:none;background:transparent;font-size:18px;cursor:pointer;color:var(--text)">▦</button>
+        </div>
+      </div>
+      ${group.description?`<div style="margin:10px 16px;padding:14px;border-radius:14px;background:var(--panel);border:1px solid var(--line)">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:4px">Описание</div>
+        <div style="font-size:14px;line-height:1.4">${esc(group.description)}</div>
+      </div>`:''}
+      <div style="margin:10px 16px;padding:14px;border-radius:14px;background:var(--panel);border:1px solid var(--line);display:flex;align-items:center;gap:12px;cursor:pointer" id="cp-media">
+        <span style="font-size:20px">📎</span>
+        <div style="flex:1">
+          <div style="font-weight:600;font-size:15px">Вложения</div>
+          <div style="font-size:12px;color:var(--muted)">Фото, видео, файлы и ссылки</div>
+        </div>
+        <span style="color:var(--muted)">›</span>
+      </div>
+      ${isAdmin?`<div style="margin:16px;display:flex;flex-direction:column;gap:8px">
+        <button type="button" id="cp-edit" class="btn-secondary" style="width:100%">Редактировать канал</button>
+        <button type="button" id="cp-admin" class="btn-secondary" style="width:100%">Настройки админа</button>
+      </div>`:''}
+    </div>`;
+  document.body.appendChild(sheet);
+  const close=()=>{ try{sheet.remove()}catch(e){} };
+  sheet.querySelector('#cp-back').onclick=close;
+  sheet.querySelector('#cp-share').onclick=async()=>{
+    try{ await navigator.clipboard.writeText(link); showToast('Ссылка скопирована'); }catch(e){ showToast(link); }
+  };
+  sheet.querySelector('#cp-qr').onclick=()=>showToast('QR: '+link);
+  sheet.querySelector('#cp-sound')?.addEventListener('click',()=>showToast('Уведомления канала'));
+  sheet.querySelector('#cp-search')?.addEventListener('click',()=>{
+    close();
+    try{ document.getElementById('chat-search-btn')?.click(); }catch(e){}
+  });
+  sheet.querySelector('#cp-more')?.addEventListener('click',()=>showToast(isAdmin?'Админ-меню':'Ещё'));
+  sheet.querySelector('#cp-media')?.addEventListener('click',()=>{
+    close();
+    try{ document.getElementById('media-btn')?.click(); }catch(e){}
+  });
+  sheet.querySelector('#cp-sub')?.addEventListener('click', async()=>{
+    try{
+      await sb.from('group_members').insert({group_id:group.id, user_id:myProfile.id, role:'member'});
+      group.myRole='member';
+      showToast('Вы подписались');
+      close();
+      if(typeof openGroup==='function') openGroup(group);
+    }catch(e){ showToast('Не удалось подписаться'); }
+  });
+  sheet.querySelector('#cp-edit')?.addEventListener('click',()=>{
+    close();
+    const n = prompt('Название канала', group.name||'');
+    if(n&&n.trim()){
+      sb.from('groups').update({name:n.trim()}).eq('id',group.id).then(()=>{
+        group.name=n.trim();
+        try{ document.getElementById('chat-partner-name').textContent=group.name; }catch(e){}
+        showToast('Сохранено');
+      });
+    }
+  });
+  sheet.querySelector('#cp-admin')?.addEventListener('click',()=>{
+    close();
+    const g=activeGroup||group;
+    let modal=document.getElementById('gs-modal');
+    if(!modal){ modal=document.createElement('div'); modal.id='gs-modal'; modal.className='modal-overlay'; document.body.appendChild(modal); }
+    const bannedArr=(typeof getBannedWords==='function'?getBannedWords(g.id):[]);
+    const antispamOn=localStorage.getItem('sl_antispam_'+g.id)==='1'||(typeof storage!=='undefined'&&storage.getItem('sl_antispam_'+g.id)==='1');
+    modal.innerHTML=`<div class="modal"><button class="close-x" id="gs-x">×</button>
+      <h3>Настройки канала</h3>
+      <div class="settings-item" id="toggle-comments" style="padding-left:0"><span class="item-text">Комментарии</span><div class="toggle-switch ${g.comments_enabled?'on':''}" id="comments-tg"></div></div>
+      <div class="settings-item" id="toggle-public" style="padding-left:0"><span class="item-text">Публичный канал</span><div class="toggle-switch ${g.is_public?'on':''}" id="public-tg"></div></div>
+      <div class="settings-item" style="padding-left:0"><span class="item-text">Антиспам</span><div class="toggle-switch ${antispamOn?'on':''}" id="antispam-tg"></div></div>
+      <div class="field"><label>Запрещённые слова</label><input class="cd-input" id="gs-banned" value="${esc((bannedArr||[]).join(', '))}"></div>
+      <button class="btn-secondary" id="gs-save-banned">Сохранить список</button>
+    </div>`;
+    modal.style.display='flex';
+    modal.querySelector('#gs-x').onclick=()=>modal.style.display='none';
+    modal.querySelector('#toggle-comments')?.addEventListener('click', async()=>{
+      const on=!g.comments_enabled;
+      try{ await sb.from('groups').update({comments_enabled:on}).eq('id',g.id); g.comments_enabled=on; modal.querySelector('#comments-tg').classList.toggle('on',on); }catch(e){}
+    });
+    modal.querySelector('#toggle-public')?.addEventListener('click', async()=>{
+      const on=!g.is_public;
+      try{ await sb.from('groups').update({is_public:on}).eq('id',g.id); }catch(e){}
+      g.is_public=on; modal.querySelector('#public-tg').classList.toggle('on',on);
+    });
+    modal.querySelector('#antispam-tg')?.addEventListener('click', function(){
+      const key='sl_antispam_'+g.id;
+      const on=(localStorage.getItem(key)==='1');
+      localStorage.setItem(key, on?'0':'1');
+      this.classList.toggle('on');
+    });
+    modal.querySelector('#gs-save-banned')?.addEventListener('click',()=>{
+      const words=modal.querySelector('#gs-banned').value.split(',').map(w=>w.trim().toLowerCase()).filter(Boolean);
+      if(typeof setBannedWords==='function') setBannedWords(g.id, words);
+      showToast('Список сохранён');
+    });
+  });
+};
+
+document.getElementById('group-settings-btn').onclick=async()=>{
   if(!activeGroup) return;
   const isAdmin=activeGroup.myRole==='admin'||activeGroup.owner_id===myProfile.id;
+  // Channel → MAX-style profile sheet
+  if(activeGroup.type==='channel'){
+    if(typeof window.openChannelProfile==='function'){ window.openChannelProfile(activeGroup); return; }
+  }
   let modal=document.getElementById('gs-modal');
   if(!modal){ modal=document.createElement('div'); modal.id='gs-modal'; modal.className='modal-overlay'; document.body.appendChild(modal); }
   const bannedArr=getBannedWords(activeGroup.id);
@@ -7115,6 +7305,43 @@ function verifiedBadgeIf(email){ return (email && VERIFIED_EMAILS.includes(Strin
 // ---------- More stickers ----------
 function mkSmile(bg,mouth){return "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='45' fill='%23"+bg+"'/%3E%3Ccircle cx='35' cy='40' r='6' fill='%23333'/%3E%3Ccircle cx='65' cy='40' r='6' fill='%23333'/%3E%3Cpath d='"+mouth+"' stroke='%23333' stroke-width='4' fill='none' stroke-linecap='round'/%3E%3C/svg%3E";}
 function mkFace(bg, eyes, mouth){return "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='45' fill='%23"+bg+"'/%3E"+eyes+mouth+"%3C/svg%3E";}
+
+window.slShowEmptyChatHint = function(isGroup){
+  try{
+    const list=document.getElementById('messages-list');
+    if(!list || list.querySelector('.sl-empty-hint')) return;
+    // pick a fun sticker if available
+    let stickerUrl='';
+    try{
+      const packs = (typeof STICKER_PACKS!=='undefined')?STICKER_PACKS:{};
+      const first = packs.birds?.stickers?.[0] || packs[Object.keys(packs)[0]]?.stickers?.[0];
+      if(first) stickerUrl=first;
+    }catch(e){}
+    const card=document.createElement('div');
+    card.className='sl-empty-hint';
+    card.style.cssText='margin:48px auto 16px;max-width:280px;text-align:center;padding:22px 18px;border-radius:18px;background:rgba(20,24,40,.88);border:1px solid rgba(255,255,255,.08)';
+    card.innerHTML=`
+      <div style="font-size:17px;font-weight:700;margin-bottom:6px">Сообщений пока нет</div>
+      <div style="color:var(--muted);font-size:13px;line-height:1.4;margin-bottom:12px">Напишите сообщение${stickerUrl?' или отправьте этот стикер':''}</div>
+      ${stickerUrl?`<img src="${stickerUrl}" alt="sticker" style="width:120px;height:120px;object-fit:contain;cursor:pointer;border-radius:12px" id="sl-empty-sticker">`
+        :`<div style="font-size:64px;line-height:1;cursor:pointer" id="sl-empty-sticker">🦩</div>`}
+    `;
+    list.appendChild(card);
+    const el=card.querySelector('#sl-empty-sticker');
+    if(el){
+      el.onclick=()=>{
+        if(stickerUrl && typeof sendMessage==='function'){
+          sendMessage('sticker', stickerUrl, '');
+          try{ card.remove(); }catch(e){}
+        } else {
+          // open sticker panel
+          try{ document.getElementById('sticker-btn')?.click(); }catch(e){}
+        }
+      };
+    }
+  }catch(e){}
+};
+
 const STICKER_PACKS = {
   birds: { name: 'Вороны', stickers: [
     "data:image/jpeg;base64,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",
@@ -7534,7 +7761,7 @@ window.openStartChatSheet = function(){
       <input class="sl-sheet-search" id="sc-search" placeholder="Найти по имени" autocomplete="off">
       <div class="sl-action-row" data-act="group"><span class="ico"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg></span>Создать группу</div>
       <div class="sl-action-row" data-act="gcall"><span class="ico"><svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.8 19.8 0 01-8.63-3.07 19.5 19.5 0 01-6-6A19.8 19.8 0 012.12 4.18 2 2 0 014.11 2h3a2 2 0 012 1.72c.13.96.36 1.9.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0122 16.92z"/></svg></span>Создать групповой звонок</div>
-      <div class="sl-action-row" data-act="channel"><span class="ico"><svg viewBox="0 0 24 24"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg></span>Создать приватный канал</div>
+      <div class="sl-action-row" data-act="channel"><span class="ico"><svg viewBox="0 0 24 24"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg></span>Создать канал</div>
       <div class="sl-action-row" data-act="phone"><span class="ico"><svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.8 19.8 0 01-8.63-3.07 19.5 19.5 0 01-6-6A19.8 19.8 0 012.12 4.18 2 2 0 014.11 2h3a2 2 0 012 1.72c.13.96.36 1.9.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0122 16.92z"/></svg></span>Найти по номеру</div>
       <div class="sl-action-row" data-act="link"><span class="ico"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg></span>Пригласить по ссылке</div>
       <div id="sc-list">${rows || '<div style="padding:24px;text-align:center;color:var(--muted)">Нет контактов</div>'}</div>
@@ -7560,8 +7787,8 @@ window.openStartChatSheet = function(){
       else if(act==='channel') window.openCreateChannelFlow&&window.openCreateChannelFlow();
       else if(act==='gcall'){ showToast('Выберите участников в группе и нажмите звонок'); window.openCreateGroupFlow&&window.openCreateGroupFlow(); }
       else if(act==='phone'){
-        // reuse contact finder
-        try{ document.querySelector('[data-action="contact"]')?.onclick?.(); }catch(e){ showToast('Поиск по номеру'); }
+        if(typeof window.openFindByPhone==='function') window.openFindByPhone();
+        else showToast('Поиск по номеру');
       }
       else if(act==='link'){
         try{
@@ -7583,6 +7810,132 @@ window.openStartChatSheet = function(){
       else if(c && typeof openPartner==='function') openPartner(c);
     };
   });
+};
+
+
+// ---- Find by phone (MAX-style) ----
+window.openFindByPhone = function(){
+  const sheet=document.createElement('div');
+  sheet.className='sl-sheet'; sheet.id='sl-find-phone';
+  let digits='';
+  function fmt(d){
+    // format like 912 345 67 89 (max 10 national digits for RU)
+    const a=d.slice(0,3), b=d.slice(3,6), c=d.slice(6,8), e=d.slice(8,10);
+    return [a,b,c,e].filter(Boolean).join(' ');
+  }
+  function paint(errMsg){
+    const ready = digits.length >= 10;
+    sheet.innerHTML=`
+      <div class="sl-sheet-hdr">
+        <button type="button" class="sl-sheet-back" id="fp-back">‹</button>
+        <h2></h2>
+        <span style="width:40px"></span>
+      </div>
+      <div class="sl-sheet-body" style="display:flex;flex-direction:column;align-items:center;padding:24px 20px 0">
+        <div style="font-size:20px;font-weight:800;text-align:center;margin-bottom:8px">Введите номер пользователя</div>
+        <div style="color:var(--muted);font-size:14px;text-align:center;line-height:1.4;max-width:280px;margin-bottom:28px">Если владелец уже в Signal Line, вы сможете сразу начать общаться</div>
+        <div style="display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px 16px;width:100%;max-width:320px;box-sizing:border-box">
+          <span style="font-size:20px">🇷🇺</span>
+          <span style="font-weight:700;font-size:17px">+7</span>
+          <span style="opacity:.4">▾</span>
+          <input id="fp-input" inputmode="numeric" autocomplete="off" placeholder="123 456 78 90"
+            value="${fmt(digits)}"
+            style="flex:1;min-width:0;border:none;background:transparent;color:var(--text);font-size:17px;outline:none;font-weight:600">
+        </div>
+        ${errMsg?`<div style="color:#e5484d;font-size:13px;margin-top:10px;text-align:center">${errMsg}</div>`:''}
+      </div>
+      <div style="padding:16px 20px 8px">
+        <button type="button" id="fp-go" class="btn-primary" style="width:100%;padding:14px;border-radius:14px;border:none;font-size:16px;font-weight:700;cursor:pointer;background:${ready?'var(--accent-a,#4C7CF3)':'rgba(255,255,255,.12)'};color:${ready?'#fff':'rgba(255,255,255,.35)'}" ${ready?'':'disabled'}>Продолжить</button>
+      </div>
+      <div id="fp-pad" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:8px 24px max(16px,env(safe-area-inset-bottom));max-width:360px;margin:0 auto;width:100%;box-sizing:border-box">
+        ${[1,2,3,4,5,6,7,8,9,'',0,'⌫'].map(k=>{
+          if(k==='') return '<div></div>';
+          return `<button type="button" data-k="${k}" style="height:52px;border:none;border-radius:14px;background:rgba(255,255,255,.08);color:var(--text);font-size:22px;font-weight:600;cursor:pointer">${k}</button>`;
+        }).join('')}
+      </div>`;
+    sheet.querySelector('#fp-back').onclick=()=>{ slCloseSheet(sheet); window.openStartChatSheet&&window.openStartChatSheet(); };
+    sheet.querySelectorAll('#fp-pad button').forEach(btn=>{
+      btn.onclick=()=>{
+        const k=btn.dataset.k;
+        if(k==='⌫') digits=digits.slice(0,-1);
+        else if(digits.length<10) digits+=String(k);
+        paint();
+      };
+    });
+    const inp=sheet.querySelector('#fp-input');
+    inp.oninput=()=>{
+      digits = (inp.value||'').replace(/\D/g,'').slice(0,10);
+      paint();
+    };
+    sheet.querySelector('#fp-go').onclick=async()=>{
+      if(digits.length<10) return;
+      const full = '+7'+digits;
+      // own number?
+      const myPhone = String(myProfile?.phone||'').replace(/\D/g,'');
+      const dig = digits;
+      if(myPhone && (myPhone.endsWith(dig) || myPhone.includes(dig) || ('7'+dig)===myPhone || dig===myPhone.slice(-10))){
+        paint('Номер телефона принадлежит вам');
+        return;
+      }
+      const go=sheet.querySelector('#fp-go');
+      go.disabled=true; go.innerHTML='<span style="display:inline-block;animation:spin 1s linear infinite">⟳</span>';
+      try{
+        // search profiles by phone variants
+        const variants = [full, dig, '7'+dig, '8'+dig, '+7 '+fmt(dig)];
+        let found=null;
+        for(const v of variants){
+          try{
+            const {data}=await sb.from('profiles').select('*').eq('phone', v).maybeSingle();
+            if(data){ found=data; break; }
+          }catch(e){}
+        }
+        if(!found){
+          try{
+            const {data}=await sb.from('profiles').select('*').or(`phone.eq.${full},phone.eq.${dig},phone.eq.7${dig},phone.eq.8${dig}`).limit(3);
+            if(data&&data[0]) found=data[0];
+          }catch(e){}
+        }
+        if(found){
+          slCloseSheet(sheet);
+          if(typeof openChat==='function') openChat(found);
+          else if(typeof openPartner==='function') openPartner(found);
+          return;
+        }
+        // not found — invite sheet
+        showNotFoundInvite(full);
+      }catch(e){
+        showToast('Ошибка поиска');
+        paint();
+      }
+    };
+  }
+  function showNotFoundInvite(full){
+    const ov=document.createElement('div');
+    ov.style.cssText='position:fixed;inset:0;z-index:13000;background:rgba(0,0,0,.55);display:flex;align-items:flex-end;justify-content:center';
+    ov.innerHTML=`<div style="width:100%;max-width:420px;background:var(--panel,#1a1f2e);border-radius:18px 18px 0 0;padding:20px 16px max(20px,env(safe-area-inset-bottom));text-align:center">
+      <div style="font-size:16px;font-weight:700;margin-bottom:6px">Мы не нашли такого контакта</div>
+      <div style="color:var(--muted);font-size:14px;margin-bottom:16px">Но вы можете отправить ему приглашение</div>
+      <button type="button" id="fp-inv" style="width:100%;padding:14px;border:none;border-radius:14px;background:var(--accent-a,#4C7CF3);color:#fff;font-size:16px;font-weight:700;margin-bottom:8px;cursor:pointer">Пригласить</button>
+      <button type="button" id="fp-no" style="width:100%;padding:14px;border:none;border-radius:14px;background:rgba(255,255,255,.08);color:var(--text);font-size:16px;font-weight:600;cursor:pointer">Не сейчас</button>
+    </div>`;
+    document.body.appendChild(ov);
+    ov.querySelector('#fp-no').onclick=()=>ov.remove();
+    ov.querySelector('#fp-inv').onclick=async()=>{
+      const link = (typeof myProfile!=='undefined'&&myProfile?.username)
+        ? (slSiteOrigin()+'/#/u/'+myProfile.username)
+        : (slSiteOrigin()+'/#/invite');
+      const msg = 'Присоединяйся ко мне в Signal Line: '+link;
+      try{
+        if(navigator.share) await navigator.share({text:msg});
+        else { await navigator.clipboard.writeText(msg); showToast('Ссылка скопирована'); }
+      }catch(e){ try{ await navigator.clipboard.writeText(msg); showToast('Ссылка скопирована'); }catch(e2){} }
+      ov.remove();
+    };
+    goReset();
+  }
+  function goReset(){ paint(); }
+  document.body.appendChild(sheet);
+  paint();
 };
 
 // ---- Group: pick members → name/avatar → create ----
@@ -7857,9 +8210,44 @@ window.slChannelTypeStep = function(opts){
 };
 
 // Core create (group or channel) + members + open
+window.slCompressImage = function(dataUrl, maxSide, quality){
+  return new Promise((resolve)=>{
+    try{
+      maxSide = maxSide || 256;
+      quality = quality == null ? 0.72 : quality;
+      const img = new Image();
+      img.onload = ()=>{
+        try{
+          let w=img.width, h=img.height;
+          if(w>maxSide || h>maxSide){
+            if(w>=h){ h=Math.round(h*maxSide/w); w=maxSide; }
+            else { w=Math.round(w*maxSide/h); h=maxSide; }
+          }
+          const c=document.createElement('canvas');
+          c.width=w; c.height=h;
+          const ctx=c.getContext('2d');
+          ctx.drawImage(img,0,0,w,h);
+          resolve(c.toDataURL('image/jpeg', quality));
+        }catch(e){ resolve(dataUrl); }
+      };
+      img.onerror=()=>resolve(dataUrl);
+      img.src=dataUrl;
+    }catch(e){ resolve(dataUrl); }
+  });
+};
+
 window.slDoCreateGroup = async function({name, description, memberIds, avatarData, isChannel, isPublic, username, inviteCode}){
   if(!myProfile?.id){ showToast('Войдите в аккаунт'); throw new Error('no auth'); }
   memberIds = memberIds || [];
+  // Compress avatar so it fits in DB / localStorage
+  let avFinal = null;
+  if(avatarData){
+    try{ avFinal = await window.slCompressImage(avatarData, 256, 0.72); }catch(e){ avFinal = avatarData; }
+    // hard size cap ~180KB
+    if(avFinal && avFinal.length > 220000){
+      try{ avFinal = await window.slCompressImage(avatarData, 160, 0.55); }catch(e){}
+    }
+  }
   const payload = {
     name: String(name).trim(),
     type: isChannel ? 'channel' : 'group',
@@ -7873,7 +8261,7 @@ window.slDoCreateGroup = async function({name, description, memberIds, avatarDat
     if(username) payload.username = String(username).toLowerCase().replace(/[^a-z0-9_]/g,'').slice(0,32);
     if(inviteCode) payload.invite_code = inviteCode;
   }
-  if(avatarData && String(avatarData).length < 900000) payload.avatar_url = avatarData;
+  if(avFinal) payload.avatar_url = avFinal;
 
   let data=null, error=null;
   try{
@@ -7895,9 +8283,17 @@ window.slDoCreateGroup = async function({name, description, memberIds, avatarDat
       if(payload.invite_code) patch.invite_code=payload.invite_code;
       if(payload.description) patch.description=payload.description;
       if(payload.avatar_url) patch.avatar_url=payload.avatar_url;
-      if(Object.keys(patch).length) await sb.from('groups').update(patch).eq('id', data.id);
-      Object.assign(data, patch);
-    }catch(e){}
+      if(Object.keys(patch).length){
+        const up = await sb.from('groups').update(patch).eq('id', data.id).select().single();
+        if(up.data) data = {...data, ...up.data};
+        else Object.assign(data, patch);
+      }
+    }catch(e){ console.warn('group patch failed', e); }
+  }
+  // Always keep local backup of avatar so UI works even if column missing
+  if(avFinal && data?.id){
+    try{ localStorage.setItem('sl_group_av_'+data.id, avFinal); }catch(e){}
+    data.avatar_url = data.avatar_url || avFinal;
   }
 
   // owner as admin
