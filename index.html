@@ -3812,25 +3812,25 @@ function showMsgCtx(e, msg){
   document.body.appendChild(bar);
 
   // Menu items
-  let items=`<div class="ctx-item" data-a="reply"><span class="ico">↩</span> Ответить</div>
-    <div class="ctx-item" data-a="forward"><span class="ico">↪</span> Переслать</div>
-    <div class="ctx-item" data-a="copy"><span class="ico">📋</span> Копировать</div>`;
+  let items=`<div class="ctx-item" data-a="reply"><span class="ico"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 17H4a2 2 0 01-2-2V5a2 2 0 012-2h12a2 2 0 012 2v4"/><path d="M9 14l-5 3 5 3v-6z"/><path d="M22 11l-5-3v2h-4v2h4v2l5-3z"/></svg></span> Ответить</div>
+    <div class="ctx-item" data-a="forward"><span class="ico"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 17h5a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v4"/><path d="M15 14l5 3-5 3v-6z"/><path d="M2 11l5-3v2h4v2H7v2l-5-3z"/></svg></span> Переслать</div>
+    <div class="ctx-item" data-a="copy"><span class="ico"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></span> Копировать</div>`;
   if(mine&&msg.type==='text') items+=`<div class="ctx-item" data-a="edit"><span class="ico"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg></span> Изменить</div>`;
   items+=`<div class="ctx-item" data-a="info"><span class="ico"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg></span> Данные</div>
     <div class="ctx-item" data-a="star"><span class="ico"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.1 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.8 21l1.2-6.8-5-4.9 6.9-1z"/></svg></span> В Избранные</div>`;
   if(msg.type==='image'||msg.type==='video'||msg.type==='circle'||msg.type==='voice'||msg.type==='sticker'){
-    items+=`<div class="ctx-item" data-a="save"><span class="ico">💾</span> Сохранить</div>`;
+    items+=`<div class="ctx-item" data-a="save"><span class="ico"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg></span> Сохранить</div>`;
   }
   if(msg.type==='voice'||msg.type==='circle'){
-    items+=`<div class="ctx-item" data-a="transcribe"><span class="ico">📝</span> Расшифровать</div>`;
+    items+=`<div class="ctx-item" data-a="transcribe"><span class="ico"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg></span> Расшифровать</div>`;
   }
   items+=`<div class="ctx-item" data-a="select"><span class="ico"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg></span> Выбрать</div>
-    <div class="ctx-item" data-a="pin"><span class="ico">📌</span> Закрепить</div>`;
-  if(!mine) items+=`<div class="ctx-item danger" data-a="report"><span class="ico">🚩</span> Пожаловаться</div>`;
+    <div class="ctx-item" data-a="pin"><span class="ico"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 17v5M9 10.76a2 2 0 01-1.14-1.32L7 6h10l-.86 3.44A2 2 0 0115 10.76V12a3 3 0 01-1 2.24V15H10v-.76A3 3 0 019 12v-1.24z"/></svg></span> Закрепить</div>`;
+  if(!mine) items+=`<div class="ctx-item danger" data-a="report"><span class="ico"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg></span> Пожаловаться</div>`;
   const canDelNews = activeGroup && typeof isNewsChannel==='function' && isNewsChannel(activeGroup)
     && typeof isNewsPublisher==='function' && isNewsPublisher();
   if(mine || canDelNews) items+=`<div class="ctx-item danger" data-a="del"><span class="ico"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg></span> Удалить</div>`;
-  items+=`<div class="ctx-sep"></div><div class="ctx-item" data-a="cancel"><span class="ico">✕</span> Отменить</div>`;
+  items+=`<div class="ctx-sep"></div><div class="ctx-item" data-a="cancel"><span class="ico"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg></span> Отменить</div>`;
 
   menu.className='ctx-menu wa-style';
   menu.innerHTML=items;
@@ -7359,7 +7359,7 @@ function wirePeerConnection(peerId, withVideo){
     console.log('[call] connectionState', pc.connectionState);
     const st=document.getElementById('call-status-text');
     if(!st) return;
-    if(pc.connectionState==='connected'){ st.textContent='Соединено'; if(currentCall) currentCall.state='active'; }
+    if(pc.connectionState==='connected'){ st.textContent='Соединено'; if(currentCall) currentCall.state='active'; try{ if(window._slNoAnswerTimer){ clearTimeout(window._slNoAnswerTimer); window._slNoAnswerTimer=null; } }catch(e){} }
     else if(pc.connectionState==='connecting') st.textContent='Соединение...';
     else if(pc.connectionState==='failed'){ st.textContent='Ошибка связи'; showToast('Не удалось установить соединение'); }
     else if(pc.connectionState==='disconnected') st.textContent='Переподключение...';
@@ -7402,6 +7402,17 @@ async function startCall(partner, withVideo){
   // Free push so peer's phone rings even if Signal Line is closed (ntfy)
   sendWebPushToUser(partner.id, currentLang==='en'?'Incoming call':'Входящий звонок', (myProfile.first_name||myProfile.username||'Signal Line'), {urgent:true, tag:'sl-call'});
   sendNtfyPush(partner.id, currentLang==='en'?'Incoming call':'Входящий звонок', (myProfile.first_name||myProfile.username||'Signal Line'), {urgent:true, force:true, tags:'telephone_receiver,vibrating_phone'});
+  // If no answer for 10 minutes — show retry / stop menu
+  try{
+    if(window._slNoAnswerTimer) clearTimeout(window._slNoAnswerTimer);
+    window._slNoAnswerTimer = setTimeout(function(){
+      try{
+        if(!currentCall || currentCall.state!=='calling') return;
+        const peer = currentCall;
+        showNoAnswerMenu(peer);
+      }catch(e){ console.warn('no-answer menu', e); }
+    }, 10 * 60 * 1000);
+  }catch(e){}
   }catch(e){ console.error(e); showToast('Ошибка звонка'); endCall(false); }
 }
 let pendingOffer=null;
@@ -7724,6 +7735,9 @@ window.slDecline = function(){
   try{ if(typeof declineCall==='function') declineCall(); else window.slHangup(); }catch(e){}
 };
 function endCall(){
+  try{ if(window._slNoAnswerTimer){ clearTimeout(window._slNoAnswerTimer); window._slNoAnswerTimer=null; } }catch(e){}
+  try{ document.getElementById('sl-no-answer-menu')?.remove(); }catch(e){}
+
   try{
     if(currentCall && currentCall.peerId){
       const state=currentCall.state;
@@ -8893,15 +8907,35 @@ async function openFullProfile(profileLike){
   if(editUn){
     editUn.onclick=async()=>{
       const cur=myProfile?.username||'';
-      const nu=await customPrompt('Новое имя пользователя (латиница)', cur);
+      const COOL_MS = 5 * 24 * 60 * 60 * 1000; // 5 days
+      let lastAt = 0;
+      try{
+        lastAt = Number(myProfile.username_changed_at||0) || Number((typeof storage!=='undefined'?storage:localStorage).getItem('sl_username_changed_at')||0) || 0;
+      }catch(e){}
+      if(lastAt && (Date.now() - lastAt) < COOL_MS){
+        const left = COOL_MS - (Date.now() - lastAt);
+        const days = Math.ceil(left / (24*60*60*1000));
+        showToast('Имя пользователя можно менять раз в 5 дней. Осталось ~'+days+' дн.');
+        return;
+      }
+      const nu=await customPrompt('Новое имя пользователя (латиница). Менять можно раз в 5 дней.', cur);
       if(nu===null) return;
       const clean=String(nu).trim().toLowerCase().replace(/[^a-z0-9_]/g,'');
       if(clean.length<3){ showToast('Минимум 3 символа'); return; }
+      if(clean===cur){ showToast('Это уже ваше имя'); return; }
       try{
-        const {error}=await sb.from('profiles').update({username:clean}).eq('id', myProfile.id);
-        if(error) throw error;
+        const now = Date.now();
+        const payload = {username:clean, username_changed_at: now};
+        const {error}=await sb.from('profiles').update(payload).eq('id', myProfile.id);
+        if(error){
+          // column may not exist — still update username
+          const r2 = await sb.from('profiles').update({username:clean}).eq('id', myProfile.id);
+          if(r2.error) throw r2.error;
+        }
         myProfile.username=clean;
-        showToast('Сохранено: @'+clean);
+        myProfile.username_changed_at=now;
+        try{ (typeof storage!=='undefined'?storage:localStorage).setItem('sl_username_changed_at', String(now)); }catch(e){}
+        showToast('Сохранено: @'+clean+' (следующая смена через 5 дней)');
         sheet.remove();
         openFullProfile(myProfile);
       }catch(e){ showToast(friendlyError(e)||'Ошибка'); }
@@ -10911,7 +10945,7 @@ function scheduleBirthdayAfterAppReady(){
     if(ov) ov.remove();
     ov = document.createElement('div');
     ov.id = 'sl-av-viewer';
-    ov.style.cssText = 'position:fixed;inset:0;z-index:14000;background:#000;display:flex;flex-direction:column;touch-action:none;';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:14000;background:#000;display:flex;flex-direction:column;touch-action:pan-y;';
     ov.innerHTML = `
       <div style="position:absolute;top:0;left:0;right:0;z-index:2;padding:calc(10px + env(safe-area-inset-top,0px)) 12px 10px;display:flex;align-items:center;gap:10px;background:linear-gradient(to bottom,rgba(0,0,0,.55),transparent)">
         <button type="button" id="avv-close" style="width:40px;height:40px;border-radius:50%;border:none;background:rgba(255,255,255,.15);color:#fff;font-size:22px;cursor:pointer">×</button>
@@ -10946,11 +10980,38 @@ function scheduleBirthdayAfterAppReady(){
       img.style.display = 'block';
       idx = (idx + list.length) % list.length;
       img.src = list[idx].url;
+      try{ img.style.willChange = 'transform, opacity'; }catch(e){}
       counter.textContent = (idx+1) + ' / ' + list.length;
       const when = list[idx].at ? new Date(list[idx].at).toLocaleString('ru-RU') : '';
       title.textContent = when || 'Фото профиля';
     }
-    function go(d){ if(!list.length) return; idx += d; render(); }
+    function go(d){
+      if(!list.length) return;
+      const dir = d < 0 ? 1 : -1; // visual: next slides from right
+      const outX = d > 0 ? '-30%' : '30%';
+      const inX = d > 0 ? '30%' : '-30%';
+      try{
+        img.style.transition = 'transform .28s cubic-bezier(.2,.8,.2,1), opacity .28s ease';
+        img.style.transform = 'translateX('+outX+') scale(.96)';
+        img.style.opacity = '0';
+      }catch(e){}
+      setTimeout(()=>{
+        idx += d;
+        render();
+        try{
+          img.style.transition = 'none';
+          img.style.transform = 'translateX('+inX+') scale(.96)';
+          img.style.opacity = '0';
+          requestAnimationFrame(()=>{
+            requestAnimationFrame(()=>{
+              img.style.transition = 'transform .32s cubic-bezier(.2,.8,.2,1), opacity .32s ease';
+              img.style.transform = 'translateX(0) scale(1)';
+              img.style.opacity = '1';
+            });
+          });
+        }catch(e){}
+      }, 200);
+    }
 
     ov.querySelector('#avv-close').onclick = ()=> ov.remove();
     ov.querySelector('#avv-prev').onclick = ()=> go(-1);
@@ -12613,6 +12674,257 @@ window._slTranscribeImpl = window.transcribeVoiceMsg = async function(msg){
   }catch(err){ console.warn('[SL] pack init', err); }
 })();
 
+
+
+
+// ========== FEATURE PACK: TV mode, no-answer call menu, profile avatar UX ==========
+(function(){
+  // --- TV / remote-friendly mode ---
+  function isTvLike(){
+    try{
+      const ua = navigator.userAgent||'';
+      if(/TV|SmartTV|AppleTV|BRAVIA|WebOS|Tizen|CrKey|AFT|GoogleTV/i.test(ua)) return true;
+      if(window.matchMedia && window.matchMedia('(pointer: coarse) and (hover: none) and (min-width: 900px)').matches) return true;
+      // large screen + no fine pointer
+      if(screen.width >= 1280 && window.matchMedia && window.matchMedia('(pointer: coarse)').matches) return true;
+    }catch(e){}
+    return localStorage.getItem('sl_tv_mode')==='1';
+  }
+  function enableTvMode(on){
+    document.documentElement.classList.toggle('sl-tv', !!on);
+    document.body.classList.toggle('sl-tv', !!on);
+    try{ localStorage.setItem('sl_tv_mode', on?'1':'0'); }catch(e){}
+    if(on){
+      // Ensure focusable controls
+      document.querySelectorAll('.bottom-tab, .contact, .icon-btn, .btn-primary, .btn-secondary, .nav-item, .call-btn-round, .settings-item, .folder-tab').forEach(el=>{
+        if(!el.hasAttribute('tabindex')) el.setAttribute('tabindex','0');
+      });
+      // Focus first tab
+      const first = document.querySelector('.bottom-tab, .nav-item, .btn-primary');
+      if(first) try{ first.focus(); }catch(e){}
+    }
+  }
+  // Spatial-ish navigation with D-pad
+  document.addEventListener('keydown', function(e){
+    if(!document.documentElement.classList.contains('sl-tv') && !isTvLike()) return;
+    const keys = ['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Enter','Escape','Backspace'];
+    if(!keys.includes(e.key)) return;
+    // Don't steal from inputs
+    const tag = (e.target && e.target.tagName)||'';
+    if(tag==='INPUT'||tag==='TEXTAREA'||e.target?.isContentEditable) return;
+
+    if(e.key==='Escape'||e.key==='Backspace'){
+      // close overlays
+      const sheet = document.querySelector('.profile-sheet, .modal-overlay, #sl-av-viewer, #ctx-menu');
+      if(sheet){
+        e.preventDefault();
+        if(sheet.id==='ctx-menu'){ try{ closeMsgCtxUI(); }catch(err){} }
+        else if(sheet.id==='sl-av-viewer') sheet.remove();
+        else if(sheet.classList.contains('modal-overlay')) sheet.remove();
+        else if(sheet.classList.contains('profile-sheet')) sheet.remove();
+        return;
+      }
+    }
+    if(e.key==='Enter'){
+      const ae = document.activeElement;
+      if(ae && ae !== document.body){
+        e.preventDefault();
+        ae.click();
+      }
+      return;
+    }
+    // Move focus among tabindex=0 / buttons
+    if(e.key.startsWith('Arrow')){
+      e.preventDefault();
+      const focusables = Array.from(document.querySelectorAll(
+        'button:not([disabled]):not([style*="display: none"]), [tabindex="0"], .contact, .bottom-tab, .settings-item, .call-btn-round, .nav-item'
+      )).filter(el=>{
+        const st = getComputedStyle(el);
+        return st.display!=='none' && st.visibility!=='hidden' && el.offsetParent!==null;
+      });
+      if(!focusables.length) return;
+      const cur = document.activeElement;
+      let i = focusables.indexOf(cur);
+      if(i < 0){ focusables[0].focus(); return; }
+      const rect = cur.getBoundingClientRect();
+      const cx = rect.left + rect.width/2, cy = rect.top + rect.height/2;
+      let best = null, bestScore = Infinity;
+      focusables.forEach((el, idx)=>{
+        if(idx===i) return;
+        const r = el.getBoundingClientRect();
+        const ex = r.left + r.width/2, ey = r.top + r.height/2;
+        const dx = ex - cx, dy = ey - cy;
+        let ok = false;
+        if(e.key==='ArrowRight' && dx > 8) ok = true;
+        if(e.key==='ArrowLeft' && dx < -8) ok = true;
+        if(e.key==='ArrowDown' && dy > 8) ok = true;
+        if(e.key==='ArrowUp' && dy < -8) ok = true;
+        if(!ok) return;
+        // prefer same axis alignment
+        const primary = (e.key==='ArrowLeft'||e.key==='ArrowRight') ? Math.abs(dx) : Math.abs(dy);
+        const secondary = (e.key==='ArrowLeft'||e.key==='ArrowRight') ? Math.abs(dy) : Math.abs(dx);
+        const score = primary + secondary * 2;
+        if(score < bestScore){ bestScore = score; best = el; }
+      });
+      if(best) best.focus();
+      else {
+        // wrap
+        if(e.key==='ArrowDown'||e.key==='ArrowRight') focusables[(i+1)%focusables.length].focus();
+        else focusables[(i-1+focusables.length)%focusables.length].focus();
+      }
+    }
+  }, true);
+
+  // CSS for TV
+  if(!document.getElementById('sl-tv-css')){
+    const st = document.createElement('style');
+    st.id = 'sl-tv-css';
+    st.textContent = `
+html.sl-tv body, body.sl-tv {
+  font-size: 18px;
+  cursor: default;
+}
+html.sl-tv .bottom-tab, html.sl-tv .nav-item, html.sl-tv .contact,
+html.sl-tv .icon-btn, html.sl-tv .btn-primary, html.sl-tv .btn-secondary,
+html.sl-tv .settings-item, html.sl-tv .call-btn-round, html.sl-tv .folder-tab {
+  outline: none;
+}
+html.sl-tv .bottom-tab:focus, html.sl-tv .nav-item:focus, html.sl-tv .contact:focus,
+html.sl-tv .icon-btn:focus, html.sl-tv .btn-primary:focus, html.sl-tv .btn-secondary:focus,
+html.sl-tv .settings-item:focus, html.sl-tv .call-btn-round:focus, html.sl-tv .folder-tab:focus,
+html.sl-tv button:focus, html.sl-tv [tabindex="0"]:focus {
+  box-shadow: 0 0 0 3px #7B2CBF, 0 0 0 6px rgba(123,44,191,.35) !important;
+  transform: scale(1.04);
+  z-index: 5;
+  position: relative;
+}
+html.sl-tv .bottom-tab { padding: 12px 8px; min-height: 64px; }
+html.sl-tv .contact { padding: 14px 16px; min-height: 72px; }
+html.sl-tv .icon-btn { width: 48px; height: 48px; }
+html.sl-tv .btn-primary, html.sl-tv .btn-secondary { padding: 16px 20px; font-size: 17px; }
+html.sl-tv .call-btn-round { width: 72px; height: 72px; }
+html.sl-tv .sidebar { width: min(420px, 40vw); min-width: 320px; }
+html.sl-tv .composer textarea { min-height: 52px; font-size: 17px; }
+.ctx-menu.wa-style .ctx-item .ico svg { display:block; margin:0 auto; }
+.ctx-menu.wa-style .ctx-item .ico { width:24px; display:inline-flex; align-items:center; justify-content:center; }
+`;
+    document.head.appendChild(st);
+  }
+  if(isTvLike()) enableTvMode(true);
+  // Settings toggle
+  setTimeout(()=>{
+    if(document.getElementById('settings-tv')) return;
+    const host = document.getElementById('settings-wallpaper')?.parentNode
+      || document.querySelector('#page-settings .settings-section')
+      || document.getElementById('page-settings');
+    if(!host) return;
+    const row = document.createElement('div');
+    row.className = 'settings-item';
+    row.id = 'settings-tv';
+    row.tabIndex = 0;
+    row.innerHTML = `<svg viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="15" rx="2"/><path d="M17 2l-5 5-5-5"/></svg>
+      <span class="item-text">Режим ТВ / приставки</span>
+      <span style="margin-left:auto;font-size:12px;color:var(--muted)" id="settings-tv-badge">${document.documentElement.classList.contains('sl-tv')?'Вкл.':'Выкл.'}</span>`;
+    host.appendChild(row);
+    row.onclick = ()=>{
+      const on = !document.documentElement.classList.contains('sl-tv');
+      enableTvMode(on);
+      const b = document.getElementById('settings-tv-badge');
+      if(b) b.textContent = on ? 'Вкл.' : 'Выкл.';
+      showToast(on ? 'Режим ТВ: пульт и стрелки' : 'Режим ТВ выключен');
+    };
+  }, 1500);
+
+  // --- No-answer menu after 10 min ---
+  window.showNoAnswerMenu = function(peer){
+    try{ document.getElementById('sl-no-answer-menu')?.remove(); }catch(e){}
+    const name = (peer && (peer.peerName||peer.first_name||peer.username)) || 'абонент';
+    const ov = document.createElement('div');
+    ov.id = 'sl-no-answer-menu';
+    ov.className = 'modal-overlay';
+    ov.style.zIndex = '100100';
+    ov.innerHTML = `<div class="modal" style="max-width:360px;text-align:center">
+      <div style="font-size:40px;margin-bottom:8px">📞</div>
+      <h3 style="margin:0 0 8px">Нет ответа</h3>
+      <p style="font-size:14px;color:var(--muted);margin:0 0 18px;line-height:1.4">
+        <b>${String(name).replace(/</g,'')}</b> не отвечает уже 10 минут.
+      </p>
+      <button type="button" class="btn-primary" id="na-retry" style="width:100%;margin-bottom:8px">Перезвонить</button>
+      <button type="button" class="btn-secondary" id="na-stop" style="width:100%">Перестать звонить</button>
+    </div>`;
+    document.body.appendChild(ov);
+    ov.querySelector('#na-stop').onclick = ()=>{
+      ov.remove();
+      try{ if(typeof endCall==='function') endCall(true); }catch(e){}
+    };
+    ov.querySelector('#na-retry').onclick = ()=>{
+      ov.remove();
+      const p = {
+        id: peer.peerId || peer.id,
+        first_name: peer.peerName || peer.first_name,
+        username: peer.username,
+        color: peer.peerColor || peer.color,
+        avatar_url: peer.peerAvatar || peer.avatar_url
+      };
+      const video = !!(peer.video);
+      try{ if(typeof endCall==='function') endCall(true); }catch(e){}
+      setTimeout(()=>{ try{ startCall(p, video); }catch(e){ showToast('Не удалось перезвонить'); } }, 400);
+    };
+  };
+
+  // --- Profile avatar UX: icon in sheet opens history; header avatars open profile info ---
+  // Re-bind partner avatar → openFullProfile / openStoriesOrProfile (info), not bare history
+  function bindPartnerAvatar(){
+    const pav = document.getElementById('partner-avatar');
+    if(!pav || pav.dataset.slInfoBound) return;
+    pav.dataset.slInfoBound = '1';
+    pav.addEventListener('click', function(e){
+      e.preventDefault(); e.stopPropagation();
+      if(activePartner){
+        if(typeof openStoriesOrProfile==='function') openStoriesOrProfile(activePartner);
+        else if(typeof openFullProfile==='function') openFullProfile(activePartner);
+      } else if(activeGroup && typeof openFullProfile==='function'){
+        openFullProfile(activeGroup);
+      }
+    }, true);
+  }
+  bindPartnerAvatar();
+  setTimeout(bindPartnerAvatar, 2000);
+
+  // When openFullProfile runs, ensure avatar opens history (with animation already)
+  const _ofp = typeof openFullProfile==='function' ? openFullProfile : null;
+  if(_ofp){
+    openFullProfile = async function(profileLike){
+      await _ofp.apply(this, arguments);
+      setTimeout(()=>{
+        try{
+          const sheet = document.querySelector('.profile-sheet');
+          if(!sheet) return;
+          const av = sheet.querySelector('#ps-av, .profile-av-big');
+          if(av && !av.dataset.histOnly){
+            av.dataset.histOnly = '1';
+            av.title = 'История фото профиля';
+            av.onclick = function(ev){
+              ev.preventDefault(); ev.stopPropagation();
+              if(typeof openAvatarHistory==='function') openAvatarHistory(profileLike||window._lastProfileOpened||myProfile);
+            };
+          }
+          // mini avatar in top bar also history
+          const mini = sheet.querySelector('#ps-av-mini');
+          if(mini && !mini.dataset.histOnly){
+            mini.dataset.histOnly = '1';
+            mini.onclick = function(ev){
+              ev.preventDefault(); ev.stopPropagation();
+              if(typeof openAvatarHistory==='function') openAvatarHistory(profileLike||myProfile);
+            };
+          }
+        }catch(e){}
+      }, 80);
+    };
+  }
+
+  console.log('[SL] TV + no-answer + avatar UX pack ready');
+})();
 
 </script>
 </body>
