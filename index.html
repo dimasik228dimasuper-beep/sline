@@ -374,7 +374,19 @@ body.beta-oled .sw-clip{background:var(--panel)!important}
 .sl-create-avatar{width:100px;height:100px;border-radius:50%;background:rgba(40,42,48,.95);margin:24px auto 8px;display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;overflow:hidden;border:none;box-shadow:inset 0 0 0 1px rgba(255,255,255,.06)}
 .sl-create-avatar img{width:100%;height:100%;object-fit:cover}
 .sl-create-avatar .cam{font-size:28px;opacity:.7}
+
 .sl-create-avatar .cam-ico{display:block;pointer-events:none}
+/* Channel ads */
+.sl-ad-card{margin:12px 10px 20px;border-radius:16px;overflow:hidden;background:var(--panel,#1a1f2e);border:1px solid rgba(255,255,255,.08);position:relative;max-width:420px}
+.sl-ad-card .sl-ad-img{width:100%;max-height:200px;object-fit:cover;display:block;background:#111}
+.sl-ad-card .sl-ad-body{padding:12px 14px 14px}
+.sl-ad-card .sl-ad-label{font-size:12px;font-weight:700;color:#5b9dff;margin-bottom:4px}
+.sl-ad-card .sl-ad-title{font-size:15px;font-weight:700;line-height:1.3;margin-bottom:4px}
+.sl-ad-card .sl-ad-text{font-size:13px;color:var(--muted);line-height:1.4;margin-bottom:10px}
+.sl-ad-card .sl-ad-go{display:inline-flex;align-items:center;gap:6px;color:#5b9dff;font-weight:700;font-size:14px;text-transform:uppercase;letter-spacing:.02em;cursor:pointer;background:none;border:none;padding:0}
+.sl-ad-card .sl-ad-x{position:absolute;top:8px;right:8px;width:28px;height:28px;border-radius:50%;border:none;background:rgba(0,0,0,.55);color:#fff;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:2}
+.sl-ad-sheet .sl-ad-preview{max-width:100%;max-height:160px;border-radius:12px;margin:8px 0;object-fit:cover}
+
 .sl-create-hint{text-align:center;color:var(--muted);font-size:13px;padding:0 24px 16px;line-height:1.4}
 .sl-field{margin:10px 16px}
 .sl-field input,.sl-field textarea{
@@ -1854,6 +1866,10 @@ html.sl-ready.sl-booting::before{display:none!important}
       <div class="settings-section">
         <div class="settings-section-title">Эксперименты</div>
         <div class="settings-item" id="settings-beta"><svg viewBox="0 0 24 24"><path d="M12 2v6M12 16v6M4.93 4.93l4.24 4.24M14.83 14.83l4.24 4.24M2 12h6M16 12h6M4.93 19.07l4.24-4.24M14.83 9.17l4.24-4.24"/><circle cx="12" cy="12" r="3"/></svg><span class="item-text">Бета-функции</span></div>
+      </div>
+      <div class="settings-section">
+        <div class="settings-section-title">Реклама</div>
+        <div class="settings-item" id="settings-ads"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M7 8h10M7 12h6M7 16h8"/><path d="M17 14l3 2-3 2v-4z"/></svg><span class="item-text">Реклама</span></div>
       </div>
       <div class="settings-section">
         <div class="settings-section-title" data-i18n="sec_logout">Выход</div>
@@ -3650,6 +3666,8 @@ async function loadGroupMessages(){
       if(typeof window.slShowEmptyChatHint==='function') window.slShowEmptyChatHint(true);
     }
   }catch(e){ console.warn(e); }
+  // Ads at the end of channels
+  try{ if(typeof window.slRenderChannelAds==='function') window.slRenderChannelAds(); }catch(e){}
   // Subscribe to global news broadcast so everyone sees posts
   if(isNews){
     try{ subscribeNewsGlobal(); }catch(e){}
@@ -6691,6 +6709,208 @@ async function openUserInfo(profileLike){
   }catch(e){}
 }
 document.getElementById('partner-avatar').addEventListener('click',()=>{ if(activePartner) openStoriesOrProfile(activePartner); });
+
+
+// ========== Free channel ads (local) ==========
+window.slAds = {
+  keyAll: 'sl_ads_catalog',
+  keyOff: 'sl_ads_disabled',
+  keyHidden: 'sl_ads_hidden_ids',
+  getAll(){
+    try{ return JSON.parse(localStorage.getItem(this.keyAll)||'[]'); }catch(e){ return []; }
+  },
+  setAll(arr){ try{ localStorage.setItem(this.keyAll, JSON.stringify(arr.slice(-50))); }catch(e){} },
+  isDisabled(){ return localStorage.getItem(this.keyOff)==='1'; },
+  setDisabled(v){ localStorage.setItem(this.keyOff, v?'1':'0'); },
+  hiddenIds(){
+    try{ return new Set(JSON.parse(localStorage.getItem(this.keyHidden)||'[]')); }catch(e){ return new Set(); }
+  },
+  hideOne(id){
+    const s=this.hiddenIds(); s.add(String(id));
+    try{ localStorage.setItem(this.keyHidden, JSON.stringify([...s])); }catch(e){}
+  },
+  visible(){
+    if(this.isDisabled()) return [];
+    const hid=this.hiddenIds();
+    return this.getAll().filter(a=>a && a.id && !hid.has(String(a.id)));
+  },
+  add(ad){
+    const list=this.getAll();
+    list.push(ad);
+    this.setAll(list);
+  },
+  remove(id){
+    this.setAll(this.getAll().filter(a=>String(a.id)!==String(id)));
+  }
+};
+
+window.openAdsSettings = function(){
+  const sheet=document.createElement('div');
+  sheet.className='sl-sheet'; sheet.id='sl-ads-settings';
+  function paint(){
+    const disabled = window.slAds.isDisabled();
+    const list = window.slAds.getAll();
+    sheet.innerHTML=`
+      <div class="sl-sheet-hdr">
+        <button type="button" class="sl-sheet-back" id="ads-back">‹</button>
+        <h2>Реклама</h2>
+        <span style="width:40px"></span>
+      </div>
+      <div class="sl-sheet-body" style="padding-bottom:32px">
+        <div style="padding:12px 16px;color:var(--muted);font-size:13px;line-height:1.4">
+          Реклама показывается в <b>конце каналов</b>. Публикация полностью <b>бесплатная</b>.
+        </div>
+        <div class="settings-item" id="ads-toggle-off" style="padding-left:16px">
+          <span class="item-text">Отключить рекламу</span>
+          <div class="toggle-switch ${disabled?'on':''}" id="ads-off-tg"></div>
+        </div>
+        <div style="padding:8px 16px 4px;font-weight:700;font-size:14px">Опубликовать рекламу (бесплатно)</div>
+        <div style="padding:0 16px 12px">
+          <div class="sl-create-avatar" id="ads-photo-box" style="width:120px;height:120px;margin:12px auto">
+            <svg class="cam-ico" viewBox="0 0 48 48" width="40" height="40" fill="none"><path d="M16 20h3.2l1.6-2.4h6.4L28.8 20H32a2 2 0 012 2v10a2 2 0 01-2 2H16a2 2 0 01-2-2V22a2 2 0 012-2z" stroke="rgba(255,255,255,0.55)" stroke-width="1.8" stroke-linejoin="round"/><circle cx="24" cy="27" r="4.2" stroke="rgba(255,255,255,0.55)" stroke-width="1.8"/><path d="M33 16v5M30.5 18.5h5" stroke="rgba(255,255,255,0.55)" stroke-width="1.8" stroke-linecap="round"/></svg>
+          </div>
+          <input type="file" id="ads-file" accept="image/*" style="display:none">
+          <input class="cd-input" id="ads-title" placeholder="Заголовок" maxlength="80" style="width:100%;margin-bottom:8px;box-sizing:border-box">
+          <textarea class="cd-input" id="ads-text" placeholder="Текст рекламы" maxlength="300" style="width:100%;min-height:72px;margin-bottom:8px;box-sizing:border-box;resize:vertical"></textarea>
+          <input class="cd-input" id="ads-link" placeholder="Ссылка (https://…)" maxlength="300" style="width:100%;margin-bottom:12px;box-sizing:border-box">
+          <button type="button" class="btn-primary" id="ads-publish" style="width:100%">Опубликовать бесплатно</button>
+        </div>
+        <div style="padding:8px 16px 4px;font-weight:700;font-size:14px">Мои объявления (${list.length})</div>
+        <div id="ads-list" style="padding:0 12px 16px">
+          ${list.length? list.slice().reverse().map(a=>`
+            <div style="display:flex;gap:10px;align-items:center;padding:10px;border-radius:12px;background:var(--panel);margin-bottom:8px;border:1px solid var(--line)">
+              ${a.image?`<img src="${String(a.image).replace(/"/g,'&quot;')}" style="width:48px;height:48px;border-radius:8px;object-fit:cover">`:'<div style="width:48px;height:48px;border-radius:8px;background:rgba(255,255,255,.08)"></div>'}
+              <div style="flex:1;min-width:0">
+                <div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${String(a.title||'').replace(/</g,'&lt;')}</div>
+                <div style="font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${String(a.link||'').replace(/</g,'&lt;')}</div>
+              </div>
+              <button type="button" data-del="${a.id}" style="border:none;background:transparent;color:var(--danger,#e5484d);font-size:12px;cursor:pointer">Удалить</button>
+            </div>`).join('')
+          : '<div style="padding:16px;text-align:center;color:var(--muted);font-size:13px">Пока нет объявлений</div>'}
+        </div>
+      </div>`;
+    let photoData=null;
+    sheet.querySelector('#ads-back').onclick=()=>sheet.remove();
+    sheet.querySelector('#ads-toggle-off').onclick=()=>{
+      window.slAds.setDisabled(!window.slAds.isDisabled());
+      paint();
+      showToast(window.slAds.isDisabled()?'Реклама отключена':'Реклама включена');
+    };
+    sheet.querySelector('#ads-photo-box').onclick=()=>sheet.querySelector('#ads-file').click();
+    sheet.querySelector('#ads-file').onchange=function(){
+      const f=this.files&&this.files[0]; if(!f) return;
+      const r=new FileReader();
+      r.onload=async()=>{
+        try{
+          photoData = (typeof window.slCompressImage==='function')
+            ? await window.slCompressImage(r.result, 640, 0.75)
+            : r.result;
+        }catch(e){ photoData=r.result; }
+        const box=sheet.querySelector('#ads-photo-box');
+        box.innerHTML=`<img src="${photoData}" style="width:100%;height:100%;object-fit:cover" alt="">`;
+      };
+      r.readAsDataURL(f);
+    };
+    sheet.querySelector('#ads-publish').onclick=()=>{
+      const title=(sheet.querySelector('#ads-title').value||'').trim();
+      const body=(sheet.querySelector('#ads-text').value||'').trim();
+      const link=(sheet.querySelector('#ads-link').value||'').trim();
+      if(!title && !body){ showToast('Введите заголовок или текст'); return; }
+      if(link && !/^https?:\/\//i.test(link)){ showToast('Ссылка должна начинаться с http:// или https://'); return; }
+      const ad={
+        id: 'ad_'+Date.now()+'_'+Math.random().toString(36).slice(2,7),
+        title, text: body, link, image: photoData||null,
+        author_id: myProfile?.id||null,
+        author_name: myProfile?.first_name||myProfile?.username||'Пользователь',
+        created_at: new Date().toISOString()
+      };
+      window.slAds.add(ad);
+      showToast('Реклама опубликована бесплатно');
+      paint();
+    };
+    sheet.querySelectorAll('[data-del]').forEach(btn=>{
+      btn.onclick=()=>{
+        window.slAds.remove(btn.dataset.del);
+        paint();
+        showToast('Удалено');
+      };
+    });
+  }
+  document.body.appendChild(sheet);
+  paint();
+};
+
+window.slRenderChannelAds = function(){
+  try{
+    if(!activeGroup || activeGroup.type!=='channel') return;
+    if(window.slAds.isDisabled()) return;
+    const list=document.getElementById('messages-list');
+    if(!list) return;
+    // remove old
+    list.querySelectorAll('.sl-ad-card').forEach(el=>el.remove());
+    const ads=window.slAds.visible();
+    if(!ads.length) return;
+    // show up to 3 newest at the end
+    ads.slice(-3).reverse().forEach(ad=>{
+      const card=document.createElement('div');
+      card.className='sl-ad-card';
+      card.dataset.adId=ad.id;
+      const esc=(s)=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+      card.innerHTML=`
+        <button type="button" class="sl-ad-x" aria-label="Закрыть">×</button>
+        ${ad.image?`<img class="sl-ad-img" src="${esc(ad.image)}" alt="">`:''}
+        <div class="sl-ad-body">
+          <div class="sl-ad-label">Реклама</div>
+          ${ad.title?`<div class="sl-ad-title">${esc(ad.title)}</div>`:''}
+          ${ad.text?`<div class="sl-ad-text">${esc(ad.text)}</div>`:''}
+          ${ad.link?`<button type="button" class="sl-ad-go">Перейти ↗</button>`:''}
+        </div>`;
+      card.querySelector('.sl-ad-x').onclick=(e)=>{
+        e.stopPropagation();
+        window.slAdCloseDialog(ad.id, card);
+      };
+      const go=card.querySelector('.sl-ad-go');
+      if(go){
+        go.onclick=()=>{
+          try{ window.open(ad.link, '_blank', 'noopener'); }catch(e){ location.href=ad.link; }
+        };
+      }
+      list.appendChild(card);
+    });
+  }catch(e){ console.warn('ads render', e); }
+};
+
+window.slAdCloseDialog = function(adId, cardEl){
+  const ov=document.createElement('div');
+  ov.className='modal-overlay';
+  ov.style.zIndex='14000';
+  ov.innerHTML=`<div class="modal" style="max-width:320px">
+    <div style="font-weight:800;font-size:16px;margin-bottom:8px;text-align:center">Реклама</div>
+    <div style="color:var(--muted);font-size:13px;text-align:center;margin-bottom:16px;line-height:1.4">Что сделать с рекламой?</div>
+    <button type="button" class="btn-primary" id="ad-off-all" style="width:100%;margin-bottom:8px">Отключить полностью рекламу (бесплатно)</button>
+    <button type="button" class="btn-secondary" id="ad-hide-one" style="width:100%;margin-bottom:8px">Убрать эту рекламу, а остальные будут показываться</button>
+    <button type="button" class="btn-secondary" id="ad-cancel" style="width:100%">Отмена</button>
+  </div>`;
+  document.body.appendChild(ov);
+  ov.querySelector('#ad-cancel').onclick=()=>ov.remove();
+  ov.querySelector('#ad-off-all').onclick=()=>{
+    window.slAds.setDisabled(true);
+    document.querySelectorAll('.sl-ad-card').forEach(el=>el.remove());
+    ov.remove();
+    showToast('Реклама полностью отключена');
+  };
+  ov.querySelector('#ad-hide-one').onclick=()=>{
+    window.slAds.hideOne(adId);
+    try{ cardEl.remove(); }catch(e){}
+    ov.remove();
+    showToast('Это объявление скрыто');
+  };
+};
+
+// wire settings button
+document.getElementById('settings-ads')?.addEventListener('click',()=>{
+  if(typeof window.openAdsSettings==='function') window.openAdsSettings();
+});
 
 // ---------- Anti-spam / banned words (channels & groups) ----------
 function getBannedWords(gid){ try{ return JSON.parse(storage.getItem('sl_banned_'+gid)||'[]'); }catch(e){ return []; } }
