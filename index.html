@@ -1541,6 +1541,46 @@ body.chats-selecting .sw-clip .sel-check{display:flex}
 .sl-bio-link{color:var(--accent-a);text-decoration:underline;word-break:break-all}
 .folder-edit-btn{margin-left:auto;font-size:11px;color:var(--muted);padding:4px 8px;cursor:pointer}
 
+
+/* Profile cover banner */
+.sl-profile-cover{
+  height:140px;width:100%;position:relative;flex-shrink:0;
+  background:linear-gradient(135deg,#3a4a6b 0%,#1a2233 100%);
+  background-size:cover;background-position:center;
+  border-radius:0;
+}
+.sl-profile-cover.has-img{background-color:#1a2233}
+.sl-profile-cover-fade{
+  position:absolute;left:0;right:0;bottom:0;height:48px;
+  background:linear-gradient(transparent,var(--bg,#0d111a));
+  pointer-events:none;
+}
+.sl-profile-cover-edit{
+  position:absolute;right:12px;bottom:12px;z-index:2;
+  background:rgba(0,0,0,.45);color:#fff;border:none;border-radius:999px;
+  padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;
+  backdrop-filter:blur(6px);
+}
+.sl-profile-hero{
+  display:flex;flex-direction:column;align-items:center;
+  padding:0 16px 8px;margin-top:-48px;position:relative;z-index:2;
+}
+.sl-profile-hero .avatar, .sl-profile-hero #up-av, .sl-profile-hero #cp-av{
+  border:3px solid var(--bg,#0d111a)!important;
+  box-shadow:0 4px 16px rgba(0,0,0,.35);
+}
+
+
+.sl-name-badge{display:inline-flex;vertical-align:middle;margin-left:6px;align-items:center;line-height:0}
+.sl-name-badge svg{width:18px;height:18px;display:block}
+.sl-badge-pick{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;width:100%}
+.sl-badge-pick button{aspect-ratio:1;border-radius:12px;border:1.5px solid var(--line);background:var(--panel);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:8px}
+.sl-badge-pick button.active{border-color:var(--accent-a,#4C7CF3);background:rgba(76,124,243,.15)}
+.sl-badge-pick button svg{width:22px;height:22px}
+.sl-music-row{display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--panel);border:1px solid var(--line);border-radius:14px;margin:0 16px 12px}
+.sl-music-ico{width:40px;height:40px;border-radius:10px;background:linear-gradient(135deg,#4C7CF3,#9b59ff);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.sl-music-ico svg{width:20px;height:20px;stroke:#fff;fill:none}
+
 </style>
 </head>
 <body>
@@ -5757,6 +5797,13 @@ document.getElementById('settings-edit-profile').onclick=()=>{
   sheet.className='sl-sheet'; sheet.id='sl-edit-profile';
   const camIco='<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>';
   const about0 = myProfile.bio || myProfile.about || '';
+  const badge0 = (typeof slGetBadge==='function'?slGetBadge(myProfile):'none')||'none';
+  const music0 = (typeof slGetMusic==='function'?slGetMusic(myProfile):'')||'';
+  const badgeKeys = Object.keys(window.SL_BADGES||{none:''});
+  const badgeBtns = badgeKeys.map(k=>{
+    const ico = k==='none' ? '<span style="font-size:11px;color:var(--muted)">Нет</span>' : (window.SL_BADGES[k]||'');
+    return `<button type="button" data-badge="${k}" class="${k===badge0?'active':''}" title="${k}">${ico}</button>`;
+  }).join('');
   sheet.innerHTML=`
     <div class="sl-sheet-hdr">
       <button type="button" class="sl-sheet-back" id="ep-back">‹</button>
@@ -5770,15 +5817,31 @@ document.getElementById('settings-edit-profile').onclick=()=>{
       </div>
       <input class="cd-input" id="ef" value="${(myProfile.first_name||'').replace(/"/g,'&quot;')}" placeholder="Имя" style="width:100%;box-sizing:border-box;border-radius:14px;padding:14px">
       <input class="cd-input" id="el" value="${(myProfile.last_name||'').replace(/"/g,'&quot;')}" placeholder="Фамилия" style="width:100%;box-sizing:border-box;border-radius:14px;padding:14px">
+      <div style="width:100%">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:8px;font-weight:600">Значок рядом с именем</div>
+        <div class="sl-badge-pick" id="ep-badges">${badgeBtns}</div>
+      </div>
       <div style="width:100%;position:relative">
         <textarea class="cd-input" id="ebio" maxlength="253" placeholder="О себе" style="width:100%;min-height:88px;box-sizing:border-box;border-radius:14px;padding:14px;resize:vertical">${(about0||'').replace(/</g,'&lt;')}</textarea>
         <div id="ebio-c" style="position:absolute;right:12px;bottom:10px;font-size:12px;color:var(--muted)">${String(about0||'').length}</div>
+      </div>
+      <div style="width:100%">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:8px;font-weight:600">Любимая музыка</div>
+        <input class="cd-input" id="emusic" value="${String(music0).replace(/"/g,'&quot;')}" placeholder="Исполнитель — трек" maxlength="120" style="width:100%;box-sizing:border-box;border-radius:14px;padding:14px">
       </div>
       <button type="button" class="btn-primary" id="esave" style="width:100%;margin-top:8px;padding:14px;border-radius:14px">Сохранить</button>
       <button type="button" class="btn-secondary" id="ep-exit" style="width:100%;padding:14px;border-radius:14px">Выйти из профиля</button>
     </div>`;
   document.body.appendChild(sheet);
   renderAvatarInto(sheet.querySelector('#ep-av'), myProfile.avatar_url, (myProfile.username||'?')[0].toUpperCase(), myProfile.color||colorFor(myProfile.id));
+  let selectedBadge = badge0;
+  sheet.querySelectorAll('#ep-badges [data-badge]').forEach(btn=>{
+    btn.onclick=()=>{
+      sheet.querySelectorAll('#ep-badges [data-badge]').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      selectedBadge = btn.dataset.badge;
+    };
+  });
   sheet.querySelector('#ep-back').onclick=()=>sheet.remove();
   sheet.querySelector('#ep-exit').onclick=()=>sheet.remove();
   sheet.querySelector('#ebio').oninput=function(){ sheet.querySelector('#ebio-c').textContent=String(this.value.length); };
@@ -5787,26 +5850,23 @@ document.getElementById('settings-edit-profile').onclick=()=>{
     const first=sheet.querySelector('#ef').value.trim();
     const last=sheet.querySelector('#el').value.trim();
     const bio=sheet.querySelector('#ebio').value.trim().slice(0,253);
+    const music=sheet.querySelector('#emusic').value.trim().slice(0,120);
+    const badge=selectedBadge||'none';
+    try{ localStorage.setItem('sl_my_badge', badge); localStorage.setItem('sl_badge_'+myProfile.id, badge); }catch(e){}
+    try{ localStorage.setItem('sl_my_music', music); localStorage.setItem('sl_music_'+myProfile.id, music); }catch(e){}
+    try{ localStorage.setItem('sl_my_bio', bio); }catch(e){}
+    Object.assign(myProfile,{first_name:first,last_name:last,bio,badge_id:badge,favorite_music:music});
     try{
-      const patch={first_name:first,last_name:last,bio};
-      await sb.from('profiles').update(patch).eq('id',myProfile.id);
-      Object.assign(myProfile, patch);
-      if(typeof updateAllUIs==='function') updateAllUIs();
-      sheet.remove();
-      showToast('Сохранено');
+      await sb.from('profiles').update({first_name:first,last_name:last,bio,badge_id:badge,favorite_music:music}).eq('id',myProfile.id);
     }catch(e){
-      // bio column may be missing — save name only + local bio
-      try{
-        await sb.from('profiles').update({first_name:first,last_name:last}).eq('id',myProfile.id);
-        Object.assign(myProfile,{first_name:first,last_name:last,bio});
-        try{ localStorage.setItem('sl_my_bio', bio); }catch(e2){}
-        if(typeof updateAllUIs==='function') updateAllUIs();
-        sheet.remove();
-        showToast('Сохранено');
-      }catch(e3){ showToast(typeof friendlyError==='function'?friendlyError(e3):String(e3)); }
+      try{ await sb.from('profiles').update({first_name:first,last_name:last}).eq('id',myProfile.id); }catch(e2){}
     }
+    if(typeof updateAllUIs==='function') updateAllUIs();
+    sheet.remove();
+    showToast('Сохранено');
   };
 };
+
 
 function applyStretchBg(el, url, color, ch){
   if(!el) return;
@@ -5950,9 +6010,34 @@ function pickCoverImage(){
     const f=e.target.files[0]; if(!f) return; e.target.value='';
     const r=new FileReader();
     r.onload=async ev=>{
-      myProfile.cover_url=ev.target.result;
-      updateAllUIs();
-      try{ await sb.from('profiles').update({cover_url:ev.target.result}).eq('id',myProfile.id); }catch(err){}
+      let dataUrl=ev.target.result;
+      // compress large covers
+      try{
+        if(f.size>400000){
+          dataUrl = await new Promise((resolve)=>{
+            const img=new Image();
+            img.onload=()=>{
+              const maxW=1280;
+              let w=img.width, h=img.height;
+              if(w>maxW){ h=Math.round(h*maxW/w); w=maxW; }
+              const c=document.createElement('canvas'); c.width=w; c.height=h;
+              c.getContext('2d').drawImage(img,0,0,w,h);
+              resolve(c.toDataURL('image/jpeg',0.82));
+            };
+            img.onerror=()=>resolve(ev.target.result);
+            img.src=ev.target.result;
+          });
+        }
+      }catch(err){}
+      myProfile.cover_url=dataUrl;
+      try{ localStorage.setItem('sl_cover_'+myProfile.id, dataUrl); }catch(err){}
+      try{ updateAllUIs(); }catch(err){}
+      // live update open sheets
+      document.querySelectorAll('#up-cover, #settings-cover, #cp-cover').forEach(el=>{
+        el.style.backgroundImage=`url(${dataUrl})`;
+        el.classList.add('has-img');
+      });
+      try{ await sb.from('profiles').update({cover_url:dataUrl}).eq('id',myProfile.id); }catch(err){}
       showToast(currentLang==='en'?'Cover updated':'Обложка обновлена');
     };
     r.readAsDataURL(f);
@@ -6775,6 +6860,13 @@ function getBannedWords(gid){ try{ return JSON.parse(storage.getItem('sl_banned_
 function setBannedWords(gid,arr){ storage.setItem('sl_banned_'+gid, JSON.stringify(arr)); }
 
 window.openChannelProfile = async function(group){
+  try{
+    if(group && group.id && !group.cover_url){
+      const lc=localStorage.getItem('sl_gcover_'+group.id);
+      if(lc) group.cover_url=lc;
+    }
+  }catch(e){}
+
   group = group || activeGroup;
   if(!group) return;
   let memberCount = 0;
@@ -6815,9 +6907,13 @@ window.openChannelProfile = async function(group){
       <h2></h2>
       <span style="width:40px"></span>
     </div>
-    <div class="sl-sheet-body" style="padding-bottom:40px">
-      <div style="display:flex;flex-direction:column;align-items:center;padding:12px 16px 8px">
-        <div id="cp-av" style="width:88px;height:88px;border-radius:50%;overflow:hidden;background:${col};display:flex;align-items:center;justify-content:center;font-size:34px;font-weight:800;color:#fff;margin-bottom:12px">
+    <div class="sl-sheet-body" style="padding:0 0 40px">
+      <div class="sl-profile-cover ${group.cover_url?'has-img':''}" id="cp-cover" style="${group.cover_url?`background-image:url('${esc(group.cover_url)}')`:''}">
+        <div class="sl-profile-cover-fade"></div>
+        ${isAdmin?`<button type="button" class="sl-profile-cover-edit" id="cp-cover-edit">Обложка</button>`:''}
+      </div>
+      <div class="sl-profile-hero">
+        <div id="cp-av" style="width:88px;height:88px;border-radius:50%;overflow:hidden;background:${col};display:flex;align-items:center;justify-content:center;font-size:34px;font-weight:800;color:#fff;margin-bottom:12px;border:3px solid var(--bg,#0d111a)">
           ${avUrl?`<img src="${esc(avUrl)}" style="width:100%;height:100%;object-fit:cover" alt="">`:esc(letter)}
         </div>
         <div style="font-size:22px;font-weight:800;text-align:center">${esc(group.name)}</div>
@@ -6855,6 +6951,37 @@ window.openChannelProfile = async function(group){
   document.body.appendChild(sheet);
   const close=()=>{ try{sheet.remove()}catch(e){} };
   sheet.querySelector('#cp-back').onclick=close;
+  sheet.querySelector('#cp-cover-edit')?.addEventListener('click', (e)=>{
+    e.stopPropagation();
+    // pick cover for group/channel
+    let inp=document.getElementById('group-cover-upload');
+    if(!inp){ inp=document.createElement('input'); inp.type='file'; inp.accept='image/*'; inp.id='group-cover-upload'; inp.className='hidden-input'; document.body.appendChild(inp); }
+    inp.onchange=async function(ev){
+      const f=ev.target.files[0]; if(!f) return; ev.target.value='';
+      const r=new FileReader();
+      r.onload=async()=>{
+        let dataUrl=r.result;
+        try{
+          if(f.size>400000){
+            dataUrl = await new Promise((resolve)=>{
+              const img=new Image();
+              img.onload=()=>{ const maxW=1280; let w=img.width,h=img.height; if(w>maxW){h=Math.round(h*maxW/w);w=maxW;} const c=document.createElement('canvas'); c.width=w;c.height=h; c.getContext('2d').drawImage(img,0,0,w,h); resolve(c.toDataURL('image/jpeg',0.82)); };
+              img.onerror=()=>resolve(r.result); img.src=r.result;
+            });
+          }
+        }catch(err){}
+        group.cover_url=dataUrl;
+        try{ localStorage.setItem('sl_gcover_'+group.id, dataUrl); }catch(err){}
+        const el=document.getElementById('cp-cover');
+        if(el){ el.style.backgroundImage=`url(${dataUrl})`; el.classList.add('has-img'); }
+        try{ await sb.from('groups').update({cover_url:dataUrl}).eq('id', group.id); }catch(err){}
+        showToast('Обложка обновлена');
+      };
+      r.readAsDataURL(f);
+    };
+    inp.click();
+  });
+
   sheet.querySelector('#cp-share').onclick=async()=>{
     try{ await navigator.clipboard.writeText(link); showToast('Ссылка скопирована'); }catch(e){ showToast(link); }
   };
@@ -10624,6 +10751,11 @@ async function openFullProfile(profileLike){
   if(isMe && myProfile){
     p = {...myProfile, ...p};
   }
+  if(!p.cover_url){
+    try{ const lc=localStorage.getItem('sl_cover_'+(p.id||'')); if(lc) p.cover_url=lc; }catch(e){}
+  }
+  if(isMe && myProfile && !myProfile.cover_url && p.cover_url) myProfile.cover_url=p.cover_url;
+
   const name=p.first_name?`${p.first_name} ${p.last_name||''}`.trim():(p.username||'');
   const about = p.bio || p.about || p.status_text || p.emoji_status || '';
   const statusLine = (typeof onlineUsers!=='undefined' && onlineUsers.has(p.id))
@@ -10641,18 +10773,27 @@ async function openFullProfile(profileLike){
   const prev=document.querySelector('.profile-sheet, #sl-user-profile'); if(prev) prev.remove();
   const sheet=document.createElement('div');
   sheet.className='sl-sheet'; sheet.id='sl-user-profile';
+  const coverUrl = p.cover_url || (isMe && myProfile?.cover_url) || '';
   sheet.innerHTML=`
     <div class="sl-sheet-hdr">
       <button type="button" class="sl-sheet-back" id="up-back">‹</button>
       <h2></h2>
       ${isMe?`<button type="button" class="sl-icon-btn" id="up-edit" title="Изменить">${ico.edit}</button>`:'<span style="width:40px"></span>'}
     </div>
-    <div class="sl-sheet-body" style="padding-bottom:40px">
-      <div style="display:flex;flex-direction:column;align-items:center;padding:16px 16px 8px">
+    <div class="sl-sheet-body" style="padding:0 0 40px;overflow-y:auto">
+      <div class="sl-profile-cover ${coverUrl?'has-img':''}" id="up-cover" style="${coverUrl?`background-image:url('${esc(coverUrl)}')`:''}">
+        <div class="sl-profile-cover-fade"></div>
+        ${isMe?`<button type="button" class="sl-profile-cover-edit" id="up-cover-edit">Обложка</button>`:''}
+      </div>
+      <div class="sl-profile-hero">
         <div id="up-av" class="avatar" style="width:96px;height:96px;border-radius:50%;font-size:36px;margin-bottom:12px"></div>
-        <div style="font-size:22px;font-weight:800;text-align:center">${esc(name)}</div>
+        <div style="font-size:22px;font-weight:800;text-align:center">${esc(name)}${(typeof slBadgeHtml==='function'?slBadgeHtml((typeof slGetBadge==='function'?slGetBadge(p):p.badge_id), p.color||'#4C7CF3'):'')}</div>
         <div style="color:var(--muted);font-size:14px;margin-top:4px">${esc(statusLine)}</div>
       </div>
+      ${((typeof slGetMusic==='function'?slGetMusic(p):'')||p.favorite_music)?`<div class="sl-music-row"><div class="sl-music-ico"><svg viewBox="0 0 24 24" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></div><div style="min-width:0;flex:1"><div style="font-size:11px;color:var(--muted);font-weight:600">Любимая музыка</div><div style="font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc((typeof slGetMusic==='function'?slGetMusic(p):'')||p.favorite_music||'')}</div></div></div>`:''}
+
+      </div>
+      <div style="padding:0 0 0">
       ${!isMe?`<div class="sl-info-actions">
         <button type="button" class="sl-info-chip" data-a="call">${ico.call}<span>Звонок</span></button>
         <button type="button" class="sl-info-chip" data-a="video">${ico.video}<span>Видео</span></button>
@@ -10671,10 +10812,12 @@ async function openFullProfile(profileLike){
         </div>
         <span style="color:var(--muted);font-size:18px">›</span>
       </div>
+      </div>
     </div>`;
   document.body.appendChild(sheet);
   renderAvatarInto(sheet.querySelector('#up-av'), p.avatar_url, (p.username||name||'?')[0].toUpperCase(), p.color||(typeof colorFor==='function'?colorFor(p.id):'#4C7CF3'));
   sheet.querySelector('#up-back').onclick=()=>sheet.remove();
+  sheet.querySelector('#up-cover-edit')?.addEventListener('click', (e)=>{ e.stopPropagation(); if(typeof pickCoverImage==='function') pickCoverImage(); });
   sheet.querySelector('#up-edit')?.addEventListener('click',()=>{
     sheet.remove();
     try{ document.getElementById('settings-edit-profile')?.click(); }catch(e){}
@@ -11354,67 +11497,100 @@ window.openAboutProject = function(){
   sheet.className='sl-sheet'; sheet.id='sl-about-project';
   const tabs=[
     {id:'about', t:'О проекте'},
+    {id:'notsignal', t:'Не Signal'},
     {id:'safety', t:'Безопасность'},
     {id:'privacy', t:'Конфиденциальность'},
     {id:'terms', t:'Условия'},
     {id:'contact', t:'Контакты'},
-    {id:'trust', t:'Прозрачность'}
+    {id:'trust', t:'Прозрачность'},
+    {id:'faq', t:'FAQ'}
   ];
   const pages = {
     about: `
       <div style="text-align:center;padding:8px 0 16px">
         <div class="sl-app-icon lg" style="margin:0 auto 12px" role="img" aria-label="Signal Line"></div>
         <h3 style="margin:0 0 4px;font-size:20px">Signal Line</h3>
-        <div style="color:var(--muted);font-size:13px;margin-bottom:12px">Версия 2.4.0 · Веб-мессенджер</div>
+        <div style="color:var(--muted);font-size:13px;margin-bottom:12px">Версия 2.4.0 · Независимый веб-мессенджер</div>
+      </div>
+      <div style="background:rgba(229,72,77,.12);border:1px solid rgba(229,72,77,.35);border-radius:12px;padding:12px 14px;margin-bottom:14px;font-size:13px;line-height:1.45">
+        <b>Важно:</b> Signal Line <b>не является</b> приложением Signal Messenger и <b>не связан</b> с Signal Foundation / Open Whisper Systems.
       </div>
       <p style="font-size:14px;line-height:1.55;color:var(--text);margin:0 0 12px">
-        Signal Line — независимый веб-мессенджер для общения: личные чаты, группы, каналы, звонки, голосовые и кружки.
+        Signal Line — отдельный веб-мессенджер для общения: личные чаты, группы, каналы, звонки, голосовые сообщения и кружки.
       </p>
       <p style="font-size:14px;line-height:1.55;color:var(--muted);margin:0 0 12px">
-        Проект <b>не связан</b> с банками, госуслугами, операторами связи и другими мессенджерами. Мы не просим пароли от почты, коды из SMS банков и данные карт.
+        Проект также <b>не связан</b> с банками, госуслугами, операторами связи, MAX, Telegram, WhatsApp и другими сервисами. Мы не просим пароли от почты, коды из SMS банков и данные карт.
       </p>
       <p style="font-size:13px;line-height:1.5;color:var(--muted);margin:0">
-        © Signal Line. Использование сервиса означает согласие с разделами «Условия» и «Конфиденциальность».
+        © Signal Line. Использование означает согласие с разделами «Условия» и «Конфиденциальность».
+      </p>`,
+    notsignal: `
+      <h3 style="margin:0 0 12px;font-size:17px">Мы не Signal Messenger</h3>
+      <p style="font-size:14px;line-height:1.55;margin:0 0 12px">
+        Название «Signal Line» — собственное имя этого веб-проекта. Оно <b>не означает</b> аффилиацию, партнёрство или преемственность с мессенджером Signal.
+      </p>
+      <ul style="margin:0;padding-left:18px;font-size:14px;line-height:1.65">
+        <li>Нет связи с <b>Signal Foundation</b> и <b>Open Whisper Systems</b></li>
+        <li>Это не клиент и не «официальная веб-версия» Signal</li>
+        <li>Протоколы, серверы и аккаунты — отдельные</li>
+        <li>Аккаунт Signal нельзя «перенести» сюда и наоборот</li>
+      </ul>
+      <p style="margin:14px 0 0;font-size:14px;line-height:1.55;color:var(--muted)">
+        Если вам нужен именно оригинальный Signal — устанавливайте его только с официального сайта signal.org или из официальных магазинов приложений.
+      </p>
+      <p style="margin:12px 0 0;font-size:13px;line-height:1.5;color:var(--muted)">
+        Официальная поддержка Signal Line никогда не просит пароль от Signal, seed-фразы, коды 2FA сторонних сервисов или перевод денег «для проверки».
       </p>`,
     safety: `
       <h3 style="margin:0 0 12px;font-size:17px">Безопасность</h3>
-      <ul style="margin:0;padding-left:18px;font-size:14px;line-height:1.6;color:var(--text)">
-        <li>Секретные чаты с <b>end-to-end шифрованием</b> (ECDH + AES-GCM): текст на сервере хранится в зашифрованном виде.</li>
-        <li>Обычные чаты идут через защищённое соединение HTTPS.</li>
-        <li>PIN-защита чатов и ключ входа — на вашем устройстве.</li>
-        <li>Можно завершать сессии устройств в настройках.</li>
-        <li>Мы не запрашиваем сканы паспорта, данные карт и пароли сторонних сервисов.</li>
+      <p style="font-size:14px;line-height:1.55;margin:0 0 10px"><b>Сквозное шифрование (E2E)</b> в секретных чатах:</p>
+      <ul style="margin:0 0 12px;padding-left:18px;font-size:14px;line-height:1.6">
+        <li>Обмен ключами: <b>ECDH P-256</b></li>
+        <li>Шифрование сообщений: <b>AES-GCM 256</b></li>
+        <li>На сервер уходит только шифротекст; расшифровка на устройствах участников</li>
+        <li>В шапке секретного чата отображается статус «End-to-end»</li>
+      </ul>
+      <p style="font-size:14px;line-height:1.55;margin:0 0 10px"><b>Обычные чаты и каналы:</b></p>
+      <ul style="margin:0 0 12px;padding-left:18px;font-size:14px;line-height:1.6">
+        <li>Транспорт: HTTPS</li>
+        <li>Содержимое обрабатывается сервером для доставки (это не E2E)</li>
+      </ul>
+      <ul style="margin:0;padding-left:18px;font-size:14px;line-height:1.6">
+        <li>PIN-защита чатов и ключ входа — на вашем устройстве</li>
+        <li>Список сессий устройств с возможностью завершения</li>
+        <li>Мы не запрашиваем паспорт, карты и пароли сторонних сервисов</li>
       </ul>
       <p style="margin:14px 0 0;font-size:13px;color:var(--muted);line-height:1.5">
-        Если вам пишут «от службы безопасности Signal Line» и просят код или перевод — это мошенники. Официальная поддержка не просит денег и паролей.
+        Письма «от службы безопасности» с просьбой кода или перевода — мошенничество. Поддержка не запрашивает пароли и деньги.
       </p>`,
     privacy: `
       <h3 style="margin:0 0 12px;font-size:17px">Конфиденциальность</h3>
-      <p style="font-size:14px;line-height:1.55;margin:0 0 10px">Кратко, какие данные могут обрабатываться:</p>
+      <p style="font-size:14px;line-height:1.55;margin:0 0 10px">Какие данные могут обрабатываться:</p>
       <ul style="margin:0;padding-left:18px;font-size:14px;line-height:1.6">
-        <li>Профиль: имя, username, аватар, email (если указан).</li>
-        <li>Сообщения и медиа — для доставки чатов и каналов.</li>
-        <li>Технические логи (ошибки, сессии) — для стабильности сервиса.</li>
+        <li>Профиль: имя, username, аватар, email или телефон (если указаны)</li>
+        <li>Сообщения и медиа — для доставки в чатах и каналах</li>
+        <li>Технические данные сессий — для входа и безопасности</li>
       </ul>
       <p style="margin:12px 0 0;font-size:14px;line-height:1.55;color:var(--muted)">
-        В секретных чатах содержимое сообщений недоступно серверу в открытом виде. Вы можете удалять чаты, блокировать пользователей и ограничивать, кто видит номер или email.
+        В <b>секретных чатах</b> текст сообщений недоступен серверу в открытом виде. В обычных чатах сервер участвует в доставке содержимого.
       </p>
-      <p style="margin:12px 0 0;font-size:13px;color:var(--muted)">
-        Резервная копия в настройках создаётся у вас на устройстве; вы сами решаете, куда её сохранить.
+      <p style="margin:12px 0 0;font-size:13px;color:var(--muted);line-height:1.5">
+        Резервная копия в настройках создаётся локально на вашем устройстве. Вы сами выбираете, куда её сохранить.
       </p>`,
     terms: `
       <h3 style="margin:0 0 12px;font-size:17px">Условия использования</h3>
       <ul style="margin:0;padding-left:18px;font-size:14px;line-height:1.6">
-        <li>Сервис предназначен для личного и делового общения.</li>
-        <li>Запрещены спам, мошенничество, угрозы, распространение вредоносного ПО.</li>
-        <li>Запрещено выдавать себя за банк, госорганы или поддержку с целью обмана.</li>
-        <li>Администрация может ограничить доступ при нарушении правил.</li>
-        <li>Сервис предоставляется «как есть»; мы стремимся к стабильности, но не гарантируем отсутствие сбоев.</li>
-        <li>Вы несёте ответственность за содержание своих сообщений и каналов.</li>
+        <li>Сервис для личного и делового общения</li>
+        <li>Запрещены спам, мошенничество, угрозы, вредоносное ПО</li>
+        <li>Запрещено выдавать себя за банк, госорганы, Signal или поддержку с целью обмана</li>
+        <li>При нарушении доступ может быть ограничен</li>
+        <li>Сервис предоставляется «как есть»; возможны технические сбои</li>
+        <li>Вы отвечаете за содержание своих сообщений и каналов</li>
+        <li>Нельзя использовать товарные знаки Signal Foundation так, будто проект с ними связан</li>
       </ul>`,
     contact: `
       <h3 style="margin:0 0 12px;font-size:17px">Контакты</h3>
-      <p style="font-size:14px;line-height:1.55;margin:0 0 12px">По вопросам работы приложения, безопасности и жалоб:</p>
+      <p style="font-size:14px;line-height:1.55;margin:0 0 12px">По работе приложения, безопасности и жалобам:</p>
       <div style="background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin-bottom:10px">
         <div style="font-size:12px;color:var(--muted);margin-bottom:4px">Поддержка</div>
         <div style="font-weight:700">support@signal-line.app</div>
@@ -11424,25 +11600,36 @@ window.openAboutProject = function(){
         <div style="font-weight:700">security@signal-line.app</div>
       </div>
       <p style="font-size:13px;color:var(--muted);line-height:1.5;margin:0">
-        Укажите в письме username и суть проблемы. Не присылайте пароли и коды подтверждения.
+        Укажите username и суть вопроса. Не присылайте пароли и одноразовые коды.
       </p>`,
     trust: `
       <h3 style="margin:0 0 12px;font-size:17px">Прозрачность</h3>
-      <p style="font-size:14px;line-height:1.55;margin:0 0 10px">
-        Чтобы было понятно, чем Signal Line <b>не является</b>:
-      </p>
+      <p style="font-size:14px;line-height:1.55;margin:0 0 10px">Чем Signal Line <b>не является</b>:</p>
       <ul style="margin:0;padding-left:18px;font-size:14px;line-height:1.6">
+        <li>Не официальный Signal и не его веб-клиент</li>
         <li>Не банк и не платёжный сервис</li>
         <li>Не госуслуги и не «служба безопасности»</li>
         <li>Не оператор связи</li>
         <li>Не биржа и не инвестиционная платформа</li>
       </ul>
       <p style="margin:14px 0 0;font-size:14px;line-height:1.55">
-        Официальные уведомления внутри приложения не требуют перевода денег, «проверки карты» или код из SMS другого сервиса.
+        Официальные уведомления не требуют перевода денег, «проверки карты» или кода из SMS другого сервиса.
       </p>
       <p style="margin:12px 0 0;font-size:13px;color:var(--muted);line-height:1.5">
-        Рекомендуем устанавливать приложение только с вашего обычного адреса сайта и проверять HTTPS в строке браузера.
-      </p>`
+        Открывайте сервис только с привычного вам адреса и проверяйте HTTPS в строке браузера. Не вводите на сторонних сайтах пароль от Signal Line.
+      </p>`,
+    faq: `
+      <h3 style="margin:0 0 12px;font-size:17px">Частые вопросы</h3>
+      <p style="font-size:14px;margin:0 0 6px"><b>Это тот же Signal?</b></p>
+      <p style="font-size:14px;color:var(--muted);margin:0 0 14px;line-height:1.5">Нет. Отдельный независимый веб-мессенджер. К Signal Foundation отношения не имеет.</p>
+      <p style="font-size:14px;margin:0 0 6px"><b>Есть ли сквозное шифрование?</b></p>
+      <p style="font-size:14px;color:var(--muted);margin:0 0 14px;line-height:1.5">Да, в секретных чатах (ECDH P-256 + AES-GCM). В обычных чатах и каналах — HTTPS, без E2E на уровне содержимого.</p>
+      <p style="font-size:14px;margin:0 0 6px"><b>Можно ли войти аккаунтом Signal?</b></p>
+      <p style="font-size:14px;color:var(--muted);margin:0 0 14px;line-height:1.5">Нет. Аккаунты и серверы разные.</p>
+      <p style="font-size:14px;margin:0 0 6px"><b>Почему нейросети называют сайт «клоном»?</b></p>
+      <p style="font-size:14px;color:var(--muted);margin:0 0 14px;line-height:1.5">Из‑за похожего слова «Signal» в названии. Это автоматическая осторожность моделей, а не проверка вашего кода. Читайте разделы «Не Signal» и «Безопасность».</p>
+      <p style="font-size:14px;margin:0 0 6px"><b>Что делать при подозрительном сообщении?</b></p>
+      <p style="font-size:14px;color:var(--muted);margin:0;line-height:1.5">Не переводите деньги, не сообщайте коды. Заблокируйте отправителя и напишите на security@signal-line.app.</p>`
   };
 
   sheet.innerHTML=`
