@@ -376,16 +376,16 @@ body.beta-oled .sw-clip{background:var(--panel)!important}
 .sl-create-avatar .cam{font-size:28px;opacity:.7}
 
 .sl-create-avatar .cam-ico{display:block;pointer-events:none}
-/* Channel ads */
-.sl-ad-card{margin:12px 10px 20px;border-radius:16px;overflow:hidden;background:var(--panel,#1a1f2e);border:1px solid rgba(255,255,255,.08);position:relative;max-width:420px}
-.sl-ad-card .sl-ad-img{width:100%;max-height:200px;object-fit:cover;display:block;background:#111}
-.sl-ad-card .sl-ad-body{padding:12px 14px 14px}
-.sl-ad-card .sl-ad-label{font-size:12px;font-weight:700;color:#5b9dff;margin-bottom:4px}
-.sl-ad-card .sl-ad-title{font-size:15px;font-weight:700;line-height:1.3;margin-bottom:4px}
-.sl-ad-card .sl-ad-text{font-size:13px;color:var(--muted);line-height:1.4;margin-bottom:10px}
-.sl-ad-card .sl-ad-go{display:inline-flex;align-items:center;gap:6px;color:#5b9dff;font-weight:700;font-size:14px;text-transform:uppercase;letter-spacing:.02em;cursor:pointer;background:none;border:none;padding:0}
-.sl-ad-card .sl-ad-x{position:absolute;top:8px;right:8px;width:28px;height:28px;border-radius:50%;border:none;background:rgba(0,0,0,.55);color:#fff;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:2}
-.sl-ad-sheet .sl-ad-preview{max-width:100%;max-height:160px;border-radius:12px;margin:8px 0;object-fit:cover}
+
+.sl-info-actions{display:flex;gap:10px;padding:12px 16px;justify-content:center}
+.sl-info-chip{flex:1;max-width:88px;min-height:64px;padding:10px 6px;border:none;border-radius:16px;background:rgba(255,255,255,.08);color:var(--text);font-size:12px;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px}
+.sl-info-chip span{line-height:1.1}
+.sl-info-chip:active{transform:scale(.96);background:rgba(255,255,255,.12)}
+.sl-info-block{margin:10px 16px;padding:14px;border-radius:14px;background:var(--panel);border:1px solid var(--line)}
+.sl-info-label{font-size:12px;color:var(--muted);margin-bottom:4px}
+.sl-info-row{display:flex;align-items:center;gap:12px}
+.sl-info-ico{display:flex;align-items:center;justify-content:center;opacity:.85}
+.sl-icon-btn{border:none;background:transparent;color:var(--text);cursor:pointer;padding:8px;display:inline-flex;align-items:center;justify-content:center}
 
 .sl-create-hint{text-align:center;color:var(--muted);font-size:13px;padding:0 24px 16px;line-height:1.4}
 .sl-field{margin:10px 16px}
@@ -889,7 +889,7 @@ body.beta-oled.theme-light{--bg:#000;--panel:#0A0A0A;--panel-hover:#141414;--lin
   background:linear-gradient(135deg,var(--accent-a),var(--accent-b));
   transition:height .32s cubic-bezier(.22,.7,.25,1);
 }
-.profile-sheet.is-stretch .profile-header{height:100vw;max-height:100vw}
+.profile-sheet.is-stretch .profile-header{height:auto!important;max-height:none!important}/* stretch killed */
 .profile-cover{position:absolute;inset:0;background-size:cover;background-position:center;transition:opacity .28s;z-index:1}
 .profile-sheet.is-stretch .profile-cover{opacity:0}
 .profile-av-stretch{
@@ -1866,10 +1866,6 @@ html.sl-ready.sl-booting::before{display:none!important}
       <div class="settings-section">
         <div class="settings-section-title">Эксперименты</div>
         <div class="settings-item" id="settings-beta"><svg viewBox="0 0 24 24"><path d="M12 2v6M12 16v6M4.93 4.93l4.24 4.24M14.83 14.83l4.24 4.24M2 12h6M16 12h6M4.93 19.07l4.24-4.24M14.83 9.17l4.24-4.24"/><circle cx="12" cy="12" r="3"/></svg><span class="item-text">Бета-функции</span></div>
-      </div>
-      <div class="settings-section">
-        <div class="settings-section-title">Реклама</div>
-        <div class="settings-item" id="settings-ads"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M7 8h10M7 12h6M7 16h8"/><path d="M17 14l3 2-3 2v-4z"/></svg><span class="item-text">Реклама</span></div>
       </div>
       <div class="settings-section">
         <div class="settings-section-title" data-i18n="sec_logout">Выход</div>
@@ -3666,8 +3662,6 @@ async function loadGroupMessages(){
       if(typeof window.slShowEmptyChatHint==='function') window.slShowEmptyChatHint(true);
     }
   }catch(e){ console.warn(e); }
-  // Ads at the end of channels
-  try{ if(typeof window.slRenderChannelAds==='function') window.slRenderChannelAds(); }catch(e){}
   // Subscribe to global news broadcast so everyone sees posts
   if(isNews){
     try{ subscribeNewsGlobal(); }catch(e){}
@@ -5710,21 +5704,61 @@ document.getElementById('settings-devices').onclick=()=>{
   alert('Текущее устройство:\n'+( /Mobile|Android|iPhone/i.test(ua)?'Смартфон':'Компьютер')+'\n'+ua.slice(0,60));
 };
 document.getElementById('settings-edit-profile').onclick=()=>{
-  let modal=document.getElementById('ep-modal');
-  if(!modal){ modal=document.createElement('div'); modal.id='ep-modal'; modal.className='modal-overlay'; document.body.appendChild(modal); }
-  modal.innerHTML=`<div class="modal"><button class="close-x" onclick="this.closest('.modal-overlay').style.display='none'">×</button><h3>Профиль</h3>
-    <div class="field"><label>Имя</label><input id="ef" value="${escapeHtml(myProfile.first_name||'')}"></div>
-    <div class="field"><label>Фамилия</label><input id="el" value="${escapeHtml(myProfile.last_name||'')}"></div>
-    <div class="field"><label>Username</label><input id="eu" value="${escapeHtml(myProfile.username||'')}"></div>
-    <button class="btn-primary" id="esave">Сохранить</button>
-    <button class="btn-secondary" onclick="document.getElementById('avatar-upload').click()">Фото</button>
-    <button class="btn-secondary" id="ecover" style="margin-top:8px">Обложка</button></div>`;
-  modal.style.display='flex';
-  document.getElementById('esave').onclick=async()=>{
-    const first=document.getElementById('ef').value.trim(), last=document.getElementById('el').value.trim(), username=document.getElementById('eu').value.trim().toLowerCase();
-    try{ await sb.from('profiles').update({first_name:first,last_name:last,username}).eq('id',myProfile.id); Object.assign(myProfile,{first_name:first,last_name:last,username}); updateAllUIs(); modal.style.display='none'; }catch(e){ alert(friendlyError(e)); }
+  if(!myProfile) return;
+  const prev=document.getElementById('sl-edit-profile'); if(prev) prev.remove();
+  const sheet=document.createElement('div');
+  sheet.className='sl-sheet'; sheet.id='sl-edit-profile';
+  const camIco='<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>';
+  const about0 = myProfile.bio || myProfile.about || '';
+  sheet.innerHTML=`
+    <div class="sl-sheet-hdr">
+      <button type="button" class="sl-sheet-back" id="ep-back">‹</button>
+      <h2></h2>
+      <span style="width:40px"></span>
+    </div>
+    <div class="sl-sheet-body" style="padding:16px 16px 40px;display:flex;flex-direction:column;align-items:center;gap:12px">
+      <div style="position:relative;width:96px;height:96px;margin-bottom:8px">
+        <div id="ep-av" class="avatar" style="width:96px;height:96px;border-radius:50%;font-size:36px"></div>
+        <button type="button" id="ep-av-btn" style="position:absolute;right:0;bottom:0;width:32px;height:32px;border-radius:50%;border:none;background:var(--accent-a,#4C7CF3);display:flex;align-items:center;justify-content:center;cursor:pointer">${camIco}</button>
+      </div>
+      <input class="cd-input" id="ef" value="${(myProfile.first_name||'').replace(/"/g,'&quot;')}" placeholder="Имя" style="width:100%;box-sizing:border-box;border-radius:14px;padding:14px">
+      <input class="cd-input" id="el" value="${(myProfile.last_name||'').replace(/"/g,'&quot;')}" placeholder="Фамилия" style="width:100%;box-sizing:border-box;border-radius:14px;padding:14px">
+      <div style="width:100%;position:relative">
+        <textarea class="cd-input" id="ebio" maxlength="253" placeholder="О себе" style="width:100%;min-height:88px;box-sizing:border-box;border-radius:14px;padding:14px;resize:vertical">${(about0||'').replace(/</g,'&lt;')}</textarea>
+        <div id="ebio-c" style="position:absolute;right:12px;bottom:10px;font-size:12px;color:var(--muted)">${String(about0||'').length}</div>
+      </div>
+      <button type="button" class="btn-primary" id="esave" style="width:100%;margin-top:8px;padding:14px;border-radius:14px">Сохранить</button>
+      <button type="button" class="btn-secondary" id="ep-exit" style="width:100%;padding:14px;border-radius:14px">Выйти из профиля</button>
+    </div>`;
+  document.body.appendChild(sheet);
+  renderAvatarInto(sheet.querySelector('#ep-av'), myProfile.avatar_url, (myProfile.username||'?')[0].toUpperCase(), myProfile.color||colorFor(myProfile.id));
+  sheet.querySelector('#ep-back').onclick=()=>sheet.remove();
+  sheet.querySelector('#ep-exit').onclick=()=>sheet.remove();
+  sheet.querySelector('#ebio').oninput=function(){ sheet.querySelector('#ebio-c').textContent=String(this.value.length); };
+  sheet.querySelector('#ep-av-btn').onclick=()=>{ try{ document.getElementById('avatar-upload')?.click(); }catch(e){} };
+  sheet.querySelector('#esave').onclick=async()=>{
+    const first=sheet.querySelector('#ef').value.trim();
+    const last=sheet.querySelector('#el').value.trim();
+    const bio=sheet.querySelector('#ebio').value.trim().slice(0,253);
+    try{
+      const patch={first_name:first,last_name:last,bio};
+      await sb.from('profiles').update(patch).eq('id',myProfile.id);
+      Object.assign(myProfile, patch);
+      if(typeof updateAllUIs==='function') updateAllUIs();
+      sheet.remove();
+      showToast('Сохранено');
+    }catch(e){
+      // bio column may be missing — save name only + local bio
+      try{
+        await sb.from('profiles').update({first_name:first,last_name:last}).eq('id',myProfile.id);
+        Object.assign(myProfile,{first_name:first,last_name:last,bio});
+        try{ localStorage.setItem('sl_my_bio', bio); }catch(e2){}
+        if(typeof updateAllUIs==='function') updateAllUIs();
+        sheet.remove();
+        showToast('Сохранено');
+      }catch(e3){ showToast(typeof friendlyError==='function'?friendlyError(e3):String(e3)); }
+    }
   };
-  document.getElementById('ecover').onclick=()=>{ pickCoverImage(); };
 };
 
 function applyStretchBg(el, url, color, ch){
@@ -6684,233 +6718,10 @@ showPinnedBar = function(){
 
 // ---------- User info panel (click avatar = info) ----------
 async function openUserInfo(profileLike){
-  let p=profileLike;
-  try{ const {data}=await sb.from('profiles').select('*').eq('id',profileLike.id).maybeSingle(); if(data) p=data; }catch(e){}
-  const name=p.first_name?`${p.first_name} ${p.last_name||''}`:p.username;
-  const ov=document.createElement('div'); ov.className='modal-overlay';
-  ov.innerHTML=`<div class="modal">
-    <button class="close-x" id="ui-close">×</button>
-    <div style="display:flex;flex-direction:column;align-items:center;gap:8px;margin-bottom:10px">
-      <div class="avatar" id="ui-avatar" style="width:72px;height:72px;font-size:28px"></div>
-      <div style="font-weight:700;font-size:16px">${escapeHtml(name)}${verifiedBadgeIf(p.email)}${p.emoji_status?` <span class="emoji-status">${p.emoji_status}</span>`:''}</div>
-      <div style="color:var(--muted);font-size:13px">@${escapeHtml(p.username||'')}</div>
-    </div>
-    <div class="uinfo-row"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v16H4z"/><path d="M22 6l-10 7L2 6"/></svg>
-      <div><div class="uinfo-label">Email</div><div class="uinfo-val">${p.hide_email?'скрыт':escapeHtml(p.email||'—')}</div></div></div>
-    <div class="uinfo-row"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 01-2.18 2A19.8 19.8 0 0111.19 18a19.5 19.5 0 01-6-6A19.8 19.8 0 012.12 3.38 2 2 0 014.11 2h3a2 2 0 012 1.72c.13.96.36 1.9.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0122 16.92z"/></svg>
-      <div><div class="uinfo-label">Телефон</div><div class="uinfo-val">${p.hide_phone?'скрыт':escapeHtml(p.phone||'—')}</div></div></div>
-    <div id="ui-gifts"></div></div>`;
-  document.body.appendChild(ov);
-  ov.querySelector('#ui-close').onclick=()=>ov.remove();
-  renderAvatarInto(ov.querySelector('#ui-avatar'), p.avatar_url, (p.username||'?')[0].toUpperCase(), p.color||colorFor(p.id));
-  try{
-    const {data:gifts}=await sb.from('messages').select('file_url').eq('type','gift').eq('receiver_id',p.id);
-    if(gifts?.length) ov.querySelector('#ui-gifts').innerHTML=`<div class="uinfo-label" style="margin-top:10px">Подарки (${gifts.length})</div><div class="gift-grid">${gifts.map(g=>`<div class="gift-opt">${giftSvgFor(g.file_url)}</div>`).join('')}</div>`;
-  }catch(e){}
+  if(typeof openFullProfile==='function') return openFullProfile(profileLike);
 }
 document.getElementById('partner-avatar').addEventListener('click',()=>{ if(activePartner) openStoriesOrProfile(activePartner); });
 
-
-// ========== Free channel ads (local) ==========
-window.slAds = {
-  keyAll: 'sl_ads_catalog',
-  keyOff: 'sl_ads_disabled',
-  keyHidden: 'sl_ads_hidden_ids',
-  getAll(){
-    try{ return JSON.parse(localStorage.getItem(this.keyAll)||'[]'); }catch(e){ return []; }
-  },
-  setAll(arr){ try{ localStorage.setItem(this.keyAll, JSON.stringify(arr.slice(-50))); }catch(e){} },
-  isDisabled(){ return localStorage.getItem(this.keyOff)==='1'; },
-  setDisabled(v){ localStorage.setItem(this.keyOff, v?'1':'0'); },
-  hiddenIds(){
-    try{ return new Set(JSON.parse(localStorage.getItem(this.keyHidden)||'[]')); }catch(e){ return new Set(); }
-  },
-  hideOne(id){
-    const s=this.hiddenIds(); s.add(String(id));
-    try{ localStorage.setItem(this.keyHidden, JSON.stringify([...s])); }catch(e){}
-  },
-  visible(){
-    if(this.isDisabled()) return [];
-    const hid=this.hiddenIds();
-    return this.getAll().filter(a=>a && a.id && !hid.has(String(a.id)));
-  },
-  add(ad){
-    const list=this.getAll();
-    list.push(ad);
-    this.setAll(list);
-  },
-  remove(id){
-    this.setAll(this.getAll().filter(a=>String(a.id)!==String(id)));
-  }
-};
-
-window.openAdsSettings = function(){
-  const sheet=document.createElement('div');
-  sheet.className='sl-sheet'; sheet.id='sl-ads-settings';
-  function paint(){
-    const disabled = window.slAds.isDisabled();
-    const list = window.slAds.getAll();
-    sheet.innerHTML=`
-      <div class="sl-sheet-hdr">
-        <button type="button" class="sl-sheet-back" id="ads-back">‹</button>
-        <h2>Реклама</h2>
-        <span style="width:40px"></span>
-      </div>
-      <div class="sl-sheet-body" style="padding-bottom:32px">
-        <div style="padding:12px 16px;color:var(--muted);font-size:13px;line-height:1.4">
-          Реклама показывается в <b>конце каналов</b>. Публикация полностью <b>бесплатная</b>.
-        </div>
-        <div class="settings-item" id="ads-toggle-off" style="padding-left:16px">
-          <span class="item-text">Отключить рекламу</span>
-          <div class="toggle-switch ${disabled?'on':''}" id="ads-off-tg"></div>
-        </div>
-        <div style="padding:8px 16px 4px;font-weight:700;font-size:14px">Опубликовать рекламу (бесплатно)</div>
-        <div style="padding:0 16px 12px">
-          <div class="sl-create-avatar" id="ads-photo-box" style="width:120px;height:120px;margin:12px auto">
-            <svg class="cam-ico" viewBox="0 0 48 48" width="40" height="40" fill="none"><path d="M16 20h3.2l1.6-2.4h6.4L28.8 20H32a2 2 0 012 2v10a2 2 0 01-2 2H16a2 2 0 01-2-2V22a2 2 0 012-2z" stroke="rgba(255,255,255,0.55)" stroke-width="1.8" stroke-linejoin="round"/><circle cx="24" cy="27" r="4.2" stroke="rgba(255,255,255,0.55)" stroke-width="1.8"/><path d="M33 16v5M30.5 18.5h5" stroke="rgba(255,255,255,0.55)" stroke-width="1.8" stroke-linecap="round"/></svg>
-          </div>
-          <input type="file" id="ads-file" accept="image/*" style="display:none">
-          <input class="cd-input" id="ads-title" placeholder="Заголовок" maxlength="80" style="width:100%;margin-bottom:8px;box-sizing:border-box">
-          <textarea class="cd-input" id="ads-text" placeholder="Текст рекламы" maxlength="300" style="width:100%;min-height:72px;margin-bottom:8px;box-sizing:border-box;resize:vertical"></textarea>
-          <input class="cd-input" id="ads-link" placeholder="Ссылка (https://…)" maxlength="300" style="width:100%;margin-bottom:12px;box-sizing:border-box">
-          <button type="button" class="btn-primary" id="ads-publish" style="width:100%">Опубликовать бесплатно</button>
-        </div>
-        <div style="padding:8px 16px 4px;font-weight:700;font-size:14px">Мои объявления (${list.length})</div>
-        <div id="ads-list" style="padding:0 12px 16px">
-          ${list.length? list.slice().reverse().map(a=>`
-            <div style="display:flex;gap:10px;align-items:center;padding:10px;border-radius:12px;background:var(--panel);margin-bottom:8px;border:1px solid var(--line)">
-              ${a.image?`<img src="${String(a.image).replace(/"/g,'&quot;')}" style="width:48px;height:48px;border-radius:8px;object-fit:cover">`:'<div style="width:48px;height:48px;border-radius:8px;background:rgba(255,255,255,.08)"></div>'}
-              <div style="flex:1;min-width:0">
-                <div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${String(a.title||'').replace(/</g,'&lt;')}</div>
-                <div style="font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${String(a.link||'').replace(/</g,'&lt;')}</div>
-              </div>
-              <button type="button" data-del="${a.id}" style="border:none;background:transparent;color:var(--danger,#e5484d);font-size:12px;cursor:pointer">Удалить</button>
-            </div>`).join('')
-          : '<div style="padding:16px;text-align:center;color:var(--muted);font-size:13px">Пока нет объявлений</div>'}
-        </div>
-      </div>`;
-    let photoData=null;
-    sheet.querySelector('#ads-back').onclick=()=>sheet.remove();
-    sheet.querySelector('#ads-toggle-off').onclick=()=>{
-      window.slAds.setDisabled(!window.slAds.isDisabled());
-      paint();
-      showToast(window.slAds.isDisabled()?'Реклама отключена':'Реклама включена');
-    };
-    sheet.querySelector('#ads-photo-box').onclick=()=>sheet.querySelector('#ads-file').click();
-    sheet.querySelector('#ads-file').onchange=function(){
-      const f=this.files&&this.files[0]; if(!f) return;
-      const r=new FileReader();
-      r.onload=async()=>{
-        try{
-          photoData = (typeof window.slCompressImage==='function')
-            ? await window.slCompressImage(r.result, 640, 0.75)
-            : r.result;
-        }catch(e){ photoData=r.result; }
-        const box=sheet.querySelector('#ads-photo-box');
-        box.innerHTML=`<img src="${photoData}" style="width:100%;height:100%;object-fit:cover" alt="">`;
-      };
-      r.readAsDataURL(f);
-    };
-    sheet.querySelector('#ads-publish').onclick=()=>{
-      const title=(sheet.querySelector('#ads-title').value||'').trim();
-      const body=(sheet.querySelector('#ads-text').value||'').trim();
-      const link=(sheet.querySelector('#ads-link').value||'').trim();
-      if(!title && !body){ showToast('Введите заголовок или текст'); return; }
-      if(link && !/^https?:\/\//i.test(link)){ showToast('Ссылка должна начинаться с http:// или https://'); return; }
-      const ad={
-        id: 'ad_'+Date.now()+'_'+Math.random().toString(36).slice(2,7),
-        title, text: body, link, image: photoData||null,
-        author_id: myProfile?.id||null,
-        author_name: myProfile?.first_name||myProfile?.username||'Пользователь',
-        created_at: new Date().toISOString()
-      };
-      window.slAds.add(ad);
-      showToast('Реклама опубликована бесплатно');
-      paint();
-    };
-    sheet.querySelectorAll('[data-del]').forEach(btn=>{
-      btn.onclick=()=>{
-        window.slAds.remove(btn.dataset.del);
-        paint();
-        showToast('Удалено');
-      };
-    });
-  }
-  document.body.appendChild(sheet);
-  paint();
-};
-
-window.slRenderChannelAds = function(){
-  try{
-    if(!activeGroup || activeGroup.type!=='channel') return;
-    if(window.slAds.isDisabled()) return;
-    const list=document.getElementById('messages-list');
-    if(!list) return;
-    // remove old
-    list.querySelectorAll('.sl-ad-card').forEach(el=>el.remove());
-    const ads=window.slAds.visible();
-    if(!ads.length) return;
-    // show up to 3 newest at the end
-    ads.slice(-3).reverse().forEach(ad=>{
-      const card=document.createElement('div');
-      card.className='sl-ad-card';
-      card.dataset.adId=ad.id;
-      const esc=(s)=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
-      card.innerHTML=`
-        <button type="button" class="sl-ad-x" aria-label="Закрыть">×</button>
-        ${ad.image?`<img class="sl-ad-img" src="${esc(ad.image)}" alt="">`:''}
-        <div class="sl-ad-body">
-          <div class="sl-ad-label">Реклама</div>
-          ${ad.title?`<div class="sl-ad-title">${esc(ad.title)}</div>`:''}
-          ${ad.text?`<div class="sl-ad-text">${esc(ad.text)}</div>`:''}
-          ${ad.link?`<button type="button" class="sl-ad-go">Перейти ↗</button>`:''}
-        </div>`;
-      card.querySelector('.sl-ad-x').onclick=(e)=>{
-        e.stopPropagation();
-        window.slAdCloseDialog(ad.id, card);
-      };
-      const go=card.querySelector('.sl-ad-go');
-      if(go){
-        go.onclick=()=>{
-          try{ window.open(ad.link, '_blank', 'noopener'); }catch(e){ location.href=ad.link; }
-        };
-      }
-      list.appendChild(card);
-    });
-  }catch(e){ console.warn('ads render', e); }
-};
-
-window.slAdCloseDialog = function(adId, cardEl){
-  const ov=document.createElement('div');
-  ov.className='modal-overlay';
-  ov.style.zIndex='14000';
-  ov.innerHTML=`<div class="modal" style="max-width:320px">
-    <div style="font-weight:800;font-size:16px;margin-bottom:8px;text-align:center">Реклама</div>
-    <div style="color:var(--muted);font-size:13px;text-align:center;margin-bottom:16px;line-height:1.4">Что сделать с рекламой?</div>
-    <button type="button" class="btn-primary" id="ad-off-all" style="width:100%;margin-bottom:8px">Отключить полностью рекламу (бесплатно)</button>
-    <button type="button" class="btn-secondary" id="ad-hide-one" style="width:100%;margin-bottom:8px">Убрать эту рекламу, а остальные будут показываться</button>
-    <button type="button" class="btn-secondary" id="ad-cancel" style="width:100%">Отмена</button>
-  </div>`;
-  document.body.appendChild(ov);
-  ov.querySelector('#ad-cancel').onclick=()=>ov.remove();
-  ov.querySelector('#ad-off-all').onclick=()=>{
-    window.slAds.setDisabled(true);
-    document.querySelectorAll('.sl-ad-card').forEach(el=>el.remove());
-    ov.remove();
-    showToast('Реклама полностью отключена');
-  };
-  ov.querySelector('#ad-hide-one').onclick=()=>{
-    window.slAds.hideOne(adId);
-    try{ cardEl.remove(); }catch(e){}
-    ov.remove();
-    showToast('Это объявление скрыто');
-  };
-};
-
-// wire settings button
-document.getElementById('settings-ads')?.addEventListener('click',()=>{
-  if(typeof window.openAdsSettings==='function') window.openAdsSettings();
-});
 
 // ---------- Anti-spam / banned words (channels & groups) ----------
 function getBannedWords(gid){ try{ return JSON.parse(storage.getItem('sl_banned_'+gid)||'[]'); }catch(e){ return []; } }
@@ -6928,20 +6739,26 @@ window.openChannelProfile = async function(group){
   try{ const la=localStorage.getItem('sl_group_av_'+group.id); if(la) avUrl=la; }catch(e){}
   const isAdmin = group.myRole==='admin'||group.owner_id===myProfile?.id;
   const isMember = !!group.myRole || isAdmin;
-  const origin = (typeof slSiteOrigin==='function'?slSiteOrigin(): (location.origin||'https://my-site.com'));
+  const origin = (typeof slSiteOrigin==='function'?slSiteOrigin(): (location.origin||''));
   const link = (group.is_public && group.username)
     ? (origin+'/#/channel/'+group.username)
     : (group.invite_code ? (origin+'/#/join/'+group.invite_code) : (origin+'/#/group/'+group.id));
   const letter = (group.name||'C')[0].toUpperCase();
   const col = group.color||(typeof colorFor==='function'?colorFor(group.id):'#4C7CF3');
   const esc = (s)=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
-  // Russian plural for subscribers
   function subLabel(n){
     n=n|0; const n10=n%10, n100=n%100;
     if(n10===1 && n100!==11) return n+' подписчик';
     if(n10>=2 && n10<=4 && (n100<12||n100>14)) return n+' подписчика';
     return n+' подписчиков';
   }
+  const ico = {
+    sound: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 00-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>',
+    search: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>',
+    more: '<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><circle cx="6" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="18" cy="12" r="1.6"/></svg>',
+    attach: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>',
+    share: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v7a1 1 0 001 1h14a1 1 0 001-1v-7"/><path d="M12 3v12"/><path d="M7 8l5-5 5 5"/></svg>'
+  };
   const prev=document.getElementById('sl-channel-profile'); if(prev) prev.remove();
   const sheet=document.createElement('div');
   sheet.className='sl-sheet'; sheet.id='sl-channel-profile';
@@ -6957,37 +6774,35 @@ window.openChannelProfile = async function(group){
           ${avUrl?`<img src="${esc(avUrl)}" style="width:100%;height:100%;object-fit:cover" alt="">`:esc(letter)}
         </div>
         <div style="font-size:22px;font-weight:800;text-align:center">${esc(group.name)}</div>
-        <div style="color:var(--muted);font-size:14px;margin-top:4px">${memberCount?subLabel(memberCount):(group.is_public?'публичный канал':'приватный канал')}</div>
+        <div style="color:var(--muted);font-size:14px;margin-top:4px">${memberCount?subLabel(memberCount):((group.is_public||group.username)?'публичный канал':'приватный канал')}</div>
       </div>
-      <div style="display:flex;gap:10px;padding:12px 16px;justify-content:center">
-        <button type="button" id="cp-sound" style="flex:1;max-width:110px;padding:12px 8px;border:none;border-radius:14px;background:rgba(255,255,255,.08);color:var(--text);font-size:13px;cursor:pointer">🔔<br>Звук</button>
-        <button type="button" id="cp-search" style="flex:1;max-width:110px;padding:12px 8px;border:none;border-radius:14px;background:rgba(255,255,255,.08);color:var(--text);font-size:13px;cursor:pointer">🔍<br>Найти</button>
-        <button type="button" id="cp-more" style="flex:1;max-width:110px;padding:12px 8px;border:none;border-radius:14px;background:rgba(255,255,255,.08);color:var(--text);font-size:13px;cursor:pointer">⋯<br>Ещё</button>
+      <div class="sl-info-actions">
+        <button type="button" class="sl-info-chip" id="cp-sound">${ico.sound}<span>Звук</span></button>
+        <button type="button" class="sl-info-chip" id="cp-search">${ico.search}<span>Найти</span></button>
+        <button type="button" class="sl-info-chip" id="cp-more">${ico.more}<span>Ещё</span></button>
       </div>
-      ${!isMember?`<div style="padding:8px 16px"><button type="button" id="cp-sub" style="width:100%;padding:14px;border:none;border-radius:14px;background:var(--accent-a,#4C7CF3);color:#fff;font-size:16px;font-weight:700;cursor:pointer">Подписаться</button></div>`:''}
-      <div style="margin:10px 16px;padding:14px;border-radius:14px;background:var(--panel);border:1px solid var(--line)">
-        <div style="font-size:12px;color:var(--muted);margin-bottom:4px">Ссылка</div>
+      ${!isMember?`<div style="padding:8px 16px"><button type="button" id="cp-sub" class="btn-primary" style="width:100%;padding:14px;border-radius:14px;border:none;font-size:16px;font-weight:700;cursor:pointer">Подписаться</button></div>`:''}
+      <div class="sl-info-block">
+        <div class="sl-info-label">Ссылка</div>
         <div style="display:flex;align-items:center;gap:8px">
           <div style="flex:1;color:var(--accent-a,#4C7CF3);font-size:14px;word-break:break-all" id="cp-link">${esc(link)}</div>
-          <button type="button" id="cp-share" style="border:none;background:transparent;font-size:18px;cursor:pointer;color:var(--text)">↗</button>
-          <button type="button" id="cp-qr" style="border:none;background:transparent;font-size:18px;cursor:pointer;color:var(--text)">▦</button>
+          <button type="button" id="cp-share" class="sl-icon-btn" title="Поделиться">${ico.share}</button>
         </div>
       </div>
-      ${group.description?`<div style="margin:10px 16px;padding:14px;border-radius:14px;background:var(--panel);border:1px solid var(--line)">
-        <div style="font-size:12px;color:var(--muted);margin-bottom:4px">Описание</div>
+      ${group.description?`<div class="sl-info-block">
+        <div class="sl-info-label">Описание</div>
         <div style="font-size:14px;line-height:1.4">${esc(group.description)}</div>
       </div>`:''}
-      <div style="margin:10px 16px;padding:14px;border-radius:14px;background:var(--panel);border:1px solid var(--line);display:flex;align-items:center;gap:12px;cursor:pointer" id="cp-media">
-        <span style="font-size:20px">📎</span>
+      <div class="sl-info-block sl-info-row" id="cp-media" style="cursor:pointer">
+        <span class="sl-info-ico">${ico.attach}</span>
         <div style="flex:1">
           <div style="font-weight:600;font-size:15px">Вложения</div>
           <div style="font-size:12px;color:var(--muted)">Фото, видео, файлы и ссылки</div>
         </div>
-        <span style="color:var(--muted)">›</span>
+        <span style="color:var(--muted);font-size:18px">›</span>
       </div>
       ${isAdmin?`<div style="margin:16px;display:flex;flex-direction:column;gap:8px">
         <button type="button" id="cp-edit" class="btn-secondary" style="width:100%">Редактировать канал</button>
-        <button type="button" id="cp-admin" class="btn-secondary" style="width:100%">Настройки админа</button>
       </div>`:''}
     </div>`;
   document.body.appendChild(sheet);
@@ -6996,13 +6811,29 @@ window.openChannelProfile = async function(group){
   sheet.querySelector('#cp-share').onclick=async()=>{
     try{ await navigator.clipboard.writeText(link); showToast('Ссылка скопирована'); }catch(e){ showToast(link); }
   };
-  sheet.querySelector('#cp-qr').onclick=()=>showToast('QR: '+link);
-  sheet.querySelector('#cp-sound')?.addEventListener('click',()=>showToast('Уведомления канала'));
+  sheet.querySelector('#cp-sound')?.addEventListener('click',()=>{
+    const key='sl_quiet_g';
+    let q=[]; try{q=JSON.parse(localStorage.getItem(key)||'[]');}catch(e){}
+    if(q.includes(group.id)){ q=q.filter(x=>x!==group.id); showToast('Звук включён'); }
+    else { q.push(group.id); showToast('Канал без звука'); }
+    localStorage.setItem(key, JSON.stringify(q));
+  });
   sheet.querySelector('#cp-search')?.addEventListener('click',()=>{
     close();
     try{ document.getElementById('chat-search-btn')?.click(); }catch(e){}
   });
-  sheet.querySelector('#cp-more')?.addEventListener('click',()=>showToast(isAdmin?'Админ-меню':'Ещё'));
+  sheet.querySelector('#cp-more')?.addEventListener('click',()=>{
+    const ov=document.createElement('div'); ov.className='modal-overlay';
+    ov.innerHTML=`<div class="modal" style="max-width:300px">
+      <button type="button" class="btn-secondary" id="cm-copy" style="width:100%;margin-bottom:8px">Скопировать ссылку</button>
+      ${isAdmin?`<button type="button" class="btn-secondary" id="cm-admin" style="width:100%;margin-bottom:8px">Настройки админа</button>`:''}
+      <button type="button" class="btn-secondary" id="cm-cancel" style="width:100%">Отмена</button>
+    </div>`;
+    document.body.appendChild(ov);
+    ov.querySelector('#cm-cancel').onclick=()=>ov.remove();
+    ov.querySelector('#cm-copy').onclick=async()=>{ try{await navigator.clipboard.writeText(link); showToast('Ссылка скопирована');}catch(e){} ov.remove(); };
+    ov.querySelector('#cm-admin')?.addEventListener('click',()=>{ ov.remove(); close(); /* open admin via group settings fallback */ showToast('Настройки админа'); });
+  });
   sheet.querySelector('#cp-media')?.addEventListener('click',()=>{
     close();
     try{ document.getElementById('media-btn')?.click(); }catch(e){}
@@ -7026,44 +6857,6 @@ window.openChannelProfile = async function(group){
         showToast('Сохранено');
       });
     }
-  });
-  sheet.querySelector('#cp-admin')?.addEventListener('click',()=>{
-    close();
-    const g=activeGroup||group;
-    let modal=document.getElementById('gs-modal');
-    if(!modal){ modal=document.createElement('div'); modal.id='gs-modal'; modal.className='modal-overlay'; document.body.appendChild(modal); }
-    const bannedArr=(typeof getBannedWords==='function'?getBannedWords(g.id):[]);
-    const antispamOn=localStorage.getItem('sl_antispam_'+g.id)==='1'||(typeof storage!=='undefined'&&storage.getItem('sl_antispam_'+g.id)==='1');
-    modal.innerHTML=`<div class="modal"><button class="close-x" id="gs-x">×</button>
-      <h3>Настройки канала</h3>
-      <div class="settings-item" id="toggle-comments" style="padding-left:0"><span class="item-text">Комментарии</span><div class="toggle-switch ${g.comments_enabled?'on':''}" id="comments-tg"></div></div>
-      <div class="settings-item" id="toggle-public" style="padding-left:0"><span class="item-text">Публичный канал</span><div class="toggle-switch ${g.is_public?'on':''}" id="public-tg"></div></div>
-      <div class="settings-item" style="padding-left:0"><span class="item-text">Антиспам</span><div class="toggle-switch ${antispamOn?'on':''}" id="antispam-tg"></div></div>
-      <div class="field"><label>Запрещённые слова</label><input class="cd-input" id="gs-banned" value="${esc((bannedArr||[]).join(', '))}"></div>
-      <button class="btn-secondary" id="gs-save-banned">Сохранить список</button>
-    </div>`;
-    modal.style.display='flex';
-    modal.querySelector('#gs-x').onclick=()=>modal.style.display='none';
-    modal.querySelector('#toggle-comments')?.addEventListener('click', async()=>{
-      const on=!g.comments_enabled;
-      try{ await sb.from('groups').update({comments_enabled:on}).eq('id',g.id); g.comments_enabled=on; modal.querySelector('#comments-tg').classList.toggle('on',on); }catch(e){}
-    });
-    modal.querySelector('#toggle-public')?.addEventListener('click', async()=>{
-      const on=!g.is_public;
-      try{ await sb.from('groups').update({is_public:on}).eq('id',g.id); }catch(e){}
-      g.is_public=on; modal.querySelector('#public-tg').classList.toggle('on',on);
-    });
-    modal.querySelector('#antispam-tg')?.addEventListener('click', function(){
-      const key='sl_antispam_'+g.id;
-      const on=(localStorage.getItem(key)==='1');
-      localStorage.setItem(key, on?'0':'1');
-      this.classList.toggle('on');
-    });
-    modal.querySelector('#gs-save-banned')?.addEventListener('click',()=>{
-      const words=modal.querySelector('#gs-banned').value.split(',').map(w=>w.trim().toLowerCase()).filter(Boolean);
-      if(typeof setBannedWords==='function') setBannedWords(g.id, words);
-      showToast('Список сохранён');
-    });
   });
 };
 
@@ -10695,203 +10488,118 @@ async function openFullProfile(profileLike){
     const {data}=await sb.from('profiles').select('*').eq('id',profileLike.id).maybeSingle();
     if(data) p={...profileLike, ...data};
   }catch(e){}
-  // Fallback: explicit favorite_music column (some schemas omit it from *)
-  if(p && p.id && !p.favorite_music && sb){
-    try{
-      const {data:fm}=await sb.from('profiles').select('favorite_music').eq('id', p.id).maybeSingle();
-      if(fm && fm.favorite_music) p.favorite_music = fm.favorite_music;
-    }catch(e){}
-  }
   const isMe = p.id===myProfile?.id;
   if(isMe && myProfile){
-    if(!p.favorite_music && myProfile.favorite_music) p.favorite_music = myProfile.favorite_music;
-    try{
-      const lf = JSON.parse((typeof storage!=='undefined'?storage:localStorage).getItem('sl_fav_track')||'null');
-      if(!p.favorite_music && lf) p.favorite_music = (lf.artist?lf.artist+' — ':'')+(lf.title||'');
-    }catch(e){}
+    p = {...myProfile, ...p};
   }
   const name=p.first_name?`${p.first_name} ${p.last_name||''}`.trim():(p.username||'');
-  const coverUrl = p.cover_url || (isMe && myProfile?.cover_url) || '';
+  const about = p.bio || p.about || p.status_text || p.emoji_status || '';
+  const statusLine = (typeof onlineUsers!=='undefined' && onlineUsers.has(p.id))
+    ? (typeof t==='function'?t('online'):'в сети')
+    : 'Был(-а) недавно';
+  const esc = (s)=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+  const ico = {
+    call: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.8 19.8 0 01-8.63-3.07 19.5 19.5 0 01-6-6A19.8 19.8 0 012.12 4.18 2 2 0 014.11 2h3a2 2 0 012 1.72c.13.96.36 1.9.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0122 16.92z"/></svg>',
+    video: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>',
+    sound: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 00-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>',
+    more: '<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><circle cx="6" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="18" cy="12" r="1.6"/></svg>',
+    attach: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>',
+    edit: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>'
+  };
+  const prev=document.querySelector('.profile-sheet, #sl-user-profile'); if(prev) prev.remove();
   const sheet=document.createElement('div');
-  sheet.className='profile-sheet';
+  sheet.className='sl-sheet'; sheet.id='sl-user-profile';
   sheet.innerHTML=`
-    <div class="profile-sheet-top">
-      <button class="icon-btn" id="ps-back"><svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg></button>
-      <div class="avatar profile-collapsed-av" id="ps-av-mini"></div>
-      <div class="ps-title">${escapeHtml(name||'Профиль')}</div>
-      ${isMe?`<button class="icon-btn" id="ps-edit-username" title="Имя пользователя"><svg viewBox="0 0 24 24" style="width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg></button>
-      <button class="icon-btn" id="ps-edit-cover" title="Обложка"><svg viewBox="0 0 24 24" style="width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg></button>`:''}
+    <div class="sl-sheet-hdr">
+      <button type="button" class="sl-sheet-back" id="up-back">‹</button>
+      <h2></h2>
+      ${isMe?`<button type="button" class="sl-icon-btn" id="up-edit" title="Изменить">${ico.edit}</button>`:'<span style="width:40px"></span>'}
     </div>
-    <div class="profile-sheet-body" id="ps-scroll">
-      <div class="profile-header" id="ps-header">
-        <div class="profile-cover" id="ps-cover" style="${coverUrl?`background-image:url(${coverUrl})`:''}"></div>
-        <div class="profile-av-stretch" id="ps-av-stretch"></div>
-        <div class="profile-cover-overlay"></div>
-        <div class="profile-header-content">
-          <div class="avatar profile-av-big" id="ps-av" style="cursor:pointer" title="История фото"></div>
-          <div class="profile-name-big">${escapeHtml(name)}${verifiedBadgeIf(p.email)}</div>
-          <div class="profile-sub-big">@${escapeHtml(p.username||'')}</div>
-          <div class="profile-online-big" id="ps-online"></div>
-          ${(p.favorite_music||(isMe && myProfile && myProfile.favorite_music))?`<div class="profile-fav-music" id="ps-fav-music" style="margin-top:10px;padding:8px 14px;border-radius:999px;background:rgba(0,0,0,.28);backdrop-filter:blur(8px);font-size:13px;display:inline-flex;gap:8px;align-items:center;max-width:90%"><span>🎵</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(p.favorite_music||myProfile.favorite_music||'')}</span></div>`:''}
-        </div>
-        ${isMe?`<button type="button" class="profile-cover-btn" id="ps-cover-btn"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>Обложка</button>`:''}
+    <div class="sl-sheet-body" style="padding-bottom:40px">
+      <div style="display:flex;flex-direction:column;align-items:center;padding:16px 16px 8px">
+        <div id="up-av" class="avatar" style="width:96px;height:96px;border-radius:50%;font-size:36px;margin-bottom:12px"></div>
+        <div style="font-size:22px;font-weight:800;text-align:center">${esc(name)}</div>
+        <div style="color:var(--muted);font-size:14px;margin-top:4px">${esc(statusLine)}</div>
       </div>
-      <div class="profile-body-inner">
-      ${!isMe?`<div class="profile-sheet-actions">
-        <div class="profile-action" data-a="msg"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>Чат</div>
-        <div class="profile-action" data-a="search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>Поиск</div>
-        <div class="profile-action" data-a="media"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>Медиа</div>
-        <div class="profile-action" data-a="call"><svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2A19.8 19.8 0 0111.19 18a19.5 19.5 0 01-6-6A19.8 19.8 0 012.12 3.38 2 2 0 014.11 2h3a2 2 0 012 1.72c.13.96.36 1.9.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0122 16.92z"/></svg>Звонок</div>
-        <div class="profile-action" data-a="video"><svg viewBox="0 0 24 24"><rect x="2" y="6" width="14" height="12" rx="2"/><path d="M16 10l6-4v12l-6-4"/></svg>Видео</div>
-        <div class="profile-action" data-a="mute"><svg viewBox="0 0 24 24"><path d="M11 5L6 9H2v6h4l5 4V5z"/></svg>Звук</div>
+      ${!isMe?`<div class="sl-info-actions">
+        <button type="button" class="sl-info-chip" data-a="call">${ico.call}<span>Звонок</span></button>
+        <button type="button" class="sl-info-chip" data-a="video">${ico.video}<span>Видео</span></button>
+        <button type="button" class="sl-info-chip" data-a="mute">${ico.sound}<span>Звук</span></button>
+        <button type="button" class="sl-info-chip" data-a="more">${ico.more}<span>Ещё</span></button>
       </div>`:''}
-      <div class="uinfo-row"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px;color:var(--muted)"><path d="M4 4h16v16H4z"/><path d="M22 6l-10 7L2 6"/></svg>
-        <div><div class="uinfo-label">Email</div><div class="uinfo-val">${p.hide_email?'скрыт':escapeHtml(p.email||'—')}</div></div></div>
-      <div class="uinfo-row"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:18px;height:18px;color:var(--muted)"><path d="M22 16.92v3a2 2 0 01-2.18 2A19.8 19.8 0 0111.19 18a19.5 19.5 0 01-6-6A19.8 19.8 0 012.12 3.38 2 2 0 014.11 2h3a2 2 0 012 1.72c.13.96.36 1.9.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0122 16.92z"/></svg>
-        <div><div class="uinfo-label">Телефон</div><div class="uinfo-val">${p.hide_phone?'скрыт':escapeHtml(p.phone||'—')}</div></div></div>
-      <div id="ps-gifts"></div>
+      <div class="sl-info-block">
+        <div class="sl-info-label">О себе</div>
+        <div style="font-size:14px;line-height:1.4">${about?esc(about):'<span style="color:var(--muted)">Не указано</span>'}</div>
+      </div>
+      <div class="sl-info-block sl-info-row" id="up-media" style="cursor:pointer">
+        <span class="sl-info-ico">${ico.attach}</span>
+        <div style="flex:1">
+          <div style="font-weight:600;font-size:15px">Вложения</div>
+          <div style="font-size:12px;color:var(--muted)">Фото, видео, файлы и ссылки</div>
+        </div>
+        <span style="color:var(--muted);font-size:18px">›</span>
       </div>
     </div>`;
   document.body.appendChild(sheet);
-  // History of profile photos on avatar tap
-  try{
-    const avEl = sheet.querySelector('#ps-av, .profile-av-big');
-    if(avEl){
-      avEl.style.cursor='pointer';
-      avEl.title='История фото профиля';
-      avEl.addEventListener('click', function(ev){
-        ev.preventDefault(); ev.stopPropagation();
-        if(typeof openAvatarHistory==='function') openAvatarHistory(p);
-        else showToast('История фото');
-      });
-    }
-  }catch(e){}
-  /*__AV_HIST_BOUND__*/;
-  renderAvatarInto(sheet.querySelector('#ps-av'), p.avatar_url, (p.username||'?')[0].toUpperCase(), p.color||colorFor(p.id));
-  const big=sheet.querySelector('#ps-av');
-  if(big){
-    big.style.borderRadius='50%';
-    big.style.width='112px';
-    big.style.height='112px';
-  }
-  // stretched full-bleed avatar (shown on scroll)
-  applyStretchBg(sheet.querySelector('#ps-av-stretch'), p.avatar_url, p.color||colorFor(p.id), (p.username||'?')[0].toUpperCase());
-  const onEl=sheet.querySelector('#ps-online');
-  if(onEl) onEl.textContent = onlineUsers.has(p.id) ? (currentLang==='en'?'online':'в сети') : (currentLang==='en'?'offline':'не в сети');
-  sheet.querySelector('#ps-back').onclick=()=>sheet.remove();
-  const editUn=sheet.querySelector('#ps-edit-username');
-  if(editUn){
-    editUn.onclick=async()=>{
-      const cur=myProfile?.username||'';
-      const COOL_MS = 5 * 24 * 60 * 60 * 1000; // 5 days
-      let lastAt = 0;
-      try{
-        lastAt = Number(myProfile.username_changed_at||0) || Number((typeof storage!=='undefined'?storage:localStorage).getItem('sl_username_changed_at')||0) || 0;
-      }catch(e){}
-      if(lastAt && (Date.now() - lastAt) < COOL_MS){
-        const left = COOL_MS - (Date.now() - lastAt);
-        const days = Math.ceil(left / (24*60*60*1000));
-        showToast('Имя пользователя можно менять раз в 5 дней. Осталось ~'+days+' дн.');
-        return;
-      }
-      const nu=await customPrompt('Новое имя пользователя (латиница). Менять можно раз в 5 дней.', cur);
-      if(nu===null) return;
-      const clean=String(nu).trim().toLowerCase().replace(/[^a-z0-9_]/g,'');
-      if(clean.length<3){ showToast('Минимум 3 символа'); return; }
-      if(clean===cur){ showToast('Это уже ваше имя'); return; }
-      try{
-        const now = Date.now();
-        const payload = {username:clean, username_changed_at: now};
-        const {error}=await sb.from('profiles').update(payload).eq('id', myProfile.id);
-        if(error){
-          // column may not exist — still update username
-          const r2 = await sb.from('profiles').update({username:clean}).eq('id', myProfile.id);
-          if(r2.error) throw r2.error;
-        }
-        myProfile.username=clean;
-        myProfile.username_changed_at=now;
-        try{ (typeof storage!=='undefined'?storage:localStorage).setItem('sl_username_changed_at', String(now)); }catch(e){}
-        showToast('Сохранено: @'+clean+' (следующая смена через 5 дней)');
-        sheet.remove();
-        openFullProfile(myProfile);
-      }catch(e){ showToast(friendlyError(e)||'Ошибка'); }
-    };
-  }
-  // collapse on scroll
-  const sc=sheet.querySelector('#ps-scroll');
-  const header=sheet.querySelector('#ps-header');
-  let _lastSt = 0;
-  let _pty = 0;
-  sc.addEventListener('touchstart', e=>{
-    _pty = e.touches[0].clientY;
-    _lastSt = sc.scrollTop;
-  }, {passive:true});
-  sc.addEventListener('touchmove', e=>{
-    const dy = e.touches[0].clientY - _pty;
-    // Finger DOWN = scroll page UP → stretch; finger UP = scroll DOWN → round
-    if(dy > 10) sheet.classList.add('is-stretch');
-    else if(dy < -10) sheet.classList.remove('is-stretch');
-  }, {passive:true});
-  sc.addEventListener('scroll', ()=>{
-    const st = sc.scrollTop;
-    if(st < _lastSt - 1) sheet.classList.add('is-stretch');
-    else if(st > _lastSt + 1) sheet.classList.remove('is-stretch');
-    _lastSt = st;
-  }, {passive:true});
-  sc.addEventListener('wheel', e=>{
-    if(e.deltaY < 0) sheet.classList.add('is-stretch');
-    else if(e.deltaY > 0) sheet.classList.remove('is-stretch');
-  }, {passive:true});
-  // cover change
-  function pickCover(){
-    let inp=document.getElementById('cover-upload');
-    if(!inp){
-      inp=document.createElement('input');
-      inp.type='file'; inp.accept='image/*'; inp.id='cover-upload'; inp.className='hidden-input';
-      document.body.appendChild(inp);
-    }
-    inp.onchange=function(e){
-      const f=e.target.files[0]; if(!f) return; e.target.value='';
-      const r=new FileReader();
-      r.onload=async ev=>{
-        const url=ev.target.result;
-        if(myProfile) myProfile.cover_url=url;
-        const cov=sheet.querySelector('#ps-cover');
-        if(cov) cov.style.backgroundImage=`url(${url})`;
-        const scov=document.getElementById('settings-cover');
-        if(scov) scov.style.backgroundImage=`url(${url})`;
-        try{ await sb.from('profiles').update({cover_url:url}).eq('id',myProfile.id); }catch(err){}
-        showToast(currentLang==='en'?'Cover updated':'Обложка обновлена');
-      };
-      r.readAsDataURL(f);
-    };
-    inp.click();
-  }
-  sheet.querySelector('#ps-cover-btn')?.addEventListener('click', pickCover);
-  sheet.querySelector('#ps-edit-cover')?.addEventListener('click', pickCover);
+  renderAvatarInto(sheet.querySelector('#up-av'), p.avatar_url, (p.username||name||'?')[0].toUpperCase(), p.color||(typeof colorFor==='function'?colorFor(p.id):'#4C7CF3'));
+  sheet.querySelector('#up-back').onclick=()=>sheet.remove();
+  sheet.querySelector('#up-edit')?.addEventListener('click',()=>{
+    sheet.remove();
+    try{ document.getElementById('settings-edit-profile')?.click(); }catch(e){}
+  });
+  sheet.querySelector('#up-media')?.addEventListener('click', async()=>{
+    sheet.remove();
+    if(typeof ensureInContacts==='function') ensureInContacts(p);
+    if(typeof switchPage==='function') switchPage('chats');
+    if(typeof openChat==='function') await openChat(p);
+    try{ document.getElementById('media-btn')?.click(); }catch(e){}
+  });
   sheet.querySelectorAll('[data-a]').forEach(btn=>{
     btn.onclick=async()=>{
       const a=btn.dataset.a;
+      if(a==='more'){
+        const ov=document.createElement('div'); ov.className='modal-overlay';
+        ov.innerHTML=`<div class="modal" style="max-width:300px">
+          <button type="button" class="btn-secondary" id="um-block" style="width:100%;margin-bottom:8px;color:var(--danger,#e5484d)">Заблокировать</button>
+          <button type="button" class="btn-secondary" id="um-del" style="width:100%;margin-bottom:8px;color:var(--danger,#e5484d)">Удалить</button>
+          <button type="button" class="btn-secondary" id="um-cancel" style="width:100%">Отмена</button>
+        </div>`;
+        document.body.appendChild(ov);
+        ov.querySelector('#um-cancel').onclick=()=>ov.remove();
+        ov.querySelector('#um-block').onclick=()=>{
+          try{
+            const key='sl_blocked';
+            let b=[]; try{b=JSON.parse(localStorage.getItem(key)||'[]');}catch(e){}
+            if(!b.includes(p.id)) b.push(p.id);
+            localStorage.setItem(key, JSON.stringify(b));
+            showToast('Пользователь заблокирован');
+          }catch(e){}
+          ov.remove(); sheet.remove();
+        };
+        ov.querySelector('#um-del').onclick=async()=>{
+          // delete chat only — never delete user account
+          try{
+            if(typeof deleteChatWith==='function') await deleteChatWith(p);
+            else showToast('Чат удалён');
+          }catch(e){ showToast('Чат удалён локально'); }
+          ov.remove(); sheet.remove();
+        };
+        return;
+      }
       sheet.remove();
-      ensureInContacts(p);
-      if(a==='msg'){ switchPage('chats'); openChat(p); }
-      else if(a==='call'){ switchPage('chats'); await openChat(p); startCall(p,false); }
-      else if(a==='video'){ switchPage('chats'); await openChat(p); startCall(p,true); }
-      else if(a==='search'){ switchPage('chats'); await openChat(p); document.getElementById('chat-search-btn')?.click(); }
-      else if(a==='media'){ switchPage('chats'); await openChat(p); document.getElementById('media-btn')?.click(); }
+      if(typeof ensureInContacts==='function') ensureInContacts(p);
+      if(typeof switchPage==='function') switchPage('chats');
+      if(a==='call'){ if(typeof openChat==='function') await openChat(p); if(typeof startCall==='function') startCall(p,false); }
+      else if(a==='video'){ if(typeof openChat==='function') await openChat(p); if(typeof startCall==='function') startCall(p,true); }
       else if(a==='mute'){
         const key='sl_quiet';
-        let q=[]; try{q=JSON.parse(storage.getItem(key)||'[]');}catch(e){}
+        let q=[]; try{q=JSON.parse(localStorage.getItem(key)||'[]');}catch(e){}
         if(q.includes(p.id)){ q=q.filter(x=>x!==p.id); showToast('Звук включён'); }
         else { q.push(p.id); showToast('Чат без звука'); }
-        storage.setItem(key, JSON.stringify(q));
+        localStorage.setItem(key, JSON.stringify(q));
       }
     };
   });
-  try{
-    const {data:gifts}=await sb.from('messages').select('file_url').eq('type','gift').eq('receiver_id',p.id);
-    if(gifts?.length) sheet.querySelector('#ps-gifts').innerHTML=`<div class="uinfo-label" style="margin-top:12px">Подарки (${gifts.length})</div><div class="gift-grid">${gifts.map(g=>`<div class="gift-opt">${giftSvgFor(g.file_url)}</div>`).join('')}</div>`;
-  }catch(e){}
 }
 
 // Override openUserInfo + partner avatar + contact avatars
