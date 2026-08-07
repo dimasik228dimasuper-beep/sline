@@ -1857,9 +1857,9 @@ html.sl-ready.sl-booting::before{display:none!important}
               </div>
               <div class="composer-input-shell">
                 <textarea id="message-input" rows="1" placeholder="Сообщение" data-i18n-placeholder="ph_message"></textarea>
-                <button type="button" class="composer-smile" id="sticker-btn" title="Стикеры" data-i18n-title="tt_stickers"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01"/></svg></button>
               </div>
               <div class="composer-media-btns" id="composer-media-btns">
+                <button type="button" class="icon-btn composer-side" id="sticker-btn" title="Стикеры" data-i18n-title="tt_stickers" aria-label="Стикеры"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="9" cy="10" r="1.2" fill="currentColor" stroke="none"/><circle cx="15" cy="10" r="1.2" fill="currentColor" stroke="none"/><path d="M8 15c1.2 1.5 2.8 2.2 4 2.2s2.8-.7 4-2.2"/><path d="M16.5 3.5l4 4"/></svg></button>
                 <button class="icon-btn composer-side" id="circle-btn" title="Кружок" data-i18n-title="tt_circle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" id="circle-btn-icon"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/></svg></button>
                 <button class="icon-btn composer-side" id="voice-btn" title="Голосовое"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4"/></svg></button>
               </div>
@@ -18029,6 +18029,409 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
   console.log('[SL] feature pack v4 ready');
 })();
 
+
+
+
+/* ===== SL FEATURE PACK v5 — stickers fix ===== */
+(function(){
+  'use strict';
+  if(window._slPackV5) return;
+  window._slPackV5 = 1;
+  const LS = (typeof storage!=='undefined'?storage:localStorage);
+  const toast=(m)=>{ try{showToast(m);}catch(e){console.log(m);} };
+
+  // Force sticker button visible next to circle/mic
+  (function ensureStickerInComposer(){
+    const media = document.getElementById('composer-media-btns');
+    let btn = document.getElementById('sticker-btn');
+    if(media){
+      if(!btn){
+        btn=document.createElement('button');
+        btn.type='button'; btn.id='sticker-btn'; btn.className='icon-btn composer-side';
+        btn.title='Стикеры';
+      }
+      // move into media btns as first child
+      if(btn.parentNode !== media || media.firstElementChild !== btn){
+        media.insertBefore(btn, media.firstChild);
+      }
+      btn.innerHTML = `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="9" cy="10" r="1.3" fill="currentColor" stroke="none"/><circle cx="15" cy="10" r="1.3" fill="currentColor" stroke="none"/><path d="M8 15c1.2 1.5 2.8 2.2 4 2.2s2.8-.7 4-2.2"/><path d="M16.2 3.5l4.3 4.3"/></svg>`;
+      btn.style.cssText='display:flex!important;opacity:1!important;visibility:visible!important;width:40px;height:40px;align-items:center;justify-content:center;flex-shrink:0;color:var(--muted);background:transparent;border:none;border-radius:50%;cursor:pointer';
+    }
+    // also remove old smile inside shell if still there
+    document.querySelectorAll('.composer-input-shell #sticker-btn').forEach(el=>{
+      if(el.parentNode && el.parentNode.classList.contains('composer-input-shell')) el.remove();
+    });
+  })();
+
+  // CSS
+  if(!document.getElementById('sl-pack-v5-css')){
+    const st=document.createElement('style');
+    st.id='sl-pack-v5-css';
+    st.textContent = `
+#sticker-btn, #composer-media-btns #sticker-btn{
+  display:flex!important; opacity:1!important; visibility:visible!important;
+  width:40px!important; height:40px!important; flex-shrink:0!important;
+  color:var(--muted)!important; background:transparent!important; border:none!important;
+}
+#sticker-btn svg{width:22px;height:22px}
+.composer.has-text #sticker-btn{display:flex!important}
+.sl-pack-carousel{
+  display:flex; overflow-x:auto; scroll-snap-type:x mandatory; -webkit-overflow-scrolling:touch;
+  gap:0; width:100%; height:min(62vh,420px);
+}
+.sl-pack-slide{
+  flex:0 0 100%; scroll-snap-align:center; display:flex; flex-direction:column;
+  align-items:center; justify-content:center; gap:14px; padding:16px 12px; box-sizing:border-box;
+}
+.sl-pack-hero{
+  width:min(72vw,260px); height:min(72vw,260px); border-radius:28px;
+  background:linear-gradient(145deg,#1a2440,#0E1626); border:1px solid var(--line);
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px;
+  box-shadow:0 16px 40px rgba(0,0,0,.35); position:relative; cursor:pointer; user-select:none;
+  transition:transform .15s;
+}
+.sl-pack-hero:active{transform:scale(.97)}
+.sl-pack-hero.owned{box-shadow:0 0 0 2px var(--mint), 0 16px 40px rgba(0,0,0,.35)}
+.sl-pack-hero-ico{width:120px;height:120px;object-fit:contain}
+.sl-pack-hero-title{font-size:18px;font-weight:800;text-align:center;padding:0 12px}
+.sl-pack-hero-sub{font-size:13px;color:var(--muted)}
+.sl-pack-progress{
+  height:8px; width:min(72vw,260px); background:var(--line); border-radius:999px; overflow:hidden;
+}
+.sl-pack-progress > i{display:block;height:100%;background:linear-gradient(90deg,#4C7CF3,#6D5DF6);width:0%;transition:width .2s}
+.sl-pack-dots{display:flex;gap:6px;justify-content:center;padding:8px 0 4px;flex-wrap:wrap;max-height:40px;overflow:hidden}
+.sl-pack-dots span{width:6px;height:6px;border-radius:50%;background:var(--line)}
+.sl-pack-dots span.on{background:var(--accent-a);width:16px;border-radius:4px}
+.sl-sticker-icon{width:72px;height:72px;object-fit:contain}
+`;
+    document.head.appendChild(st);
+  }
+
+  // ---- Icon sticker generators (vector icons, NOT emoji) ----
+  function iconSvg(kind, color){
+    const c = color || '#4C7CF3';
+    const bg = '#131B2E';
+    const icons = {
+      star: `<polygon points="64,18 74,48 106,48 80,68 90,100 64,80 38,100 48,68 22,48 54,48" fill="${c}"/>`,
+      heart: `<path d="M64 96 S20 70 20 48 Q20 28 36 28 Q52 28 64 44 Q76 28 92 28 Q108 28 108 48 S64 96 64 96Z" fill="${c}"/>`,
+      fire: `<path d="M64 20c8 18-8 24-4 40 12-8 24 4 24 22a28 28 0 01-56 0c0-22 16-36 36-62z" fill="${c}"/><ellipse cx="64" cy="88" rx="10" ry="14" fill="#FBBF24"/>`,
+      bolt: `<polygon points="72,16 40,70 60,70 52,112 92,52 70,52" fill="${c}"/>`,
+      moon: `<path d="M78 24a40 40 0 1010 64 32 32 0 01-10-64z" fill="${c}"/>`,
+      sun: `<circle cx="64" cy="64" r="22" fill="${c}"/><g stroke="${c}" stroke-width="6" stroke-linecap="round"><path d="M64 12v12M64 104v12M12 64h12M104 64h12M28 28l8 8M92 92l8 8M28 100l8-8M92 36l8-8"/></g>`,
+      cloud: `<ellipse cx="64" cy="72" rx="36" ry="22" fill="${c}"/><circle cx="44" cy="60" r="18" fill="${c}"/><circle cx="70" cy="52" r="22" fill="${c}"/>`,
+      music: `<circle cx="40" cy="88" r="14" fill="${c}"/><circle cx="88" cy="78" r="14" fill="${c}"/><path d="M54 88V36l48-10v52" stroke="${c}" stroke-width="8" fill="none"/><path d="M54 52l48-10" stroke="${c}" stroke-width="6"/>`,
+      game: `<rect x="24" y="48" width="80" height="48" rx="14" fill="${c}"/><circle cx="44" cy="72" r="6" fill="${bg}"/><circle cx="60" cy="72" r="6" fill="${bg}"/><rect x="80" y="66" width="14" height="6" rx="2" fill="${bg}"/><rect x="84" y="62" width="6" height="14" rx="2" fill="${bg}"/>`,
+      rocket: `<path d="M64 16c20 20 24 48 16 72l-16 8-16-8c-8-24-4-52 16-72z" fill="${c}"/><circle cx="64" cy="52" r="8" fill="${bg}"/><path d="M48 78l-12 22M80 78l12 22" stroke="${c}" stroke-width="6" stroke-linecap="round"/>`,
+      coffee: `<path d="M36 40h52v36a20 20 0 01-20 20H56A20 20 0 0136 76V40z" fill="${c}"/><path d="M88 48h10a12 12 0 010 24H88" stroke="${c}" stroke-width="6" fill="none"/><path d="M44 28c4 6 4 10 0 14M56 28c4 6 4 10 0 14M68 28c4 6 4 10 0 14" stroke="${c}" stroke-width="4" fill="none" stroke-linecap="round"/>`,
+      camera: `<rect x="22" y="40" width="84" height="56" rx="10" fill="${c}"/><circle cx="64" cy="68" r="16" fill="${bg}"/><circle cx="64" cy="68" r="8" fill="${c}"/><rect x="48" y="30" width="32" height="12" rx="4" fill="${c}"/>`,
+      phone: `<rect x="44" y="20" width="40" height="88" rx="8" fill="${c}"/><circle cx="64" cy="94" r="5" fill="${bg}"/><rect x="54" y="28" width="20" height="4" rx="2" fill="${bg}"/>`,
+      gift: `<rect x="28" y="56" width="72" height="48" rx="6" fill="${c}"/><rect x="28" y="44" width="72" height="16" rx="4" fill="${c}"/><rect x="60" y="44" width="8" height="60" fill="${bg}"/><path d="M64 44c-12-18-28-8-16 0M64 44c12-18 28-8 16 0" stroke="${bg}" stroke-width="5" fill="none"/>`,
+      crown: `<path d="M24 84h80L92 44l-28 24-16-36-16 36L24 84z" fill="${c}"/><circle cx="24" cy="40" r="6" fill="${c}"/><circle cx="64" cy="28" r="6" fill="${c}"/><circle cx="104" cy="40" r="6" fill="${c}"/>`,
+      diamond: `<path d="M64 16 L108 52 L64 112 L20 52 Z" fill="${c}"/><path d="M20 52h88M64 16l-20 36h40z" stroke="${bg}" stroke-width="3" fill="none" opacity=".35"/>`,
+      leaf: `<path d="M64 20c36 20 40 60 0 92C24 80 28 40 64 20z" fill="${c}"/><path d="M64 28v76" stroke="${bg}" stroke-width="4" opacity=".4"/>`,
+      drop: `<path d="M64 18c24 32 36 48 36 64a36 36 0 11-72 0c0-16 12-32 36-64z" fill="${c}"/>`,
+      shield: `<path d="M64 16l44 16v28c0 28-28 48-44 56-16-8-44-28-44-56V32z" fill="${c}"/><path d="M48 64l12 12 20-24" stroke="${bg}" stroke-width="6" fill="none" stroke-linecap="round"/>`,
+      cat: `<ellipse cx="64" cy="72" rx="36" ry="30" fill="${c}"/><path d="M36 50l-8-28 28 16M92 50l8-28-28 16" fill="${c}"/><circle cx="52" cy="70" r="4" fill="${bg}"/><circle cx="76" cy="70" r="4" fill="${bg}"/><path d="M56 84c4 6 12 6 16 0" stroke="${bg}" stroke-width="3" fill="none"/>`,
+      dog: `<ellipse cx="64" cy="70" rx="34" ry="28" fill="${c}"/><ellipse cx="30" cy="58" rx="12" ry="18" fill="${c}"/><ellipse cx="98" cy="58" rx="12" ry="18" fill="${c}"/><circle cx="54" cy="68" r="4" fill="${bg}"/><circle cx="74" cy="68" r="4" fill="${bg}"/><ellipse cx="64" cy="80" rx="8" ry="5" fill="${bg}"/>`,
+      fish: `<ellipse cx="64" cy="64" rx="40" ry="22" fill="${c}"/><path d="M24 64l-14-16v32z" fill="${c}"/><circle cx="88" cy="58" r="4" fill="${bg}"/><path d="M64 42c8 8 8 20 0 28" stroke="${bg}" stroke-width="3" fill="none" opacity=".4"/>`,
+      car: `<path d="M28 72h72l-8-24H36z" fill="${c}"/><rect x="24" y="72" width="80" height="20" rx="4" fill="${c}"/><circle cx="40" cy="92" r="8" fill="${bg}"/><circle cx="88" cy="92" r="8" fill="${bg}"/><path d="M44 56h16l6 16H40z" fill="${bg}" opacity=".35"/>`,
+      plane: `<path d="M64 20l12 40 28 10-28 8 4 30-16-18-16 18 4-30-28-8 28-10z" fill="${c}"/>`,
+      book: `<path d="M28 28h32c8 0 12 4 12 12v64c0-6-4-8-12-8H28z" fill="${c}"/><path d="M100 28H68c-8 0-12 4-12 12v64c0-6 4-8 12-8h32z" fill="${c}" opacity=".85"/>`,
+      lock: `<rect x="36" y="56" width="56" height="44" rx="8" fill="${c}"/><path d="M48 56V44a16 16 0 0132 0v12" stroke="${c}" stroke-width="8" fill="none"/><circle cx="64" cy="78" r="6" fill="${bg}"/>`,
+      key: `<circle cx="44" cy="64" r="18" fill="${c}"/><circle cx="44" cy="64" r="8" fill="${bg}"/><rect x="58" y="58" width="46" height="12" rx="3" fill="${c}"/><rect x="90" y="70" width="8" height="12" fill="${c}"/><rect x="78" y="70" width="8" height="10" fill="${c}"/>`,
+      bell: `<path d="M64 20a28 28 0 0128 28v20l10 16H26l10-16V48A28 28 0 0164 20z" fill="${c}"/><circle cx="64" cy="96" r="8" fill="${c}"/>`,
+      pin: `<circle cx="64" cy="44" r="22" fill="${c}"/><path d="M64 66v42" stroke="${c}" stroke-width="10" stroke-linecap="round"/><circle cx="64" cy="44" r="8" fill="${bg}"/>`,
+      check: `<circle cx="64" cy="64" r="44" fill="${c}"/><path d="M40 66l16 16 32-36" stroke="${bg}" stroke-width="10" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`,
+      xmark: `<circle cx="64" cy="64" r="44" fill="${c}"/><path d="M44 44l40 40M84 44L44 84" stroke="${bg}" stroke-width="10" stroke-linecap="round"/>`,
+      plus: `<circle cx="64" cy="64" r="44" fill="${c}"/><path d="M64 40v48M40 64h48" stroke="${bg}" stroke-width="10" stroke-linecap="round"/>`,
+      home: `<path d="M64 20l48 40v48H80V78H48v30H16V60z" fill="${c}"/>`,
+      user: `<circle cx="64" cy="44" r="20" fill="${c}"/><path d="M28 108c0-24 16-36 36-36s36 12 36 36" fill="${c}"/>`,
+      chat: `<path d="M24 28h80v56H56L40 104V84H24z" fill="${c}"/>`,
+      eye: `<path d="M12 64s20-28 52-28 52 28 52 28-20 28-52 28S12 64 12 64z" fill="${c}"/><circle cx="64" cy="64" r="14" fill="${bg}"/><circle cx="64" cy="64" r="6" fill="${c}"/>`,
+      spark: `<path d="M64 12l8 36 36 8-36 8-8 36-8-36-36-8 36-8z" fill="${c}"/>`,
+      snow: `<g stroke="${c}" stroke-width="6" stroke-linecap="round" fill="none"><path d="M64 24v80M30 40l68 48M30 88l68-48"/><path d="M64 36l-8-8M64 36l8-8M64 92l-8 8M64 92l8 8"/></g>`,
+      wave: `<path d="M16 64c12-20 20-20 32 0s20 20 32 0 20-20 32 0" stroke="${c}" stroke-width="10" fill="none" stroke-linecap="round"/><path d="M16 88c12-20 20-20 32 0s20 20 32 0 20-20 32 0" stroke="${c}" stroke-width="8" fill="none" opacity=".5"/>`,
+    };
+    const body = icons[kind] || icons.star;
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128"><rect width="128" height="128" rx="28" fill="${bg}"/>${body}</svg>`;
+    return 'data:image/svg+xml,'+encodeURIComponent(svg);
+  }
+
+  const ICON_KINDS = Object.keys({
+    star:1,heart:1,fire:1,bolt:1,moon:1,sun:1,cloud:1,music:1,game:1,rocket:1,
+    coffee:1,camera:1,phone:1,gift:1,crown:1,diamond:1,leaf:1,drop:1,shield:1,cat:1,
+    dog:1,fish:1,car:1,plane:1,book:1,lock:1,key:1,bell:1,pin:1,check:1,
+    xmark:1,plus:1,home:1,user:1,chat:1,eye:1,spark:1,snow:1,wave:1
+  });
+  const COLORS = ['#4C7CF3','#6D5DF6','#2DD4BF','#F0708A','#F7B955','#22c55e','#a78bfa','#fb7185','#38bdf8','#f472b6'];
+
+  function makeIconStickers(seed, count){
+    const out=[];
+    for(let j=0;j<count;j++){
+      const kind = ICON_KINDS[(seed*3+j*5)%ICON_KINDS.length];
+      const color = COLORS[(seed+j*2)%COLORS.length];
+      out.push(iconSvg(kind, color));
+    }
+    return out;
+  }
+
+  const PACK_THEMES = [
+    'Звёзды','Сердца','Огонь','Космос','Погода','Музыка','Игры','Подарки',
+    'Животные','Путешествия','Работа','Природа','Безопасность','Люди','Знаки'
+  ];
+
+  function buildAllPacks(){
+    const packs=[];
+    // include classic birds as locked pack 0 if exists in STICKER_PACKS
+    try{
+      if(typeof STICKER_PACKS!=='undefined' && STICKER_PACKS.birds){
+        packs.push({
+          id:'birds',
+          name: STICKER_PACKS.birds.name||'Вороны',
+          stickers: STICKER_PACKS.birds.stickers.slice(),
+          preview: STICKER_PACKS.birds.stickers[0]
+        });
+      }
+    }catch(e){}
+    for(let i=0;i<100;i++){
+      const theme = PACK_THEMES[i%PACK_THEMES.length];
+      const n = Math.floor(i/PACK_THEMES.length)+1;
+      const stickers = makeIconStickers(i+7, 8);
+      packs.push({
+        id: 'pack_'+i,
+        name: theme+(n>1?(' '+n):''),
+        stickers,
+        preview: stickers[0]
+      });
+    }
+    return packs;
+  }
+
+  const ALL_PACKS = buildAllPacks();
+
+  function ownedPacks(){ try{ return JSON.parse(LS.getItem('sl_owned_packs')||'[]'); }catch(e){ return []; } }
+  function setOwned(a){ LS.setItem('sl_owned_packs', JSON.stringify(a)); }
+  function clicks(){ try{ return JSON.parse(LS.getItem('sl_pack_clicks')||'{}'); }catch(e){ return {}; } }
+  function setClicks(o){ LS.setItem('sl_pack_clicks', JSON.stringify(o)); }
+
+  // Lock default STICKER_PACKS until owned — empty grid if none owned
+  window.slMergeStickerPacks = function(){
+    try{
+      if(typeof STICKER_PACKS==='undefined') window.STICKER_PACKS = {};
+      // strip non-owned built-ins
+      const own = new Set(ownedPacks());
+      // keep only owned
+      const next = {};
+      ALL_PACKS.forEach(p=>{
+        if(own.has(p.id)) next[p.id] = { name:p.name, stickers:p.stickers };
+      });
+      // friend packs
+      try{
+        const sh=JSON.parse(LS.getItem('sl_friend_packs')||'{}');
+        Object.entries(sh).forEach(([id,p])=>{
+          next['friend_'+id] = { name:p.name||'Пак друга', stickers:p.stickers||[] };
+        });
+      }catch(e){}
+      // replace global
+      Object.keys(STICKER_PACKS).forEach(k=>{ delete STICKER_PACKS[k]; });
+      Object.assign(STICKER_PACKS, next);
+      if(!Object.keys(STICKER_PACKS).length){
+        // placeholder message pack empty
+      }
+    }catch(e){}
+  };
+
+  // Override open shop — one pack per screen carousel
+  window.slOpenStickerPackShop = function(){
+    const own = new Set(ownedPacks());
+    const cl = clicks();
+    const ov = document.createElement('div');
+    ov.className = 'modal-overlay';
+    ov.style.zIndex = '22000';
+    ov.innerHTML = `<div class="modal" style="max-width:440px;padding:16px 12px 20px">
+      <button class="close-x" id="pk5-x">×</button>
+      <h3 style="text-align:center;margin-bottom:4px">Стикер-паки</h3>
+      <p style="text-align:center;font-size:12px;color:var(--muted);margin-bottom:8px">Листай паки · 10 нажатий чтобы открыть</p>
+      <div class="sl-pack-carousel" id="pk5-car"></div>
+      <div class="sl-pack-dots" id="pk5-dots"></div>
+      <button class="btn-secondary" id="pk5-friend" style="width:100%;margin-top:10px">Код пака друга</button>
+    </div>`;
+    document.body.appendChild(ov);
+    ov.querySelector('#pk5-x').onclick=()=>ov.remove();
+    const car = ov.querySelector('#pk5-car');
+    const dots = ov.querySelector('#pk5-dots');
+
+    ALL_PACKS.forEach((p, idx)=>{
+      const isOwn = own.has(p.id);
+      const c = cl[p.id]||0;
+      const slide = document.createElement('div');
+      slide.className = 'sl-pack-slide';
+      slide.innerHTML = `
+        <div class="sl-pack-hero ${isOwn?'owned':''}" data-id="${p.id}">
+          <img class="sl-pack-hero-ico" src="${p.preview}" alt="">
+          <div class="sl-pack-hero-title">${p.name}</div>
+          <div class="sl-pack-hero-sub">${isOwn?'Открыт — нажми, чтобы выбрать':'Нажми 10 раз, чтобы открыть'}</div>
+        </div>
+        <div class="sl-pack-progress"><i style="width:${isOwn?100:Math.min(100,c*10)}%"></i></div>
+        <div style="font-size:13px;color:var(--muted)">${isOwn?'✓ В коллекции':(c+'/10')}</div>`;
+      const hero = slide.querySelector('.sl-pack-hero');
+      const bar = slide.querySelector('.sl-pack-progress > i');
+      const sub = slide.querySelector('.sl-pack-hero-sub');
+      const cnt = slide.querySelector('div[style]');
+      hero.onclick = ()=>{
+        if(own.has(p.id)){
+          try{ activeStickerPack = p.id; }catch(e){}
+          window.slMergeStickerPacks();
+          toast('Пак «'+p.name+'»');
+          ov.remove();
+          openStickerPanel();
+          return;
+        }
+        const o = clicks();
+        o[p.id] = (o[p.id]||0)+1;
+        setClicks(o);
+        const n = o[p.id];
+        bar.style.width = Math.min(100,n*10)+'%';
+        cnt.textContent = n+'/10';
+        hero.style.transform = 'scale(0.94)';
+        setTimeout(()=>hero.style.transform='', 100);
+        if(n >= 10){
+          playOpen(p, ov);
+        } else {
+          toast(n+'/10');
+        }
+      };
+      car.appendChild(slide);
+      const d=document.createElement('span');
+      if(idx===0) d.className='on';
+      dots.appendChild(d);
+    });
+
+    // dots update on scroll
+    car.addEventListener('scroll', ()=>{
+      const w = car.clientWidth||1;
+      const i = Math.round(car.scrollLeft / w);
+      dots.querySelectorAll('span').forEach((s,idx)=>s.classList.toggle('on', idx===i));
+    }, {passive:true});
+
+    ov.querySelector('#pk5-friend').onclick=()=>{
+      const code = prompt('Код пака (например pack_0 или birds):');
+      if(!code) return;
+      const id = code.trim();
+      const p = ALL_PACKS.find(x=>x.id===id || x.id==='pack_'+id);
+      if(!p){ toast('Пак не найден'); return; }
+      const sh=JSON.parse(LS.getItem('sl_friend_packs')||'{}');
+      sh[p.id]=p; LS.setItem('sl_friend_packs', JSON.stringify(sh));
+      // also grant as owned for use
+      const ow=ownedPacks(); if(!ow.includes(p.id)){ ow.push(p.id); setOwned(ow); }
+      window.slMergeStickerPacks();
+      toast('Пак «'+p.name+'» добавлен');
+      ov.remove();
+    };
+  };
+
+  function playOpen(p, parentOv){
+    try{ parentOv?.remove(); }catch(e){}
+    const ov=document.createElement('div');
+    ov.className='sl-pack-open-ov';
+    ov.innerHTML=`<div class="sl-pack-box" id="pk5-box"><img src="${p.preview}" style="width:80px;height:80px"></div>
+      <div style="color:#fff;font-weight:700">Открытие «${p.name}»…</div>
+      <div class="sl-pack-reward" id="pk5-rew">${p.stickers.map(s=>`<img src="${s}" style="width:48px;height:48px">`).join('')}</div>`;
+    document.body.appendChild(ov);
+    const box=ov.querySelector('#pk5-box');
+    setTimeout(()=>{
+      box.classList.add('burst');
+      setTimeout(()=>{
+        ov.querySelector('#pk5-rew').classList.add('show');
+        const ow=ownedPacks(); if(!ow.includes(p.id)) ow.push(p.id); setOwned(ow);
+        const o=clicks(); delete o[p.id]; setClicks(o);
+        window.slMergeStickerPacks();
+        toast('Пак «'+p.name+'» открыт!');
+      }, 450);
+      setTimeout(()=>ov.remove(), 2600);
+    }, 700);
+  }
+
+  function openStickerPanel(){
+    window.slMergeStickerPacks();
+    const panel=document.getElementById('sticker-panel');
+    if(!panel){ toast('Откройте чат'); return; }
+    const keys=Object.keys(typeof STICKER_PACKS!=='undefined'?STICKER_PACKS:{});
+    if(!keys.length){
+      toast('Нет открытых паков — зайдите в Настройки → Стикер-пак');
+      window.slOpenStickerPackShop();
+      return;
+    }
+    try{ if(typeof activeStickerPack==='undefined' || !STICKER_PACKS[activeStickerPack]) activeStickerPack=keys[0]; }catch(e){}
+    const packsEl=document.getElementById('sticker-packs');
+    if(packsEl){
+      packsEl.innerHTML=keys.map(k=>`<div class="sticker-pack-tab ${k===activeStickerPack?'active':''}" data-pack="${k}">${STICKER_PACKS[k].name}</div>`).join('');
+      packsEl.querySelectorAll('.sticker-pack-tab').forEach(t=>{
+        t.onclick=()=>{ activeStickerPack=t.dataset.pack; packsEl.querySelectorAll('.sticker-pack-tab').forEach(x=>x.classList.toggle('active',x.dataset.pack===t.dataset.pack)); renderStickerGridSafe(); };
+      });
+    }
+    renderStickerGridSafe();
+    panel.classList.add('show');
+  }
+
+  function renderStickerGridSafe(){
+    const grid=document.getElementById('sticker-grid');
+    if(!grid) return;
+    const stickers=(typeof STICKER_PACKS!=='undefined' && STICKER_PACKS[activeStickerPack]?.stickers)||[];
+    if(!stickers.length){ grid.innerHTML='<div style="padding:20px;color:var(--muted);text-align:center">Пусто</div>'; return; }
+    grid.innerHTML=stickers.map(s=>`<img src="${s}" data-url="${s}" class="sl-sticker-icon">`).join('');
+    grid.querySelectorAll('img').forEach(img=>{
+      img.onclick=()=>{
+        if(typeof sendMessage==='function') sendMessage('sticker', img.dataset.url, '');
+        document.getElementById('sticker-panel')?.classList.remove('show');
+      };
+    });
+  }
+
+  // Bind sticker button
+  function bindStickerBtn(){
+    const btn=document.getElementById('sticker-btn');
+    if(!btn || btn.dataset.v5bound) return;
+    btn.dataset.v5bound='1';
+    btn.onclick=null;
+    btn.addEventListener('click', (e)=>{
+      e.preventDefault(); e.stopPropagation();
+      openStickerPanel();
+    }, true);
+  }
+  bindStickerBtn();
+  setInterval(()=>{
+    // keep button in media row
+    const media=document.getElementById('composer-media-btns');
+    const btn=document.getElementById('sticker-btn');
+    if(media && btn && btn.parentNode!==media) media.insertBefore(btn, media.firstChild);
+    bindStickerBtn();
+  }, 1500);
+
+  // Initial merge: lock old packs
+  try{ window.slMergeStickerPacks(); }catch(e){}
+
+  // Settings row already exists from v4 — rebind click
+  setTimeout(()=>{
+    const row=document.getElementById('settings-sticker-packs');
+    if(row){ row.onclick=()=>window.slOpenStickerPackShop(); }
+    else {
+      const host=document.getElementById('settings-notifications')?.parentNode;
+      if(host){
+        const r=document.createElement('div');
+        r.className='settings-item'; r.id='settings-sticker-packs';
+        r.innerHTML=`<svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01"/></svg><span class="item-text">Стикер-пак</span>`;
+        host.appendChild(r);
+        r.onclick=()=>window.slOpenStickerPackShop();
+      }
+    }
+  }, 800);
+
+  // Remove time limit data remnant
+  try{ LS.removeItem('sl_last_pack_open'); }catch(e){}
+
+  console.log('[SL] sticker pack v5 ready');
+})();
 
 </script>
 </body>
