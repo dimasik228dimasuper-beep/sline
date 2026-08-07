@@ -9076,23 +9076,79 @@ async function requestNotifPermission(){
 }
 
 function showLocalNotification(title, body, opts={}){
-  if(storage.getItem(NOTIF_PREF_KEY)!=='1') return;
-  if(!('Notification' in window) || Notification.permission!=='granted') return;
-  const options={body:body||'', tag:opts.tag||'sl-msg', renotify:true, vibrate:opts.vibrate||[200,100,200], requireInteraction:!!opts.requireInteraction, silent:false};
+  // System notifications: prefer explicit pref, but also fire if browser already granted
+  if(!('Notification' in window)) return;
+  const prefOn = storage.getItem(NOTIF_PREF_KEY)==='1';
+  const granted = Notification.permission==='granted';
+  if(!granted) return;
+  if(!prefOn){
+    // auto-enable if user already allowed in browser
+    try{ storage.setItem(NOTIF_PREF_KEY,'1'); }catch(e){}
+  }
+  const icon = (function(){
+    try{
+      const link = document.querySelector('link[rel="apple-touch-icon"], link[rel="icon"]');
+      return (link && link.href) || undefined;
+    }catch(e){ return undefined; }
+  })();
+  const options={
+    body: body||'',
+    tag: opts.tag||'sl-msg',
+    renotify: true,
+    vibrate: opts.vibrate||[200,100,200],
+    requireInteraction: !!opts.requireInteraction,
+    silent: false,
+    badge: icon,
+    icon: opts.icon || icon
+  };
   try{
-    if(swRegistration) swRegistration.showNotification(title, options);
+    if(typeof swRegistration!=='undefined' && swRegistration) swRegistration.showNotification(title, options);
     else new Notification(title, options);
-  }catch(e){ try{ new Notification(title, options); }catch(e2){} }
-  vibratePhone(opts.vibrate||[200,100,200]);
+  }catch(e){
+    try{ new Notification(title, options); }catch(e2){}
+  }
+  try{ vibratePhone(opts.vibrate||[200,100,200]); }catch(e){}
 }
 
 function notifyIncomingMessage(msg){
-  if(storage.getItem(NOTIF_PREF_KEY)!=='1') return;
-  if(document.visibilityState==='visible' && activePartner?.id===msg.sender_id) return;
-  const sender=contacts.find(c=>c.id===msg.sender_id);
-  const title=sender ? (sender.first_name||sender.username) : (currentLang==='en'?'New message':'Новое сообщение');
-  const body = msg.type==='text' ? (msg.content||'').slice(0,80) : ({image:'Фото',video:'Видео',voice:'Голосовое',circle:'Кружок',file:'Файл',sticker:'Стикер',gift:'Подарок',poll:'Опрос'}[msg.type]||'Сообщение');
-  showLocalNotification(title, body, {tag:'sl-msg-'+msg.sender_id, vibrate:[180,80,180]});
+  if(!msg || !myProfile) return;
+  // skip if currently viewing this exact chat
+  if(document.visibilityState==='visible'){
+    if(msg.group_id && activeGroup && String(activeGroup.id)===String(msg.group_id)) return;
+    if(!msg.group_id && activePartner && String(activePartner.id)===String(msg.sender_id)) return;
+  }
+  try{ if(typeof window.slGetDnd==='function' && window.slGetDnd()) return; }catch(e){}
+  let title, avatar;
+  if(msg.group_id){
+    const g = (typeof groups!=='undefined' ? groups : []).find(x=>String(x.id)===String(msg.group_id));
+    title = g ? (g.name||'Канал') : (currentLang==='en'?'Channel':'Канал');
+    avatar = g?.avatar_url;
+  } else {
+    const sender = (typeof contacts!=='undefined' ? contacts : []).find(c=>String(c.id)===String(msg.sender_id));
+    title = sender ? (sender.first_name||sender.username) : (currentLang==='en'?'New message':'Новое сообщение');
+    avatar = sender?.avatar_url;
+  }
+  let body;
+  if(msg.type==='text' || !msg.type){
+    const t = String(msg.content||'');
+    body = (typeof window.slE2E?.isEncrypted==='function' && window.slE2E.isEncrypted(t))
+      ? '🔒' : (t.replace(/\s+/g,' ').trim().slice(0,80) || (currentLang==='en'?'Message':'Сообщение'));
+  } else {
+    body = ({image:'📷 Фото',photo:'📷 Фото',video:'🎬 Видео',voice:'🎤 Голосовое',circle:'⭕ Кружок',file:'📎 Файл',document:'📎 Файл',sticker:'Стикер',gift:'🎁 Подарок',poll:'📊 Опрос'}[msg.type]|| (currentLang==='en'?'Message':'Сообщение'));
+  }
+  // In-app banner (MAX-style)
+  try{ if(typeof window.showInAppMessageNotification==='function') window.showInAppMessageNotification(msg); }catch(e){}
+  // System notification (browser / OS)
+  const tag = msg.group_id ? ('sl-g-'+msg.group_id) : ('sl-msg-'+msg.sender_id);
+  showLocalNotification(title, body, {tag, vibrate:[180,80,180], icon: avatar});
+  // Soft-prompt permission once if never asked
+  try{
+    if('Notification' in window && Notification.permission==='default' && !sessionStorage.getItem('sl_notif_asked')){
+      sessionStorage.setItem('sl_notif_asked','1');
+      // non-blocking: user can allow from settings too
+      setTimeout(()=>{ try{ requestNotifPermission(); }catch(e){} }, 600);
+    }
+  }catch(e){}
 }
 
 function notifyIncomingCall(name){
@@ -17027,7 +17083,349 @@ html.sl-tv .composer textarea { min-height: 52px; font-size: 17px; }
     };
   }
 
-  console.log('[SL] E2E ECDH+AES-GCM ready');
+  
+console.log('[SL] E2E ECDH+AES-GCM ready');
+})();
+
+/* ===== SL In-app notifications (MAX-style) + system + faster delivery ===== */
+(function(){
+  'use strict';
+  if(window._slInAppNotifV2) return;
+  window._slInAppNotifV2 = 1;
+
+  const STYLE_ID = 'sl-inapp-notif-css';
+  if(!document.getElementById(STYLE_ID)){
+    const st = document.createElement('style');
+    st.id = STYLE_ID;
+    st.textContent = `
+.sl-inapp-stack{
+  position:fixed; top:calc(10px + env(safe-area-inset-top,0px)); left:0; right:0;
+  z-index:18000; display:flex; flex-direction:column; align-items:center; gap:8px;
+  pointer-events:none; padding:0 12px;
+}
+.sl-inapp-toast{
+  pointer-events:auto; width:100%; max-width:420px;
+  display:flex; align-items:center; gap:12px;
+  padding:12px 14px; border-radius:18px;
+  background:rgba(22,30,48,.94); backdrop-filter:blur(18px) saturate(1.2);
+  -webkit-backdrop-filter:blur(18px) saturate(1.2);
+  border:1px solid rgba(255,255,255,.08);
+  box-shadow:0 12px 40px rgba(0,0,0,.45), 0 0 0 1px rgba(76,124,243,.12);
+  cursor:pointer; transform:translateY(-120%); opacity:0;
+  transition:transform .32s cubic-bezier(.2,.9,.2,1), opacity .28s ease;
+  color:var(--text,#E7ECF5);
+}
+.sl-inapp-toast.show{ transform:translateY(0); opacity:1; }
+.sl-inapp-toast.hide{ transform:translateY(-110%); opacity:0; }
+body.theme-light .sl-inapp-toast{
+  background:rgba(255,255,255,.96); color:#111827;
+  border-color:rgba(0,0,0,.06); box-shadow:0 12px 36px rgba(15,23,42,.15);
+}
+.sl-inapp-av{
+  width:48px; height:48px; border-radius:50%; flex-shrink:0;
+  background:linear-gradient(135deg,#4C7CF3,#6D5DF6);
+  display:flex; align-items:center; justify-content:center;
+  font-weight:800; font-size:18px; color:#fff; overflow:hidden;
+  background-size:cover; background-position:center;
+}
+.sl-inapp-body{ flex:1; min-width:0; }
+.sl-inapp-top{ display:flex; align-items:baseline; gap:8px; margin-bottom:2px; }
+.sl-inapp-name{
+  font-size:14px; font-weight:700; white-space:nowrap;
+  overflow:hidden; text-overflow:ellipsis; max-width:70%;
+}
+.sl-inapp-time{ font-size:11px; color:var(--muted,#7C8AA5); margin-left:auto; flex-shrink:0; }
+.sl-inapp-text{
+  font-size:13px; line-height:1.35; color:var(--muted,#9AA8C0);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+body.theme-light .sl-inapp-text{ color:#4B5563; }
+.sl-inapp-close{
+  width:28px; height:28px; border:none; border-radius:50%;
+  background:rgba(255,255,255,.08); color:var(--muted,#7C8AA5);
+  cursor:pointer; flex-shrink:0; font-size:16px; line-height:1;
+  display:flex; align-items:center; justify-content:center;
+}
+body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
+`;
+    document.head.appendChild(st);
+  }
+
+  function ensureStack(){
+    let s = document.getElementById('sl-inapp-stack');
+    if(!s){
+      s = document.createElement('div');
+      s.id = 'sl-inapp-stack';
+      s.className = 'sl-inapp-stack';
+      document.body.appendChild(s);
+    }
+    return s;
+  }
+
+  function previewOf(msg){
+    if(!msg) return 'Сообщение';
+    if(msg.type==='text' || !msg.type){
+      let t = String(msg.content||'');
+      if(typeof window.slE2E?.isEncrypted==='function' && window.slE2E.isEncrypted(t)) return '🔒 Зашифрованное сообщение';
+      t = t.replace(/\s+/g,' ').trim();
+      return t ? t.slice(0,120) : 'Сообщение';
+    }
+    const map = {
+      image:'📷 Фото', photo:'📷 Фото', video:'🎬 Видео', voice:'🎤 Голосовое',
+      circle:'⭕ Видеосообщение', file:'📎 Файл', document:'📎 Файл',
+      sticker:'Стикер', gift:'🎁 Подарок', poll:'📊 Опрос', call:'📞 Звонок'
+    };
+    return map[msg.type] || 'Сообщение';
+  }
+
+  function formatTime(ts){
+    try{
+      const d = ts ? new Date(ts) : new Date();
+      return d.toLocaleTimeString((typeof currentLang!=='undefined' && currentLang==='en') ? 'en-GB' : 'ru-RU', {hour:'2-digit', minute:'2-digit'});
+    }catch(e){ return ''; }
+  }
+
+  function resolveSender(msg){
+    const sid = msg?.sender_id;
+    let p = null;
+    try{
+      if(typeof contacts!=='undefined' && Array.isArray(contacts))
+        p = contacts.find(c=>String(c.id)===String(sid));
+    }catch(e){}
+    if(!p && typeof groups!=='undefined' && msg?.group_id){
+      try{ p = (groups||[]).find(g=>String(g.id)===String(msg.group_id)); }catch(e){}
+      if(p) return { name: p.name || 'Канал', avatar: p.avatar_url, color: p.color||'#4C7CF3', id: msg.group_id, isGroup:true };
+    }
+    const name = p ? (p.first_name || p.username || 'Пользователь') : ((typeof currentLang!=='undefined' && currentLang==='en') ? 'New message' : 'Новое сообщение');
+    return { name, avatar: p?.avatar_url, color: p?.color||'#4C7CF3', id: sid, isGroup:false, profile:p };
+  }
+
+  function avatarHtml(info){
+    const letter = (info.name||'?').trim().charAt(0).toUpperCase() || '?';
+    if(info.avatar){
+      return `<div class="sl-inapp-av" style="background-image:url('${String(info.avatar).replace(/'/g,"%27")}')"></div>`;
+    }
+    return `<div class="sl-inapp-av" style="background:${info.color||'#4C7CF3'}">${letter}</div>`;
+  }
+
+  window.showInAppMessageNotification = function(msg, opts={}){
+    try{
+      if(!msg || !myProfile) return;
+      if(msg.sender_id && String(msg.sender_id)===String(myProfile.id)) return;
+      if(document.visibilityState==='visible'){
+        if(msg.group_id && activeGroup && String(activeGroup.id)===String(msg.group_id)) return;
+        if(!msg.group_id && activePartner && String(activePartner.id)===String(msg.sender_id)) return;
+      }
+      try{ if(typeof window.slGetDnd==='function' && window.slGetDnd()) return; }catch(e){}
+
+      const info = resolveSender(msg);
+      const text = previewOf(msg);
+      const time = formatTime(msg.created_at || Date.now());
+      const stack = ensureStack();
+      const tag = 't-'+(msg.group_id || msg.sender_id || 'x');
+      const prev = stack.querySelector('[data-tag="'+tag+'"]');
+      if(prev) prev.remove();
+
+      const el = document.createElement('div');
+      el.className = 'sl-inapp-toast';
+      el.dataset.tag = tag;
+      el.innerHTML = avatarHtml(info)
+        + `<div class="sl-inapp-body">
+            <div class="sl-inapp-top"><span class="sl-inapp-name"></span><span class="sl-inapp-time"></span></div>
+            <div class="sl-inapp-text"></div>
+          </div>
+          <button type="button" class="sl-inapp-close" aria-label="Закрыть">×</button>`;
+      el.querySelector('.sl-inapp-name').textContent = info.name;
+      el.querySelector('.sl-inapp-time').textContent = time;
+      el.querySelector('.sl-inapp-text').textContent = text;
+      stack.appendChild(el);
+      requestAnimationFrame(()=> el.classList.add('show'));
+
+      const dismiss = ()=>{
+        el.classList.remove('show'); el.classList.add('hide');
+        setTimeout(()=> el.remove(), 320);
+      };
+      el.querySelector('.sl-inapp-close').onclick = (e)=>{ e.stopPropagation(); dismiss(); };
+      el.onclick = ()=>{
+        dismiss();
+        try{
+          if(msg.group_id){
+            const g = (typeof groups!=='undefined' ? groups : []).find(x=>String(x.id)===String(msg.group_id));
+            if(g && typeof openGroup==='function') openGroup(g);
+          } else if(info.profile && typeof openChat==='function'){
+            openChat(info.profile);
+          } else if(msg.sender_id && typeof openChat==='function'){
+            openChat({id: msg.sender_id, first_name: info.name, username: info.name, avatar_url: info.avatar, color: info.color});
+          }
+        }catch(e){}
+      };
+      let sy=0;
+      el.addEventListener('touchstart', e=>{ sy=e.touches[0].clientY; }, {passive:true});
+      el.addEventListener('touchend', e=>{
+        if(sy - e.changedTouches[0].clientY > 40) dismiss();
+      }, {passive:true});
+      clearTimeout(el._tm);
+      el._tm = setTimeout(dismiss, opts.duration || 4500);
+      try{ if(typeof haptic==='function') haptic(12); }catch(e){}
+    }catch(e){ console.warn('inapp notif', e); }
+  };
+
+  // Ensure system notifications stay enabled when permission already granted
+  function syncNotifPref(){
+    try{
+      if('Notification' in window && Notification.permission==='granted'){
+        if(storage.getItem(NOTIF_PREF_KEY)!=='1') storage.setItem(NOTIF_PREF_KEY,'1');
+      }
+    }catch(e){}
+  }
+  syncNotifPref();
+
+  // On login / app ready — offer system notifications
+  function ensureSystemNotifs(){
+    syncNotifPref();
+    try{
+      if(!('Notification' in window)) return;
+      if(Notification.permission==='granted'){
+        storage.setItem(NOTIF_PREF_KEY,'1');
+        try{ if(typeof subscribeWebPush==='function') subscribeWebPush().catch(()=>{}); }catch(e){}
+        return;
+      }
+      if(Notification.permission==='default' && !sessionStorage.getItem('sl_notif_banner')){
+        sessionStorage.setItem('sl_notif_banner','1');
+        setTimeout(()=>{
+          try{
+            if(typeof showToast==='function'){
+              showToast((typeof currentLang!=='undefined' && currentLang==='en')
+                ? 'Enable notifications in Settings for alerts when the app is closed'
+                : 'Включите уведомления в Настройках — чтобы видеть сообщения, когда сайт свёрнут');
+            }
+          }catch(e){}
+        }, 2500);
+      }
+    }catch(e){}
+  }
+  setTimeout(ensureSystemNotifs, 1500);
+  setTimeout(ensureSystemNotifs, 5000);
+  document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible') syncNotifPref(); });
+
+  // Patch handleIncomingMessage to always notify (in-app + system path)
+  if(typeof handleIncomingMessage==='function' && !window._slHimNotifV2){
+    window._slHimNotifV2 = 1;
+    const _h = handleIncomingMessage;
+    handleIncomingMessage = function(msg){
+      const r = _h.apply(this, arguments);
+      try{
+        if(!msg || !myProfile) return r;
+        if(msg.sender_id && String(msg.sender_id)===String(myProfile.id)) return r;
+        const viewing =
+          (msg.group_id && activeGroup && String(activeGroup.id)===String(msg.group_id)) ||
+          (!msg.group_id && activePartner && String(activePartner.id)===String(msg.sender_id));
+        if(!viewing){
+          // notifyIncomingMessage already does in-app + system; call if not already via original path
+          // original path calls notify for non-active — this is a safety net for edge cases
+          if(typeof window.showInAppMessageNotification==='function'){
+            window.showInAppMessageNotification(msg);
+          }
+        }
+      }catch(e){}
+      return r;
+    };
+  }
+
+  /* ---- Faster message delivery ---- */
+  try{
+    if(typeof startChatLiveSync==='function' && !window._slFastPoll){
+      window._slFastPoll = 1;
+      startChatLiveSync = function(){
+        try{ if(typeof stopChatLiveSync==='function') stopChatLiveSync(); }catch(e){}
+        try{ _chatPollSince = new Date().toISOString(); }catch(e){}
+        try{
+          _chatPollTimer = setInterval(()=>{ pullNewMessages().catch(()=>{}); }, 900);
+          pullNewMessages().catch(()=>{});
+        }catch(e){}
+      };
+      try{ if(typeof _chatPollTimer!=='undefined' && _chatPollTimer) startChatLiveSync(); }catch(e){}
+    }
+  }catch(e){}
+
+  if(!window._slGlobalPoll){
+    window._slGlobalPoll = 1;
+    let _since = new Date().toISOString();
+    async function pullInbox(){
+      if(!myProfile || typeof sb==='undefined') return;
+      try{
+        const {data, error} = await sb.from('messages')
+          .select('*')
+          .eq('receiver_id', myProfile.id)
+          .gt('created_at', _since)
+          .order('created_at', {ascending:true})
+          .limit(30);
+        if(error || !data?.length) return;
+        for(const msg of data){
+          if(msg.created_at && msg.created_at > _since) _since = msg.created_at;
+          try{ handleIncomingMessage(msg); }catch(e){}
+        }
+      }catch(e){}
+    }
+    setInterval(()=> pullInbox().catch(()=>{}), 1500);
+    setTimeout(()=> pullInbox().catch(()=>{}), 800);
+  }
+
+  if(typeof sendMessage==='function' && !window._slFastBroadcast){
+    window._slFastBroadcast = 1;
+    const _sm = sendMessage;
+    const peerChans = new Map();
+    function warmInbox(peerId){
+      if(!peerId || !sb) return null;
+      let ch = peerChans.get(peerId);
+      if(ch) return ch;
+      try{
+        ch = sb.channel('inbox-'+peerId);
+        ch.subscribe();
+        peerChans.set(peerId, ch);
+        setTimeout(()=>{ try{ sb.removeChannel(ch); peerChans.delete(peerId); }catch(e){} }, 240000);
+      }catch(e){ return null; }
+      return ch;
+    }
+    sendMessage = async function(type='text', fileUrl=null, content=null){
+      const r = await _sm.apply(this, arguments);
+      try{
+        const peerId = (!activeGroup && activePartner && activePartner.id !== myProfile?.id) ? activePartner.id : null;
+        if(peerId) warmInbox(peerId);
+      }catch(e){}
+      return r;
+    };
+    if(typeof openChat==='function'){
+      const _oc = openChat;
+      openChat = async function(partner){
+        const r = await _oc.apply(this, arguments);
+        try{ if(partner?.id) warmInbox(partner.id); }catch(e){}
+        return r;
+      };
+    }
+  }
+
+  document.addEventListener('visibilitychange', ()=>{
+    if(document.visibilityState!=='visible') return;
+    try{ if(typeof subscribeRealtime==='function' && myProfile) subscribeRealtime(); }catch(e){}
+    try{ if(typeof startChatLiveSync==='function' && (activePartner||activeGroup)) startChatLiveSync(); }catch(e){}
+  });
+
+  // Click on system notification focuses app (best-effort)
+  try{
+    if('serviceWorker' in navigator){
+      navigator.serviceWorker.addEventListener('message', (ev)=>{
+        try{
+          const d = ev.data||{};
+          if(d.type==='notification-click' && d.senderId && typeof openChat==='function'){
+            openChat({id:d.senderId});
+          }
+        }catch(e){}
+      });
+    }
+  }catch(e){}
+
+  console.log('[SL] in-app + system notifications + fast delivery ready');
 })();
 
 </script>
