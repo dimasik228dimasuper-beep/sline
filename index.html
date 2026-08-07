@@ -2947,6 +2947,11 @@ async function loadChats(){
 }
 async function loadGroups(){
   try{ const {data}=await sb.from('group_members').select('group_id,role,groups(*)').eq('user_id',myProfile.id); groups=(data||[]).map(m=>({...m.groups,myRole:m.role})).filter(g=>g?.id); }catch(e){ groups=[]; }
+  // Locally hidden (deleted from list)
+  try{
+    const hid=new Set(JSON.parse(localStorage.getItem('sl_hidden_chats')||'[]').map(String));
+    if(hid.size) groups=(groups||[]).filter(g=>g && !hid.has(String(g.id)));
+  }catch(e){}
   // Merge local backups (avatar + is_public / username) when DB columns missing
   try{
     (groups||[]).forEach(g=>{
@@ -3416,9 +3421,19 @@ function showChatCtx(e, type, data){
       } else if(it.dataset.a==='del'){
         if(!(await customConfirm(t('you_sure_delete_chat')))) return;
         try{
-          if(type==='group') await sb.from('group_members').delete().eq('group_id',data.id).eq('user_id',myProfile.id);
-          else await sb.from('messages').delete().or(`and(sender_id.eq.${myProfile.id},receiver_id.eq.${data.id}),and(sender_id.eq.${data.id},receiver_id.eq.${myProfile.id})`);
+          if(type==='group'){
+            await sb.from('group_members').delete().eq('group_id',data.id).eq('user_id',myProfile.id);
+            try{ localStorage.removeItem('sl_group_av_'+data.id); localStorage.removeItem('sl_group_meta_'+data.id); }catch(e){}
+            try{
+              const hid=JSON.parse(localStorage.getItem('sl_hidden_chats')||'[]');
+              if(!hid.map(String).includes(String(data.id))){ hid.push(data.id); localStorage.setItem('sl_hidden_chats', JSON.stringify(hid)); }
+            }catch(e){}
+            try{ groups=(groups||[]).filter(g=>String(g.id)!==String(data.id)); }catch(e){}
+          } else {
+            await sb.from('messages').delete().or(`and(sender_id.eq.${myProfile.id},receiver_id.eq.${data.id}),and(sender_id.eq.${data.id},receiver_id.eq.${myProfile.id})`);
+          }
           loadChats(); loadGroups();
+          showToast('Удалено');
         }catch(err){ alert(friendlyError(err)); }
       }
     };
@@ -6720,7 +6735,7 @@ showPinnedBar = function(){
 async function openUserInfo(profileLike){
   if(typeof openFullProfile==='function') return openFullProfile(profileLike);
 }
-document.getElementById('partner-avatar').addEventListener('click',()=>{ if(activePartner) openStoriesOrProfile(activePartner); });
+document.getElementById('partner-avatar')?.addEventListener('click',(e)=>{ e.stopPropagation(); window.slOpenChatInfo && window.slOpenChatInfo(); });
 
 
 // ---------- Anti-spam / banned words (channels & groups) ----------
@@ -6774,7 +6789,7 @@ window.openChannelProfile = async function(group){
           ${avUrl?`<img src="${esc(avUrl)}" style="width:100%;height:100%;object-fit:cover" alt="">`:esc(letter)}
         </div>
         <div style="font-size:22px;font-weight:800;text-align:center">${esc(group.name)}</div>
-        <div style="color:var(--muted);font-size:14px;margin-top:4px">${memberCount?subLabel(memberCount):((group.is_public||group.username)?'публичный канал':'приватный канал')}</div>
+        <div style="color:var(--muted);font-size:14px;margin-top:4px">${group.type==='channel'?(memberCount?subLabel(memberCount):((group.is_public||group.username)?'публичный канал':'приватный канал')):(memberCount?(memberCount+' участник'+(memberCount===1?'':'ов')):'группа')}</div>
       </div>
       <div class="sl-info-actions">
         <button type="button" class="sl-info-chip" id="cp-sound">${ico.sound}<span>Звук</span></button>
@@ -10555,18 +10570,29 @@ async function openFullProfile(profileLike){
     try{ document.getElementById('media-btn')?.click(); }catch(e){}
   });
   sheet.querySelectorAll('[data-a]').forEach(btn=>{
-    btn.onclick=async()=>{
+    btn.onclick=async(e)=>{
       const a=btn.dataset.a;
       if(a==='more'){
-        const ov=document.createElement('div'); ov.className='modal-overlay';
-        ov.innerHTML=`<div class="modal" style="max-width:300px">
+        e && e.preventDefault && e.preventDefault();
+        e && e.stopPropagation && e.stopPropagation();
+        const ov=document.createElement('div');
+        ov.className='modal-overlay';
+        ov.style.zIndex='20000';
+        ov.innerHTML=`<div class="modal" style="max-width:300px" id="um-more-modal">
           <button type="button" class="btn-secondary" id="um-block" style="width:100%;margin-bottom:8px;color:var(--danger,#e5484d)">Заблокировать</button>
           <button type="button" class="btn-secondary" id="um-del" style="width:100%;margin-bottom:8px;color:var(--danger,#e5484d)">Удалить</button>
           <button type="button" class="btn-secondary" id="um-cancel" style="width:100%">Отмена</button>
         </div>`;
         document.body.appendChild(ov);
-        ov.querySelector('#um-cancel').onclick=()=>ov.remove();
-        ov.querySelector('#um-block').onclick=()=>{
+        // Prevent click-through to sheet / chat under overlay
+        ov.addEventListener('click', (ev)=>{
+          if(ev.target===ov){ ov.remove(); }
+          ev.stopPropagation();
+        });
+        ov.querySelector('#um-more-modal').addEventListener('click', (ev)=>ev.stopPropagation());
+        ov.querySelector('#um-cancel').onclick=(ev)=>{ ev.preventDefault(); ev.stopPropagation(); ov.remove(); };
+        ov.querySelector('#um-block').onclick=(ev)=>{
+          ev.preventDefault(); ev.stopPropagation();
           try{
             const key='sl_blocked';
             let b=[]; try{b=JSON.parse(localStorage.getItem(key)||'[]');}catch(e){}
@@ -10576,13 +10602,19 @@ async function openFullProfile(profileLike){
           }catch(e){}
           ov.remove(); sheet.remove();
         };
-        ov.querySelector('#um-del').onclick=async()=>{
-          // delete chat only — never delete user account
+        ov.querySelector('#um-del').onclick=async(ev)=>{
+          ev.preventDefault(); ev.stopPropagation();
           try{
             if(typeof deleteChatWith==='function') await deleteChatWith(p);
-            else showToast('Чат удалён');
-          }catch(e){ showToast('Чат удалён локально'); }
+            else {
+              try{
+                await sb.from('messages').delete().or(`and(sender_id.eq.${myProfile.id},receiver_id.eq.${p.id}),and(sender_id.eq.${p.id},receiver_id.eq.${myProfile.id})`);
+              }catch(e){}
+              showToast('Чат удалён');
+            }
+          }catch(e){ showToast('Чат удалён'); }
           ov.remove(); sheet.remove();
+          try{ loadChats(); }catch(e){}
         };
         return;
       }
@@ -10603,8 +10635,25 @@ async function openFullProfile(profileLike){
 }
 
 // Override openUserInfo + partner avatar + contact avatars
+
+// Unified chat-header info open (user vs channel/group)
+window.slOpenChatInfo = function(){
+  try{
+    if(activeGroup){
+      if(typeof window.openChannelProfile==='function') window.openChannelProfile(activeGroup);
+      else if(typeof openGroupInfo==='function') openGroupInfo(activeGroup);
+      return;
+    }
+    if(activePartner){
+      if(typeof openStoriesOrProfile==='function') openStoriesOrProfile(activePartner);
+      else if(typeof openFullProfile==='function') openFullProfile(activePartner);
+    }
+  }catch(e){ console.warn(e); }
+};
+
 openUserInfo = openFullProfile;
-document.getElementById('partner-avatar').onclick=()=>{ if(activePartner) openStoriesOrProfile(activePartner); };
+document.getElementById('partner-avatar').onclick=(e)=>{ e&&e.stopPropagation&&e.stopPropagation(); window.slOpenChatInfo&&window.slOpenChatInfo(); };
+document.getElementById('chat-partner-name')?.addEventListener('click',(e)=>{ e.stopPropagation(); window.slOpenChatInfo&&window.slOpenChatInfo(); }); /*chat-partner-name-click*/
 
 // Tap contact avatar opens full profile (event delegation)
 document.getElementById('contacts-list')?.addEventListener('click', e=>{
@@ -10737,6 +10786,10 @@ const _gsBtn = document.getElementById('group-settings-btn');
 if(_gsBtn){
   const prevGs = _gsBtn.onclick;
   _gsBtn.onclick = async function(){
+    // Channels use dedicated profile sheet — do not open gs-modal roles
+    if(activeGroup && activeGroup.type==='channel'){
+      if(typeof window.openChannelProfile==='function'){ window.openChannelProfile(activeGroup); return; }
+    }
     if(typeof prevGs==='function') await prevGs.call(this);
     // After modal opens, inject members/roles panel
     setTimeout(async()=>{
@@ -11700,13 +11753,27 @@ function scheduleBirthdayAfterAppReady(){
           setLocked(l); showToast('PIN: '+ids.length);
         } else if(a==='del'){
           if(!(await customConfirm('Удалить выбранные чаты ('+ids.length+')?'))) return;
+          const groupIds=new Set((groups||[]).map(g=>String(g.id)));
           for(const id of ids){
             try{
-              await sb.from('messages').delete().or(`and(sender_id.eq.${myProfile.id},receiver_id.eq.${id}),and(sender_id.eq.${id},receiver_id.eq.${myProfile.id})`);
-            }catch(e){}
+              if(groupIds.has(String(id))){
+                // leave group/channel
+                await sb.from('group_members').delete().eq('group_id',id).eq('user_id',myProfile.id);
+                // drop local meta
+                try{ localStorage.removeItem('sl_group_av_'+id); localStorage.removeItem('sl_group_meta_'+id); }catch(e){}
+                try{
+                  const hid=JSON.parse(localStorage.getItem('sl_hidden_chats')||'[]');
+                  if(!hid.map(String).includes(String(id))){ hid.push(id); localStorage.setItem('sl_hidden_chats', JSON.stringify(hid)); }
+                }catch(e){}
+                try{ groups=(groups||[]).filter(g=>String(g.id)!==String(id)); }catch(e){}
+              } else {
+                await sb.from('messages').delete().or(`and(sender_id.eq.${myProfile.id},receiver_id.eq.${id}),and(sender_id.eq.${id},receiver_id.eq.${myProfile.id})`);
+              }
+            }catch(e){ console.warn('del chat', id, e); }
           }
           showToast('Удалено');
-          loadChats();
+          try{ await loadChats(); }catch(e){}
+          try{ await loadGroups(); }catch(e){}
         }
         exitChatSelect();
         renderContactsAndGroups();
