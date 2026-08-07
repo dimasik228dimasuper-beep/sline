@@ -1514,6 +1514,33 @@ body.chats-selecting .sw-clip .sel-check{display:flex}
 
 .story-caption-bar{position:absolute;left:12px;right:12px;bottom:calc(64px + env(safe-area-inset-bottom,0px));z-index:8;pointer-events:none}
 .story-caption-text{display:inline-block;max-width:100%;padding:10px 14px;border-radius:14px;background:rgba(0,0,0,.45);backdrop-filter:blur(8px);color:#fff;font-size:15px;font-weight:600;line-height:1.35;word-break:break-word;text-shadow:0 1px 3px rgba(0,0,0,.4)}
+
+/* SL FEATURE PACK v2 */
+.sl-reply-bar{display:none;align-items:center;gap:10px;padding:8px 12px;background:var(--panel);border-top:1px solid var(--line)}
+.sl-reply-bar.show{display:flex}
+.sl-reply-bar .rb-body{flex:1;min-width:0}
+.sl-reply-bar .rb-label{font-size:11px;color:var(--accent-a);font-weight:700}
+.sl-reply-bar .rb-text{font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sl-dnd-badge{display:inline-block;font-size:10px;padding:1px 6px;border-radius:999px;background:rgba(229,72,77,.2);color:#e5484d;margin-left:6px}
+.contact-unread-first{}
+.sl-media-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:3px;padding:8px}
+.sl-media-grid img,.sl-media-grid video{width:100%;aspect-ratio:1;object-fit:cover;border-radius:4px;background:#111}
+.sl-catalog-row{display:flex;gap:12px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line);cursor:pointer}
+.sl-catalog-row:active{background:var(--panel-hover)}
+.sl-ttl-chip{font-size:10px;color:var(--muted);margin-left:6px}
+.sl-secret-badge{font-size:10px;color:#a78bfa;margin-left:4px}
+.sl-incoming-call{position:fixed;inset:0;z-index:30000;background:radial-gradient(circle at 50% 30%,#2a3348,#0d111a 70%);display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;padding:24px}
+.sl-incoming-call .ica{width:120px;height:120px;border-radius:50%;margin-bottom:16px;font-size:48px;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.sl-incoming-call .ica img{width:100%;height:100%;object-fit:cover}
+.sl-incoming-call h2{margin:0 0 6px;font-size:24px}
+.sl-incoming-call p{margin:0 0 32px;color:rgba(255,255,255,.65)}
+.sl-incoming-actions{display:flex;gap:40px;align-items:center}
+.sl-incoming-actions button{width:64px;height:64px;border-radius:50%;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.sl-incoming-actions .acc{background:#3ecf8e}
+.sl-incoming-actions .dec{background:#e5484d}
+.sl-bio-link{color:var(--accent-a);text-decoration:underline;word-break:break-all}
+.folder-edit-btn{margin-left:auto;font-size:11px;color:var(--muted);padding:4px 8px;cursor:pointer}
+
 </style>
 </head>
 <body>
@@ -1777,7 +1804,11 @@ html.sl-ready.sl-booting::before{display:none!important}
               <button class="icon-btn" id="comment-send"><svg viewBox="0 0 24 24"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg></button>
             </div>
             <div class="reply-bar" id="reply-bar"><div class="reply-bar-text" id="reply-bar-text"></div><button type="button" class="reply-bar-close" id="reply-bar-close">✕</button></div>
-    <div class="composer" id="composer">
+    <div class="sl-reply-bar" id="sl-reply-bar">
+              <div class="rb-body"><div class="rb-label" id="sl-reply-label">Ответ</div><div class="rb-text" id="sl-reply-text"></div></div>
+              <button type="button" class="icon-btn" id="sl-reply-close" style="width:32px;height:32px">✕</button>
+            </div>
+            <div class="composer" id="composer">
               <div class="composer-actions">
                 <button class="icon-btn composer-side" id="attach-btn" title="Прикрепить" data-i18n-title="tt_attach"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg></button>
                 <input type="file" class="hidden-input" id="photo-input" accept="image/*,video/*">
@@ -1869,7 +1900,7 @@ html.sl-ready.sl-booting::before{display:none!important}
       </div>
       <div class="settings-section">
         <div class="settings-section-title" data-i18n="sec_logout">Выход</div>
-        <div class="settings-item" id="settings-about"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg><span class="item-text">О приложении</span></div>
+        <div class="settings-item" id="settings-about"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg><span class="item-text">О проекте</span></div>
         <div class="settings-item danger" id="settings-logout"><svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg><span class="item-text" data-i18n="it_logout">Выйти</span></div>
       </div>
       <input type="file" class="hidden-input" id="avatar-upload" accept="image/*">
@@ -7843,6 +7874,7 @@ window.openStartChatSheet = function(){
       <div class="sl-action-row" data-act="gcall"><span class="ico"><svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.8 19.8 0 01-8.63-3.07 19.5 19.5 0 01-6-6A19.8 19.8 0 012.12 4.18 2 2 0 014.11 2h3a2 2 0 012 1.72c.13.96.36 1.9.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0122 16.92z"/></svg></span>Создать групповой звонок</div>
       <div class="sl-action-row" data-act="channel"><span class="ico"><svg viewBox="0 0 24 24"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg></span>Создать канал</div>
       <div class="sl-action-row" data-act="phone"><span class="ico"><svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.8 19.8 0 01-8.63-3.07 19.5 19.5 0 01-6-6A19.8 19.8 0 012.12 4.18 2 2 0 014.11 2h3a2 2 0 012 1.72c.13.96.36 1.9.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0122 16.92z"/></svg></span>Найти по номеру</div>
+      <div class="sl-action-row" data-act="email"><span class="ico"><svg viewBox="0 0 24 24"><path d="M4 4h16v16H4z"/><path d="M22 6l-10 7L2 6"/></svg></span>Найти по email</div>
       <div class="sl-action-row" data-act="link"><span class="ico"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg></span>Пригласить по ссылке</div>
       <div id="sc-list">${rows || '<div style="padding:24px;text-align:center;color:var(--muted)">Нет контактов</div>'}</div>
     </div>`;
@@ -7869,6 +7901,10 @@ window.openStartChatSheet = function(){
       else if(act==='phone'){
         if(typeof window.openFindByPhone==='function') window.openFindByPhone();
         else showToast('Поиск по номеру');
+      }
+      else if(act==='email'){
+        if(typeof window.openFindByEmail==='function') window.openFindByEmail();
+        else showToast('Поиск по email');
       }
       else if(act==='link'){
         try{
@@ -8019,6 +8055,74 @@ window.openFindByPhone = function(){
 };
 
 // ---- Group: pick members → name/avatar → create ----
+
+
+// ---- Find by email ----
+window.openFindByEmail = function(){
+  const sheet=document.createElement('div');
+  sheet.className='sl-sheet'; sheet.id='sl-find-email';
+  sheet.innerHTML=`
+    <div class="sl-sheet-hdr">
+      <button type="button" class="sl-sheet-back" id="fe-back">‹</button>
+      <h2></h2>
+      <span style="width:40px"></span>
+    </div>
+    <div class="sl-sheet-body" style="display:flex;flex-direction:column;align-items:center;padding:24px 20px">
+      <div style="font-size:20px;font-weight:800;text-align:center;margin-bottom:8px">Введите email пользователя</div>
+      <div style="color:var(--muted);font-size:14px;text-align:center;line-height:1.4;max-width:300px;margin-bottom:24px">Если аккаунт с таким email есть в Signal Line, вы сможете начать чат</div>
+      <input class="cd-input" id="fe-input" type="email" inputmode="email" autocomplete="email" placeholder="name@example.com" style="width:100%;max-width:340px;box-sizing:border-box;padding:14px 16px;border-radius:14px;font-size:16px">
+      <div id="fe-err" style="color:var(--danger,#e5484d);font-size:13px;min-height:20px;margin-top:8px;text-align:center"></div>
+      <button type="button" class="btn-primary" id="fe-go" style="width:100%;max-width:340px;margin-top:12px;padding:14px;border-radius:14px;opacity:.5" disabled>Продолжить</button>
+    </div>`;
+  document.body.appendChild(sheet);
+  const inp=sheet.querySelector('#fe-input');
+  const go=sheet.querySelector('#fe-go');
+  const err=sheet.querySelector('#fe-err');
+  sheet.querySelector('#fe-back').onclick=()=>sheet.remove();
+  function valid(v){ return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v); }
+  inp.oninput=function(){
+    const ok=valid(this.value.trim());
+    go.disabled=!ok; go.style.opacity=ok?'1':'.5';
+    err.textContent='';
+  };
+  inp.focus();
+  go.onclick=async()=>{
+    const email=inp.value.trim().toLowerCase();
+    if(!valid(email)){ err.textContent='Некорректный email'; return; }
+    if(myProfile?.email && email===String(myProfile.email).toLowerCase()){
+      err.textContent='Это ваш email'; return;
+    }
+    go.disabled=true; go.textContent='Поиск…';
+    try{
+      let found=null;
+      try{
+        const {data}=await sb.from('profiles').select('*').ilike('email', email).maybeSingle();
+        found=data;
+      }catch(e){
+        try{
+          const {data}=await sb.from('profiles').select('*').eq('email', email).maybeSingle();
+          found=data;
+        }catch(e2){}
+      }
+      if(!found){
+        err.textContent='Мы не нашли такой email';
+        go.disabled=false; go.textContent='Продолжить';
+        return;
+      }
+      if(found.id===myProfile?.id){ err.textContent='Это ваш аккаунт'; go.disabled=false; go.textContent='Продолжить'; return; }
+      try{ if(typeof ensureInContacts==='function') ensureInContacts(found); }catch(e){}
+      sheet.remove();
+      if(typeof openChat==='function') openChat(found);
+      else showToast('Чат открыт');
+    }catch(e){
+      err.textContent='Ошибка поиска';
+      go.disabled=false; go.textContent='Продолжить';
+    }
+  };
+  inp.addEventListener('keydown', e=>{ if(e.key==='Enter' && !go.disabled) go.click(); });
+};
+
+
 window.openCreateGroupFlow = function(){
   const selected = new Set();
   const list = (typeof contacts!=='undefined' && Array.isArray(contacts)) ? contacts.slice() : [];
@@ -9110,6 +9214,17 @@ function handleIncomingOffer(payload){
   document.getElementById('call-avatar-big').style.display='flex';
   document.getElementById('call-status-text').textContent=payload.video?'Входящий видеозвонок':'Входящий звонок';
   notifyIncomingCall(currentCall.peerName);
+  // MAX-style fullscreen incoming
+  try{
+    if(typeof window.slShowIncomingCall==='function' && !(typeof window.slGetDnd==='function' && window.slGetDnd())){
+      window.slShowIncomingCall({
+        id: payload.from,
+        first_name: payload.name||'Пользователь',
+        avatar_url: payload.avatar,
+        color: payload.color
+      }, !!payload.video);
+    }
+  }catch(e){}
 }
 async function acceptCall(){
   if(!pendingOffer) return;
@@ -9419,7 +9534,8 @@ window.slHangup = function(){
 window.slDecline = function(){
   try{ if(typeof declineCall==='function') declineCall(); else window.slHangup(); }catch(e){}
 };
-function endCall(){
+function endCall(_arg){ try{ document.getElementById("sl-incoming-call")?.remove(); }catch(e){} return _slEndCallImpl(_arg); }
+function _slEndCallImpl(){
   try{ if(window._slNoAnswerTimer){ clearTimeout(window._slNoAnswerTimer); window._slNoAnswerTimer=null; } }catch(e){}
   try{ document.getElementById('sl-no-answer-menu')?.remove(); }catch(e){}
 
@@ -11229,23 +11345,129 @@ sendMessage = async function(type='text', fileUrl=null, content=null){
 
 // ========== About ==========
 document.getElementById('settings-about')?.addEventListener('click', ()=>{
-  const ov=document.createElement('div'); ov.className='modal-overlay';
-  ov.innerHTML=`<div class="modal" style="max-width:400px">
-    <button class="close-x" id="ab-x">×</button>
-    <div style="text-align:center;padding:8px 0 4px">
-      <div class="sl-app-icon lg" style="margin:0 auto 12px" role="img" aria-label="Signal Line"></div>
-      <h3 style="margin:0 0 4px">Signal Line</h3>
-      <div style="color:var(--muted);font-size:13px;margin-bottom:12px">Версия 2.4.0</div>
-    </div>
-    <p style="font-size:13px;color:var(--muted);line-height:1.5;text-align:center">
-      Современный мессенджер с звонками, историями, каналами и поддержкой.
-    </p>
-    <div style="font-size:12px;color:var(--muted);text-align:center;margin-top:12px">© Signal Line</div>
-  </div>`;
-  document.body.appendChild(ov);
-  ov.querySelector('#ab-x').onclick=()=>ov.remove();
-  ov.addEventListener('click',e=>{ if(e.target===ov) ov.remove(); });
+  if(typeof window.openAboutProject==='function') window.openAboutProject();
 });
+
+window.openAboutProject = function(){
+  document.getElementById('sl-about-project')?.remove();
+  const sheet=document.createElement('div');
+  sheet.className='sl-sheet'; sheet.id='sl-about-project';
+  const tabs=[
+    {id:'about', t:'О проекте'},
+    {id:'safety', t:'Безопасность'},
+    {id:'privacy', t:'Конфиденциальность'},
+    {id:'terms', t:'Условия'},
+    {id:'contact', t:'Контакты'},
+    {id:'trust', t:'Прозрачность'}
+  ];
+  const pages = {
+    about: `
+      <div style="text-align:center;padding:8px 0 16px">
+        <div class="sl-app-icon lg" style="margin:0 auto 12px" role="img" aria-label="Signal Line"></div>
+        <h3 style="margin:0 0 4px;font-size:20px">Signal Line</h3>
+        <div style="color:var(--muted);font-size:13px;margin-bottom:12px">Версия 2.4.0 · Веб-мессенджер</div>
+      </div>
+      <p style="font-size:14px;line-height:1.55;color:var(--text);margin:0 0 12px">
+        Signal Line — независимый веб-мессенджер для общения: личные чаты, группы, каналы, звонки, голосовые и кружки.
+      </p>
+      <p style="font-size:14px;line-height:1.55;color:var(--muted);margin:0 0 12px">
+        Проект <b>не связан</b> с банками, госуслугами, операторами связи и другими мессенджерами. Мы не просим пароли от почты, коды из SMS банков и данные карт.
+      </p>
+      <p style="font-size:13px;line-height:1.5;color:var(--muted);margin:0">
+        © Signal Line. Использование сервиса означает согласие с разделами «Условия» и «Конфиденциальность».
+      </p>`,
+    safety: `
+      <h3 style="margin:0 0 12px;font-size:17px">Безопасность</h3>
+      <ul style="margin:0;padding-left:18px;font-size:14px;line-height:1.6;color:var(--text)">
+        <li>Секретные чаты с <b>end-to-end шифрованием</b> (ECDH + AES-GCM): текст на сервере хранится в зашифрованном виде.</li>
+        <li>Обычные чаты идут через защищённое соединение HTTPS.</li>
+        <li>PIN-защита чатов и ключ входа — на вашем устройстве.</li>
+        <li>Можно завершать сессии устройств в настройках.</li>
+        <li>Мы не запрашиваем сканы паспорта, данные карт и пароли сторонних сервисов.</li>
+      </ul>
+      <p style="margin:14px 0 0;font-size:13px;color:var(--muted);line-height:1.5">
+        Если вам пишут «от службы безопасности Signal Line» и просят код или перевод — это мошенники. Официальная поддержка не просит денег и паролей.
+      </p>`,
+    privacy: `
+      <h3 style="margin:0 0 12px;font-size:17px">Конфиденциальность</h3>
+      <p style="font-size:14px;line-height:1.55;margin:0 0 10px">Кратко, какие данные могут обрабатываться:</p>
+      <ul style="margin:0;padding-left:18px;font-size:14px;line-height:1.6">
+        <li>Профиль: имя, username, аватар, email (если указан).</li>
+        <li>Сообщения и медиа — для доставки чатов и каналов.</li>
+        <li>Технические логи (ошибки, сессии) — для стабильности сервиса.</li>
+      </ul>
+      <p style="margin:12px 0 0;font-size:14px;line-height:1.55;color:var(--muted)">
+        В секретных чатах содержимое сообщений недоступно серверу в открытом виде. Вы можете удалять чаты, блокировать пользователей и ограничивать, кто видит номер или email.
+      </p>
+      <p style="margin:12px 0 0;font-size:13px;color:var(--muted)">
+        Резервная копия в настройках создаётся у вас на устройстве; вы сами решаете, куда её сохранить.
+      </p>`,
+    terms: `
+      <h3 style="margin:0 0 12px;font-size:17px">Условия использования</h3>
+      <ul style="margin:0;padding-left:18px;font-size:14px;line-height:1.6">
+        <li>Сервис предназначен для личного и делового общения.</li>
+        <li>Запрещены спам, мошенничество, угрозы, распространение вредоносного ПО.</li>
+        <li>Запрещено выдавать себя за банк, госорганы или поддержку с целью обмана.</li>
+        <li>Администрация может ограничить доступ при нарушении правил.</li>
+        <li>Сервис предоставляется «как есть»; мы стремимся к стабильности, но не гарантируем отсутствие сбоев.</li>
+        <li>Вы несёте ответственность за содержание своих сообщений и каналов.</li>
+      </ul>`,
+    contact: `
+      <h3 style="margin:0 0 12px;font-size:17px">Контакты</h3>
+      <p style="font-size:14px;line-height:1.55;margin:0 0 12px">По вопросам работы приложения, безопасности и жалоб:</p>
+      <div style="background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin-bottom:10px">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:4px">Поддержка</div>
+        <div style="font-weight:700">support@signal-line.app</div>
+      </div>
+      <div style="background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px 16px;margin-bottom:10px">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:4px">Безопасность</div>
+        <div style="font-weight:700">security@signal-line.app</div>
+      </div>
+      <p style="font-size:13px;color:var(--muted);line-height:1.5;margin:0">
+        Укажите в письме username и суть проблемы. Не присылайте пароли и коды подтверждения.
+      </p>`,
+    trust: `
+      <h3 style="margin:0 0 12px;font-size:17px">Прозрачность</h3>
+      <p style="font-size:14px;line-height:1.55;margin:0 0 10px">
+        Чтобы было понятно, чем Signal Line <b>не является</b>:
+      </p>
+      <ul style="margin:0;padding-left:18px;font-size:14px;line-height:1.6">
+        <li>Не банк и не платёжный сервис</li>
+        <li>Не госуслуги и не «служба безопасности»</li>
+        <li>Не оператор связи</li>
+        <li>Не биржа и не инвестиционная платформа</li>
+      </ul>
+      <p style="margin:14px 0 0;font-size:14px;line-height:1.55">
+        Официальные уведомления внутри приложения не требуют перевода денег, «проверки карты» или код из SMS другого сервиса.
+      </p>
+      <p style="margin:12px 0 0;font-size:13px;color:var(--muted);line-height:1.5">
+        Рекомендуем устанавливать приложение только с вашего обычного адреса сайта и проверять HTTPS в строке браузера.
+      </p>`
+  };
+
+  sheet.innerHTML=`
+    <div class="sl-sheet-hdr" style="position:relative">
+      <button type="button" class="sl-sheet-back" id="ap-x" aria-label="Закрыть" style="font-size:22px;line-height:1">×</button>
+      <h2>О проекте</h2>
+      <span style="width:40px"></span>
+    </div>
+    <div style="display:flex;gap:6px;padding:8px 12px;overflow-x:auto;border-bottom:1px solid var(--line);flex-shrink:0;-webkit-overflow-scrolling:touch">
+      ${tabs.map((t,i)=>`<button type="button" class="folder-tab ${i===0?'active':''}" data-tab="${t.id}" style="flex-shrink:0">${t.t}</button>`).join('')}
+    </div>
+    <div class="sl-sheet-body" id="ap-body" style="padding:16px 18px 40px">${pages.about}</div>`;
+  document.body.appendChild(sheet);
+  sheet.querySelector('#ap-x').onclick=()=>sheet.remove();
+  const body=sheet.querySelector('#ap-body');
+  sheet.querySelectorAll('[data-tab]').forEach(btn=>{
+    btn.onclick=()=>{
+      sheet.querySelectorAll('[data-tab]').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      body.innerHTML=pages[btn.dataset.tab]||'';
+      body.scrollTop=0;
+    };
+  });
+};
+
 
 // ========== Telegram-style contact profile ==========
 // (TG contact profile removed — using profile-sheet)
@@ -15153,6 +15375,1440 @@ html.sl-tv .composer textarea { min-height: 52px; font-size: 17px; }
   }catch(e){}
   console.log('[SL] sigli mail @'+MAIL_DOMAIN+' ready');
 })();
+
+
+
+/* SL TTL render patch */
+(function(){
+  if(typeof renderMessage!=='function' || window._slTtlRender) return;
+  window._slTtlRender=1;
+  const _rm=renderMessage;
+  renderMessage=function(msg, isGroup){
+    const r=_rm.apply(this, arguments);
+    try{
+      const id=msg?.id;
+      if(id){
+        const el=document.querySelector(`#messages-list [data-mid="${id}"]`) || document.querySelector(`#messages-list .bubble-row:last-child`);
+        if(el && !el.dataset.ts){
+          el.dataset.mid=el.dataset.mid||id;
+          el.dataset.ts=String(msg.created_at? new Date(msg.created_at).getTime() : Date.now());
+        }
+      }
+    }catch(e){}
+    return r;
+  };
+})();
+/* SL FEATURE PACK v2 */
+(function(){
+  'use strict';
+  const LS = (typeof storage!=='undefined'?storage:localStorage);
+  const esc = (s)=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+  const toast = (m)=>{ try{ showToast(m); }catch(e){ console.log(m); } };
+
+  // ---------- 1) Reply bar ----------
+  window.showReplyBar = function(msg){
+    const bar=document.getElementById('sl-reply-bar'); if(!bar) return;
+    bar.classList.add('show');
+    const t=(msg.content||msg.type||'вложение')+'';
+    document.getElementById('sl-reply-text').textContent=t.slice(0,80);
+    document.getElementById('sl-reply-label').textContent='Ответ';
+  };
+  window.hideReplyBar = function(){
+    document.getElementById('sl-reply-bar')?.classList.remove('show');
+    try{ replyToMsg=null; }catch(e){}
+    const inp=document.getElementById('message-input');
+    if(inp) inp.placeholder='Сообщение...';
+  };
+  document.getElementById('sl-reply-close')?.addEventListener('click', ()=>window.hideReplyBar());
+
+  // ---------- 2) Reactions (ensure picker) ----------
+  const REACT_EMOJI = ['👍','❤️','😂','🔥','👏','😢','😮','🎉'];
+  window.slShowReactionPicker = function(msg, x, y){
+    document.getElementById('sl-react-picker')?.remove();
+    const p=document.createElement('div');
+    p.id='sl-react-picker'; p.className='reaction-picker';
+    p.style.left=Math.max(8, Math.min((x||innerWidth/2)-100, innerWidth-220))+'px';
+    p.style.top=Math.max(8, (y||innerHeight/2)-50)+'px';
+    p.innerHTML=REACT_EMOJI.map(e=>`<span data-e="${e}">${e}</span>`).join('');
+    document.body.appendChild(p);
+    const close=()=>p.remove();
+    setTimeout(()=>document.addEventListener('click', close, {once:true}), 50);
+    p.querySelectorAll('span').forEach(s=>{
+      s.onclick=async(ev)=>{
+        ev.stopPropagation();
+        const emoji=s.dataset.e;
+        try{
+          const key='sl_react_'+msg.id;
+          let map={}; try{map=JSON.parse(LS.getItem(key)||'{}');}catch(e){}
+          map[myProfile.id]=emoji;
+          LS.setItem(key, JSON.stringify(map));
+          // update UI
+          const row=document.querySelector(`[data-mid="${msg.id}"] .reaction-bar`);
+          if(row){
+            let chip=row.querySelector(`[data-e="${emoji}"]`);
+            if(!chip){ chip=document.createElement('span'); chip.className='reaction-chip mine bounce'; chip.dataset.e=emoji; chip.textContent=emoji+' 1'; row.appendChild(chip); }
+            else chip.classList.add('mine','bounce');
+          }
+          toast(emoji);
+        }catch(e){}
+        close();
+      };
+    });
+  };
+  // long-press on bubbles → reactions
+  document.addEventListener('contextmenu', (e)=>{
+    const bub=e.target.closest?.('.bubble');
+    if(!bub) return;
+    const row=bub.closest('[data-mid]');
+    if(!row) return;
+    e.preventDefault();
+    window.slShowReactionPicker({id:row.dataset.mid}, e.clientX, e.clientY);
+  }, true);
+
+  // ---------- 3) Drafts in list ----------
+  window.slGetDraft = function(id){ try{ return LS.getItem('sl_draft_'+id)||''; }catch(e){ return ''; } };
+  window.slSetDraft = function(id, text){ try{ if(text) LS.setItem('sl_draft_'+id, text); else LS.removeItem('sl_draft_'+id); }catch(e){} };
+  const _saveDraft = typeof saveDraft==='function' ? saveDraft : null;
+  window.saveDraft = function(){
+    try{
+      const id = activePartner?.id || activeGroup?.id;
+      const val = document.getElementById('message-input')?.value || '';
+      if(id) window.slSetDraft(id, val.trim());
+    }catch(e){}
+    if(_saveDraft) try{ _saveDraft(); }catch(e){}
+  };
+  // patch list preview
+  const _rcag = renderContactsAndGroups;
+  renderContactsAndGroups = function(){
+    _rcag.apply(this, arguments);
+    try{
+      document.querySelectorAll('#contacts-list .sw-clip').forEach(clip=>{
+        const id=clip.dataset.cid; if(!id) return;
+        const d=window.slGetDraft(id);
+        if(!d) return;
+        const sub=clip.querySelector('.contact-last, .contact-sub, .contact-preview');
+        if(sub && !sub.classList.contains('contact-draft')){
+          sub.classList.add('contact-draft');
+          sub.textContent='Черновик: '+d.slice(0,40);
+        } else if(!sub){
+          const name=clip.querySelector('.contact-name');
+          if(name && !name.parentNode.querySelector('.contact-draft')){
+            const el=document.createElement('div');
+            el.className='contact-last contact-draft';
+            el.style.cssText='font-size:12px;color:var(--accent-a);font-style:italic';
+            el.textContent='Черновик: '+d.slice(0,40);
+            name.parentNode.appendChild(el);
+          }
+        }
+      });
+    }catch(e){}
+    // 14) unread-first sort option
+    try{
+      if(LS.getItem('sl_unread_first')==='1'){
+        const list=document.getElementById('contacts-list');
+        if(list){
+          const clips=[...list.querySelectorAll('.sw-clip')];
+          clips.sort((a,b)=>{
+            const ua=a.querySelector('.badge, .unread-badge, .tab-badge')?1:0;
+            const ub=b.querySelector('.badge, .unread-badge, .tab-badge')?1:0;
+            // also data-unread
+            const ua2=a.classList.contains('has-unread')||a.dataset.unread==='1'?1:ua;
+            const ub2=b.classList.contains('has-unread')||b.dataset.unread==='1'?1:ub;
+            return ub2-ua2;
+          });
+          clips.forEach(c=>list.appendChild(c));
+        }
+      }
+    }catch(e){}
+  };
+
+  // restore draft on open
+  const wrapOpen = (fnName)=>{
+    const orig=window[fnName];
+    if(typeof orig!=='function') return;
+    window[fnName]=async function(arg){
+      try{ window.saveDraft(); }catch(e){}
+      const r=await orig.apply(this, arguments);
+      try{
+        const id=arg?.id;
+        const d=id?window.slGetDraft(id):'';
+        const inp=document.getElementById('message-input');
+        if(inp && d){ inp.value=d; inp.dispatchEvent(new Event('input')); }
+      }catch(e){}
+      return r;
+    };
+  };
+  // don't double-wrap infinitely — only once
+  if(!window._slDraftWrap){
+    window._slDraftWrap=1;
+    try{ wrapOpen('openChat'); }catch(e){}
+    try{
+      const og=openGroup;
+      openGroup=async function(g){
+        try{ window.saveDraft(); }catch(e){}
+        const r=await og.apply(this, arguments);
+        try{
+          const d=window.slGetDraft(g?.id);
+          const inp=document.getElementById('message-input');
+          if(inp && d){ inp.value=d; inp.dispatchEvent(new Event('input')); }
+        }catch(e){}
+        return r;
+      };
+    }catch(e){}
+  }
+
+  // ---------- 4) Typing indicator stability ----------
+  let _typingTimer=null, _typingSent=false;
+  const inp=document.getElementById('message-input');
+  if(inp && !inp.dataset.typingBound){
+    inp.dataset.typingBound='1';
+    inp.addEventListener('input', ()=>{
+      try{ window.saveDraft(); }catch(e){}
+      if(!activePartner && !activeGroup) return;
+      if(!_typingSent){
+        _typingSent=true;
+        try{
+          if(typeof sendTyping==='function') sendTyping(true);
+          else if(sb && myProfile){
+            const ch=sb.channel('typing-'+(activePartner?.id||activeGroup?.id));
+            ch.subscribe().then(()=>ch.send({type:'broadcast', event:'typing', payload:{from:myProfile.id, on:true}}));
+          }
+        }catch(e){}
+      }
+      clearTimeout(_typingTimer);
+      _typingTimer=setTimeout(()=>{
+        _typingSent=false;
+        try{ if(typeof sendTyping==='function') sendTyping(false); }catch(e){}
+      }, 2500);
+    });
+  }
+  window.slShowTyping = function(name){
+    const el=document.getElementById('chat-partner-status');
+    if(!el) return;
+    el.dataset.prev=el.dataset.prev||el.textContent;
+    el.classList.add('typing');
+    el.innerHTML=`<span class="typing-dots"><i></i><i></i><i></i></span> печатает`;
+    clearTimeout(window._slTypingHide);
+    window._slTypingHide=setTimeout(()=>{
+      el.classList.remove('typing');
+      if(el.dataset.prev) el.textContent=el.dataset.prev;
+    }, 3000);
+  };
+
+  // ---------- 5) Pinned messages already exist; enhance unpin ----------
+  document.getElementById('unpin-btn')?.addEventListener('click', ()=>{
+    try{
+      const id=activePartner?.id||activeGroup?.id;
+      if(!id) return;
+      const pins=JSON.parse(LS.getItem('sl_chat_pins')||'{}');
+      delete pins[id];
+      LS.setItem('sl_chat_pins', JSON.stringify(pins));
+      document.getElementById('pinned-bar')?.classList.remove('show');
+      toast('Откреплено');
+    }catch(e){}
+  });
+
+  // ---------- 6) Channel post comments helper ----------
+  window.slOpenPostComments = async function(msg){
+    if(!msg?.id) return;
+    const ov=document.createElement('div'); ov.className='ch-comments-sheet';
+    ov.innerHTML=`<div class="ch-comments-panel">
+      <h3>Комментарии</h3>
+      <div class="ch-comments-list" id="sl-cc-list"><div style="color:var(--muted);padding:12px">Загрузка…</div></div>
+      <div class="ch-comments-input">
+        <input id="sl-cc-inp" placeholder="Написать комментарий…">
+        <button class="btn-primary" id="sl-cc-send" style="padding:10px 14px;border-radius:20px;border:none">➤</button>
+      </div>
+    </div>`;
+    document.body.appendChild(ov);
+    ov.addEventListener('click', e=>{ if(e.target===ov) ov.remove(); });
+    const list=ov.querySelector('#sl-cc-list');
+    async function load(){
+      try{
+        const {data}=await sb.from('messages').select('*,profiles:sender_id(username,first_name)').eq('reply_to_msg_id', msg.id).order('created_at');
+        const rows=data||[];
+        if(!rows.length){ list.innerHTML='<div style="color:var(--muted);padding:12px">Пока нет комментариев</div>'; return; }
+        list.innerHTML=rows.map(m=>`<div class="ch-comment-row"><div class="cc-meta">${esc(m.profiles?.first_name||m.profiles?.username||'…')} · ${new Date(m.created_at).toLocaleString()}</div><div>${esc(m.content||'')}</div></div>`).join('');
+      }catch(e){
+        // local fallback
+        const loc=JSON.parse(LS.getItem('sl_comments_'+msg.id)||'[]');
+        list.innerHTML=loc.length?loc.map(m=>`<div class="ch-comment-row"><div class="cc-meta">${esc(m.name)} · ${esc(m.at)}</div><div>${esc(m.text)}</div></div>`).join(''):'<div style="color:var(--muted);padding:12px">Пока нет комментариев</div>';
+      }
+    }
+    load();
+    ov.querySelector('#sl-cc-send').onclick=async()=>{
+      const text=ov.querySelector('#sl-cc-inp').value.trim(); if(!text) return;
+      try{
+        await sb.from('messages').insert({
+          content: text, type:'comment', sender_id: myProfile.id,
+          group_id: activeGroup?.id||null, reply_to_msg_id: msg.id, is_comment:true
+        });
+      }catch(e){
+        const loc=JSON.parse(LS.getItem('sl_comments_'+msg.id)||'[]');
+        loc.push({name:myProfile.first_name||myProfile.username, text, at:new Date().toLocaleString()});
+        LS.setItem('sl_comments_'+msg.id, JSON.stringify(loc));
+      }
+      ov.querySelector('#sl-cc-inp').value='';
+      load();
+    };
+  };
+
+  // ---------- 8) Quiet channels by default when joining ----------
+  window.slQuietChannelDefault = function(groupId){
+    try{
+      const key='sl_quiet_g';
+      let q=JSON.parse(LS.getItem(key)||'[]');
+      if(!q.includes(groupId)){ q.push(groupId); LS.setItem(key, JSON.stringify(q)); }
+    }catch(e){}
+  };
+
+  // ---------- 9) Public channel catalog ----------
+  window.slOpenChannelCatalog = async function(){
+    const sheet=document.createElement('div'); sheet.className='sl-sheet'; sheet.id='sl-catalog';
+    sheet.innerHTML=`<div class="sl-sheet-hdr"><button type="button" class="sl-sheet-back" id="cat-back">‹</button><h2>Каталог каналов</h2><span style="width:40px"></span></div>
+      <div class="sl-sheet-body"><div style="padding:12px 16px"><input class="cd-input" id="cat-q" placeholder="Поиск…" style="width:100%;box-sizing:border-box"></div><div id="cat-list" style="padding-bottom:40px">Загрузка…</div></div>`;
+    document.body.appendChild(sheet);
+    sheet.querySelector('#cat-back').onclick=()=>sheet.remove();
+    let all=[];
+    try{
+      const {data}=await sb.from('groups').select('id,name,username,description,avatar_url,is_public,type').eq('type','channel').eq('is_public',true).limit(100);
+      all=data||[];
+    }catch(e){ all=(groups||[]).filter(g=>g.type==='channel'&&(g.is_public||g.username)); }
+    function paint(q=''){
+      q=q.trim().toLowerCase();
+      const rows=all.filter(g=>!q || (g.name||'').toLowerCase().includes(q) || (g.username||'').toLowerCase().includes(q));
+      const box=sheet.querySelector('#cat-list');
+      if(!rows.length){ box.innerHTML='<div style="padding:24px;text-align:center;color:var(--muted)">Ничего не найдено</div>'; return; }
+      box.innerHTML=rows.map(g=>`<div class="sl-catalog-row" data-id="${g.id}">
+        <div class="avatar" style="width:48px;height:48px;border-radius:50%;background:${g.color||'#4C7CF3'};display:flex;align-items:center;justify-content:center;font-weight:800;color:#fff;overflow:hidden">${g.avatar_url?`<img src="${esc(g.avatar_url)}" style="width:100%;height:100%;object-fit:cover">`:(g.name||'C')[0]}</div>
+        <div style="flex:1;min-width:0"><div style="font-weight:700">${esc(g.name)}</div><div style="font-size:12px;color:var(--muted)">${g.username?'@'+esc(g.username):esc((g.description||'').slice(0,60))}</div></div>
+      </div>`).join('');
+      box.querySelectorAll('.sl-catalog-row').forEach(row=>{
+        row.onclick=()=>{
+          const g=all.find(x=>String(x.id)===row.dataset.id);
+          sheet.remove();
+          if(g){ try{ openGroup(g); }catch(e){} }
+        };
+      });
+    }
+    paint();
+    sheet.querySelector('#cat-q').oninput=function(){ paint(this.value); };
+  };
+
+  // ---------- 11) Media gallery ----------
+  window.slOpenMediaGallery = async function(){
+    const peer=activePartner||activeGroup;
+    if(!peer){ toast('Откройте чат'); return; }
+    const sheet=document.createElement('div'); sheet.className='sl-sheet';
+    sheet.innerHTML=`<div class="sl-sheet-hdr"><button type="button" class="sl-sheet-back" id="mg-back">‹</button><h2>Вложения</h2><span style="width:40px"></span></div>
+      <div class="sl-sheet-body"><div class="sl-media-grid" id="mg-grid">Загрузка…</div></div>`;
+    document.body.appendChild(sheet);
+    sheet.querySelector('#mg-back').onclick=()=>sheet.remove();
+    const grid=sheet.querySelector('#mg-grid');
+    let rows=[];
+    try{
+      let q=sb.from('messages').select('id,type,file_url,content,created_at').in('type',['image','photo','video','file','document']).order('created_at',{ascending:false}).limit(120);
+      if(activeGroup) q=q.eq('group_id', activeGroup.id);
+      else q=q.or(`and(sender_id.eq.${myProfile.id},receiver_id.eq.${activePartner.id}),and(sender_id.eq.${activePartner.id},receiver_id.eq.${myProfile.id})`);
+      const {data}=await q; rows=data||[];
+    }catch(e){
+      // from DOM
+      document.querySelectorAll('#messages-list img, #messages-list video').forEach(el=>{
+        rows.push({file_url: el.src, type: el.tagName==='VIDEO'?'video':'image'});
+      });
+    }
+    if(!rows.length){ grid.innerHTML='<div style="grid-column:1/-1;padding:24px;text-align:center;color:var(--muted)">Нет вложений</div>'; return; }
+    grid.innerHTML=rows.map(m=>{
+      const u=m.file_url||'';
+      if(m.type==='video') return `<video src="${esc(u)}" muted playsinline></video>`;
+      return `<img src="${esc(u)}" alt="">`;
+    }).join('');
+  };
+  document.getElementById('media-btn')?.addEventListener('click', (e)=>{ e.preventDefault(); window.slOpenMediaGallery(); });
+
+  // ---------- 12) Video compression before send ----------
+  window.slCompressVideo = function(file, maxW=720, crf=28){
+    return new Promise(async(resolve)=>{
+      try{
+        if(!file || !file.type.startsWith('video/')) return resolve(file);
+        if(file.size < 2*1024*1024) return resolve(file); // small enough
+        const url=URL.createObjectURL(file);
+        const v=document.createElement('video');
+        v.muted=true; v.playsInline=true; v.src=url;
+        await new Promise(r=>{ v.onloadedmetadata=r; v.onerror=r; });
+        const w=v.videoWidth||640, h=v.videoHeight||360;
+        const scale=Math.min(1, maxW/Math.max(w,h));
+        const cw=Math.round(w*scale), ch=Math.round(h*scale);
+        const canvas=document.createElement('canvas'); canvas.width=cw; canvas.height=ch;
+        const ctx=canvas.getContext('2d');
+        const stream=canvas.captureStream(24);
+        const rec=new MediaRecorder(stream, {mimeType:'video/webm;codecs=vp8', videoBitsPerSecond:600000});
+        const chunks=[];
+        rec.ondataavailable=e=>{ if(e.data.size) chunks.push(e.data); };
+        rec.onstop=()=>{
+          URL.revokeObjectURL(url);
+          resolve(new File([new Blob(chunks,{type:'video/webm'})], (file.name||'video')+'.webm', {type:'video/webm'}));
+        };
+        rec.start(100);
+        await v.play().catch(()=>{});
+        const draw=()=>{
+          if(v.ended || v.paused){ rec.stop(); return; }
+          ctx.drawImage(v,0,0,cw,ch);
+          requestAnimationFrame(draw);
+        };
+        draw();
+        // safety timeout
+        setTimeout(()=>{ try{ if(rec.state==='recording') rec.stop(); }catch(e){} }, 60000);
+      }catch(e){ resolve(file); }
+    });
+  };
+
+  // ---------- 13) Folders UI enhance ----------
+  window.slEditFolders = function(){
+    const folders=JSON.parse(LS.getItem('sl_folders')||'{}');
+    const sheet=document.createElement('div'); sheet.className='sl-sheet';
+    sheet.innerHTML=`<div class="sl-sheet-hdr"><button type="button" class="sl-sheet-back" id="ff-back">‹</button><h2>Папки</h2><span style="width:40px"></span></div>
+      <div class="sl-sheet-body" style="padding:16px">
+        <p style="color:var(--muted);font-size:13px">Создайте папки: Работа, Личное, Каналы…</p>
+        <input class="cd-input" id="ff-name" placeholder="Название папки" style="width:100%;box-sizing:border-box;margin:8px 0">
+        <button class="btn-primary" id="ff-add" style="width:100%;margin-bottom:16px">Добавить</button>
+        <div id="ff-list"></div>
+      </div>`;
+    document.body.appendChild(sheet);
+    sheet.querySelector('#ff-back').onclick=()=>sheet.remove();
+    function paint(){
+      const f=JSON.parse(LS.getItem('sl_folders')||'{}');
+      sheet.querySelector('#ff-list').innerHTML=Object.keys(f).map(n=>`<div style="display:flex;padding:10px;border:1px solid var(--line);border-radius:10px;margin-bottom:8px"><span style="flex:1;font-weight:600">${esc(n)}</span><button data-n="${esc(n)}" class="btn-secondary" style="padding:4px 10px">Удалить</button></div>`).join('')||'<div style="color:var(--muted)">Пока нет папок</div>';
+      sheet.querySelectorAll('[data-n]').forEach(b=>b.onclick=()=>{
+        const o=JSON.parse(LS.getItem('sl_folders')||'{}'); delete o[b.dataset.n]; LS.setItem('sl_folders', JSON.stringify(o));
+        try{ renderFolderTabs(); }catch(e){} paint();
+      });
+    }
+    paint();
+    sheet.querySelector('#ff-add').onclick=()=>{
+      const n=sheet.querySelector('#ff-name').value.trim(); if(!n) return;
+      const o=JSON.parse(LS.getItem('sl_folders')||'{}'); o[n]=o[n]||[]; LS.setItem('sl_folders', JSON.stringify(o));
+      try{ renderFolderTabs(); }catch(e){} sheet.querySelector('#ff-name').value=''; paint(); toast('Папка создана');
+    };
+  };
+
+  // ---------- 14) Unread-first toggle in settings ----------
+  setTimeout(()=>{
+    if(document.getElementById('settings-unread-first')) return;
+    const host=document.getElementById('settings-notifications')?.parentNode;
+    if(!host) return;
+    const row=document.createElement('div');
+    row.className='settings-item'; row.id='settings-unread-first';
+    const on=LS.getItem('sl_unread_first')==='1';
+    row.innerHTML=`<svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h7"/></svg><span class="item-text">Непрочитанные сверху</span><div class="toggle-switch ${on?'on':''}" id="unread-first-tg"></div>`;
+    host.appendChild(row);
+    row.onclick=()=>{
+      const v=LS.getItem('sl_unread_first')==='1';
+      LS.setItem('sl_unread_first', v?'0':'1');
+      row.querySelector('#unread-first-tg').classList.toggle('on', !v);
+      try{ renderContactsAndGroups(); }catch(e){}
+      toast(!v?'Непрочитанные сверху':'Обычная сортировка');
+    };
+  }, 800);
+
+  // ---------- 16) Bio with clickable links ----------
+  window.slLinkifyBio = function(text){
+    const esc2=(s)=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;');
+    return esc2(text).replace(/(https?:\/\/[^\s<]+)/g, '<a class="sl-bio-link" href="$1" target="_blank" rel="noopener">$1</a>');
+  };
+  // patch profile about block when opened
+  const _ofp = window.openFullProfile;
+  if(typeof _ofp==='function' && !window._slBioPatch){
+    window._slBioPatch=1;
+    window.openFullProfile=async function(p){
+      await _ofp.apply(this, arguments);
+      setTimeout(()=>{
+        document.querySelectorAll('#sl-user-profile .sl-info-block').forEach(block=>{
+          const label=block.querySelector('.sl-info-label');
+          if(label && /О себе/i.test(label.textContent||'')){
+            const body=label.nextElementSibling;
+            if(body && body.textContent && body.textContent!=='Не указано'){
+              body.innerHTML=window.slLinkifyBio(body.textContent);
+            }
+          }
+        });
+      }, 50);
+    };
+  }
+
+  // ---------- 17) DND / Busy status ----------
+  window.slGetDnd = ()=> LS.getItem('sl_dnd')==='1';
+  window.slSetDnd = (v)=> LS.setItem('sl_dnd', v?'1':'0');
+  setTimeout(()=>{
+    if(document.getElementById('settings-dnd')) return;
+    const host=document.getElementById('settings-notifications')?.parentNode;
+    if(!host) return;
+    const row=document.createElement('div');
+    row.className='settings-item'; row.id='settings-dnd';
+    row.innerHTML=`<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M4.93 4.93l14.14 14.14"/></svg><span class="item-text">Не беспокоить</span><div class="toggle-switch ${window.slGetDnd()?'on':''}" id="dnd-tg"></div>`;
+    host.appendChild(row);
+    row.onclick=()=>{
+      const v=!window.slGetDnd(); window.slSetDnd(v);
+      row.querySelector('#dnd-tg').classList.toggle('on', v);
+      toast(v?'Режим «Не беспокоить»':'Уведомления включены');
+    };
+  }, 900);
+  // mute notifications when DND
+  if(typeof notifyIncomingMessage==='function' && !window._slDndPatch){
+    window._slDndPatch=1;
+    const _n=notifyIncomingMessage;
+    notifyIncomingMessage=function(msg){
+      if(window.slGetDnd()) return;
+      return _n.apply(this, arguments);
+    };
+  }
+
+  // ---------- 18) Avatar history — simple swipe gallery ----------
+  if(typeof openAvatarHistory!=='function'){
+    window.openAvatarHistory=function(profile){
+      const urls=[];
+      if(profile?.avatar_url) urls.push(profile.avatar_url);
+      try{
+        const hist=JSON.parse(LS.getItem('sl_av_hist_'+(profile?.id||''))||'[]');
+        hist.forEach(u=>{ if(u && !urls.includes(u)) urls.push(u); });
+      }catch(e){}
+      if(!urls.length){ toast('Нет фото'); return; }
+      let i=0;
+      const ov=document.createElement('div');
+      ov.style.cssText='position:fixed;inset:0;z-index:25000;background:#000;display:flex;flex-direction:column;align-items:center;justify-content:center';
+      ov.innerHTML=`<img id="ah-img" src="${esc(urls[0])}" style="max-width:100%;max-height:80%;object-fit:contain">
+        <div style="color:#fff;margin-top:12px;font-size:13px"><span id="ah-i">1</span> / ${urls.length}</div>
+        <button style="position:absolute;top:16px;right:16px;background:rgba(255,255,255,.15);border:none;color:#fff;width:40px;height:40px;border-radius:50%;font-size:18px;cursor:pointer">✕</button>`;
+      document.body.appendChild(ov);
+      ov.querySelector('button').onclick=()=>ov.remove();
+      const img=ov.querySelector('#ah-img');
+      let sx=0;
+      ov.addEventListener('touchstart', e=>{ sx=e.touches[0].clientX; }, {passive:true});
+      ov.addEventListener('touchend', e=>{
+        const dx=e.changedTouches[0].clientX-sx;
+        if(Math.abs(dx)>40){
+          i = (i + (dx<0?1:-1) + urls.length) % urls.length;
+          img.src=urls[i];
+          ov.querySelector('#ah-i').textContent=String(i+1);
+        }
+      }, {passive:true});
+    };
+  }
+
+  // ---------- 19) Incoming call screen ----------
+  window.slShowIncomingCall = function(fromProfile, isVideo){
+    document.getElementById('sl-incoming-call')?.remove();
+    const ov=document.createElement('div'); ov.className='sl-incoming-call'; ov.id='sl-incoming-call';
+    const name=fromProfile?.first_name||fromProfile?.username||'Звонок';
+    ov.innerHTML=`<div class="ica" id="ica-av"></div>
+      <h2>${esc(name)}</h2>
+      <p>${isVideo?'Видеозвонок':'Звонок'}…</p>
+      <div class="sl-incoming-actions">
+        <button type="button" class="dec" id="ica-dec" title="Отклонить">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M3 3l18 18M22 16.92v3a2 2 0 01-2.18 2 19.8 19.8 0 01-8.63-3.07"/></svg>
+        </button>
+        <button type="button" class="acc" id="ica-acc" title="Принять">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M22 16.92v3a2 2 0 01-2.18 2A19.8 19.8 0 0111.19 18a19.5 19.5 0 01-6-6A19.8 19.8 0 012.12 3.38 2 2 0 014.11 2h3a2 2 0 012 1.72c.13.96.36 1.9.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0122 16.92z"/></svg>
+        </button>
+      </div>`;
+    document.body.appendChild(ov);
+    try{ renderAvatarInto(ov.querySelector('#ica-av'), fromProfile?.avatar_url, (name||'?')[0], fromProfile?.color||'#4C7CF3'); }catch(e){}
+    ov.querySelector('#ica-dec').onclick=()=>{ ov.remove(); try{ if(typeof declineCall==='function') declineCall(); else if(typeof rejectCall==='function') rejectCall(); else if(typeof endCall==='function') endCall(false); }catch(e){} };
+    ov.querySelector('#ica-acc').onclick=()=>{ ov.remove(); try{ if(typeof acceptCall==='function') acceptCall(); else if(typeof startCall==='function') startCall(fromProfile, !!isVideo); }catch(e){} };
+  };
+
+  // ---------- 20) Group call button ----------
+  window.slStartGroupCall = function(){
+    if(!activeGroup){ toast('Откройте группу'); return; }
+    toast('Групповой звонок: исходящий…');
+    try{
+      if(typeof startCall==='function'){
+        // call first member as bridge
+        startCall({id:activeGroup.id, username:activeGroup.name, first_name:activeGroup.name}, true);
+      }
+    }catch(e){}
+  };
+
+  // ---------- 21) Offline queue flush ----------
+  window.slFlushOfflineQueue = async function(){
+    const q=typeof getOfflineQ==='function'?getOfflineQ():JSON.parse(LS.getItem('sl_offline_q')||'[]');
+    if(!q.length) return;
+    const left=[];
+    for(const item of q){
+      try{
+        if(item.table && item.row) await sb.from(item.table).insert(item.row);
+        else if(item.type==='message' && typeof sendMessage==='function'){ /* already structured */ await sb.from('messages').insert(item.payload); }
+      }catch(e){ left.push(item); }
+    }
+    if(typeof setOfflineQ==='function') setOfflineQ(left);
+    else LS.setItem('sl_offline_q', JSON.stringify(left));
+    if(q.length-left.length) toast('Отправлено из очереди: '+(q.length-left.length));
+  };
+  window.addEventListener('online', ()=>window.slFlushOfflineQueue());
+  setTimeout(()=>window.slFlushOfflineQueue(), 2500);
+
+  // ---------- 22) Backup / export ----------
+  window.slExportBackup = function(){
+    const data={
+      at: new Date().toISOString(),
+      profile: myProfile||null,
+      drafts: {},
+      settings: {
+        dnd: LS.getItem('sl_dnd'),
+        unread_first: LS.getItem('sl_unread_first'),
+        folders: LS.getItem('sl_folders'),
+        quiet: LS.getItem('sl_quiet'),
+        quiet_g: LS.getItem('sl_quiet_g')
+      }
+    };
+    try{
+      for(let i=0;i<localStorage.length;i++){
+        const k=localStorage.key(i);
+        if(k && k.startsWith('sl_draft_')) data.drafts[k]=localStorage.getItem(k);
+      }
+    }catch(e){}
+    const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download='signal-line-backup.json';
+    a.click();
+    toast('Резервная копия скачана');
+  };
+  window.slImportBackup = function(file){
+    const r=new FileReader();
+    r.onload=()=>{
+      try{
+        const data=JSON.parse(r.result);
+        if(data.settings){
+          Object.entries(data.settings).forEach(([k,v])=>{ if(v!=null) LS.setItem(k.startsWith('sl_')?k:'sl_'+k, typeof v==='string'?v:JSON.stringify(v)); });
+        }
+        if(data.drafts) Object.entries(data.drafts).forEach(([k,v])=>LS.setItem(k,v));
+        toast('Резервная копия восстановлена');
+        try{ renderContactsAndGroups(); }catch(e){}
+      }catch(e){ toast('Ошибка файла'); }
+    };
+    r.readAsText(file);
+  };
+  setTimeout(()=>{
+    if(document.getElementById('settings-backup')) return;
+    const host=document.getElementById('settings-about')?.parentNode;
+    if(!host) return;
+    const row=document.createElement('div');
+    row.className='settings-item'; row.id='settings-backup';
+    row.innerHTML=`<svg viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg><span class="item-text">Резервная копия</span>`;
+    host.insertBefore(row, host.firstChild);
+    row.onclick=()=>{
+      const ov=document.createElement('div'); ov.className='modal-overlay';
+      ov.innerHTML=`<div class="modal"><h3>Резервная копия</h3>
+        <button class="btn-primary" id="bk-exp" style="width:100%;margin-bottom:8px">Экспорт</button>
+        <button class="btn-secondary" id="bk-imp" style="width:100%;margin-bottom:8px">Импорт</button>
+        <button class="btn-secondary" id="bk-x" style="width:100%">Закрыть</button>
+        <input type="file" id="bk-file" accept="application/json" style="display:none"></div>`;
+      document.body.appendChild(ov);
+      ov.querySelector('#bk-x').onclick=()=>ov.remove();
+      ov.querySelector('#bk-exp').onclick=()=>{ window.slExportBackup(); ov.remove(); };
+      ov.querySelector('#bk-imp').onclick=()=>ov.querySelector('#bk-file').click();
+      ov.querySelector('#bk-file').onchange=function(){ if(this.files[0]) window.slImportBackup(this.files[0]); ov.remove(); };
+    };
+  }, 1000);
+
+  // ---------- 23) Device sessions ----------
+  window.slOpenSessions = async function(){
+    const sheet=document.createElement('div'); sheet.className='sl-sheet';
+    sheet.innerHTML=`<div class="sl-sheet-hdr"><button type="button" class="sl-sheet-back" id="ss-back">‹</button><h2>Сессии</h2><span style="width:40px"></span></div>
+      <div class="sl-sheet-body" id="ss-list" style="padding:12px">Загрузка…</div>`;
+    document.body.appendChild(sheet);
+    sheet.querySelector('#ss-back').onclick=()=>sheet.remove();
+    let rows=[];
+    try{
+      const {data}=await sb.from('sessions').select('*').eq('user_id', myProfile.id).order('last_seen',{ascending:false});
+      rows=data||[];
+    }catch(e){
+      rows=[{id:'local', device: navigator.userAgent.slice(0,40), last_seen: new Date().toISOString(), current:true}];
+    }
+    if(!rows.length) rows=[{id:'local', device: navigator.userAgent.slice(0,48), last_seen: new Date().toISOString(), current:true}];
+    sheet.querySelector('#ss-list').innerHTML=rows.map(s=>`<div style="padding:12px;border:1px solid var(--line);border-radius:12px;margin-bottom:8px;display:flex;gap:10px;align-items:center">
+      <div style="flex:1"><b>${esc(s.device||s.user_agent||'Устройство')}</b>
+      <div style="font-size:12px;color:var(--muted)">${esc(s.last_seen||'')}${s.current?' · это устройство':''}</div></div>
+      ${s.current?'':`<button class="btn-secondary" data-sid="${s.id}" style="padding:6px 10px">Завершить</button>`}
+    </div>`).join('');
+    sheet.querySelectorAll('[data-sid]').forEach(b=>b.onclick=async()=>{
+      try{ await sb.from('sessions').delete().eq('id', b.dataset.sid); }catch(e){}
+      b.closest('div').remove(); toast('Сессия завершена');
+    });
+  };
+  setTimeout(()=>{
+    if(document.getElementById('settings-sessions')) return;
+    const host=document.getElementById('settings-anonymity')?.parentNode || document.getElementById('settings-notifications')?.parentNode;
+    if(!host) return;
+    const row=document.createElement('div');
+    row.className='settings-item'; row.id='settings-sessions';
+    row.innerHTML=`<svg viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/></svg><span class="item-text">Сессии устройств</span>`;
+    host.appendChild(row);
+    row.onclick=()=>window.slOpenSessions();
+  }, 1100);
+
+  // ---------- 24) Disappearing messages ----------
+  window.slGetTTL = function(chatId){ try{ return Number(JSON.parse(LS.getItem('sl_ttl')||'{}')[chatId]||0); }catch(e){ return 0; } };
+  window.slSetTTL = function(chatId, sec){
+    try{
+      const o=JSON.parse(LS.getItem('sl_ttl')||'{}');
+      if(sec) o[chatId]=sec; else delete o[chatId];
+      LS.setItem('sl_ttl', JSON.stringify(o));
+    }catch(e){}
+  };
+  window.slOpenTTLMenu = function(){
+    const id=activePartner?.id||activeGroup?.id; if(!id) return;
+    const ov=document.createElement('div'); ov.className='modal-overlay';
+    ov.innerHTML=`<div class="modal"><h3>Исчезающие сообщения</h3>
+      <button class="btn-secondary" data-s="0" style="width:100%;margin:4px 0">Выкл</button>
+      <button class="btn-secondary" data-s="5" style="width:100%;margin:4px 0">5 секунд</button>
+      <button class="btn-secondary" data-s="60" style="width:100%;margin:4px 0">1 минута</button>
+      <button class="btn-secondary" data-s="3600" style="width:100%;margin:4px 0">1 час</button>
+      <button class="btn-secondary" id="ttl-x" style="width:100%;margin-top:8px">Закрыть</button></div>`;
+    document.body.appendChild(ov);
+    ov.querySelector('#ttl-x').onclick=()=>ov.remove();
+    ov.querySelectorAll('[data-s]').forEach(b=>b.onclick=()=>{
+      window.slSetTTL(id, Number(b.dataset.s));
+      toast(b.dataset.s==='0'?'Таймер выключен':'Таймер: '+b.dataset.s+'с');
+      ov.remove();
+    });
+  };
+  // auto-delete rendered messages with TTL
+  setInterval(()=>{
+    try{
+      const id=activePartner?.id||activeGroup?.id; if(!id) return;
+      const ttl=window.slGetTTL(id); if(!ttl) return;
+      document.querySelectorAll('#messages-list [data-mid][data-ts]').forEach(el=>{
+        const ts=Number(el.dataset.ts); if(!ts) return;
+        if(Date.now()-ts > ttl*1000) el.remove();
+      });
+    }catch(e){}
+  }, 2000);
+
+  // ---------- 25) Secret chat ----------
+  window.slStartSecretChat = async function(partner){
+    if(!partner){ toast('Выберите пользователя'); return; }
+    const secret={
+      id: 'secret_'+partner.id,
+      username: partner.username,
+      first_name: (partner.first_name||partner.username)+' 🔒',
+      avatar_url: partner.avatar_url,
+      color: partner.color,
+      isSecret: true,
+      secretPeer: partner.id
+    };
+    try{ ensureInContacts(secret); }catch(e){}
+    LS.setItem('sl_secret_'+partner.id, '1');
+    toast('Секретный чат');
+    try{ await openChat(secret); }catch(e){}
+  };
+
+  // ---------- 26) PWA badge ----------
+  window.slUpdateAppBadge = function(n){
+    try{
+      n=Number(n)||0;
+      if(navigator.setAppBadge){ if(n>0) navigator.setAppBadge(n); else navigator.clearAppBadge?.(); }
+      // title fallback
+      const base='Signal Line';
+      document.title = n>0 ? `(${n}) ${base}` : base;
+    }catch(e){}
+  };
+  setInterval(()=>{
+    try{
+      let n=0;
+      const u=JSON.parse(LS.getItem('sl_unread')||'{}');
+      Object.values(u).forEach(v=>n+=Number(v)||0);
+      window.slUpdateAppBadge(n);
+    }catch(e){}
+  }, 5000);
+
+  // ---------- Settings entries: catalog, folders, TTL, secret ----------
+  setTimeout(()=>{
+    const host=document.getElementById('settings-posts')?.parentNode;
+    if(host && !document.getElementById('settings-catalog')){
+      const row=document.createElement('div');
+      row.className='settings-item'; row.id='settings-catalog';
+      row.innerHTML=`<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg><span class="item-text">Каталог каналов</span>`;
+      host.appendChild(row);
+      row.onclick=()=>window.slOpenChannelCatalog();
+    }
+    const host2=document.getElementById('settings-notifications')?.parentNode;
+    if(host2 && !document.getElementById('settings-folders')){
+      const row=document.createElement('div');
+      row.className='settings-item'; row.id='settings-folders';
+      row.innerHTML=`<svg viewBox="0 0 24 24"><path d="M3 7h6l2 2h10v10H3z"/></svg><span class="item-text">Папки чатов</span>`;
+      host2.appendChild(row);
+      row.onclick=()=>window.slEditFolders();
+    }
+  }, 1200);
+
+  // Wire group call into group header if possible
+  setTimeout(()=>{
+    const gs=document.getElementById('group-settings-btn');
+    if(!gs || document.getElementById('group-call-btn')) return;
+    const btn=document.createElement('button');
+    btn.className='icon-btn'; btn.id='group-call-btn'; btn.title='Групповой звонок';
+    btn.innerHTML=`<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>`;
+    btn.onclick=(e)=>{ e.stopPropagation(); window.slStartGroupCall(); };
+    gs.parentNode?.insertBefore(btn, gs);
+  }, 1500);
+
+  // TTL menu from chat search area long-press on more — bind to chat-lock as secondary
+  document.addEventListener('keydown', e=>{
+    if(e.key==='Escape'){
+      document.getElementById('sl-react-picker')?.remove();
+      window.hideReplyBar?.();
+    }
+  });
+
+  console.log('[SL] feature pack v2 loaded');
+})();
+
+
+/* SL video compress bind */
+(function(){
+  const inp=document.getElementById('file-input')||document.querySelector('input[type=file][accept*="video"], input[type=file][accept*="image"]');
+  if(!inp || inp.dataset.compressBound) return;
+  // use capture on change at document level for any file input with video
+  document.addEventListener('change', async function(e){
+    const t=e.target;
+    if(!t || t.tagName!=='INPUT' || t.type!=='file') return;
+    const f=t.files && t.files[0];
+    if(!f || !f.type.startsWith('video/')) return;
+    if(t.dataset.slCompressed) return;
+    try{
+      e.stopImmediatePropagation();
+    }catch(err){}
+    // don't block too hard — compress async then re-dispatch is complex; just toast
+    if(f.size>2*1024*1024 && typeof window.slCompressVideo==='function'){
+      showToast('Сжатие видео…');
+      try{
+        const out=await window.slCompressVideo(f);
+        if(out && out!==f){
+          const dt=new DataTransfer();
+          dt.items.add(out);
+          t.dataset.slCompressed='1';
+          t.files=dt.files;
+          showToast('Видео сжато');
+        }
+      }catch(err){}
+    }
+  }, true);
+})();
+
+
+
+/* SL FEATURE PACK v3 — full wiring */
+(function(){
+  'use strict';
+  const LS = (typeof storage!=='undefined'?storage:localStorage);
+  const toast=(m)=>{ try{showToast(m);}catch(e){console.log(m);} };
+  const esc=(s)=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+
+  // ===== Offline queue on failed send =====
+  if(typeof sendMessage==='function' && !window._slOffSend){
+    window._slOffSend=1;
+    const _sm=sendMessage;
+    function enqueueOffline(type, fileUrl, content){
+      const payload={
+        type: type||'text',
+        content: content!=null?content:(document.getElementById('message-input')?.value||''),
+        file_url: fileUrl,
+        sender_id: myProfile?.id,
+        receiver_id: activePartner?.id||null,
+        group_id: activeGroup?.id||null,
+        created_at: new Date().toISOString()
+      };
+      const q=typeof getOfflineQ==='function'?getOfflineQ():JSON.parse(LS.getItem('sl_offline_q')||'[]');
+      q.push({type:'message', payload, table:'messages', row:payload, at:Date.now()});
+      if(typeof setOfflineQ==='function') setOfflineQ(q); else LS.setItem('sl_offline_q', JSON.stringify(q));
+      toast('Нет сети — в очереди');
+      try{
+        if(typeof renderMessage==='function'){
+          renderMessage({...payload, id:'off_'+Date.now(), pending:true}, !!activeGroup);
+          scrollToBottom?.(true);
+        }
+        const inp=document.getElementById('message-input');
+        if(inp && type==='text'){ inp.value=''; inp.dispatchEvent(new Event('input')); }
+        window.hideReplyBar?.();
+      }catch(e){}
+    }
+    sendMessage=async function(type='text', fileUrl=null, content=null){
+      if(typeof navigator!=='undefined' && navigator.onLine===false){
+        enqueueOffline(type, fileUrl, content);
+        return;
+      }
+      try{
+        const r=await _sm.apply(this, arguments);
+        try{
+          const id=activePartner?.id||activeGroup?.id;
+          if(id && type==='text') window.slSetDraft?.(id,'');
+          window.hideReplyBar?.();
+        }catch(e){}
+        return r;
+      }catch(err){
+        try{ enqueueOffline(type, fileUrl, content); }
+        catch(e2){ throw err; }
+      }
+    };
+  }
+
+  // ===== renderMessage: reactions + comments btn + ttl + data-ts =====
+  if(typeof renderMessage==='function' && !window._slRmV3){
+    window._slRmV3=1;
+    const _rm=renderMessage;
+    renderMessage=function(msg, isGroup=false){
+      const r=_rm.apply(this, arguments);
+      try{
+        const list=document.getElementById('messages-list');
+        if(!list||!msg) return r;
+        let row=msg.id? list.querySelector(`[data-mid="${msg.id}"]`) : null;
+        if(!row){
+          // last bubble-row
+          const rows=list.querySelectorAll('.bubble-row, [data-mid]');
+          row=rows[rows.length-1];
+        }
+        if(!row) return r;
+        if(msg.id) row.dataset.mid=String(msg.id);
+        row.dataset.ts=String(msg.created_at? new Date(msg.created_at).getTime() : Date.now());
+
+        const bubble=row.querySelector('.bubble')||row;
+        // reaction bar
+        let bar=bubble.querySelector('.reaction-bar');
+        if(!bar){
+          bar=document.createElement('div');
+          bar.className='reaction-bar';
+          bubble.appendChild(bar);
+        }
+        try{
+          const map=JSON.parse(LS.getItem('sl_react_'+msg.id)||'{}');
+          const counts={};
+          Object.values(map).forEach(e=>{ counts[e]=(counts[e]||0)+1; });
+          bar.innerHTML=Object.entries(counts).map(([e,c])=>`<span class="reaction-chip" data-e="${e}">${e} ${c}</span>`).join('');
+        }catch(e){}
+
+        // channel comments button
+        if(isGroup && activeGroup?.type==='channel' && msg.type!=='comment' && !String(msg.content||'').startsWith('__comment__')){
+          if(!bubble.querySelector('.ch-post-comments-btn')){
+            const btn=document.createElement('button');
+            btn.type='button';
+            btn.className='ch-post-comments-btn';
+            btn.textContent='Комментарии';
+            btn.onclick=(ev)=>{ ev.stopPropagation(); window.slOpenPostComments?.(msg); };
+            bubble.appendChild(btn);
+          }
+        }
+
+        // TTL chip
+        const chatId=activePartner?.id||activeGroup?.id;
+        const ttl=chatId && window.slGetTTL ? window.slGetTTL(chatId) : 0;
+        if(ttl && !bubble.querySelector('.sl-ttl-chip')){
+          const chip=document.createElement('span');
+          chip.className='sl-ttl-chip';
+          chip.textContent='⏱ '+ttl+'с';
+          bubble.appendChild(chip);
+        }
+      }catch(e){}
+      return r;
+    };
+  }
+
+  // ===== Long-press bubble → reaction picker (touch) =====
+  if(!window._slReactTouch){
+    window._slReactTouch=1;
+    let tmr=null, startX=0, startY=0;
+    document.addEventListener('touchstart', e=>{
+      const bub=e.target.closest?.('.bubble');
+      if(!bub) return;
+      const row=bub.closest('[data-mid], .bubble-row');
+      if(!row) return;
+      startX=e.touches[0].clientX; startY=e.touches[0].clientY;
+      tmr=setTimeout(()=>{
+        const mid=row.dataset.mid;
+        if(mid && window.slShowReactionPicker) window.slShowReactionPicker({id:mid}, startX, startY);
+      }, 450);
+    }, {passive:true});
+    document.addEventListener('touchmove', e=>{
+      if(!tmr) return;
+      const dx=Math.abs(e.touches[0].clientX-startX), dy=Math.abs(e.touches[0].clientY-startY);
+      if(dx>12||dy>12){ clearTimeout(tmr); tmr=null; }
+    }, {passive:true});
+    document.addEventListener('touchend', ()=>{ clearTimeout(tmr); tmr=null; }, {passive:true});
+  }
+
+  // ===== Quiet on channel subscribe =====
+  const _cp = window.openChannelProfile;
+  if(typeof _cp==='function' && !window._slQuietSub){
+    window._slQuietSub=1;
+    // patch via event delegation after profile opens is hard; hook global subscribe success
+  }
+  document.addEventListener('click', e=>{
+    if(e.target?.id==='cp-sub' || e.target?.closest?.('#cp-sub')){
+      setTimeout(()=>{
+        if(activeGroup?.id) window.slQuietChannelDefault?.(activeGroup.id);
+      }, 500);
+    }
+  }, true);
+
+  // ===== Secret chat + TTL + Delete from profile More =====
+  // Enhance profile more menu if openFullProfile exists - inject into page via observer
+  const obs=new MutationObserver(()=>{
+    const modal=document.getElementById('um-more-modal');
+    if(modal && !modal.dataset.enriched){
+      modal.dataset.enriched='1';
+      // add secret + ttl if peer chat
+      if(activePartner && !activePartner.isSecret){
+        const b=document.createElement('button');
+        b.type='button'; b.className='btn-secondary';
+        b.style.cssText='width:100%;margin-bottom:8px';
+        b.textContent='Секретный чат';
+        b.onclick=(ev)=>{
+          ev.stopPropagation();
+          modal.closest('.modal-overlay')?.remove();
+          document.getElementById('sl-user-profile')?.remove();
+          window.slStartSecretChat?.(activePartner);
+        };
+        modal.insertBefore(b, modal.firstChild);
+      }
+      const t=document.createElement('button');
+      t.type='button'; t.className='btn-secondary';
+      t.style.cssText='width:100%;margin-bottom:8px';
+      t.textContent='Исчезающие сообщения';
+      t.onclick=(ev)=>{
+        ev.stopPropagation();
+        modal.closest('.modal-overlay')?.remove();
+        window.slOpenTTLMenu?.();
+      };
+      modal.insertBefore(t, modal.querySelector('#um-cancel'));
+    }
+  });
+  try{ obs.observe(document.body, {childList:true, subtree:true}); }catch(e){}
+
+  // ===== Folder filter: assign chat to folder via context =====
+  const _ctx = typeof showChatCtx==='function' ? showChatCtx : null;
+  if(_ctx && !window._slFolderCtx){
+    window._slFolderCtx=1;
+    window.showChatCtx=function(e, type, data){
+      _ctx.apply(this, arguments);
+      setTimeout(()=>{
+        const menu=document.getElementById('ctx-menu');
+        if(!menu || menu.dataset.folderItem) return;
+        menu.dataset.folderItem='1';
+        const folders=JSON.parse(LS.getItem('sl_folders')||'{}');
+        const names=Object.keys(folders);
+        if(!names.length) return;
+        const div=document.createElement('div');
+        div.className='ctx-item';
+        div.textContent='В папку…';
+        div.onclick=()=>{
+          menu.style.display='none';
+          const ov=document.createElement('div'); ov.className='modal-overlay';
+          ov.innerHTML=`<div class="modal"><h3>Папка</h3>${names.map(n=>`<button class="btn-secondary" data-fn="${esc(n)}" style="width:100%;margin:4px 0">${esc(n)}</button>`).join('')}<button class="btn-secondary" id="fp-x" style="width:100%;margin-top:8px">Отмена</button></div>`;
+          document.body.appendChild(ov);
+          ov.querySelector('#fp-x').onclick=()=>ov.remove();
+          ov.querySelectorAll('[data-fn]').forEach(b=>b.onclick=()=>{
+            const f=JSON.parse(LS.getItem('sl_folders')||'{}');
+            const arr=f[b.dataset.fn]||[];
+            if(!arr.includes(data.id)) arr.push(data.id);
+            f[b.dataset.fn]=arr;
+            LS.setItem('sl_folders', JSON.stringify(f));
+            toast('Добавлено в «'+b.dataset.fn+'»');
+            ov.remove();
+            try{ renderContactsAndGroups(); }catch(e){}
+          });
+        };
+        menu.appendChild(div);
+      }, 30);
+    };
+  }
+
+  // Filter list by active folder tab
+  if(typeof renderContactsAndGroups==='function' && !window._slFolderFilter){
+    window._slFolderFilter=1;
+    const _r=renderContactsAndGroups;
+    renderContactsAndGroups=function(){
+      _r.apply(this, arguments);
+      try{
+        const active=document.querySelector('.folder-tab.active');
+        const name=active?.textContent?.trim();
+        if(!name || name==='Все' || name==='Архив') return;
+        const folders=JSON.parse(LS.getItem('sl_folders')||'{}');
+        const ids=new Set((folders[name]||[]).map(String));
+        if(!ids.size) return;
+        document.querySelectorAll('#contacts-list .sw-clip').forEach(clip=>{
+          const id=String(clip.dataset.cid||'');
+          if(id && !ids.has(id)) clip.style.display='none';
+        });
+      }catch(e){}
+    };
+  }
+
+  // ===== Incoming call hook =====
+  if(typeof startCall==='function' && !window._slCallHook){
+    window._slCallHook=1;
+    // expose for websocket/broadcast
+    window.slOnIncomingCall=function(payload){
+      if(window.slGetDnd?.()) return;
+      const p=payload?.from||payload||{};
+      window.slShowIncomingCall?.(p, !!payload?.video);
+    };
+  }
+
+  // ===== Secret badge in list =====
+  if(typeof renderContactsAndGroups==='function'){
+    const _r2=renderContactsAndGroups;
+    renderContactsAndGroups=function(){
+      _r2.apply(this, arguments);
+      try{
+        document.querySelectorAll('#contacts-list .sw-clip').forEach(clip=>{
+          const id=clip.dataset.cid;
+          if(id && LS.getItem('sl_secret_'+id)==='1'){
+            const name=clip.querySelector('.contact-name');
+            if(name && !name.querySelector('.sl-secret-badge')){
+              const s=document.createElement('span');
+              s.className='sl-secret-badge';
+              s.textContent='секрет';
+              name.appendChild(s);
+            }
+          }
+        });
+      }catch(e){}
+    };
+  }
+
+  // ===== Group call visible only in groups =====
+  setInterval(()=>{
+    const btn=document.getElementById('group-call-btn');
+    if(!btn) return;
+    btn.style.display=(activeGroup && activeGroup.type!=='channel')?'flex':'none';
+  }, 1000);
+
+  // ===== Flush offline on focus =====
+  window.addEventListener('focus', ()=>window.slFlushOfflineQueue?.());
+
+  // ===== Ensure catalog + backup + sessions + folders + dnd settings exist =====
+  function ensureSetting(id, afterId, html, onClick){
+    if(document.getElementById(id)) return;
+    const after=document.getElementById(afterId);
+    const host=after?.parentNode;
+    if(!host) return;
+    const row=document.createElement('div');
+    row.className='settings-item'; row.id=id;
+    row.innerHTML=html;
+    host.appendChild(row);
+    row.onclick=onClick;
+  }
+  setTimeout(()=>{
+    ensureSetting('settings-catalog','settings-posts',
+      `<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg><span class="item-text">Каталог каналов</span>`,
+      ()=>window.slOpenChannelCatalog?.());
+    ensureSetting('settings-folders','settings-notifications',
+      `<svg viewBox="0 0 24 24"><path d="M3 7h6l2 2h10v10H3z"/></svg><span class="item-text">Папки чатов</span>`,
+      ()=>window.slEditFolders?.());
+    ensureSetting('settings-sessions','settings-anonymity',
+      `<svg viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/></svg><span class="item-text">Сессии устройств</span>`,
+      ()=>window.slOpenSessions?.());
+    ensureSetting('settings-backup','settings-about',
+      `<svg viewBox="0 0 24 24"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 21h14"/></svg><span class="item-text">Резервная копия</span>`,
+      ()=>{
+        const ov=document.createElement('div'); ov.className='modal-overlay';
+        ov.innerHTML=`<div class="modal"><h3>Резервная копия</h3>
+          <button class="btn-primary" id="bk-exp" style="width:100%;margin-bottom:8px">Экспорт</button>
+          <button class="btn-secondary" id="bk-imp" style="width:100%;margin-bottom:8px">Импорт</button>
+          <button class="btn-secondary" id="bk-x" style="width:100%">Закрыть</button>
+          <input type="file" id="bk-file" accept="application/json" style="display:none"></div>`;
+        document.body.appendChild(ov);
+        ov.querySelector('#bk-x').onclick=()=>ov.remove();
+        ov.querySelector('#bk-exp').onclick=()=>{ window.slExportBackup?.(); ov.remove(); };
+        ov.querySelector('#bk-imp').onclick=()=>ov.querySelector('#bk-file').click();
+        ov.querySelector('#bk-file').onchange=function(){ if(this.files[0]) window.slImportBackup?.(this.files[0]); ov.remove(); };
+      });
+  }, 1500);
+
+  // ===== Swipe-right on bubble already sets replyToMsg — show reply bar =====
+  if(!window._slSwipeReplyBar){
+    window._slSwipeReplyBar=1;
+    const _show=window.showReplyBar;
+    // observe replyToMsg changes via input placeholder hack
+    setInterval(()=>{
+      try{
+        if(typeof replyToMsg!=='undefined' && replyToMsg && document.getElementById('sl-reply-bar') && !document.getElementById('sl-reply-bar').classList.contains('show')){
+          window.showReplyBar?.(replyToMsg);
+        }
+      }catch(e){}
+    }, 400);
+  }
+
+  console.log('[SL] feature pack v3 wired');
+})();
+
+
+/* SL media-btn sole */
+(function(){
+  const btn=document.getElementById('media-btn');
+  if(!btn || btn.dataset.soleBound) return;
+  btn.dataset.soleBound='1';
+  btn.addEventListener('click', function(e){
+    e.preventDefault(); e.stopPropagation();
+    if(typeof window.slOpenMediaGallery==='function') window.slOpenMediaGallery();
+  }, true);
+})();
+
+
+
+/* SL E2E (WhatsApp-style: ECDH P-256 + AES-GCM) */
+(function(){
+  const LS = (typeof storage!=='undefined'?storage:localStorage);
+  const enc = new TextEncoder();
+  const dec = new TextDecoder();
+
+  function b64(buf){
+    const u=new Uint8Array(buf);
+    let s=''; for(let i=0;i<u.length;i++) s+=String.fromCharCode(u[i]);
+    return btoa(s);
+  }
+  function unb64(s){
+    const bin=atob(s);
+    const u=new Uint8Array(bin.length);
+    for(let i=0;i<bin.length;i++) u[i]=bin.charCodeAt(i);
+    return u.buffer;
+  }
+
+  async function generateIdentity(){
+    const kp = await crypto.subtle.generateKey({name:'ECDH', namedCurve:'P-256'}, true, ['deriveKey','deriveBits']);
+    const pub = await crypto.subtle.exportKey('jwk', kp.publicKey);
+    const priv = await crypto.subtle.exportKey('jwk', kp.privateKey);
+    return {publicKey: pub, privateKey: priv};
+  }
+
+  async function importPriv(jwk){
+    return crypto.subtle.importKey('jwk', jwk, {name:'ECDH', namedCurve:'P-256'}, true, ['deriveKey','deriveBits']);
+  }
+  async function importPub(jwk){
+    return crypto.subtle.importKey('jwk', jwk, {name:'ECDH', namedCurve:'P-256'}, true, []);
+  }
+
+  window.slE2E = {
+    async ensureKeys(){
+      let raw=null;
+      try{ raw=JSON.parse(LS.getItem('sl_e2e_identity')||'null'); }catch(e){}
+      if(!raw || !raw.publicKey || !raw.privateKey){
+        raw = await generateIdentity();
+        LS.setItem('sl_e2e_identity', JSON.stringify(raw));
+        // publish public key best-effort
+        try{
+          if(myProfile?.id && sb){
+            await sb.from('profiles').update({e2e_pub: JSON.stringify(raw.publicKey)}).eq('id', myProfile.id);
+            myProfile.e2e_pub = JSON.stringify(raw.publicKey);
+          }
+        }catch(e){
+          try{ LS.setItem('sl_e2e_pub_local', JSON.stringify(raw.publicKey)); }catch(e2){}
+        }
+      }
+      return raw;
+    },
+    async myPublicJwk(){
+      const id=await this.ensureKeys();
+      return id.publicKey;
+    },
+    async getPeerPub(peerId){
+      // cache
+      try{
+        const c=JSON.parse(LS.getItem('sl_e2e_peer_'+peerId)||'null');
+        if(c) return c;
+      }catch(e){}
+      try{
+        const {data}=await sb.from('profiles').select('e2e_pub').eq('id', peerId).maybeSingle();
+        if(data?.e2e_pub){
+          const j=typeof data.e2e_pub==='string'?JSON.parse(data.e2e_pub):data.e2e_pub;
+          LS.setItem('sl_e2e_peer_'+peerId, JSON.stringify(j));
+          return j;
+        }
+      }catch(e){}
+      return null;
+    },
+    async sharePubWithPeer(peerId){
+      // send a system-ish message carrying our pub (still ok — public)
+      try{
+        const pub=await this.myPublicJwk();
+        await sb.from('messages').insert({
+          sender_id: myProfile.id,
+          receiver_id: peerId,
+          type: 'e2e_key',
+          content: 'e2e_pub:'+b64(enc.encode(JSON.stringify(pub)))
+        });
+      }catch(e){}
+    },
+    async deriveAesKey(peerPubJwk){
+      const id=await this.ensureKeys();
+      const priv=await importPriv(id.privateKey);
+      const pub=await importPub(peerPubJwk);
+      return crypto.subtle.deriveKey(
+        {name:'ECDH', public: pub},
+        priv,
+        {name:'AES-GCM', length:256},
+        false,
+        ['encrypt','decrypt']
+      );
+    },
+    async encrypt(peerId, plaintext){
+      let peerPub=await this.getPeerPub(peerId);
+      if(!peerPub){
+        // try wait/share
+        await this.sharePubWithPeer(peerId);
+        peerPub=await this.getPeerPub(peerId);
+      }
+      if(!peerPub) throw new Error('Нет ключа собеседника');
+      const key=await this.deriveAesKey(peerPub);
+      const iv=crypto.getRandomValues(new Uint8Array(12));
+      const ct=await crypto.subtle.encrypt({name:'AES-GCM', iv}, key, enc.encode(String(plaintext||'')));
+      return 'e2e:v1:'+b64(iv)+':'+b64(ct);
+    },
+    async decrypt(peerId, blob){
+      if(!blob || !String(blob).startsWith('e2e:v1:')) return blob;
+      const parts=String(blob).split(':');
+      if(parts.length<4) return blob;
+      const iv=new Uint8Array(unb64(parts[2]));
+      const ct=unb64(parts.slice(3).join(':'));
+      let peerPub=await this.getPeerPub(peerId);
+      if(!peerPub) throw new Error('no peer key');
+      const key=await this.deriveAesKey(peerPub);
+      const pt=await crypto.subtle.decrypt({name:'AES-GCM', iv}, key, ct);
+      return dec.decode(pt);
+    },
+    isEncrypted(text){ return typeof text==='string' && text.startsWith('e2e:v1:'); }
+  };
+
+  // bootstrap keys on login
+  setTimeout(()=>{ try{ if(myProfile) window.slE2E.ensureKeys(); }catch(e){} }, 2000);
+
+  // Real secret chat with E2E
+  window.slStartSecretChat = async function(partner){
+    if(!partner?.id){ showToast('Выберите пользователя'); return; }
+    try{ await window.slE2E.ensureKeys(); }catch(e){ showToast('WebCrypto недоступен'); return; }
+    // fetch peer key / publish ours
+    try{ await window.slE2E.sharePubWithPeer(partner.id); }catch(e){}
+    let peerPub=await window.slE2E.getPeerPub(partner.id);
+    if(!peerPub){
+      // still allow chat; encrypt will retry
+      showToast('Обмен ключами… Напишите сообщение после того, как собеседник откроет чат');
+    }
+    const secret={
+      id: partner.id, // use real peer id so messages route correctly
+      username: partner.username,
+      first_name: (partner.first_name||partner.username||''),
+      avatar_url: partner.avatar_url,
+      color: partner.color,
+      isSecret: true,
+      secretPeer: partner.id,
+      email: partner.email
+    };
+    try{ ensureInContacts(secret); }catch(e){}
+    LS.setItem('sl_secret_'+partner.id, '1');
+    showToast('Секретный чат · End-to-end');
+    try{ await openChat(secret); }catch(e){}
+    // header badge
+    try{
+      const st=document.getElementById('chat-partner-status');
+      if(st){ st.textContent='🔒 End-to-end'; st.className='chat-status'; }
+    }catch(e){}
+  };
+
+  // Encrypt on send for secret chats
+  if(typeof sendMessage==='function' && !window._slE2ESend){
+    window._slE2ESend=1;
+    const _sm=sendMessage;
+    sendMessage=async function(type='text', fileUrl=null, content=null){
+      if(activePartner?.isSecret && (type==='text' || type==null) && !fileUrl){
+        try{
+          await window.slE2E.ensureKeys();
+          let text=content??(document.getElementById('message-input')?.value||'');
+          text=String(text).trim();
+          if(!text) return _sm.apply(this, arguments);
+          const peerId=activePartner.secretPeer||activePartner.id;
+          const cipher=await window.slE2E.encrypt(peerId, text);
+          // show plaintext locally optimistically via rendering after insert — send ciphertext
+          const inp=document.getElementById('message-input');
+          if(inp && content==null){ /* keep; _sm will clear */ }
+          return await _sm.call(this, 'text', null, cipher);
+        }catch(e){
+          console.warn('e2e encrypt', e);
+          showToast('Не удалось зашифровать: '+(e.message||e));
+          return;
+        }
+      }
+      return _sm.apply(this, arguments);
+    };
+  }
+
+  // Decrypt on render
+  if(typeof renderMessage==='function' && !window._slE2ERender){
+    window._slE2ERender=1;
+    const _rm=renderMessage;
+    renderMessage=function(msg, isGroup=false){
+      // handle key exchange messages
+      try{
+        if(msg && msg.type==='e2e_key' && msg.content && String(msg.content).startsWith('e2e_pub:')){
+          const raw=String(msg.content).slice(8);
+          try{
+            const json=new TextDecoder().decode(new Uint8Array([...atob(raw)].map(c=>c.charCodeAt(0))));
+            const jwk=JSON.parse(json);
+            if(msg.sender_id) LS.setItem('sl_e2e_peer_'+msg.sender_id, JSON.stringify(jwk));
+          }catch(e){}
+          return; // don't show key messages
+        }
+        if(msg && msg.content && window.slE2E.isEncrypted(msg.content)){
+          const peerId = (msg.sender_id===myProfile?.id)
+            ? (msg.receiver_id||activePartner?.id)
+            : msg.sender_id;
+          // async decrypt then update DOM
+          const cipher=msg.content;
+          msg = {...msg, content: '🔒 …', _e2e:true, _cipher:cipher};
+          const r=_rm.call(this, msg, isGroup);
+          window.slE2E.decrypt(peerId, cipher).then(pt=>{
+            msg.content=pt;
+            const row=document.querySelector(`[data-mid="${msg.id}"] .bubble, .bubble-row[data-id="${msg.id}"] .bubble`);
+            if(row){
+              // preserve time node
+              const t=row.querySelector('.bubble-time');
+              const timeHtml=t?t.outerHTML:'';
+              const safe=(typeof escapeHtml==='function'?escapeHtml:function(s){return String(s).replace(/</g,'&lt;');})(pt);
+              row.innerHTML=safe+timeHtml;
+            }
+          }).catch(()=>{
+            const row=document.querySelector(`[data-mid="${msg.id}"] .bubble, .bubble-row[data-id="${msg.id}"] .bubble`);
+            if(row) row.innerHTML=(row.innerHTML||'') || '🔒 Не удалось расшифровать';
+          });
+          return r;
+        }
+      }catch(e){}
+      return _rm.apply(this, arguments);
+    };
+  }
+
+  // When opening secret chat, show lock status
+  if(typeof openChat==='function' && !window._slE2EOpen){
+    window._slE2EOpen=1;
+    const _oc=openChat;
+    openChat=async function(partner){
+      const r=await _oc.apply(this, arguments);
+      try{
+        if(partner?.isSecret || (partner?.id && LS.getItem('sl_secret_'+partner.id)==='1')){
+          if(activePartner) activePartner.isSecret=true;
+          const st=document.getElementById('chat-partner-status');
+          if(st){ st.textContent='🔒 End-to-end'; }
+          await window.slE2E.ensureKeys();
+          if(partner.id) window.slE2E.sharePubWithPeer(partner.id);
+        }
+      }catch(e){}
+      return r;
+    };
+  }
+
+  console.log('[SL] E2E ECDH+AES-GCM ready');
+})();
+
 </script>
 </body>
 </html>
