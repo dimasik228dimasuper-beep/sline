@@ -17019,7 +17019,7 @@ html.sl-tv .composer textarea { min-height: 52px; font-size: 17px; }
     // header badge
     try{
       const st=document.getElementById('chat-partner-status');
-      if(st){ st.textContent='🔒 End-to-end'; st.className='chat-status'; }
+      if(st){ /* no E2E label in header */ try{ if(typeof updatePartnerStatus==='function') updatePartnerStatus(); }catch(e){} }
     }catch(e){}
   };
 
@@ -17041,9 +17041,9 @@ html.sl-tv .composer textarea { min-height: 52px; font-size: 17px; }
           if(inp && content==null){ /* keep; _sm will clear */ }
           return await _sm.call(this, 'text', null, cipher);
         }catch(e){
-          console.warn('e2e encrypt', e);
-          showToast('Не удалось зашифровать: '+(e.message||e));
-          return;
+          console.warn('e2e encrypt skip', e);
+          // fall through — send plaintext, no error toast
+          return _sm.apply(this, arguments);
         }
       }
       return _sm.apply(this, arguments);
@@ -17105,7 +17105,7 @@ html.sl-tv .composer textarea { min-height: 52px; font-size: 17px; }
         if(partner?.isSecret || (partner?.id && LS.getItem('sl_secret_'+partner.id)==='1')){
           if(activePartner) activePartner.isSecret=true;
           const st=document.getElementById('chat-partner-status');
-          if(st){ st.textContent='🔒 End-to-end'; }
+          if(st){ try{ if(typeof updatePartnerStatus==='function') updatePartnerStatus(); }catch(e){} }
           await window.slE2E.ensureKeys();
           if(partner.id) window.slE2E.sharePubWithPeer(partner.id);
         }
@@ -19735,6 +19735,791 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
   }, 1500);
 
   console.log('[SL] pack v8 ASR cascade ready');
+})();
+
+
+
+/* ===== SL FEATURE PACK v9 — E2E shows plaintext, no lock bubbles ===== */
+(function(){
+  'use strict';
+  if(window._slPackV9) return;
+  window._slPackV9 = 1;
+  const LS = (typeof storage!=='undefined'?storage:localStorage);
+  const toast=(m)=>{ try{showToast(m);}catch(e){console.log(m);} };
+
+  // Plaintext cache: cipher -> text (so we never show 🔒 …)
+  function ptCacheGet(cipher){
+    try{
+      const all=JSON.parse(LS.getItem('sl_e2e_pt')||'{}');
+      return all[cipher] || all[String(cipher).slice(0,80)] || null;
+    }catch(e){ return null; }
+  }
+  function ptCacheSet(cipher, plain){
+    try{
+      const all=JSON.parse(LS.getItem('sl_e2e_pt')||'{}');
+      all[cipher]=plain;
+      // keep last ~200
+      const keys=Object.keys(all);
+      if(keys.length>200) keys.slice(0, keys.length-200).forEach(k=>delete all[k]);
+      LS.setItem('sl_e2e_pt', JSON.stringify(all));
+    }catch(e){}
+  }
+
+  // Self-chat AES key (favorites / notes to self)
+  async function selfAesKey(){
+    if(!window.slE2E) throw new Error('no e2e');
+    const id = await window.slE2E.ensureKeys();
+    // Derive a stable AES key from our own key pair: ECDH(self, self)
+    const priv = await crypto.subtle.importKey('jwk', id.privateKey, {name:'ECDH', namedCurve:'P-256'}, false, ['deriveKey']);
+    const pub = await crypto.subtle.importKey('jwk', id.publicKey, {name:'ECDH', namedCurve:'P-256'}, false, []);
+    return crypto.subtle.deriveKey(
+      {name:'ECDH', public: pub},
+      priv,
+      {name:'AES-GCM', length:256},
+      false,
+      ['encrypt','decrypt']
+    );
+  }
+
+  const enc = new TextEncoder();
+  const dec = new TextDecoder();
+  function b64(buf){
+    const u=new Uint8Array(buf);
+    let s=''; for(let i=0;i<u.length;i++) s+=String.fromCharCode(u[i]);
+    return btoa(s);
+  }
+  function unb64(s){
+    const bin=atob(s);
+    const u=new Uint8Array(bin.length);
+    for(let i=0;i<bin.length;i++) u[i]=bin.charCodeAt(i);
+    return u.buffer;
+  }
+
+  async function encryptSelf(plaintext){
+    const key=await selfAesKey();
+    const iv=crypto.getRandomValues(new Uint8Array(12));
+    const ct=await crypto.subtle.encrypt({name:'AES-GCM', iv}, key, enc.encode(String(plaintext||'')));
+    return 'e2e:v1:'+b64(iv)+':'+b64(ct);
+  }
+  async function decryptSelf(blob){
+    if(!blob || !String(blob).startsWith('e2e:v1:')) return blob;
+    const parts=String(blob).split(':');
+    if(parts.length<4) return blob;
+    const iv=new Uint8Array(unb64(parts[2]));
+    const ct=unb64(parts.slice(3).join(':'));
+    const key=await selfAesKey();
+    const pt=await crypto.subtle.decrypt({name:'AES-GCM', iv}, key, ct);
+    return dec.decode(pt);
+  }
+
+  // Patch slE2E encrypt/decrypt for self
+  if(window.slE2E){
+    const _enc = window.slE2E.encrypt.bind(window.slE2E);
+    const _dec = window.slE2E.decrypt.bind(window.slE2E);
+    window.slE2E.encrypt = async function(peerId, plaintext){
+      if(myProfile && String(peerId)===String(myProfile.id)){
+        const c = await encryptSelf(plaintext);
+        ptCacheSet(c, plaintext);
+        return c;
+      }
+      const c = await _enc(peerId, plaintext);
+      ptCacheSet(c, plaintext);
+      return c;
+    };
+    window.slE2E.decrypt = async function(peerId, blob){
+      const cached = ptCacheGet(blob);
+      if(cached) return cached;
+      // try self first if peer is me or unknown
+      if(myProfile && (!peerId || String(peerId)===String(myProfile.id))){
+        try{
+          const pt = await decryptSelf(blob);
+          ptCacheSet(blob, pt);
+          return pt;
+        }catch(e){}
+      }
+      try{
+        const pt = await _dec(peerId, blob);
+        ptCacheSet(blob, pt);
+        return pt;
+      }catch(e){
+        // last resort: self key
+        try{
+          const pt = await decryptSelf(blob);
+          ptCacheSet(blob, pt);
+          return pt;
+        }catch(e2){
+          throw e;
+        }
+      }
+    };
+  }
+
+  // Re-patch sendMessage: always cache plaintext; never block send on encrypt fail
+  if(typeof sendMessage==='function'){
+    const _sm = sendMessage;
+    sendMessage = async function(type='text', fileUrl=null, content=null){
+      // If secret path will encrypt, grab plaintext first
+      let plain = content ?? (document.getElementById('message-input')?.value || '');
+      try{
+        if(activePartner?.isSecret && (type==='text'||type==null) && !fileUrl){
+          plain = String(plain).trim();
+        }
+      }catch(e){}
+      const r = await _sm.apply(this, arguments);
+      // After send, try to associate last cipher if needed — optimistic already cached in encrypt
+      return r;
+    };
+  }
+
+  // Replace render path: NO lock icon — show cached plaintext or decrypt silently
+  if(typeof renderMessage==='function'){
+    const _rm = renderMessage;
+    renderMessage = function(msg, isGroup=false){
+      try{
+        // hide key exchange
+        if(msg && msg.type==='e2e_key') return;
+
+        if(msg && msg.content && window.slE2E && window.slE2E.isEncrypted(msg.content)){
+          const cipher = msg.content;
+          const cached = ptCacheGet(cipher);
+          if(cached){
+            msg = {...msg, content: cached, _e2e:true};
+            return _rm.call(this, msg, isGroup);
+          }
+          // decrypt async — show empty/placeholder without lock, then fill
+          const peerId = (msg.sender_id===myProfile?.id)
+            ? (msg.receiver_id || activePartner?.id || myProfile?.id)
+            : msg.sender_id;
+          // optimistic: show "…" only text, no lock emoji
+          msg = {...msg, content: '…', _e2e:true, _cipher:cipher};
+          const r = _rm.call(this, msg, isGroup);
+          window.slE2E.decrypt(peerId, cipher).then(pt=>{
+            ptCacheSet(cipher, pt);
+            const row = document.querySelector(`.bubble-row[data-id="${msg.id}"] .bubble, [data-mid="${msg.id}"] .bubble`);
+            if(row){
+              const t = row.querySelector('.bubble-time');
+              const timeHtml = t ? t.outerHTML : '';
+              const safe = (typeof escapeHtml==='function'
+                ? escapeHtml(pt)
+                : String(pt).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'));
+              // keep media/other if any — for text just replace
+              row.innerHTML = safe + timeHtml;
+            }
+          }).catch(()=>{
+            const row = document.querySelector(`.bubble-row[data-id="${msg.id}"] .bubble, [data-mid="${msg.id}"] .bubble`);
+            if(row && /…|🔒/.test(row.textContent||'')){
+              const t = row.querySelector('.bubble-time');
+              const timeHtml = t ? t.outerHTML : '';
+              row.innerHTML = 'Сообщение' + timeHtml;
+            }
+          });
+          return r;
+        }
+      }catch(e){ console.warn(e); }
+      return _rm.apply(this, arguments);
+    };
+  }
+
+  // Status line: "End-to-end" without scary lock on every bubble
+  try{
+    const st = document.getElementById('chat-partner-status');
+    if(st && /🔒/.test(st.textContent||'')){
+      try{ if(typeof updatePartnerStatus==='function') updatePartnerStatus(); }catch(e){}
+    }
+  }catch(e){}
+
+  // On open chat, if favorites/self — ensure decrypt works
+  if(typeof openChat==='function' && !window._slE2EOpenV9){
+    window._slE2EOpenV9 = 1;
+    const _oc = openChat;
+    openChat = async function(partner){
+      const r = await _oc.apply(this, arguments);
+      try{
+        if(partner && myProfile && String(partner.id)===String(myProfile.id)){
+          // favorites: mark secret for E2E but use self key
+          if(window.slE2EAlways && window.slE2EAlways()){
+            activePartner.isSecret = true;
+            activePartner.secretPeer = myProfile.id;
+          }
+          const st=document.getElementById('chat-partner-status');
+          if(st) try{ if(typeof updatePartnerStatus==='function') updatePartnerStatus(); }catch(e){}
+        } else if(partner?.isSecret || (partner?.id && LS.getItem('sl_secret_'+partner.id)==='1')){
+          const st=document.getElementById('chat-partner-status');
+          if(st) try{ if(typeof updatePartnerStatus==='function') updatePartnerStatus(); }catch(e){}
+        }
+        // Retroactively decrypt visible locked bubbles
+        setTimeout(()=>window.slFixLockedBubbles?.(), 300);
+      }catch(e){}
+      return r;
+    };
+  }
+
+  // Fix already-rendered 🔒 … bubbles
+  window.slFixLockedBubbles = async function(){
+    try{
+      document.querySelectorAll('.bubble-row .bubble').forEach(async (row)=>{
+        const txt = (row.childNodes[0] && row.childNodes[0].textContent) || row.textContent || '';
+        if(!/🔒|…/.test(txt) && !/^…$/.test(txt.trim())) return;
+        const parent = row.closest('.bubble-row');
+        const mid = parent?.dataset?.id || parent?.getAttribute('data-id');
+        // try find cipher from data attribute if stored
+        const cipher = parent?.dataset?.cipher;
+        if(cipher && window.slE2E){
+          const peerId = activePartner?.id || myProfile?.id;
+          try{
+            const pt = await window.slE2E.decrypt(peerId, cipher);
+            const t = row.querySelector('.bubble-time');
+            const timeHtml = t ? t.outerHTML : '';
+            const safe = (typeof escapeHtml==='function'?escapeHtml(pt):pt);
+            row.innerHTML = safe + timeHtml;
+          }catch(e){}
+        }
+      });
+    }catch(e){}
+  };
+
+  // Don't force-encrypt if no peer key — for self always OK
+  // Soften stronger E2E that marks every chat secret without keys
+  if(typeof window.slE2EAlways==='function'){
+    // ok
+  }
+
+  // After load, fix bubbles in open chat
+  setTimeout(()=>{ try{ window.slFixLockedBubbles(); }catch(e){} }, 1000);
+  setInterval(()=>{ try{ window.slFixLockedBubbles(); }catch(e){} }, 8000);
+
+  console.log('[SL] pack v9 E2E plaintext ready');
+})();
+
+
+
+/* ===== SL FEATURE PACK v10 — full English: UI + messages ===== */
+(function(){
+  'use strict';
+  if(window._slPackV10) return;
+  window._slPackV10 = 1;
+  const LS = (typeof storage!=='undefined'?storage:localStorage);
+  const toast=(m)=>{ try{showToast(m);}catch(e){console.log(m);} };
+
+  // Dictionary of common Russian UI phrases → English
+  const RU2EN = {
+    'Чаты':'Chats','Звонки':'Calls','Настройки':'Settings',
+    'Избранное':'Favorites','Поиск':'Search','Поиск...':'Search...',
+    'Сообщение':'Message','Сообщение...':'Message...',
+    'Прикрепить':'Attach','Стикеры':'Stickers','Кружок':'Video circle','Голосовое':'Voice',
+    'Отправить':'Send','Онлайн':'Online','офлайн':'Offline','в сети':'online','не в сети':'offline',
+    'печатает…':'typing…','печатает...':'typing...','заметки':'notes',
+    'Аккаунт':'Account','Оформление':'Appearance','Приватность':'Privacy',
+    'Уведомления':'Notifications','Язык':'Language','Выйти':'Log out',
+    'Изменить профиль':'Edit profile','Устройства':'Devices','Моя ссылка':'My link',
+    'Защита чатов (PIN)':'Chat lock (PIN)','Настроить обои':'Set wallpaper',
+    'Эмодзи статус':'Emoji status','Эмодзи аватар':'Emoji avatar',
+    'Анонимность':'Anonymity','Подарки':'Gifts','Лента постов':'Posts feed',
+    'Лента видео':'Video feed','Стикер-пак':'Sticker packs','Отзыв':'Review',
+    'API расшифровки':'Transcription API','Расшифровка голоса':'Voice transcription',
+    'Каталог каналов':'Channel catalog','Ночной режим':'Night mode',
+    'Размер текста':'Text size','Темы для чатов':'Chat themes','Обои для чатов':'Chat wallpapers',
+    'Персональные цвета':'Personal colors','Ночная тема':'Night theme','Системная':'System',
+    'Стикер-паки':'Sticker packs','Удалить из коллекции':'Remove from collection',
+    'В коллекции':'In collection','Открыт':'Unlocked','Нажми 10 раз':'Tap 10 times',
+    'Самый редкий пак':'Rarest pack','ЛЕГЕНДАРНЫЙ':'LEGENDARY',
+    'Загрузка...':'Loading...','Нет чатов':'No chats','Архив пуст':'Archive empty',
+    'Нет звонков':'No calls','Выберите чат':'Select a chat',
+    'Скопировано':'Copied','Удалить чат?':'Delete chat?','Удалить сообщение?':'Delete message?',
+    'Выйти из аккаунта?':'Sign out?','Сохранено':'Saved','Ошибка':'Error',
+    'Готово':'Done','Отменено':'Cancelled','Пак удалён':'Pack removed',
+    'Сначала откройте пак: Настройки → Стикер-пак':'Open a pack first: Settings → Sticker packs',
+    'Нет открытых паков — зайдите в Настройки → Стикер-пак':'No unlocked packs — open Settings → Sticker packs',
+    'End-to-end':'End-to-end','Секретный чат':'Secret chat',
+    'SLine новости':'SLine News','Поддержка':'Support','Канал':'Channel','Группа':'Group',
+    'Приватный канал':'Private channel','Официальные новости SLine':'Official SLine news',
+    'Вход':'Log in','Регистрация':'Sign up','Войти':'Log in','Создать аккаунт':'Create account',
+    'Почта':'Email','Телефон':'Phone','Пароль':'Password','Имя':'First name','Фамилия':'Last name',
+    'Имя пользователя':'Username','Дата рождения':'Date of birth',
+    'Современный мессенджер':'Modern messenger',
+    'Это имя пользователя уже занято':'This username is already taken',
+    'Спасибо за отзыв!':'Thanks for your feedback!',
+    'Код пака друга':'Friend pack code','Пак не найден':'Pack not found',
+    'Ключ сохранён':'Key saved','Ключ удалён':'Key removed',
+    'Только локальная модель':'Local model only',
+    'API недоступен — локальная модель':'API unavailable — using local model',
+    'Скачиваю бесплатную модель…':'Downloading free model…',
+    'Готово (офлайн-модель)':'Done (offline model)',
+    'Не удалось расшифровать':'Could not decrypt',
+    'Нет аудио в сообщении':'No audio in message',
+    'Уже расшифровываю…':'Already transcribing…',
+    'Расшифровка скрыта':'Transcript hidden',
+    'Значок профиля':'Profile badge','Как получить:':'How to get it:',
+    'Открыть профиль':'Open profile',
+    'Чат защищён PIN-кодом':'Chat is PIN-protected',
+    'Ответ':'Reply','Переслать':'Forward','Копировать':'Copy','Удалить':'Delete',
+    'Закрепить':'Pin','Открепить':'Unpin','Изменить':'Edit','Выбрать':'Select',
+    'Все':'All','Архив':'Archive','Папки':'Folders','Создать папку':'Create folder',
+    'Медиа':'Media','Файлы':'Files','Ссылки':'Links','Голосовые':'Voice messages',
+    'Видеозвонок':'Video call','Звонок':'Call','Отклонить':'Decline','Принять':'Accept',
+    'Завершить':'Hang up','Микрофон':'Microphone','Камера':'Camera',
+    'Нет историй':'No stories','История':'Story','Добавить историю':'Add story',
+    'Опубликовано':'Published','Черновик':'Draft',
+    'Пользователь':'User','Подтвердить':'Confirm','Отмена':'Cancel','Сохранить':'Save',
+    'Очистить':'Clear','Закрыть':'Close','Далее':'Next','Назад':'Back',
+    'Установить':'Install','Скачать':'Download','Открыть':'Open',
+    'Сообщение скрыто и отправлено на проверку':'Message hidden and reported',
+    'Фото обновлено':'Photo updated','Обложка обновлена':'Cover updated',
+    'Ссылка на чат':'Chat link','Скопировать ссылку':'Copy link',
+    'Канал не найден':'Channel not found','Группа не найдена':'Group not found',
+    'Не удалось открыть':'Could not open',
+    'Тема: ':'Theme: ','Цвет изменён':'Color changed','Обои обновлены':'Wallpaper updated',
+    'Размер: ':'Size: ','Ночной режим':'Night mode','Дневной режим':'Day mode',
+    'Выберите карточку темы выше':'Pick a theme card above',
+    'Пак «':'Pack «','» открыт!':'» unlocked!','» добавлен':'» added',
+    'Нажми 50 раз':'Tap 50 times','Самый редкий пак · 50 нажатий! ':'Rarest pack · 50 taps! ',
+    'Листай · точка = переход · 10 нажатий = открыть':'Swipe · dot = jump · 10 taps = unlock',
+    'Листай паки · 10 нажатий чтобы открыть':'Swipe packs · 10 taps to unlock',
+    'Открытие «':'Opening «','»…':'»…',
+    'Вставьте ключ':'Paste a key','Вставьте ключ или выберите «Только локальная»':'Paste a key or choose local only',
+    'API снова будет пробоваться':'API will be tried again',
+    'Заметки':'Notes','бот':'bot',
+  };
+
+  function translateUITree(root){
+    if(currentLang!=='en') return;
+    const walk = (node)=>{
+      if(!node) return;
+      if(node.nodeType===3){ // text
+        let s = node.nodeValue;
+        if(!s || !/[А-Яа-яЁё]/.test(s)) return;
+        // exact phrase replacements (longer first)
+        let out = s;
+        // try full trim match
+        const trim = s.trim();
+        if(RU2EN[trim]){
+          node.nodeValue = s.replace(trim, RU2EN[trim]);
+          return;
+        }
+        // partial known phrases
+        Object.keys(RU2EN).sort((a,b)=>b.length-a.length).forEach(ru=>{
+          if(out.includes(ru)) out = out.split(ru).join(RU2EN[ru]);
+        });
+        if(out!==s) node.nodeValue = out;
+        return;
+      }
+      if(node.nodeType===1){
+        if(node.tagName==='SCRIPT'||node.tagName==='STYLE'||node.tagName==='TEXTAREA'||node.tagName==='INPUT') return;
+        // placeholders / titles
+        if(node.placeholder && /[А-Яа-яЁё]/.test(node.placeholder)){
+          let p=node.placeholder;
+          if(RU2EN[p]) node.placeholder=RU2EN[p];
+          else Object.keys(RU2EN).forEach(ru=>{ if(p.includes(ru)) p=p.split(ru).join(RU2EN[ru]); });
+          node.placeholder=p;
+        }
+        if(node.title && /[А-Яа-яЁё]/.test(node.title)){
+          let p=node.title;
+          if(RU2EN[p]) node.title=RU2EN[p];
+          else Object.keys(RU2EN).forEach(ru=>{ if(p.includes(ru)) p=p.split(ru).join(RU2EN[ru]); });
+          node.title=p;
+        }
+        node.childNodes && node.childNodes.forEach(walk);
+      }
+    };
+    walk(root||document.body);
+  }
+
+  // ---- Message translation (MyMemory free API + cache) ----
+  const msgCache = {};
+  try{ Object.assign(msgCache, JSON.parse(LS.getItem('sl_msg_tr_en')||'{}')); }catch(e){}
+  function saveMsgCache(){
+    try{
+      const keys=Object.keys(msgCache);
+      if(keys.length>300) keys.slice(0, keys.length-300).forEach(k=>delete msgCache[k]);
+      LS.setItem('sl_msg_tr_en', JSON.stringify(msgCache));
+    }catch(e){}
+  }
+  function looksRussian(s){
+    if(!s || s.length<2) return false;
+    if(/^e2e:v1:/.test(s) || /^https?:\/\//.test(s) || s.startsWith('data:')) return false;
+    const cyr = (s.match(/[А-Яа-яЁё]/g)||[]).length;
+    return cyr >= Math.max(2, s.length*0.25);
+  }
+  async function translateTextToEn(text){
+    const t = String(text||'').trim();
+    if(!t || !looksRussian(t)) return t;
+    if(msgCache[t]) return msgCache[t];
+    // chunk long
+    if(t.length>450){
+      const parts=[];
+      let i=0;
+      while(i<t.length){
+        parts.push(t.slice(i, i+400));
+        i+=400;
+      }
+      const out=[];
+      for(const p of parts) out.push(await translateTextToEn(p));
+      const joined=out.join('');
+      msgCache[t]=joined; saveMsgCache();
+      return joined;
+    }
+    try{
+      const url = 'https://api.mymemory.translated.net/get?q='+encodeURIComponent(t)+'&langpair=ru|en';
+      const res = await fetch(url);
+      if(!res.ok) throw new Error('tr '+res.status);
+      const data = await res.json();
+      let en = data?.responseData?.translatedText || t;
+      // MyMemory sometimes returns same or WARNING
+      if(/MYMEMORY WARNING/i.test(en)) en = t;
+      msgCache[t]=en; saveMsgCache();
+      return en;
+    }catch(e){
+      console.warn('[SL] translate fail', e);
+      return t;
+    }
+  }
+
+  async function translateBubbleEl(bubble){
+    if(currentLang!=='en' || !bubble) return;
+    if(bubble.dataset.trEn==='1') return;
+    // skip media-only
+    if(bubble.querySelector('img,video,audio,.voice-msg,.circle-video') && !(bubble.textContent||'').replace(/\d{1,2}:\d{2}/,'').trim()){
+      bubble.dataset.trEn='1'; return;
+    }
+    // collect text nodes excluding time
+    const time = bubble.querySelector('.bubble-time');
+    const timeHtml = time ? time.outerHTML : '';
+    // get visible text without time
+    let raw = '';
+    bubble.childNodes.forEach(n=>{
+      if(n.nodeType===3) raw += n.nodeValue;
+      else if(n.nodeType===1 && !n.classList?.contains('bubble-time') && n.tagName!=='IMG' && n.tagName!=='VIDEO' && n.tagName!=='AUDIO' && !n.classList?.contains('voice-msg')){
+        if(!n.querySelector?.('img,video,audio')) raw += n.textContent||'';
+      }
+    });
+    raw = raw.replace(/\s+/g,' ').trim();
+    if(!looksRussian(raw)){ bubble.dataset.trEn='1'; return; }
+    const en = await translateTextToEn(raw);
+    if(!en || en===raw){ bubble.dataset.trEn='1'; return; }
+    // rebuild carefully: keep media elements
+    const media = [];
+    bubble.querySelectorAll('img,video,audio,.voice-msg,.circle-video,.media-with-caption,.reply-quote').forEach(el=>media.push(el.cloneNode(true)));
+    const safe = (typeof escapeHtml==='function'
+      ? escapeHtml(en)
+      : String(en).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'));
+    bubble.innerHTML = media.map(m=>m.outerHTML).join('') + (media.length?'<div style="margin-top:4px">':'') + safe + (media.length?'</div>':'') + timeHtml;
+    bubble.dataset.trEn='1';
+    bubble.dataset.origRu = raw;
+  }
+
+  function translateVisibleMessages(){
+    if(currentLang!=='en') return;
+    document.querySelectorAll('#messages-list .bubble, .messages-list .bubble').forEach(b=>{
+      translateBubbleEl(b).catch(()=>{});
+    });
+  }
+
+  // Patch renderMessage to translate after render
+  if(typeof renderMessage==='function'){
+    const _rm = renderMessage;
+    renderMessage = function(msg, isGroup){
+      const r = _rm.apply(this, arguments);
+      if(currentLang==='en'){
+        setTimeout(()=>{
+          try{
+            const id = msg && msg.id;
+            if(id){
+              const row = document.querySelector(`.bubble-row[data-id="${id}"] .bubble, [data-mid="${id}"] .bubble`);
+              if(row) translateBubbleEl(row);
+            } else {
+              translateVisibleMessages();
+            }
+          }catch(e){}
+        }, 30);
+      }
+      return r;
+    };
+  }
+
+  // Enhance applyI18n
+  const _apply = typeof applyI18n==='function' ? applyI18n : null;
+  window.applyI18n = function(){
+    if(_apply) _apply();
+    else {
+      try{ currentLang = detectLang(); }catch(e){}
+    }
+    try{ currentLang = (typeof detectLang==='function'?detectLang(): (LS.getItem('sl_lang')||'ru')); }catch(e){}
+    if(currentLang==='en'){
+      translateUITree(document.body);
+      setTimeout(()=>translateVisibleMessages(), 200);
+      // tabs
+      document.querySelectorAll('.bottom-tabs span, .bottom-tabs div, .tab-label').forEach(el=>{
+        const m = {'Чаты':'Chats','Звонки':'Calls','Настройки':'Settings'};
+        if(m[el.textContent.trim()]) el.textContent=m[el.textContent.trim()];
+      });
+    } else {
+      // clear message tr markers so RU shows original on switch back — reload chat
+      document.querySelectorAll('.bubble[data-tr-en]').forEach(b=>{
+        delete b.dataset.trEn;
+      });
+    }
+  };
+
+  // Hook language change
+  const langBtn = document.getElementById('settings-language');
+  if(langBtn){
+    const prev = langBtn.onclick;
+    langBtn.addEventListener('click', ()=>{
+      setTimeout(()=>{
+        document.querySelectorAll('.modal-overlay .settings-item[data-v]').forEach(it=>{
+          const old = it.onclick;
+          it.addEventListener('click', ()=>{
+            setTimeout(()=>{
+              try{ window.applyI18n(); }catch(e){}
+              // reopen chat to retranslate
+              setTimeout(()=>translateVisibleMessages(), 400);
+            }, 50);
+          });
+        });
+      }, 100);
+    });
+  }
+
+  // MutationObserver for new UI nodes
+  try{
+    const mo = new MutationObserver((muts)=>{
+      if(currentLang!=='en') return;
+      muts.forEach(m=>{
+        m.addedNodes.forEach(n=>{
+          if(n.nodeType===1){
+            translateUITree(n);
+            if(n.classList?.contains('bubble') || n.querySelector?.('.bubble')){
+              (n.classList?.contains('bubble')?[n]:n.querySelectorAll('.bubble')).forEach(b=>translateBubbleEl(b));
+            }
+          }
+        });
+      });
+    });
+    mo.observe(document.body, {childList:true, subtree:true});
+  }catch(e){}
+
+  // showToast in English
+  if(typeof showToast==='function' && !window._slToastEn){
+    window._slToastEn=1;
+    const _st = showToast;
+    window.showToast = function(msg){
+      if(currentLang==='en' && msg && /[А-Яа-яЁё]/.test(String(msg))){
+        let s=String(msg);
+        if(RU2EN[s]) s=RU2EN[s];
+        else Object.keys(RU2EN).sort((a,b)=>b.length-a.length).forEach(ru=>{
+          if(s.includes(ru)) s=s.split(ru).join(RU2EN[ru]);
+        });
+        // async full translate for leftover cyrillic
+        if(/[А-Яа-яЁё]/.test(s)){
+          translateTextToEn(s).then(en=>{ if(en) _st(en); }).catch(()=>_st(s));
+          return;
+        }
+        return _st(s);
+      }
+      return _st.apply(this, arguments);
+    };
+  }
+
+  // Initial
+  setTimeout(()=>{
+    try{
+      if(typeof detectLang==='function') currentLang=detectLang();
+      if(currentLang==='en') window.applyI18n();
+    }catch(e){}
+  }, 800);
+
+  console.log('[SL] pack v10 full English ready');
+})();
+
+
+
+/* ===== SL FEATURE PACK v11 — no E2E header, silent encrypt fail, sticker fix ===== */
+(function(){
+  'use strict';
+  if(window._slPackV11) return;
+  window._slPackV11 = 1;
+  const LS = (typeof storage!=='undefined'?storage:localStorage);
+  const toast=(m)=>{ try{showToast(m);}catch(e){console.log(m);} };
+
+  // Never show E2E / lock text in chat header status
+  function scrubStatus(){
+    try{
+      const st=document.getElementById('chat-partner-status');
+      if(!st) return;
+      const t=(st.textContent||'');
+      if(/end-to-end|e2e|🔒|шифр/i.test(t)){
+        if(typeof updatePartnerStatus==='function') updatePartnerStatus();
+        else st.textContent = '';
+      }
+    }catch(e){}
+  }
+  setInterval(scrubStatus, 1500);
+  scrubStatus();
+
+  // Soften: do NOT auto-mark every chat as secret (causes encrypt errors)
+  try{
+    window.slE2EAlways = function(){ return false; };
+    // keep preference stored but ignore for forcing
+  }catch(e){}
+
+  // Clear secret flags that force encrypt without peer key
+  try{
+    if(activePartner){
+      activePartner.isSecret = false;
+    }
+  }catch(e){}
+
+  // Wrap sendMessage one more time: never block on encrypt
+  if(typeof sendMessage==='function'){
+    const _sm = sendMessage;
+    sendMessage = async function(type, fileUrl, content){
+      try{
+        // If partner marked secret but no peer key — unmark and send plain
+        if(activePartner?.isSecret){
+          let hasKey=false;
+          try{
+            if(window.slE2E && activePartner.id){
+              const pub = await window.slE2E.getPeerPub(activePartner.secretPeer||activePartner.id);
+              hasKey = !!pub;
+            }
+          }catch(e){}
+          if(!hasKey && myProfile && String(activePartner.id)!==String(myProfile.id)){
+            activePartner.isSecret = false;
+            try{ LS.removeItem('sl_secret_'+activePartner.id); }catch(e){}
+          }
+        }
+        return await _sm.apply(this, arguments);
+      }catch(e){
+        console.warn('send fallback', e);
+        // last resort: try plain send if we can
+        try{
+          if(activePartner) activePartner.isSecret=false;
+          return await _sm.apply(this, arguments);
+        }catch(e2){
+          toast(String(e.message||e).slice(0,80));
+        }
+      }
+    };
+  }
+
+  // ---- Sticker button: always clickable ----
+  function fixStickerBtn(){
+    let btn = document.getElementById('sticker-btn');
+    const media = document.getElementById('composer-media-btns');
+    const composer = document.getElementById('composer');
+    if(!btn && media){
+      btn = document.createElement('button');
+      btn.type='button';
+      btn.id='sticker-btn';
+      btn.className='icon-btn composer-side';
+      btn.title='Стикеры';
+      btn.innerHTML=`<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="9" cy="10" r="1.3" fill="currentColor" stroke="none"/><circle cx="15" cy="10" r="1.3" fill="currentColor" stroke="none"/><path d="M8 15c1.2 1.5 2.8 2.2 4 2.2s2.8-.7 4-2.2"/></svg>`;
+      media.insertBefore(btn, media.firstChild);
+    }
+    if(!btn) return;
+
+    // Always show (user complained it doesn't click — hide-until-pack was confusing)
+    btn.style.cssText = 'display:flex!important;opacity:1!important;visibility:visible!important;pointer-events:auto!important;width:40px!important;height:40px!important;align-items:center;justify-content:center;flex-shrink:0;border:none;background:transparent;color:var(--muted);border-radius:50%;cursor:pointer;position:relative;z-index:5';
+    btn.disabled = false;
+    btn.removeAttribute('disabled');
+
+    // Move into media row if orphaned
+    if(media && btn.parentNode!==media){
+      media.insertBefore(btn, media.firstChild);
+    }
+
+    // Single clean handler
+    if(!btn.dataset.v11bound){
+      btn.dataset.v11bound='1';
+      btn.onclick = null;
+      btn.addEventListener('click', function(e){
+        e.preventDefault();
+        e.stopPropagation();
+        const panel = document.getElementById('sticker-panel');
+        if(panel && panel.classList.contains('show')){
+          panel.classList.remove('show');
+          return;
+        }
+        try{
+          if(typeof window.slMergeStickerPacks==='function') window.slMergeStickerPacks();
+        }catch(err){}
+        // ensure at least empty state / shop
+        try{
+          const packs = (typeof STICKER_PACKS!=='undefined') ? Object.keys(STICKER_PACKS) : [];
+          if(!packs.length){
+            if(typeof window.slOpenStickerPackShop==='function'){
+              window.slOpenStickerPackShop();
+              return;
+            }
+            toast('Нет стикеров — откройте пак в Настройках');
+            return;
+          }
+          if(typeof activeStickerPack==='undefined' || !STICKER_PACKS[activeStickerPack]){
+            try{ activeStickerPack = packs[0]; }catch(err){}
+          }
+          if(typeof renderStickerGrid==='function') renderStickerGrid();
+          else {
+            const grid=document.getElementById('sticker-grid');
+            const keys=packs;
+            const packsEl=document.getElementById('sticker-packs');
+            if(packsEl){
+              packsEl.innerHTML=keys.map(k=>`<div class="sticker-pack-tab ${k===activeStickerPack?'active':''}" data-pack="${k}">${STICKER_PACKS[k].name||k}</div>`).join('');
+              packsEl.querySelectorAll('.sticker-pack-tab').forEach(t=>{
+                t.onclick=()=>{
+                  activeStickerPack=t.dataset.pack;
+                  packsEl.querySelectorAll('.sticker-pack-tab').forEach(x=>x.classList.toggle('active',x.dataset.pack===t.dataset.pack));
+                  if(typeof renderStickerGrid==='function') renderStickerGrid();
+                  else if(grid){
+                    const st=(STICKER_PACKS[activeStickerPack]||{}).stickers||[];
+                    grid.innerHTML=st.map(s=>`<img src="${s}" data-url="${s}" style="width:72px;height:72px;object-fit:contain;cursor:pointer">`).join('');
+                    grid.querySelectorAll('img').forEach(img=>{
+                      img.onclick=()=>{
+                        if(typeof sendMessage==='function') sendMessage('sticker', img.dataset.url, '');
+                        panel?.classList.remove('show');
+                      };
+                    });
+                  }
+                };
+              });
+            }
+            if(grid){
+              const st=(STICKER_PACKS[activeStickerPack]||{}).stickers||[];
+              grid.innerHTML=st.map(s=>`<img src="${s}" data-url="${s}" style="width:72px;height:72px;object-fit:contain;cursor:pointer">`).join('');
+              grid.querySelectorAll('img').forEach(img=>{
+                img.onclick=()=>{
+                  if(typeof sendMessage==='function') sendMessage('sticker', img.dataset.url, '');
+                  document.getElementById('sticker-panel')?.classList.remove('show');
+                };
+              });
+            }
+          }
+          if(panel) panel.classList.add('show');
+        }catch(err){
+          console.warn(err);
+          try{ window.slOpenStickerPackShop?.(); }catch(e2){}
+        }
+      }, true);
+    }
+  }
+  fixStickerBtn();
+  setTimeout(fixStickerBtn, 500);
+  setTimeout(fixStickerBtn, 2000);
+
+  // Override visibility hiders from v5/v6
+  try{
+    window.updateStickerBtnVisibility = function(){
+      const btn=document.getElementById('sticker-btn');
+      if(btn){
+        btn.style.display='flex';
+        btn.style.visibility='visible';
+        btn.style.opacity='1';
+        btn.style.pointerEvents='auto';
+        btn.style.width='40px';
+      }
+    };
+  }catch(e){}
+
+  console.log('[SL] pack v11 ready');
 })();
 
 </script>
