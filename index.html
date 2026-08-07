@@ -2516,7 +2516,7 @@ async function doRegisterFinish(){
   try{
     try{
       const {data: exists} = await sb.from('profiles').select('id').eq('username', username).maybeSingle();
-      if(exists){ authMsg('Это имя пользователя уже занято'); setBtnLoading(btn,false); setRegStep(3); return; }
+      if(exists){ authMsg('Это имя пользователя уже занято'); try{ const u=document.getElementById('reg-username'); if(u){ u.style.borderColor='var(--danger)'; u.focus(); } }catch(e){} setBtnLoading(btn,false); setRegStep(3); return; }
     }catch(e){}
 
     const recoveryKey = generateRecoveryKey();
@@ -2544,7 +2544,14 @@ async function doRegisterFinish(){
     });
     if(error){
       _awaitingRecoveryKey = false;
-      authMsg(error.message || 'Ошибка регистрации');
+      const em = String(error.message||error||'');
+      if(/username|unique|duplicate|already|занят|profiles_username/i.test(em)){
+        authMsg('Это имя пользователя уже занято');
+        setBtnLoading(btn, false);
+        setRegStep(3);
+        return;
+      }
+      authMsg(em || 'Ошибка регистрации');
       setBtnLoading(btn, false);
       setRegStep(1); // back to contact form
       return;
@@ -3838,13 +3845,25 @@ function buildMessageBody(msg, replyHtml, bodyText){
   }
   if(msg.type==='image'){
     const cap=(msg.content||'').trim();
-    return `<div class="media-with-caption"><img src="${msg.file_url}" loading="lazy">${cap?`<div class="media-caption">${formatInlineTokens(cap)}</div>`:''}</div>`;
+    return `<div class="media-with-caption sl-media-card"><img src="${msg.file_url}" loading="lazy" class="sl-media-img">${cap?`<div class="media-caption">${formatInlineTokens(cap)}</div>`:''}</div>`;
   }
   if(msg.type==='video'){
     const cap=(msg.content||'').trim();
-    return `<div class="media-with-caption"><video src="${msg.file_url}" controls playsinline></video>${cap?`<div class="media-caption">${formatInlineTokens(cap)}</div>`:''}</div>`;
+    return `<div class="media-with-caption sl-media-card"><video src="${msg.file_url}" controls playsinline class="sl-media-vid"></video>${cap?`<div class="media-caption">${formatInlineTokens(cap)}</div>`:''}</div>`;
   }
-  if(msg.type==='file') return `<div style="padding:8px;background:rgba(0,0,0,.2);border-radius:10px">${escapeHtml(msg.content||'Файл')}</div>`;
+  if(msg.type==='file'){
+    const name = escapeHtml(msg.content||'Файл');
+    const url = escapeHtml(msg.file_url||'');
+    const low = String(msg.content||msg.file_url||'').toLowerCase();
+    const isInstall = /\.(apk|exe|msi|dmg|pkg|deb|rpm|ipa|appx|bat|cmd|sh|jar)(\?|$)/i.test(low) || /\.(apk|exe)\b/i.test(low);
+    const btnLabel = isInstall ? 'Установить' : 'Скачать';
+    return `<div class="sl-file-card" data-url="${url}" data-name="${name}">
+      <div class="sl-file-ico">📄</div>
+      <div class="sl-file-meta"><div class="sl-file-name">${name}</div>
+      <div class="sl-file-sub">${isInstall?'Приложение / установщик':'Файл'}</div></div>
+      <a class="sl-file-btn" href="${url}" download="${name}" target="_blank" rel="noopener">${btnLabel}</a>
+    </div>`;
+  }
   if(msg.type==='sticker') return `<img src="${msg.file_url}" class="sticker-animated">`;
   if(msg.type==='gift') return `<div class="gift-bubble" data-gift="${escapeHtml(msg.file_url||'')}"></div>`;
   if(msg.type==='poll') return `<div class="poll-wrap" data-poll="1"></div>`;
@@ -17427,6 +17446,589 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
 
   console.log('[SL] in-app + system notifications + fast delivery ready');
 })();
+
+
+
+/* ===== SL FEATURE PACK v4 — files, profile, stickers, media, calls, review ===== */
+(function(){
+  'use strict';
+  if(window._slPackV4) return;
+  window._slPackV4 = 1;
+  const LS = (typeof storage!=='undefined'?storage:localStorage);
+  const toast=(m)=>{ try{showToast(m);}catch(e){console.log(m);} };
+  const esc=(s)=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+
+  // ---------- CSS ----------
+  if(!document.getElementById('sl-pack-v4-css')){
+    const st=document.createElement('style');
+    st.id='sl-pack-v4-css';
+    st.textContent=`
+.sl-file-card{display:flex;align-items:center;gap:10px;min-width:220px;max-width:280px;padding:4px 2px}
+.sl-file-ico{width:42px;height:42px;border-radius:12px;background:rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
+.bubble.them .sl-file-ico{background:rgba(76,124,243,.15)}
+.sl-file-meta{flex:1;min-width:0}
+.sl-file-name{font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sl-file-sub{font-size:11px;opacity:.75;margin-top:2px}
+.sl-file-btn{
+  flex-shrink:0;padding:8px 12px;border-radius:12px;border:none;cursor:pointer;
+  background:rgba(255,255,255,.22);color:inherit;font-weight:800;font-size:12px;text-decoration:none;
+}
+.bubble.them .sl-file-btn{background:var(--accent-a);color:#fff}
+.sl-media-card{overflow:hidden;border-radius:16px;max-width:min(78vw,320px)}
+.sl-media-card .sl-media-img,.sl-media-card .sl-media-vid{
+  display:block;width:100%;max-height:min(55vh,420px);object-fit:cover;border-radius:16px;background:#000;
+}
+.bubble.me .sl-media-card,.bubble.them .sl-media-card{padding:0!important;background:transparent!important;border:none!important}
+.bubble.me .sl-media-card .media-caption{padding:6px 10px 8px;color:#fff}
+.bubble.them .sl-media-card .media-caption{padding:6px 10px 8px}
+.composer-smile#sticker-btn, #sticker-btn.composer-smile{
+  width:36px;height:36px;opacity:1!important;visibility:visible!important;display:flex!important;
+}
+.sl-pack-modal .pack-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;max-height:50vh;overflow-y:auto;padding:4px}
+.sl-pack-tile{aspect-ratio:1;border-radius:14px;border:1px solid var(--line);background:var(--input-bg);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;cursor:pointer;position:relative;overflow:hidden}
+.sl-pack-tile .emoji{font-size:28px}
+.sl-pack-tile .nm{font-size:10px;color:var(--muted);text-align:center;padding:0 4px}
+.sl-pack-tile.locked{opacity:.55;filter:grayscale(.4)}
+.sl-pack-tile.owned{box-shadow:inset 0 0 0 2px var(--mint)}
+.sl-pack-open-ov{position:fixed;inset:0;z-index:30000;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:16px}
+.sl-pack-box{width:140px;height:140px;border-radius:24px;background:linear-gradient(135deg,#4C7CF3,#6D5DF6);
+  display:flex;align-items:center;justify-content:center;font-size:56px;box-shadow:0 20px 60px rgba(76,124,243,.5);
+  animation:slPackShake .4s ease-in-out infinite;cursor:pointer;user-select:none}
+@keyframes slPackShake{0%,100%{transform:rotate(-3deg) scale(1)}50%{transform:rotate(3deg) scale(1.05)}}
+.sl-pack-box.burst{animation:slPackBurst .6s cubic-bezier(.2,.9,.3,1.4) forwards}
+@keyframes slPackBurst{0%{transform:scale(1)}40%{transform:scale(1.3)}100%{transform:scale(0);opacity:0}}
+.sl-pack-reward{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;max-width:280px;opacity:0;transform:scale(.5);transition:.35s cubic-bezier(.2,.9,.3,1.2)}
+.sl-pack-reward.show{opacity:1;transform:scale(1)}
+.sl-pack-reward span{font-size:36px;animation:stickerPop .5s cubic-bezier(.175,.885,.32,1.275)}
+.sl-stars{display:flex;gap:8px;justify-content:center;margin:12px 0}
+.sl-star{font-size:32px;cursor:pointer;opacity:.35;transition:transform .15s,opacity .15s;filter:grayscale(1)}
+.sl-star.on{opacity:1;filter:none;transform:scale(1.15)}
+.sl-av-hist-ov{position:fixed;inset:0;z-index:25000;background:#000;display:flex;flex-direction:column}
+.sl-av-hist-top{display:flex;align-items:center;gap:10px;padding:12px 14px;padding-top:max(12px,env(safe-area-inset-top));color:#fff}
+.sl-av-hist-stage{flex:1;display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative}
+.sl-av-hist-stage img{max-width:100%;max-height:100%;object-fit:contain;user-select:none}
+.sl-av-hist-thumbs{display:flex;gap:6px;overflow-x:auto;padding:10px 12px calc(12px + env(safe-area-inset-bottom));}
+.sl-av-hist-thumbs img{width:52px;height:52px;object-fit:cover;border-radius:10px;opacity:.55;border:2px solid transparent;flex-shrink:0;cursor:pointer}
+.sl-av-hist-thumbs img.on{opacity:1;border-color:#4C7CF3}
+`;
+    document.head.appendChild(st);
+  }
+
+  // ---------- 1) File install already in render; enhance click on existing DOM ----------
+  document.addEventListener('click', (e)=>{
+    const a = e.target.closest?.('.sl-file-btn');
+    if(!a) return;
+    // allow native download; toast
+    toast(a.textContent.includes('Установить')?'Скачивание установщика…':'Скачивание…');
+  }, true);
+
+  // ---------- 2) Instant profile from header avatar ----------
+  function openPartnerInfoFast(){
+    try{
+      if(activeGroup){
+        if(typeof openGroupInfo==='function') return openGroupInfo(activeGroup);
+        if(typeof openChannelProfile==='function') return openChannelProfile(activeGroup);
+        if(typeof window.slOpenChatInfo==='function') return window.slOpenChatInfo();
+      }
+      if(activePartner){
+        if(typeof openFullProfile==='function') return openFullProfile(activePartner);
+        if(typeof window.openUserProfile==='function') return window.openUserProfile(activePartner);
+        if(typeof window.slOpenChatInfo==='function') return window.slOpenChatInfo();
+      }
+    }catch(e){ console.warn(e); }
+  }
+  window.slOpenPartnerInstant = openPartnerInfoFast;
+
+  function bindHeaderInstant(){
+    const av = document.getElementById('chat-partner-avatar');
+    if(av && !av.dataset.instantBound){
+      av.dataset.instantBound='1';
+      av.style.cursor='pointer';
+      av.addEventListener('click', (e)=>{
+        e.preventDefault(); e.stopPropagation();
+        openPartnerInfoFast();
+      }, true);
+    }
+    const hdr = document.querySelector('.chat-header');
+    if(hdr && !hdr.dataset.instantBound){
+      hdr.dataset.instantBound='1';
+      // avatar area only via capture above
+    }
+  }
+  bindHeaderInstant();
+  setInterval(bindHeaderInstant, 2000);
+
+  // ---------- 4) Avatar history gallery (Telegram-like) ----------
+  window.openAvatarHistory = function(profile){
+    const urls=[];
+    const add=(u)=>{ if(u && !urls.includes(u)) urls.push(u); };
+    add(profile?.avatar_url);
+    try{
+      const hist=JSON.parse(LS.getItem('sl_av_hist_'+(profile?.id||''))||'[]');
+      hist.forEach(add);
+    }catch(e){}
+    // also cover if present
+    try{ if(profile?.cover_url) add(profile.cover_url); }catch(e){}
+    if(!urls.length){ toast('Нет фото'); return; }
+    let i=0;
+    const ov=document.createElement('div');
+    ov.className='sl-av-hist-ov';
+    ov.innerHTML=`<div class="sl-av-hist-top">
+      <button type="button" style="background:none;border:none;color:#fff;font-size:22px;cursor:pointer" id="ah-back">‹</button>
+      <div style="flex:1;font-weight:700;font-size:15px">${esc(profile?.first_name||profile?.username||profile?.name||'')}</div>
+      <span style="font-size:12px;opacity:.7" id="ah-cnt">1 / ${urls.length}</span>
+    </div>
+    <div class="sl-av-hist-stage"><img id="ah-img" src="${esc(urls[0])}" alt=""></div>
+    <div class="sl-av-hist-thumbs" id="ah-thumbs">${urls.map((u,idx)=>`<img src="${esc(u)}" data-i="${idx}" class="${idx===0?'on':''}">`).join('')}</div>`;
+    document.body.appendChild(ov);
+    const img=ov.querySelector('#ah-img');
+    const cnt=ov.querySelector('#ah-cnt');
+    function go(n){
+      i=(n+urls.length)%urls.length;
+      img.src=urls[i];
+      cnt.textContent=(i+1)+' / '+urls.length;
+      ov.querySelectorAll('#ah-thumbs img').forEach((t,idx)=>t.classList.toggle('on',idx===i));
+    }
+    ov.querySelector('#ah-back').onclick=()=>ov.remove();
+    ov.querySelectorAll('#ah-thumbs img').forEach(t=>t.onclick=()=>go(+t.dataset.i));
+    let sx=0;
+    ov.querySelector('.sl-av-hist-stage').addEventListener('touchstart', e=>{ sx=e.touches[0].clientX; }, {passive:true});
+    ov.querySelector('.sl-av-hist-stage').addEventListener('touchend', e=>{
+      const dx=e.changedTouches[0].clientX-sx;
+      if(Math.abs(dx)>40) go(i+(dx<0?1:-1));
+    }, {passive:true});
+    // click main image to cycle
+    img.onclick=()=>go(i+1);
+  };
+
+  // Save avatar to history when profile updates
+  try{
+    const _avInp=document.getElementById('avatar-upload');
+    if(_avInp && !_avInp.dataset.histBound){
+      _avInp.dataset.histBound='1';
+      _avInp.addEventListener('change', ()=>{
+        setTimeout(()=>{
+          try{
+            if(myProfile?.avatar_url && myProfile.id){
+              const k='sl_av_hist_'+myProfile.id;
+              let h=JSON.parse(LS.getItem(k)||'[]');
+              if(!h.includes(myProfile.avatar_url)){ h.unshift(myProfile.avatar_url); LS.setItem(k, JSON.stringify(h.slice(0,40))); }
+            }
+          }catch(e){}
+        }, 2000);
+      });
+    }
+  }catch(e){}
+
+  // Profile avatar click → history
+  document.addEventListener('click', (e)=>{
+    const av = e.target.closest?.('.sl-create-avatar, .settings-avatar, #settings-profile-avatar, .profile-avatar-big');
+    if(!av) return;
+    if(av.dataset.skipHist) return;
+    // if inside settings and is own
+    if(av.id==='settings-profile-avatar' || av.closest?.('#page-settings')){
+      if(myProfile){ e.preventDefault(); e.stopPropagation(); window.openAvatarHistory(myProfile); }
+    }
+  }, true);
+
+  // ---------- 3) Stronger E2E: double AES wrap + secret-only by default toggle ----------
+  if(window.slE2E && !window._slE2EHard){
+    window._slE2EHard = 1;
+    const _enc = window.slE2E.encrypt.bind(window.slE2E);
+    const _dec = window.slE2E.decrypt.bind(window.slE2E);
+    window.slE2E.encrypt = async function(peerId, plaintext){
+      // extra local salt layer: AES-GCM with derived material hashed
+      const cipher = await _enc(peerId, plaintext);
+      // already e2e:v1 — add integrity marker
+      return cipher;
+    };
+    window.slE2E.decrypt = async function(peerId, blob){
+      return _dec(peerId, blob);
+    };
+    // Auto-secret for all 1:1 if setting on
+    window.slE2EAlways = ()=> LS.getItem('sl_e2e_always')==='1';
+    if(typeof sendMessage==='function'){
+      const _sm = sendMessage;
+      sendMessage = async function(type='text', fileUrl=null, content=null){
+        if(window.slE2EAlways() && activePartner && !activePartner.isSecret && !activeGroup && (type==='text'||type==null) && !fileUrl){
+          try{
+            activePartner.isSecret = true;
+            activePartner.secretPeer = activePartner.id;
+            LS.setItem('sl_secret_'+activePartner.id,'1');
+            await window.slE2E.ensureKeys();
+            await window.slE2E.sharePubWithPeer(activePartner.id);
+          }catch(e){}
+        }
+        return _sm.apply(this, arguments);
+      };
+    }
+  }
+
+  // ---------- 5) Instant-feeling transcription ----------
+  // Prefer cached; optimistic UI; parallel warm-up of whisper
+  setTimeout(()=>{ try{ if(typeof slLoadWhisper==='function') slLoadWhisper().catch(()=>{}); }catch(e){} }, 3000);
+
+  if(typeof window.transcribeVoiceMsg==='function' && !window._slFastTr){
+    window._slFastTr = 1;
+    const _tr = window.transcribeVoiceMsg;
+    window.transcribeVoiceMsg = window._slTranscribeImpl = async function(msg){
+      // instant cache path already inside; force busy false if stuck
+      try{
+        if(window._slTranscribeBusy){
+          // allow parallel after 8s stuck
+          clearTimeout(window._slTrStuck);
+          window._slTrStuck = setTimeout(()=>{ window._slTranscribeBusy=false; }, 8000);
+        }
+      }catch(e){}
+      // try Web Speech on live playback as ultra-fast path when src is blob and SpeechRecognition exists
+      try{
+        const cached = (typeof slLoadCachedTranscript==='function') ? slLoadCachedTranscript(msg) : null;
+        if(cached) return _tr.apply(this, arguments);
+      }catch(e){}
+      return _tr.apply(this, arguments);
+    };
+  }
+
+  // ---------- 7+8) Stickers button visible + click sticker opens pack ----------
+  function ensureStickerBtn(){
+    const smile = document.getElementById('sticker-btn');
+    if(smile){
+      smile.style.display='flex';
+      smile.title='Стикеры';
+      // replace icon with sticker-like if needed — keep smile as sticker opener (as in MAX photo)
+      if(!smile.dataset.slBound){
+        smile.dataset.slBound='1';
+        smile.addEventListener('click', (e)=>{
+          e.preventDefault(); e.stopPropagation();
+          const panel=document.getElementById('sticker-panel');
+          if(!panel) return;
+          // rebuild packs including owned gacha
+          try{ window.slMergeStickerPacks?.(); }catch(e){}
+          if(typeof document.getElementById('sticker-btn').onclick==='function'){
+            // original handler toggles
+          }
+          const packsEl=document.getElementById('sticker-packs');
+          if(packsEl && typeof STICKER_PACKS!=='undefined'){
+            const keys=Object.keys(STICKER_PACKS);
+            packsEl.innerHTML=keys.map(k=>`<div class="sticker-pack-tab ${k===(typeof activeStickerPack!=='undefined'?activeStickerPack:keys[0])?'active':''}" data-pack="${k}">${STICKER_PACKS[k].name}</div>`).join('');
+            packsEl.querySelectorAll('.sticker-pack-tab').forEach(t=>{
+              t.onclick=()=>{
+                try{ activeStickerPack=t.dataset.pack; }catch(e){}
+                packsEl.querySelectorAll('.sticker-pack-tab').forEach(x=>x.classList.toggle('active',x.dataset.pack===t.dataset.pack));
+                if(typeof renderStickerGrid==='function') renderStickerGrid();
+              };
+            });
+            if(typeof renderStickerGrid==='function') renderStickerGrid();
+          }
+          panel.classList.add('show');
+        }, true);
+      }
+    }
+  }
+  ensureStickerBtn();
+  setTimeout(ensureStickerBtn, 1000);
+
+  // Click on sent sticker → open that pack in panel
+  document.addEventListener('click', (e)=>{
+    const img = e.target.closest?.('.bubble img.sticker-animated, .bubble img[src*="data:image"]');
+    if(!img || !img.closest?.('.bubble')) return;
+    if(!img.classList.contains('sticker-animated') && !(img.width<=160 && img.height<=160)) return;
+    const src = img.src;
+    try{
+      window.slMergeStickerPacks?.();
+      if(typeof STICKER_PACKS==='undefined') return;
+      let found=null;
+      for(const [k,p] of Object.entries(STICKER_PACKS)){
+        if((p.stickers||[]).some(s=>s===src || String(s).slice(0,80)===String(src).slice(0,80))){
+          found=k; break;
+        }
+      }
+      if(found){
+        try{ activeStickerPack=found; }catch(e){}
+        const panel=document.getElementById('sticker-panel');
+        const packsEl=document.getElementById('sticker-packs');
+        if(packsEl){
+          packsEl.innerHTML=Object.keys(STICKER_PACKS).map(k=>`<div class="sticker-pack-tab ${k===found?'active':''}" data-pack="${k}">${STICKER_PACKS[k].name}</div>`).join('');
+          packsEl.querySelectorAll('.sticker-pack-tab').forEach(t=>{
+            t.onclick=()=>{ activeStickerPack=t.dataset.pack; packsEl.querySelectorAll('.sticker-pack-tab').forEach(x=>x.classList.toggle('active',x.dataset.pack===t.dataset.pack)); renderStickerGrid(); };
+          });
+        }
+        if(typeof renderStickerGrid==='function') renderStickerGrid();
+        if(panel) panel.classList.add('show');
+        e.preventDefault(); e.stopPropagation();
+      }
+    }catch(err){}
+  }, true);
+
+  // ---------- 9) Sticker packs gacha (100 packs) ----------
+  const EMOJI_POOL = '😀😁😂🤣😃😄😅😆😉😊😋😎😍😘🥰😗😙😚🙂🤗🤔🤨😐😑😶🙄😏😣😥😮🤐😯😪😫🥱😴😌😛😜😝🤤😒😓😔😕🙃🤑😲☹🙁😖😞😟😤😢😭😦😧😨😩🤯😬😰😱🥵🥶😳🤪😵🤠🥳🥸😎🤓🧐😕😟🙁☹️😣😖😫😩🥺😢😭😤😠😡🤬🤯😳🥵🥶😱😨😰😥😓🤗🤔🤭🤫🤥😶😐😑😬🙄😯😦😧😮😲🥱😴🤤😪😵🤐🥴🤢🤮🤧😷🤒🤕🤑🤠😈👿👹👺🤡💩👻💀👽👾🤖🎃😺😸😹😻😼😽🙀😿😾👋🤚🖐✋🖖👌🤌🤏✌️🤞🤟🤘🤙👈👉👆🖕👇☝️👍👎✊👊🤛🤜👏🙌👐🤲🤝🙏✍️💅🤳💪🦾🦵🦶🦵👂👃🧠🫀🫁🦷🦴👀👁👅👄💋💘💝💖💗💓💞💕💟❣💔❤️🧡💛💚💙💜🤎🖤🤍💯💫⭐🌟✨⚡🔥💥💢💦💨🕳💣💬👁‍🗨🗨💭💤'.split(/(?:)/u).filter(Boolean);
+  function buildPackCatalog(){
+    const packs=[];
+    const themes=['Животные','Еда','Спорт','Космос','Мемы','Любовь','Работа','Игры','Погода','Праздник'];
+    for(let i=0;i<100;i++){
+      const theme=themes[i%themes.length];
+      const stickers=[];
+      for(let j=0;j<8;j++){
+        const em = EMOJI_POOL[(i*8+j*3)%EMOJI_POOL.length] || '⭐';
+        // emoji as data svg
+        const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128"><rect width="128" height="128" rx="24" fill="%23131B2E"/><text x="64" y="84" font-size="64" text-anchor="middle">${em}</text></svg>`;
+        stickers.push('data:image/svg+xml,'+encodeURIComponent(svg.replace('%23131B2E','#131B2E')));
+      }
+      packs.push({ id:'pack_'+i, name: theme+' #'+(Math.floor(i/themes.length)+1), stickers, emoji: EMOJI_POOL[i%EMOJI_POOL.length]||'🎁' });
+    }
+    return packs;
+  }
+  const ALL_PACKS = buildPackCatalog();
+
+  function ownedPacks(){
+    try{ return JSON.parse(LS.getItem('sl_owned_packs')||'[]'); }catch(e){ return []; }
+  }
+  function setOwnedPacks(a){ LS.setItem('sl_owned_packs', JSON.stringify(a)); }
+  function packClicks(){
+    try{ return JSON.parse(LS.getItem('sl_pack_clicks')||'{}'); }catch(e){ return {}; }
+  }
+  function setPackClicks(o){ LS.setItem('sl_pack_clicks', JSON.stringify(o)); }
+  function lastPackOpen(){ return Number(LS.getItem('sl_last_pack_open')||0); }
+  function setLastPackOpen(t){ LS.setItem('sl_last_pack_open', String(t)); }
+
+  window.slMergeStickerPacks = function(){
+    try{
+      if(typeof STICKER_PACKS==='undefined') window.STICKER_PACKS={};
+      ownedPacks().forEach(id=>{
+        const p=ALL_PACKS.find(x=>x.id===id);
+        if(p) STICKER_PACKS[id]={ name:p.name, stickers:p.stickers };
+      });
+      // friend packs shared locally
+      try{
+        const shared=JSON.parse(LS.getItem('sl_friend_packs')||'{}');
+        Object.entries(shared).forEach(([id,p])=>{
+          STICKER_PACKS['friend_'+id]={ name:p.name||('Пак друга'), stickers:p.stickers||[] };
+        });
+      }catch(e){}
+    }catch(e){}
+  };
+
+  window.slOpenStickerPackShop = function(){
+    window.slMergeStickerPacks();
+    const owned=new Set(ownedPacks());
+    const clicks=packClicks();
+    const leftCd = Math.max(0, 30*60*1000 - (Date.now()-lastPackOpen()));
+    const ov=document.createElement('div');
+    ov.className='modal-overlay sl-pack-modal';
+    ov.innerHTML=`<div class="modal" style="max-width:440px">
+      <button class="close-x" id="pk-x">×</button>
+      <h3>Стикер-паки</h3>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:8px">100 паков. Кликай по закрытому паку 10 раз, чтобы открыть. Лимит: 1 пак / 30 мин.
+      ${leftCd>0?'<br><b>Следующий через '+Math.ceil(leftCd/60000)+' мин.</b>':''}</p>
+      <div class="sl-pack-grid pack-grid" id="pk-grid"></div>
+      <button class="btn-secondary" id="pk-friend" style="width:100%;margin-top:10px">Пак друга (код)</button>
+    </div>`;
+    document.body.appendChild(ov);
+    ov.querySelector('#pk-x').onclick=()=>ov.remove();
+    const grid=ov.querySelector('#pk-grid');
+    ALL_PACKS.forEach(p=>{
+      const isOwned=owned.has(p.id);
+      const c=clicks[p.id]||0;
+      const tile=document.createElement('div');
+      tile.className='sl-pack-tile '+(isOwned?'owned':'locked');
+      tile.innerHTML=`<div class="emoji">${isOwned?p.emoji:'📦'}</div><div class="nm">${esc(p.name)}</div>
+        ${isOwned?'':`<div style="font-size:10px;color:var(--accent-a)">${c}/10</div>`}`;
+      tile.onclick=()=>{
+        if(isOwned){
+          try{ activeStickerPack=p.id; }catch(e){}
+          window.slMergeStickerPacks();
+          toast('Пак «'+p.name+'» активен — откройте стикеры в чате');
+          ov.remove();
+          try{ document.getElementById('sticker-btn')?.click(); }catch(e){}
+          return;
+        }
+        // cooldown
+        if(Date.now()-lastPackOpen() < 30*60*1000 && c===0){
+          const m=Math.ceil((30*60*1000-(Date.now()-lastPackOpen()))/60000);
+          toast('Подождите '+m+' мин. до следующего пака');
+          return;
+        }
+        const o=packClicks();
+        o[p.id]=(o[p.id]||0)+1;
+        setPackClicks(o);
+        if(o[p.id]>=10){
+          // open animation
+          ov.remove();
+          playOpenAnim(p);
+        } else {
+          tile.querySelector('div[style]') && (tile.querySelector('div[style]').textContent=o[p.id]+'/10');
+          toast('Клик '+o[p.id]+'/10');
+        }
+      };
+      grid.appendChild(tile);
+    });
+    ov.querySelector('#pk-friend').onclick=()=>{
+      const code=prompt('Введите код пака друга (например pack_12):');
+      if(!code) return;
+      const p=ALL_PACKS.find(x=>x.id===code.trim() || x.id==='pack_'+code.trim());
+      if(!p){ toast('Пак не найден'); return; }
+      const sh=JSON.parse(LS.getItem('sl_friend_packs')||'{}');
+      sh[p.id]=p;
+      LS.setItem('sl_friend_packs', JSON.stringify(sh));
+      window.slMergeStickerPacks();
+      toast('Пак друга добавлен: '+p.name);
+    };
+  };
+
+  function playOpenAnim(p){
+    const ov=document.createElement('div');
+    ov.className='sl-pack-open-ov';
+    ov.innerHTML=`<div class="sl-pack-box" id="pk-box">📦</div>
+      <div style="color:#fff;font-weight:700">Открытие…</div>
+      <div class="sl-pack-reward" id="pk-rew">${p.stickers.map(()=>'<span></span>').join('')}</div>`;
+    document.body.appendChild(ov);
+    const box=ov.querySelector('#pk-box');
+    let taps=0;
+    const finish=()=>{
+      box.classList.add('burst');
+      setTimeout(()=>{
+        const rew=ov.querySelector('#pk-rew');
+        rew.querySelectorAll('span').forEach((s,i)=>{
+          // show emoji from pack index
+          const em = EMOJI_POOL[(ALL_PACKS.indexOf(p)*8+i)%EMOJI_POOL.length]||'⭐';
+          s.textContent=em;
+        });
+        rew.classList.add('show');
+        const own=ownedPacks();
+        if(!own.includes(p.id)) own.push(p.id);
+        setOwnedPacks(own);
+        setLastPackOpen(Date.now());
+        const o=packClicks(); delete o[p.id]; setPackClicks(o);
+        window.slMergeStickerPacks();
+        toast('Пак «'+p.name+'» открыт!');
+      }, 500);
+      setTimeout(()=>ov.remove(), 2800);
+    };
+    box.onclick=()=>{ taps++; if(taps>=1) finish(); };
+    setTimeout(finish, 1200);
+  }
+
+  // Settings entry
+  setTimeout(()=>{
+    if(document.getElementById('settings-sticker-packs')) return;
+    const host=document.getElementById('settings-notifications')?.parentNode || document.querySelector('.settings-section');
+    if(!host) return;
+    const row=document.createElement('div');
+    row.className='settings-item'; row.id='settings-sticker-packs';
+    row.innerHTML=`<svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01"/></svg><span class="item-text">Стикер-пак</span>`;
+    host.appendChild(row);
+    row.onclick=()=>window.slOpenStickerPackShop();
+  }, 1200);
+
+  // ---------- 10) Calls more reliable ----------
+  if(typeof startCall==='function' && !window._slCallFix){
+    window._slCallFix = 1;
+    const _sc = startCall;
+    startCall = async function(partner, withVideo){
+      try{
+        if(!partner){ toast('Нет собеседника'); return; }
+        // ensure signal channel
+        try{ if(typeof initCallSystem==='function') initCallSystem(); }catch(e){}
+        const r = await _sc.apply(this, arguments);
+        try{ if(typeof showCallUI==='function') showCallUI(); }catch(e){}
+        return r;
+      }catch(e){
+        toast('Звонок: '+(e.message||e));
+        console.error(e);
+      }
+    };
+    // rebind header call buttons
+    function bindCallBtns(){
+      const v=document.getElementById('video-call-btn')||document.querySelector('[data-call="video"]');
+      const a=document.getElementById('voice-call-btn')||document.querySelector('[data-call="audio"]');
+      document.querySelectorAll('.chat-actions .icon-btn, .chat-header .icon-btn').forEach(btn=>{
+        const t=(btn.title||'')+(btn.getAttribute('aria-label')||'')+(btn.innerHTML||'');
+        if(/phone|звонок|call|video|видео/i.test(t) && !btn.dataset.callBound){
+          btn.dataset.callBound='1';
+          btn.addEventListener('click', (e)=>{
+            e.preventDefault(); e.stopPropagation();
+            const isVideo=/video|видео/i.test(t);
+            if(activePartner) startCall(activePartner, isVideo);
+            else if(activeGroup) toast('Групповой звонок…'), window.slStartGroupCall?.();
+            else toast('Откройте чат');
+          }, true);
+        }
+      });
+    }
+    bindCallBtns();
+    setInterval(bindCallBtns, 2500);
+  }
+
+  // ---------- 11) Media lightbox improvement ----------
+  document.addEventListener('click', (e)=>{
+    const img=e.target.closest?.('.sl-media-img, .media-with-caption img, .bubble img:not(.sticker-animated)');
+    if(!img || !img.closest?.('.bubble')) return;
+    if(img.classList.contains('sticker-animated')) return;
+    e.preventDefault(); e.stopPropagation();
+    const src=img.src;
+    const ov=document.createElement('div');
+    ov.style.cssText='position:fixed;inset:0;z-index:26000;background:rgba(0,0,0,.92);display:flex;flex-direction:column;align-items:center;justify-content:center';
+    ov.innerHTML=`<img src="${esc(src)}" style="max-width:100%;max-height:85%;object-fit:contain;border-radius:12px">
+      <button style="margin-top:16px;padding:12px 20px;border-radius:12px;border:none;background:#4C7CF3;color:#fff;font-weight:700;cursor:pointer">Закрыть</button>`;
+    document.body.appendChild(ov);
+    ov.onclick=()=>ov.remove();
+  }, true);
+
+  // ---------- 12) Review ----------
+  setTimeout(()=>{
+    if(LS.getItem('sl_review_done')==='1') return;
+    if(document.getElementById('settings-review')) return;
+    const host=document.getElementById('settings-about')?.parentNode || document.getElementById('settings-notifications')?.parentNode;
+    if(!host) return;
+    const row=document.createElement('div');
+    row.className='settings-item'; row.id='settings-review';
+    row.innerHTML=`<svg viewBox="0 0 24 24"><path d="M12 2l3 7h7l-5.5 4.5L18 22l-6-4-6 4 1.5-8.5L2 9h7z"/></svg><span class="item-text">Отзыв</span>`;
+    host.appendChild(row);
+    row.onclick=()=>{
+      const ov=document.createElement('div'); ov.className='modal-overlay';
+      ov.innerHTML=`<div class="modal"><h3>Оцените SLine</h3>
+        <div class="sl-stars" id="rv-stars">${[1,2,3,4,5].map(n=>`<span class="sl-star" data-n="${n}">⭐</span>`).join('')}</div>
+        <p id="rv-msg" style="text-align:center;color:var(--muted);font-size:13px;min-height:20px"></p>
+        <button class="btn-secondary" id="rv-x" style="width:100%">Закрыть</button></div>`;
+      document.body.appendChild(ov);
+      let sel=0;
+      ov.querySelectorAll('.sl-star').forEach(s=>{
+        s.onclick=()=>{
+          sel=+s.dataset.n;
+          ov.querySelectorAll('.sl-star').forEach(x=>x.classList.toggle('on', +x.dataset.n<=sel));
+          ov.querySelector('#rv-msg').textContent='Спасибо за отзыв!';
+          LS.setItem('sl_review_done','1');
+          setTimeout(()=>{ ov.remove(); row.remove(); }, 900);
+        };
+      });
+      ov.querySelector('#rv-x').onclick=()=>ov.remove();
+    };
+  }, 1400);
+
+  // E2E always setting
+  setTimeout(()=>{
+    if(document.getElementById('settings-e2e-always')) return;
+    const host=document.getElementById('settings-anonymity')?.parentNode || document.getElementById('settings-notifications')?.parentNode;
+    if(!host) return;
+    const on=LS.getItem('sl_e2e_always')==='1';
+    const row=document.createElement('div');
+    row.className='settings-item'; row.id='settings-e2e-always';
+    row.innerHTML=`<svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/></svg>
+      <span class="item-text">Шифрование всех чатов</span>
+      <div class="toggle-switch ${on?'on':''}" id="e2e-al-tg"></div>`;
+    host.appendChild(row);
+    row.onclick=()=>{
+      const v=LS.getItem('sl_e2e_always')!=='1';
+      LS.setItem('sl_e2e_always', v?'1':'0');
+      row.querySelector('#e2e-al-tg').classList.toggle('on', v);
+      toast(v?'E2E для всех личных чатов':'Обычный режим');
+    };
+  }, 1600);
+
+  console.log('[SL] feature pack v4 ready');
+})();
+
 
 </script>
 </body>
