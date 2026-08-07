@@ -1574,7 +1574,7 @@ body.chats-selecting .sw-clip .sel-check{display:flex}
 .sl-name-badge{display:inline-flex;vertical-align:middle;margin-left:6px;align-items:center;line-height:0}
 .sl-name-badge svg{width:18px;height:18px;display:block}
 .sl-badge-pick{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;width:100%}
-.sl-badge-pick button{aspect-ratio:1;border-radius:12px;border:1.5px solid var(--line);background:var(--panel);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:8px}
+.sl-badge-pick button{aspect-ratio:1;border-radius:12px;border:1.5px solid var(--line);background:var(--panel);display:flex;align-items:center;justify-content:center;cursor:pointer;padding:8px;color:var(--text,#e8eefc)}
 .sl-badge-pick button.active{border-color:var(--accent-a,#4C7CF3);background:rgba(76,124,243,.15)}
 .sl-badge-pick button svg{width:22px;height:22px}
 .sl-music-row{display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--panel);border:1px solid var(--line);border-radius:14px;margin:0 16px 12px}
@@ -5790,6 +5790,37 @@ document.getElementById('settings-devices').onclick=()=>{
   const ua=navigator.userAgent;
   alert('Текущее устройство:\n'+( /Mobile|Android|iPhone/i.test(ua)?'Смартфон':'Компьютер')+'\n'+ua.slice(0,60));
 };
+
+// ---- Profile name badge (SVG) + favorite music ----
+window.SL_BADGES = {
+  none: '',
+  star: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.1 6.3L22 9.3l-5 4.9 1.2 6.9L12 17.8 5.8 21l1.2-6.9-5-4.9 6.9-1L12 2z"/></svg>',
+  music: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>',
+  fire: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3c2 3 1 5 1 5s2-1 3 1 0 4 0 4 3-1 3 3a7 7 0 11-14 0c0-3 2-5 3-6s2-2 4-7z"/></svg>',
+  heart: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.6a5.5 5.5 0 00-7.8 0L12 5.6l-1-1a5.5 5.5 0 00-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 000-7.8z"/></svg>',
+  bolt: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h8l-1 8 11-14h-8l1-6z"/></svg>',
+  crown: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 18h20l-2-10-5 4-3-6-3 6-5-4-2 10z"/><path d="M2 18h20v2H2z"/></svg>',
+  game: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="3"/><path d="M6 12h4M8 10v4M15 11h.01M18 13h.01"/></svg>',
+  code: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 8l-4 4 4 4M16 8l4 4-4 4"/></svg>',
+  plane: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 14L3 11l18-7-7 18-3-7-5 2z"/></svg>',
+  leaf: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 20A7 7 0 019.2 6.2C13 4 20 4 20 4s0 7-2.2 10.8A7 7 0 0111 20z"/><path d="M11 20c0-5 3-8 9-10"/></svg>'
+};
+window.slBadgeHtml = function(id, color){
+  if(!id || id==='none' || !window.SL_BADGES[id]) return '';
+  const col = color || 'var(--accent-a,#4C7CF3)';
+  return '<span class="sl-name-badge" style="color:'+col+'" title="Значок">'+window.SL_BADGES[id]+'</span>';
+};
+window.slGetBadge = function(p){
+  if(!p) return 'none';
+  if(p.badge_id) return p.badge_id;
+  try{ return localStorage.getItem('sl_badge_'+(p.id||'')) || (p.id===myProfile?.id ? localStorage.getItem('sl_my_badge') : null) || 'none'; }catch(e){ return 'none'; }
+};
+window.slGetMusic = function(p){
+  if(!p) return '';
+  if(p.favorite_music) return p.favorite_music;
+  try{ return localStorage.getItem('sl_music_'+(p.id||'')) || (p.id===myProfile?.id ? localStorage.getItem('sl_my_music') : '') || ''; }catch(e){ return ''; }
+};
+
 document.getElementById('settings-edit-profile').onclick=()=>{
   if(!myProfile) return;
   const prev=document.getElementById('sl-edit-profile'); if(prev) prev.remove();
@@ -5799,10 +5830,13 @@ document.getElementById('settings-edit-profile').onclick=()=>{
   const about0 = myProfile.bio || myProfile.about || '';
   const badge0 = (typeof slGetBadge==='function'?slGetBadge(myProfile):'none')||'none';
   const music0 = (typeof slGetMusic==='function'?slGetMusic(myProfile):'')||'';
-  const badgeKeys = Object.keys(window.SL_BADGES||{none:''});
+  const _badges = window.SL_BADGES || {};
+  const badgeKeys = Object.keys(_badges).length ? Object.keys(_badges) : ['none','star','music','fire','heart','bolt','crown','game','code','plane','leaf'];
   const badgeBtns = badgeKeys.map(k=>{
-    const ico = k==='none' ? '<span style="font-size:11px;color:var(--muted)">Нет</span>' : (window.SL_BADGES[k]||'');
-    return `<button type="button" data-badge="${k}" class="${k===badge0?'active':''}" title="${k}">${ico}</button>`;
+    let ico;
+    if(k==='none') ico = '<span style="font-size:11px;color:var(--muted)">Нет</span>';
+    else ico = (_badges[k]||'').replace(/currentColor/g, '#e8eefc');
+    return `<button type="button" data-badge="${k}" class="${k===badge0?'active':''}" title="${k}" style="color:#e8eefc">${ico}</button>`;
   }).join('');
   sheet.innerHTML=`
     <div class="sl-sheet-hdr">
