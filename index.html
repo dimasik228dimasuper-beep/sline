@@ -23840,6 +23840,510 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
 
 
 
+
+/* ===== SL: Telegram voice + video-circle UX ===== */
+(function(){
+  'use strict';
+  if(window._slTgRecUX) return;
+  window._slTgRecUX = 1;
+
+  // CSS
+  if(!document.getElementById('tg-rec-css')){
+    const st=document.createElement('style');
+    st.id='tg-rec-css';
+    st.textContent=`
+      .tg-mode-hint{
+        position:fixed; left:50%; bottom:92px; transform:translateX(-50%);
+        background:rgba(30,34,48,.92); color:rgba(255,255,255,.85);
+        font-size:13px; padding:8px 14px; border-radius:10px;
+        z-index:4500; pointer-events:none;
+        animation:tgHintIn .18s ease;
+        white-space:nowrap; max-width:90vw; text-align:center;
+      }
+      @keyframes tgHintIn{ from{opacity:0;transform:translateX(-50%) translateY(8px)} to{opacity:1;transform:translateX(-50%) translateY(0)} }
+
+      /* Voice recording bar (Telegram) */
+      #tg-voice-bar{
+        position:fixed; left:0; right:0; bottom:0; z-index:4600;
+        background:#1c1f2e;
+        padding:10px 12px calc(10px + env(safe-area-inset-bottom,0px));
+        display:flex; align-items:center; gap:10px;
+        box-shadow:0 -4px 24px rgba(0,0,0,.4);
+        animation:tgBarUp .2s ease;
+      }
+      @keyframes tgBarUp{ from{transform:translateY(100%)} to{transform:none} }
+      .tg-vb-dot{
+        width:10px; height:10px; border-radius:50%; background:#e53935;
+        animation:tgPulse 1s ease infinite;
+        flex-shrink:0;
+      }
+      @keyframes tgPulse{ 0%,100%{opacity:1} 50%{opacity:.35} }
+      .tg-vb-time{ color:#fff; font-size:15px; font-variant-numeric:tabular-nums; min-width:52px; }
+      .tg-vb-cancel{
+        flex:1; text-align:center; color:#5B9CFF; font-size:16px;
+        background:none; border:none; cursor:pointer; padding:8px;
+      }
+      .tg-vb-send{
+        width:52px; height:52px; border-radius:50%; border:none;
+        background:#3A7AFE; color:#fff; display:flex; align-items:center; justify-content:center;
+        cursor:pointer; box-shadow:0 4px 16px rgba(58,122,254,.45); flex-shrink:0;
+      }
+      .tg-vb-send:active{ transform:scale(.94); }
+      .tg-vb-send svg{ width:24px; height:24px; }
+
+      /* Voice preview bar after release */
+      #tg-voice-preview{
+        position:fixed; left:0; right:0; bottom:0; z-index:4600;
+        background:#1c1f2e;
+        padding:10px 12px calc(10px + env(safe-area-inset-bottom,0px));
+        display:flex; align-items:center; gap:10px;
+        box-shadow:0 -4px 24px rgba(0,0,0,.4);
+      }
+      .tg-vp-trash{
+        width:40px; height:40px; border:none; background:transparent; color:#e53935;
+        display:flex; align-items:center; justify-content:center; cursor:pointer;
+      }
+      .tg-vp-wave{
+        flex:1; height:36px; border-radius:18px; background:#3A7AFE;
+        display:flex; align-items:center; gap:8px; padding:0 12px; color:#fff;
+        overflow:hidden;
+      }
+      .tg-vp-wave canvas{ flex:1; height:24px; }
+      .tg-vp-play{
+        width:28px; height:28px; border-radius:50%; border:none; background:rgba(255,255,255,.2);
+        color:#fff; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;
+      }
+      .tg-vp-send{
+        width:48px; height:48px; border-radius:50%; border:none; background:#3A7AFE; color:#fff;
+        display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0;
+      }
+
+      /* Circle full-screen record */
+      #tg-circle-ov{
+        position:fixed; inset:0; z-index:4700; background:#0a0a12;
+        display:flex; flex-direction:column; align-items:center; justify-content:center;
+      }
+      #tg-circle-ov .tg-cl-wrap{
+        width:min(78vw, 340px); aspect-ratio:1; border-radius:50%;
+        overflow:hidden; position:relative;
+        box-shadow:0 0 0 3px rgba(255,255,255,.15), 0 12px 40px rgba(0,0,0,.5);
+      }
+      #tg-circle-ov video{
+        width:100%; height:100%; object-fit:cover;
+      }
+      #tg-circle-ov video.mirrored{ transform:scaleX(-1); }
+      .tg-cl-bottom{
+        position:absolute; left:0; right:0; bottom:0;
+        padding:16px 20px calc(20px + env(safe-area-inset-bottom,0px));
+        display:flex; align-items:center; gap:12px;
+      }
+      .tg-cl-tools{ display:flex; gap:12px; }
+      .tg-cl-tool{
+        width:44px; height:44px; border-radius:50%; border:none;
+        background:rgba(40,44,58,.85); color:#fff;
+        display:flex; align-items:center; justify-content:center; cursor:pointer;
+      }
+      .tg-cl-tool svg{ width:22px; height:22px; }
+      .tg-cl-mid{ flex:1; display:flex; align-items:center; justify-content:center; gap:10px; color:#fff; }
+      .tg-cl-dot{ width:10px; height:10px; border-radius:50%; background:#e53935; animation:tgPulse 1s ease infinite; }
+      .tg-cl-cancel{ background:none; border:none; color:#5B9CFF; font-size:16px; cursor:pointer; padding:8px 12px; }
+      .tg-cl-send{
+        width:56px; height:56px; border-radius:50%; border:none; background:#3A7AFE; color:#fff;
+        display:flex; align-items:center; justify-content:center; cursor:pointer;
+        box-shadow:0 4px 20px rgba(58,122,254,.5);
+      }
+      .tg-cl-pause{
+        position:absolute; right:18px; bottom:calc(90px + env(safe-area-inset-bottom,0px));
+        width:40px; height:40px; border-radius:50%; border:none;
+        background:rgba(40,44,58,.85); color:#fff;
+        display:flex; align-items:center; justify-content:center; cursor:pointer;
+      }
+    `;
+    document.head.appendChild(st);
+  }
+
+  const ARROW = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>`;
+  const MIC = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4"/></svg>`;
+  const CIRCLE = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5"/></svg>`;
+  const TRASH = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>`;
+  const PLAY = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>`;
+  const PAUSE = `<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14"/><rect x="14" y="5" width="4" height="14"/></svg>`;
+  const FLIP = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 014-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 01-4 4H3"/></svg>`;
+  const FLASH = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>`;
+
+  let mode = 'voice'; // voice | circle
+  try{ const s=localStorage.getItem('sl_tg_rec_mode'); if(s==='circle'||s==='voice') mode=s; }catch(e){}
+  let recording = false;
+  let recStart = 0;
+  let recTimer = null;
+  let mediaStream = null;
+  let mediaRec = null;
+  let chunks = [];
+  let paused = false;
+  let previewUrl = null;
+  let previewAudio = null;
+  let facing = 'user';
+
+  function toast(m){ try{ showToast(m); }catch(e){ console.log(m); } }
+
+  function showModeHint(){
+    document.querySelectorAll('.tg-mode-hint').forEach(n=>n.remove());
+    const h=document.createElement('div');
+    h.className='tg-mode-hint';
+    h.textContent = mode==='voice'
+      ? 'Звук — удерживайте. Видео — нажмите.'
+      : 'Видео — удерживайте. Звук — нажмите.';
+    document.body.appendChild(h);
+    setTimeout(()=>{ try{h.remove();}catch(e){} }, 1800);
+  }
+
+  function updateBtnIcon(){
+    const btn=document.getElementById('circle-btn');
+    if(!btn) return;
+    const svg = btn.querySelector('svg') || btn;
+    if(mode==='voice'){
+      btn.innerHTML = MIC;
+      btn.title = 'Голосовое · тап = кружок, зажать = запись';
+    } else {
+      btn.innerHTML = CIRCLE;
+      btn.title = 'Кружок · тап = голосовое, зажать = запись';
+    }
+    try{ localStorage.setItem('sl_tg_rec_mode', mode); }catch(e){}
+    try{ if(typeof recordMode!=='undefined') recordMode = mode==='circle'?'circle':'voice'; }catch(e){}
+  }
+
+  function fmt(ms){
+    const s=Math.floor(ms/1000);
+    const m=Math.floor(s/60);
+    const ss=String(s%60).padStart(2,'0');
+    const cs=String(Math.floor((ms%1000)/10)).padStart(2,'0');
+    return m+':'+ss+','+cs;
+  }
+
+  function clearUI(){
+    document.getElementById('tg-voice-bar')?.remove();
+    document.getElementById('tg-voice-preview')?.remove();
+    document.getElementById('tg-circle-ov')?.remove();
+    // hide old overlay
+    try{ const o=document.getElementById('circle-record-overlay'); if(o) o.style.display='none'; }catch(e){}
+  }
+
+  function stopTracks(){
+    try{ mediaStream?.getTracks().forEach(t=>t.stop()); }catch(e){}
+    mediaStream=null;
+  }
+
+  async function startVoice(){
+    if(recording) return;
+    clearUI();
+    try{
+      mediaStream = await navigator.mediaDevices.getUserMedia({ audio:true });
+    }catch(e){ toast('Нет доступа к микрофону'); return; }
+    chunks=[];
+    paused=false;
+    recording=true;
+    recStart=Date.now();
+    let mime='audio/webm';
+    if(!MediaRecorder.isTypeSupported(mime)) mime='audio/mp4';
+    try{ mediaRec=new MediaRecorder(mediaStream,{mimeType:mime}); }
+    catch(e){ mediaRec=new MediaRecorder(mediaStream); }
+    mediaRec.ondataavailable=e=>{ if(e.data&&e.data.size) chunks.push(e.data); };
+    mediaRec.start(100);
+
+    const bar=document.createElement('div');
+    bar.id='tg-voice-bar';
+    bar.innerHTML=`
+      <span class="tg-vb-dot"></span>
+      <span class="tg-vb-time" id="tg-vb-time">0:00,00</span>
+      <button type="button" class="tg-vb-cancel" id="tg-vb-cancel">Отмена</button>
+      <button type="button" class="tg-vb-send" id="tg-vb-send">${ARROW}</button>`;
+    document.body.appendChild(bar);
+    bar.querySelector('#tg-vb-cancel').onclick=()=>cancelRec();
+    bar.querySelector('#tg-vb-send').onclick=()=>finishVoice(true);
+
+    clearInterval(recTimer);
+    recTimer=setInterval(()=>{
+      const el=document.getElementById('tg-vb-time');
+      if(el) el.textContent=fmt(Date.now()-recStart);
+    }, 50);
+  }
+
+  function finishVoice(send){
+    if(!recording && !previewUrl) return;
+    clearInterval(recTimer);
+    const stopAndHandle = ()=>{
+      recording=false;
+      stopTracks();
+      const blob=new Blob(chunks, {type: chunks[0]?.type||'audio/webm'});
+      if(!send || blob.size<200){
+        clearUI();
+        if(blob.size<200) toast('Слишком коротко');
+        chunks=[];
+        return;
+      }
+      // show preview
+      clearUI();
+      previewUrl = URL.createObjectURL(blob);
+      const bar=document.createElement('div');
+      bar.id='tg-voice-preview';
+      bar.innerHTML=`
+        <button type="button" class="tg-vp-trash" id="tg-vp-trash">${TRASH}</button>
+        <div class="tg-vp-wave">
+          <button type="button" class="tg-vp-play" id="tg-vp-play">${PLAY}</button>
+          <canvas id="tg-vp-canvas" width="200" height="24"></canvas>
+          <span id="tg-vp-dur" style="font-size:12px;opacity:.9">0:00</span>
+        </div>
+        <button type="button" class="tg-vp-send" id="tg-vp-send">${ARROW}</button>`;
+      document.body.appendChild(bar);
+      // simple waveform decoration
+      try{
+        const c=document.getElementById('tg-vp-canvas');
+        const ctx=c.getContext('2d');
+        ctx.fillStyle='rgba(255,255,255,.85)';
+        for(let i=0;i<40;i++){
+          const h=4+Math.random()*16;
+          ctx.fillRect(i*5, (24-h)/2, 3, h);
+        }
+      }catch(e){}
+      previewAudio = new Audio(previewUrl);
+      previewAudio.onloadedmetadata=()=>{
+        const d=document.getElementById('tg-vp-dur');
+        if(d) d.textContent = Math.floor(previewAudio.duration)+'с';
+      };
+      let playing=false;
+      bar.querySelector('#tg-vp-play').onclick=()=>{
+        if(!previewAudio) return;
+        if(playing){ previewAudio.pause(); playing=false; bar.querySelector('#tg-vp-play').innerHTML=PLAY; }
+        else { previewAudio.play(); playing=true; bar.querySelector('#tg-vp-play').innerHTML=PAUSE; }
+      };
+      previewAudio.onended=()=>{ playing=false; const b=document.getElementById('tg-vp-play'); if(b) b.innerHTML=PLAY; };
+      bar.querySelector('#tg-vp-trash').onclick=()=>{
+        try{ previewAudio?.pause(); }catch(e){}
+        try{ URL.revokeObjectURL(previewUrl); }catch(e){}
+        previewUrl=null; previewAudio=null; chunks=[]; clearUI();
+      };
+      bar.querySelector('#tg-vp-send').onclick=()=>{
+        const reader=new FileReader();
+        reader.onload=async ev=>{
+          try{
+            if(typeof sendMessage==='function') await sendMessage('voice', ev.target.result, '');
+          }catch(e){ toast('Не отправилось'); }
+          try{ URL.revokeObjectURL(previewUrl); }catch(e){}
+          previewUrl=null; previewAudio=null; chunks=[]; clearUI();
+        };
+        reader.readAsDataURL(blob);
+      };
+    };
+    if(mediaRec && mediaRec.state!=='inactive'){
+      mediaRec.onstop=stopAndHandle;
+      try{ mediaRec.stop(); }catch(e){ stopAndHandle(); }
+    } else stopAndHandle();
+  }
+
+  function cancelRec(){
+    clearInterval(recTimer);
+    recording=false;
+    try{ if(mediaRec && mediaRec.state!=='inactive') mediaRec.stop(); }catch(e){}
+    stopTracks();
+    chunks=[];
+    try{ previewAudio?.pause(); }catch(e){}
+    try{ if(previewUrl) URL.revokeObjectURL(previewUrl); }catch(e){}
+    previewUrl=null; previewAudio=null;
+    clearUI();
+  }
+
+  async function startCircle(){
+    if(recording) return;
+    clearUI();
+    try{
+      mediaStream = await navigator.mediaDevices.getUserMedia({
+        video:{ facingMode: facing, width:{ideal:640}, height:{ideal:640} },
+        audio:true
+      });
+    }catch(e){
+      try{
+        mediaStream = await navigator.mediaDevices.getUserMedia({ video:true, audio:true });
+      }catch(e2){ toast('Нет доступа к камере'); return; }
+    }
+    chunks=[];
+    paused=false;
+    recording=true;
+    recStart=Date.now();
+
+    // canvas for circular crop optional - record full then CSS circle is enough for playback
+    let mime='video/webm;codecs=vp8,opus';
+    if(!MediaRecorder.isTypeSupported(mime)) mime='video/webm';
+    try{ mediaRec=new MediaRecorder(mediaStream,{mimeType:mime, videoBitsPerSecond:2500000}); }
+    catch(e){ mediaRec=new MediaRecorder(mediaStream); }
+    mediaRec.ondataavailable=e=>{ if(e.data&&e.data.size) chunks.push(e.data); };
+    mediaRec.start(100);
+
+    const ov=document.createElement('div');
+    ov.id='tg-circle-ov';
+    ov.innerHTML=`
+      <div class="tg-cl-wrap"><video id="tg-cl-video" autoplay muted playsinline></video></div>
+      <button type="button" class="tg-cl-pause" id="tg-cl-pause">${PAUSE}</button>
+      <div class="tg-cl-bottom">
+        <div class="tg-cl-tools">
+          <button type="button" class="tg-cl-tool" id="tg-cl-flip">${FLIP}</button>
+          <button type="button" class="tg-cl-tool" id="tg-cl-flash">${FLASH}</button>
+        </div>
+        <div class="tg-cl-mid">
+          <span class="tg-cl-dot"></span>
+          <span id="tg-cl-time">0:00,00</span>
+          <button type="button" class="tg-cl-cancel" id="tg-cl-cancel">Отмена</button>
+        </div>
+        <button type="button" class="tg-cl-send" id="tg-cl-send">${ARROW}</button>
+      </div>`;
+    document.body.appendChild(ov);
+    const v=document.getElementById('tg-cl-video');
+    v.srcObject=mediaStream;
+    v.classList.toggle('mirrored', facing==='user');
+    v.play().catch(()=>{});
+
+    clearInterval(recTimer);
+    recTimer=setInterval(()=>{
+      const el=document.getElementById('tg-cl-time');
+      if(el) el.textContent=fmt(Date.now()-recStart);
+    }, 50);
+
+    ov.querySelector('#tg-cl-cancel').onclick=()=>cancelRec();
+    ov.querySelector('#tg-cl-send').onclick=()=>finishCircle();
+    ov.querySelector('#tg-cl-pause').onclick=()=>{
+      if(!mediaRec) return;
+      if(!paused){ try{ mediaRec.pause(); }catch(e){} paused=true; ov.querySelector('#tg-cl-pause').innerHTML=PLAY; }
+      else { try{ mediaRec.resume(); }catch(e){} paused=false; ov.querySelector('#tg-cl-pause').innerHTML=PAUSE; }
+    };
+    ov.querySelector('#tg-cl-flip').onclick=async()=>{
+      facing = facing==='user'?'environment':'user';
+      try{
+        const old=mediaStream;
+        mediaStream = await navigator.mediaDevices.getUserMedia({
+          video:{ facingMode: facing, width:{ideal:640}, height:{ideal:640} },
+          audio:true
+        });
+        v.srcObject=mediaStream;
+        v.classList.toggle('mirrored', facing==='user');
+        await v.play().catch(()=>{});
+        // swap tracks on recorder if possible
+        try{
+          if(mediaRec && mediaRec.stream){
+            mediaRec.stream.getVideoTracks().forEach(t=>{ try{ mediaRec.stream.removeTrack(t); t.stop(); }catch(e){} });
+            mediaRec.stream.getAudioTracks().forEach(t=>{ try{ mediaRec.stream.removeTrack(t); t.stop(); }catch(e){} });
+            mediaStream.getTracks().forEach(t=>{ try{ mediaRec.stream.addTrack(t); }catch(e){} });
+          }
+        }catch(e){}
+        try{ old?.getTracks().forEach(t=>t.stop()); }catch(e){}
+      }catch(e){ toast('Не удалось переключить камеру'); facing=facing==='user'?'environment':'user'; }
+    };
+    ov.querySelector('#tg-cl-flash').onclick=async()=>{
+      try{
+        const track=mediaStream?.getVideoTracks()[0];
+        const caps=track?.getCapabilities?.()||{};
+        if(caps.torch){
+          const settings=track.getSettings();
+          await track.applyConstraints({ advanced:[{ torch: !settings.torch }] });
+        } else toast('Вспышка недоступна');
+      }catch(e){ toast('Вспышка недоступна'); }
+    };
+  }
+
+  function finishCircle(){
+    if(!recording) return;
+    clearInterval(recTimer);
+    const done=()=>{
+      recording=false;
+      stopTracks();
+      const blob=new Blob(chunks,{type:chunks[0]?.type||'video/webm'});
+      clearUI();
+      if(blob.size<500){ toast('Слишком коротко'); chunks=[]; return; }
+      const reader=new FileReader();
+      reader.onload=async ev=>{
+        try{
+          if(typeof sendMessage==='function') await sendMessage('circle', ev.target.result, '');
+        }catch(e){ toast('Не отправилось'); }
+        chunks=[];
+      };
+      reader.readAsDataURL(blob);
+    };
+    if(mediaRec && mediaRec.state!=='inactive'){
+      mediaRec.onstop=done;
+      try{ mediaRec.stop(); }catch(e){ done(); }
+    } else done();
+  }
+
+  // Bind button: tap = switch mode, hold = record
+  let holdTimer=null;
+  let held=false;
+  let ptrId=null;
+
+  function bind(){
+    const btn=document.getElementById('circle-btn');
+    if(!btn || btn.dataset.tgRec==='1') return;
+    // clone to drop old listeners
+    const neo=btn.cloneNode(true);
+    neo.id='circle-btn';
+    neo.dataset.tgRec='1';
+    neo.style.cssText='display:flex!important;visibility:visible!important;opacity:1!important;width:40px;height:40px;align-items:center;justify-content:center;pointer-events:auto!important';
+    btn.parentNode.replaceChild(neo, btn);
+    updateBtnIcon();
+
+    neo.addEventListener('pointerdown', e=>{
+      if(e.button!=null && e.button!==0) return;
+      e.preventDefault();
+      e.stopPropagation();
+      held=false;
+      ptrId=e.pointerId;
+      try{ neo.setPointerCapture(e.pointerId); }catch(err){}
+      clearTimeout(holdTimer);
+      holdTimer=setTimeout(()=>{
+        held=true;
+        try{ navigator.vibrate?.(15); }catch(err){}
+        if(mode==='voice') startVoice();
+        else startCircle();
+      }, 280);
+    });
+    const end=(e)=>{
+      if(ptrId!=null && e && e.pointerId!=null && e.pointerId!==ptrId) return;
+      clearTimeout(holdTimer);
+      try{ if(e&&e.pointerId!=null) neo.releasePointerCapture(e.pointerId); }catch(err){}
+      if(!held){
+        // tap → switch mode
+        mode = mode==='voice' ? 'circle' : 'voice';
+        updateBtnIcon();
+        showModeHint();
+      } else if(recording && mode==='voice'){
+        // release after hold on voice → go to preview
+        finishVoice(true);
+      } else if(recording && mode==='circle'){
+        // for circle, release also finishes (Telegram holds while recording)
+        finishCircle();
+      }
+      held=false; ptrId=null;
+    };
+    neo.addEventListener('pointerup', end);
+    neo.addEventListener('pointercancel', ()=>{ clearTimeout(holdTimer); held=false; if(recording) cancelRec(); });
+  }
+
+  bind();
+  setTimeout(bind, 400);
+  setTimeout(bind, 1500);
+  setTimeout(()=>{ updateBtnIcon(); }, 200);
+
+  // hide duplicate voice btn forever
+  const hideVoice=()=>{
+    document.querySelectorAll('#voice-btn').forEach(el=>{
+      el.style.display='none'; el.setAttribute('aria-hidden','true');
+    });
+  };
+  hideVoice();
+  setInterval(hideVoice, 2000);
+
+  console.log('[SL] Telegram voice/circle UX ready');
+})();
+
+
+
 </script>
 </body>
 </html>
