@@ -3691,19 +3691,23 @@ function updatePartnerStatus(){
 }
 
 async function loadMessages(){
+  // generation token — discard stale responses
+  const _gen = (window._slChatGen = (window._slChatGen||0));
+  const partnerSnap = activePartner;
+  const groupSnap = activeGroup;
+
   // Local news channel messages
-  if(activeGroup && typeof isNewsChannel==='function' && isNewsChannel(activeGroup)){
+  if(groupSnap && typeof isNewsChannel==='function' && isNewsChannel(groupSnap)){
     try{
       const realId = storage.getItem('sl_news_real_id');
       if(realId && realId!==NEWS_FALLBACK_ID){
-        activeGroup = {...activeGroup, id: realId, _localOnly:false};
+        activeGroup = {...groupSnap, id: realId, _localOnly:false};
       } else {
         const list=document.getElementById('messages-list');
-        if(list) list.innerHTML='';
+        if(list && _gen===window._slChatGen) list.innerHTML='';
         const locals=getNewsLocalMsgs();
         locals.forEach(msg=>renderMessage(msg, true));
-        // still try DB with fallback id only if valid uuid format
-        if(!/^[0-9a-fA-F-]{36}$/.test(String(activeGroup.id)) || activeGroup.id===NEWS_FALLBACK_ID && activeGroup._localOnly){
+        if(!/^[0-9a-fA-F-]{36}$/.test(String((activeGroup||groupSnap).id)) || (activeGroup||groupSnap).id===NEWS_FALLBACK_ID && (activeGroup||groupSnap)._localOnly){
           scrollToBottom();
           return;
         }
@@ -3711,23 +3715,42 @@ async function loadMessages(){
     }catch(e){}
   }
 
-  const list=document.getElementById('messages-list'); list.innerHTML='';
-  if(activePartner?.isBot) return;
+  if(!partnerSnap){
+    // nothing to load for DM — do not wipe if group chat
+    if(!activeGroup){
+      const list=document.getElementById('messages-list');
+      if(list && _gen===window._slChatGen) list.innerHTML='';
+    }
+    return;
+  }
+  if(partnerSnap?.isBot) return;
+
   try{
     let q=sb.from('messages').select('*').is('group_id',null).order('created_at',{ascending:true});
-    if(activePartner.id===myProfile.id) q=q.eq('sender_id',myProfile.id).eq('receiver_id',myProfile.id);
-    else q=q.or(`and(sender_id.eq.${myProfile.id},receiver_id.eq.${activePartner.id}),and(sender_id.eq.${activePartner.id},receiver_id.eq.${myProfile.id})`);
-    const {data}=await q;
+    if(partnerSnap.id===myProfile.id) q=q.eq('sender_id',myProfile.id).eq('receiver_id',myProfile.id);
+    else q=q.or(`and(sender_id.eq.${myProfile.id},receiver_id.eq.${partnerSnap.id}),and(sender_id.eq.${partnerSnap.id},receiver_id.eq.${myProfile.id})`);
+    const {data, error}=await q;
+    // STALE? user already switched chat — do not touch DOM
+    if(_gen !== window._slChatGen) return;
+    if(activePartner?.id !== partnerSnap.id) return;
+    const list=document.getElementById('messages-list');
+    if(!list) return;
+    if(error){ console.warn('loadMessages error', error); return; } // keep existing messages on error
     const rows=data||[];
+    list.innerHTML='';
     rows.forEach(m=>renderMessage(m));
-    if(!rows.length && activePartner && activePartner.id!==myProfile?.id){
+    if(!rows.length && partnerSnap && partnerSnap.id!==myProfile?.id){
       if(typeof window.slShowEmptyChatHint==='function') window.slShowEmptyChatHint();
     }
-  }catch(e){}
+    scrollToBottom(true);
+  }catch(e){ console.warn('loadMessages', e); }
 }
 async function loadGroupMessages(){
-  const list=document.getElementById('messages-list'); list.innerHTML='';
-  const isNews = activeGroup && typeof isNewsChannel==='function' && isNewsChannel(activeGroup);
+  const _gen = (window._slChatGen = (window._slChatGen||0));
+  const groupSnap = activeGroup;
+  const list=document.getElementById('messages-list');
+  // do NOT clear yet — wait for data
+  const isNews = groupSnap && typeof isNewsChannel==='function' && isNewsChannel(groupSnap);
   // Ensure real id for news
   if(isNews){
     try{
@@ -3755,10 +3778,15 @@ async function loadGroupMessages(){
       if(m.content && String(m.content).startsWith('__comment__:')) return false;
       return true;
     });
+    // STALE guard
+    if(_gen !== window._slChatGen) return;
+    if(!activeGroup || (groupSnap && String(activeGroup.id)!==String(groupSnap.id))) return;
+    if(list) list.innerHTML='';
     rows.forEach(m=>renderMessage(m,true));
     if(!rows.length && activeGroup && activeGroup.type!=='channel'){
       if(typeof window.slShowEmptyChatHint==='function') window.slShowEmptyChatHint(true);
     }
+    try{ scrollToBottom(true); }catch(e){}
   }catch(e){ console.warn(e); }
   // Subscribe to global news broadcast so everyone sees posts
   if(isNews){
@@ -4516,7 +4544,7 @@ function showMsgCtx(e, msg){
           const reactions=JSON.parse(msg.reactions||'{}');
           reactions[el.dataset.r]=(reactions[el.dataset.r]||0)+1;
           await sb.from('messages').update({reactions: JSON.stringify(reactions)}).eq('id', msg.id);
-          loadMessages();
+          /* no full reload — keep messages on screen */
         }
       }catch(err){ showToast('Реакция: '+el.dataset.r); }
     };
@@ -22081,28 +22109,21 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
     };
   }
 
-  // Patch loadMessages to respect generation
+  // Patch loadMessages to respect generation — DO NOT clear early (causes message loss)
   if(typeof loadMessages==='function' && !window._slLoadMsgIso){
     window._slLoadMsgIso=1;
     const _lm=loadMessages;
     loadMessages=async function(){
       const gen=window._slChatGen;
-      const key=chatKey();
+      const key=typeof chatKey==='function' ? chatKey() : '';
       const list=document.getElementById('messages-list');
-      if(list){ list.innerHTML=''; list.dataset.chatKey=key; list.dataset.chatGen=String(gen); }
+      if(list){ list.dataset.chatKey=key; list.dataset.chatGen=String(gen); }
       try{
         await _lm.apply(this, arguments);
       }catch(e){ console.warn('loadMessages', e); }
-      // stale?
       if(gen!==window._slChatGen){
         console.warn('[SL] stale loadMessages discarded');
         return;
-      }
-      // remove messages that don't belong
-      if(list){
-        list.querySelectorAll('.bubble-row').forEach(row=>{
-          // can't always read msg; rely on data attributes if present
-        });
       }
     };
   }
@@ -22112,7 +22133,7 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
     loadGroupMessages=async function(){
       const gen=window._slChatGen;
       const list=document.getElementById('messages-list');
-      if(list){ list.innerHTML=''; list.dataset.chatGen=String(gen); }
+      if(list){ list.dataset.chatGen=String(gen); }
       await _lg.apply(this, arguments);
       if(gen!==window._slChatGen) console.warn('[SL] stale loadGroupMessages discarded');
     };
@@ -24340,6 +24361,104 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
   setInterval(hideVoice, 2000);
 
   console.log('[SL] Telegram voice/circle UX ready');
+})();
+
+
+
+
+/* ===== SL: stop messages from disappearing ===== */
+(function(){
+  'use strict';
+  if(window._slMsgPersistFix) return;
+  window._slMsgPersistFix = 1;
+
+  // Bump gen only when switching chats (openChat/openGroup already do this ideally)
+  if(typeof window._slChatGen !== 'number') window._slChatGen = 1;
+
+  function bump(){ window._slChatGen = (window._slChatGen||0) + 1; return window._slChatGen; }
+
+  // Re-wrap loadMessages: NEVER clear before fetch; ignore stale
+  if(typeof loadMessages === 'function'){
+    const _lm = loadMessages;
+    loadMessages = async function(){
+      const gen = window._slChatGen;
+      const partnerId = activePartner && activePartner.id;
+      try{
+        await _lm.apply(this, arguments);
+      }catch(e){
+        console.warn('[SL] loadMessages error (messages kept)', e);
+      }
+      // If another chat was opened during fetch, leave DOM alone
+      if(gen !== window._slChatGen) return;
+      if(partnerId && activePartner && activePartner.id !== partnerId) return;
+    };
+  }
+
+  if(typeof loadGroupMessages === 'function'){
+    const _lg = loadGroupMessages;
+    loadGroupMessages = async function(){
+      const gen = window._slChatGen;
+      const gid = activeGroup && activeGroup.id;
+      try{
+        await _lg.apply(this, arguments);
+      }catch(e){
+        console.warn('[SL] loadGroupMessages error (messages kept)', e);
+      }
+      if(gen !== window._slChatGen) return;
+      if(gid && activeGroup && String(activeGroup.id) !== String(gid)) return;
+    };
+  }
+
+  // openChat / openGroup: bump gen so in-flight loads are discarded
+  if(typeof openChat === 'function' && !window._slOpenChatBump){
+    window._slOpenChatBump = 1;
+    const _oc = openChat;
+    openChat = async function(){
+      bump();
+      return await _oc.apply(this, arguments);
+    };
+  }
+  if(typeof openGroup === 'function' && !window._slOpenGroupBump2){
+    window._slOpenGroupBump2 = 1;
+    const _og = openGroup;
+    openGroup = async function(){
+      bump();
+      return await _og.apply(this, arguments);
+    };
+  }
+
+  // Prevent accidental full wipes from random code when no active chat
+  const list = document.getElementById('messages-list');
+  if(list){
+    const obs = new MutationObserver(()=>{
+      // if list was wiped but we still have activePartner and no loading in progress, recover
+    });
+    // not aggressive — just a safety log
+  }
+
+  // Soft poll: if chat is open and list empty for no reason, reload once
+  let _emptyTries = 0;
+  setInterval(()=>{
+    try{
+      if(!activePartner && !activeGroup) return;
+      const list = document.getElementById('messages-list');
+      if(!list) return;
+      const chatView = document.getElementById('chat-screen') || document.querySelector('.chat-view.show, #chat.active, .screen-chat');
+      // only when messages area is visible-ish
+      if(list.children.length === 0){
+        _emptyTries++;
+        if(_emptyTries === 3){
+          _emptyTries = 0;
+          if(activePartner && typeof loadMessages === 'function') loadMessages();
+          else if(activeGroup && typeof loadGroupMessages === 'function') loadGroupMessages();
+        }
+      } else {
+        _emptyTries = 0;
+      }
+    }catch(e){}
+  }, 2000);
+
+  console.log('[SL] message persist fix active');
 })();
 
 
