@@ -17,7 +17,7 @@
 <title>SLine</title>
 <style>
 :root {
-  /* DEFAULT = LIGHT (white) */
+  /* DEFAULT = LIGHT (white UI) */
   --bg:#F4F6F9; --panel:#FFFFFF; --panel-hover:#EEF1F5; --line:rgba(0,0,0,.08); --text:#1A1D21; --muted:#6B7A90;
   --accent-a:#4C7CF3; --accent-b:#6D5DF6; --mint:#3EE0C6; --danger:#FF6B81;
   --safe-bottom:env(safe-area-inset-bottom,0px); --safe-top:env(safe-area-inset-top,0px); --input-bg:#F0F2F5;
@@ -27,11 +27,13 @@
   --shadow-sm:0 2px 8px rgba(0,0,0,.08); --shadow-md:0 8px 28px rgba(0,0,0,.12);
   --spring:cubic-bezier(.22,1,.36,1);
 }
-body.night-mode, body.theme-dark {
+/* Dark theme when user selects it */
+body.theme-dark, body.night-mode {
   --bg:#0F1419; --panel:#1A222D; --panel-hover:#243041; --line:rgba(255,255,255,.08); --text:#F4F7FB; --muted:#8B9BB4;
   --input-bg:#151C27;
   --bubble-me:linear-gradient(135deg,#5B8CFF 0%,#6B7BFF 100%);
   --bubble-them:#243041;
+  --shadow-sm:0 2px 8px rgba(0,0,0,.18); --shadow-md:0 8px 28px rgba(0,0,0,.28);
 }
 
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;user-select:none!important;-webkit-user-select:none!important}
@@ -1607,6 +1609,26 @@ body.chats-selecting .sw-clip .sel-check{display:flex}
 </style>
 </head>
 <body class="light-theme theme-light">
+<script>
+/* Early light theme — before anything else */
+(function(){
+  try {
+    var LS = localStorage;
+    var t = LS.getItem('sl_theme');
+    var night = LS.getItem('sl_night_mode');
+    // Clear stuck dark if user wants light default
+    if (!t || t === 'light') {
+      document.documentElement.classList.add('light-theme');
+      document.body.classList.add('light-theme', 'theme-light');
+      LS.setItem('sl_theme', 'light');
+      LS.setItem('sl_night_mode', '0');
+    } else if (t === 'dark' || night === '1') {
+      document.body.classList.add('theme-dark', 'night-mode');
+    }
+  } catch(e) {}
+})();
+</script>
+
 
 <script>
 /* Early: suppress opaque cross-origin "Script error." before other scripts run */
@@ -1789,7 +1811,7 @@ body::before {
 
 /* Composer */
 .composer, #composer {
-  background: rgba(26,34,45,.92) !important;
+  background: var(--panel) !important;
   backdrop-filter: blur(20px) saturate(1.2) !important;
   -webkit-backdrop-filter: blur(20px) saturate(1.2) !important;
   border-top: 1px solid var(--line) !important;
@@ -1818,7 +1840,7 @@ body.theme-light .composer, body.theme-light #composer {
 
 /* Header / sidebar */
 .sidebar, .chat-header, .topbar, .social-header {
-  background: rgba(26,34,45,.85) !important;
+  background: var(--panel) !important;
   backdrop-filter: blur(18px) saturate(1.15) !important;
   -webkit-backdrop-filter: blur(18px) saturate(1.15) !important;
   border-color: var(--line) !important;
@@ -1886,18 +1908,6 @@ body.theme-light .topbar {
   background: var(--panel) !important;
   backdrop-filter: blur(24px) !important;
 }
-body.light-theme .auth-card,
-body.theme-light .auth-card {
-  background: #FFFFFF !important;
-  border: 1px solid rgba(0,0,0,.08) !important;
-  box-shadow: 0 16px 48px rgba(0,0,0,.1) !important;
-  color: #1A1D21 !important;
-}
-body.light-theme .auth-card::before,
-body.theme-light .auth-card::before {
-  opacity: .12 !important;
-}
-
 .auth-card::before {
   opacity: .45 !important;
   filter: blur(60px) !important;
@@ -7001,6 +7011,8 @@ function applyTheme(){
   const isLight = t==='light';
   document.body.classList.toggle('theme-light', isLight);
   document.body.classList.toggle('light-theme', isLight);
+  document.body.classList.toggle('theme-dark', !isLight);
+  document.body.classList.toggle('night-mode', !isLight);
   document.documentElement.classList.toggle('light-theme', isLight);
   document.documentElement.classList.toggle('theme-light', isLight);
   try { storage.setItem('sl_night_mode', isLight ? '0' : '1'); } catch(e){}
@@ -22939,7 +22951,7 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
   function setFavs(a){ try{ LS.setItem(FAV_KEY, JSON.stringify(a.slice(0,100))); }catch(e){} }
 
   function emojiSvg(emoji, bg){
-    bg = bg || '#1c1f2e';
+    bg = bg || 'var(--panel)';
     const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128"><rect width="128" height="128" rx="28" fill="${bg}"/><text x="64" y="84" text-anchor="middle" font-size="72">${emoji}</text></svg>`;
     return 'data:image/svg+xml,'+encodeURIComponent(svg);
   }
@@ -23259,7 +23271,7 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
         position:absolute; left:0; right:0; bottom:calc(58px + env(safe-area-inset-bottom,0px));
         z-index:50; display:none; flex-direction:column;
         height:min(52vh, 420px); max-height:52vh;
-        background:#1c1f2e; border-top:1px solid rgba(255,255,255,.08);
+        background:var(--panel); border-top:1px solid rgba(255,255,255,.08);
         border-radius:16px 16px 0 0;
         box-shadow:0 -12px 40px rgba(0,0,0,.45);
         overflow:hidden;
@@ -23883,7 +23895,7 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
         bottom:calc(56px + env(safe-area-inset-bottom,0px));
         z-index:60; display:none; flex-direction:column;
         height:min(54vh, 460px); max-height:54vh;
-        background:#1c1f2e;
+        background:var(--panel);
         border-radius:14px 14px 0 0;
         box-shadow:0 -8px 32px rgba(0,0,0,.5);
         overflow:hidden;
@@ -24312,7 +24324,7 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
       ov.id='tg-contact-pick';
       ov.style.cssText='position:fixed;inset:0;z-index:300;background:rgba(0,0,0,.55);display:flex;align-items:flex-end;';
       const sheet=document.createElement('div');
-      sheet.style.cssText='background:#1c1f2e;border-radius:16px 16px 0 0;max-height:70vh;width:100%;overflow:auto;padding:12px 0 24px;';
+      sheet.style.cssText='background:var(--panel);border-radius:16px 16px 0 0;max-height:70vh;width:100%;overflow:auto;padding:12px 0 24px;';
       sheet.innerHTML=`<div style="text-align:center;padding:8px 0 12px;font-weight:600;color:#fff">Контакты</div>`+
         list.slice(0,40).map(c=>{
           const name=(c.display_name||c.username||c.id||'?');
@@ -24349,7 +24361,7 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
     const ov=document.createElement('div');
     ov.style.cssText='position:fixed;inset:0;z-index:300;background:rgba(0,0,0,.55);display:flex;align-items:flex-end;';
     const sheet=document.createElement('div');
-    sheet.style.cssText='background:#1c1f2e;border-radius:16px 16px 0 0;width:100%;padding:16px 16px 28px;';
+    sheet.style.cssText='background:var(--panel);border-radius:16px 16px 0 0;width:100%;padding:16px 16px 28px;';
     sheet.innerHTML=`<div style="text-align:center;font-weight:600;color:#fff;margin-bottom:14px">Подарок</div>
       <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px">
         ${gifts.map(g=>`<button type="button" data-g="${g}" style="aspect-ratio:1;border:none;border-radius:14px;background:rgba(255,255,255,.08);font-size:28px;cursor:pointer">${g}</button>`).join('')}
@@ -24397,7 +24409,7 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
         }
         #tg-attach-sheet{
           position:fixed; left:0; right:0; bottom:0; z-index:281;
-          background:#1c1f2e;
+          background:var(--panel);
           border-radius:16px 16px 0 0;
           padding:10px 0 calc(12px + env(safe-area-inset-bottom,0px));
           box-shadow:0 -8px 32px rgba(0,0,0,.45);
@@ -24557,7 +24569,7 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
       /* Voice recording bar (Telegram) */
       #tg-voice-bar{
         position:fixed; left:0; right:0; bottom:0; z-index:4600;
-        background:#1c1f2e;
+        background:var(--panel);
         padding:10px 12px calc(10px + env(safe-area-inset-bottom,0px));
         display:flex; align-items:center; gap:10px;
         box-shadow:0 -4px 24px rgba(0,0,0,.4);
@@ -24586,7 +24598,7 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
       /* Voice preview bar after release */
       #tg-voice-preview{
         position:fixed; left:0; right:0; bottom:0; z-index:4600;
-        background:#1c1f2e;
+        background:var(--panel);
         padding:10px 12px calc(10px + env(safe-area-inset-bottom,0px));
         display:flex; align-items:center; gap:10px;
         box-shadow:0 -4px 24px rgba(0,0,0,.4);
@@ -25416,176 +25428,69 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
 
 
 
-/* ===== SL COMPLETE LIGHT THEME — everything white ===== */
+/* ===== SL LIGHT REINFORCEMENT ===== */
 (function(){
   'use strict';
-  if (window._slLightComplete) return;
-  window._slLightComplete = 1;
-
-  const CSS = `
-body.light-theme, body.theme-light, html.light-theme {
-  --bg: #F4F6F9 !important;
-  --panel: #FFFFFF !important;
-  --panel-hover: #EEF1F5 !important;
-  --line: rgba(0,0,0,.08) !important;
-  --text: #1A1D21 !important;
-  --muted: #6B7A90 !important;
-  --input-bg: #F0F2F5 !important;
-  --bubble-them: #FFFFFF !important;
-  background: #F4F6F9 !important;
-  color: #1A1D21 !important;
+  if (window._slLightFinal) return;
+  window._slLightFinal = 1;
+  var s = document.createElement('style');
+  s.id = 'sl-light-final';
+  s.textContent = `
+body.light-theme, body.theme-light {
+  --bg:#F4F6F9!important; --panel:#FFF!important; --panel-hover:#EEF1F5!important;
+  --line:rgba(0,0,0,.08)!important; --text:#1A1D21!important; --muted:#6B7A90!important;
+  --input-bg:#F0F2F5!important; --bubble-them:#FFF!important;
+  background:#F4F6F9!important; color:#1A1D21!important;
 }
-body.light-theme #auth-screen, body.theme-light #auth-screen { background: #F4F6F9 !important; }
+body.light-theme #auth-screen, body.theme-light #auth-screen { background:#F4F6F9!important; }
 body.light-theme .auth-card, body.theme-light .auth-card {
-  background: #FFFFFF !important; border: 1px solid rgba(0,0,0,.08) !important;
-  color: #1A1D21 !important; box-shadow: 0 16px 48px rgba(0,0,0,.1) !important;
+  background:#FFFFFF!important; color:#1A1D21!important;
+  border:1px solid rgba(0,0,0,.08)!important;
+  box-shadow:0 16px 48px rgba(0,0,0,.1)!important;
 }
-body.light-theme .auth-card::before, body.theme-light .auth-card::before { opacity: .12 !important; }
-body.light-theme .brand-name, body.theme-light .brand-name { color: #1A1D21 !important; }
-body.light-theme .auth-sub, body.theme-light .auth-sub { color: #6B7A90 !important; }
-body.light-theme .tabs, body.theme-light .tabs { background: #F0F2F5 !important; border-color: rgba(0,0,0,.08) !important; }
-body.light-theme .tab { color: #6B7A90 !important; }
-body.light-theme .tab.active { background: #FFFFFF !important; color: #1A1D21 !important; }
-body.light-theme .field label { color: #6B7A90 !important; }
-body.light-theme .field input {
-  background: #F0F2F5 !important; border: 1px solid rgba(0,0,0,.1) !important; color: #1A1D21 !important;
+body.light-theme .auth-card::before { opacity:.1!important; }
+body.light-theme .brand-name { color:#1A1D21!important; }
+body.light-theme .auth-sub { color:#6B7A90!important; }
+body.light-theme .tabs { background:#F0F2F5!important; border-color:rgba(0,0,0,.08)!important; }
+body.light-theme .tab { color:#6B7A90!important; }
+body.light-theme .tab.active { background:#FFF!important; color:#1A1D21!important; }
+body.light-theme .field input { background:#F0F2F5!important; color:#1A1D21!important; border-color:rgba(0,0,0,.1)!important; }
+body.light-theme .btn-secondary { background:#F0F2F5!important; color:#1A1D21!important; border-color:rgba(0,0,0,.08)!important; }
+body.light-theme .bottom-tabs, body.theme-light .bottom-tabs {
+  background:#FFFFFF!important; background-color:#FFFFFF!important;
+  backdrop-filter:none!important; -webkit-backdrop-filter:none!important;
+  border-top:1px solid rgba(0,0,0,.08)!important;
 }
-body.light-theme .btn-secondary {
-  background: #F0F2F5 !important; color: #1A1D21 !important; border: 1px solid rgba(0,0,0,.08) !important;
+body.light-theme .bottom-tab { color:#8B9BB4!important; }
+body.light-theme .bottom-tab.active { color:#4C7CF3!important; background:rgba(76,124,243,.12)!important; }
+body.light-theme .sidebar, body.light-theme .sidebar-header, body.light-theme .chat-header,
+body.light-theme .composer, body.light-theme .settings-page, body.light-theme .settings-item,
+body.light-theme .modal, body.light-theme .sl-sheet, body.light-theme .contact, body.light-theme .sw-front {
+  background:#FFFFFF!important; color:#1A1D21!important; border-color:rgba(0,0,0,.08)!important;
 }
-body.light-theme .bottom-tabs, body.theme-light .bottom-tabs,
-body.light-theme .bottom-nav, body.theme-light .bottom-nav,
-body.light-theme #bottom-tabs {
-  background: #FFFFFF !important; background-color: #FFFFFF !important;
-  backdrop-filter: none !important; -webkit-backdrop-filter: none !important;
-  border-top: 1px solid rgba(0,0,0,.08) !important;
-  box-shadow: 0 -2px 16px rgba(0,0,0,.05) !important;
+body.light-theme .messages, body.light-theme #app-screen, body.light-theme .app-page { background:#F4F6F9!important; }
+body.light-theme .bubble.them { background:#FFF!important; color:#1A1D21!important; border:1px solid rgba(0,0,0,.08)!important; }
+body.light-theme .search-box input, body.light-theme .composer-input-shell { background:#F0F2F5!important; color:#1A1D21!important; }
+body.light-theme #tg-attach-sheet, body.light-theme #tg-voice-bar, body.light-theme #tg-voice-preview {
+  background:#FFFFFF!important; color:#1A1D21!important;
 }
-body.light-theme .bottom-tab { color: #8B9BB4 !important; background: transparent !important; }
-body.light-theme .bottom-tab.active {
-  color: #4C7CF3 !important; background: rgba(76,124,243,.12) !important; border-radius: 14px !important;
-}
-body.light-theme .bottom-tab svg { stroke: currentColor !important; }
-body.light-theme .bottom-tab.active svg { stroke: #4C7CF3 !important; }
-body.light-theme .sidebar, body.light-theme .sidebar-header, body.light-theme .sidebar-scroll {
-  background: #FFFFFF !important; border-color: rgba(0,0,0,.08) !important; color: #1A1D21 !important;
-}
-body.light-theme .contact, body.light-theme .sw-clip, body.light-theme .sw-front {
-  background: #FFFFFF !important; color: #1A1D21 !important;
-}
-body.light-theme .contact:hover, body.light-theme .contact.active, body.light-theme .sw-front.active {
-  background: #EEF1F5 !important;
-}
-body.light-theme .contact-name, body.light-theme .me-name { color: #1A1D21 !important; }
-body.light-theme .contact-sub, body.light-theme .contact-time, body.light-theme .me-tag { color: #6B7A90 !important; }
-body.light-theme .search-box input {
-  background: #F0F2F5 !important; border: 1px solid rgba(0,0,0,.08) !important; color: #1A1D21 !important;
-}
-body.light-theme .chat-header {
-  background: #FFFFFF !important; border-color: rgba(0,0,0,.08) !important; color: #1A1D21 !important;
-}
-body.light-theme .messages { background: #F4F6F9 !important; }
-body.light-theme .bubble.them {
-  background: #FFFFFF !important; border: 1px solid rgba(0,0,0,.08) !important; color: #1A1D21 !important;
-}
-body.light-theme .composer {
-  background: #FFFFFF !important; border-top: 1px solid rgba(0,0,0,.08) !important;
-}
-body.light-theme .composer-input-shell {
-  background: #F0F2F5 !important; border: 1px solid rgba(0,0,0,.1) !important;
-}
-body.light-theme .composer textarea { color: #1A1D21 !important; }
-body.light-theme .settings-page, body.light-theme .settings-item {
-  background: #FFFFFF !important; color: #1A1D21 !important; border-color: rgba(0,0,0,.08) !important;
-}
-body.light-theme .modal, body.light-theme .sl-sheet {
-  background: #FFFFFF !important; color: #1A1D21 !important;
-}
-body.light-theme .folder-tab { background: #F0F2F5 !important; color: #6B7A90 !important; }
-body.light-theme .folder-tab.active { background: #4C7CF3 !important; color: #FFFFFF !important; }
-body.light-theme #app-screen, body.light-theme .app-page,
-body.light-theme #page-chats, body.light-theme #page-calls, body.light-theme #page-settings {
-  background: #F4F6F9 !important;
-}
-body.light-theme .icon-btn { border-color: rgba(0,0,0,.1) !important; color: #6B7A90 !important; }
-`;
-
-  const el = document.createElement('style');
-  el.id = 'sl-light-complete';
-  el.textContent = CSS;
-  document.head.appendChild(el);
-
-  const LS = (typeof storage !== 'undefined' ? storage : localStorage);
-
-  function applyLight() {
-    try {
-      const themeKey = LS.getItem('sl_theme');
-      const night = LS.getItem('sl_night_mode');
-      let isLight;
-      if (themeKey === 'dark' || night === '1') isLight = false;
-      else if (themeKey === 'light' || night === '0') isLight = true;
-      else isLight = true; // default = white
-      if (isLight) {
-        document.body.classList.add('light-theme', 'theme-light');
-        document.documentElement.classList.add('light-theme', 'theme-light');
-      } else {
-        document.body.classList.remove('light-theme', 'theme-light');
-        document.documentElement.classList.remove('light-theme', 'theme-light');
-      }
-    } catch (e) {}
-  }
-
-  window.slToggleLightTheme = function (on) {
-    if (on !== false) {
-      LS.setItem('sl_night_mode', '0');
-      document.body.classList.add('light-theme', 'theme-light');
-      document.documentElement.classList.add('light-theme');
-    } else {
-      LS.setItem('sl_night_mode', '1');
-      document.body.classList.remove('light-theme', 'theme-light');
-      document.documentElement.classList.remove('light-theme');
-    }
-  };
-
-  applyLight();
-  document.addEventListener('DOMContentLoaded', applyLight);
-  window.addEventListener('load', applyLight);
-  [100,500,1500,3000].forEach(t => setTimeout(applyLight, t));
-
-  console.log('[SL] Complete light theme — everything white');
-})();
-
-
-/* TG sheets light overrides */
-(function(){
-  if(window._slTgLight) return; window._slTgLight=1;
-  const s=document.createElement('style');
-  s.id='sl-tg-light';
-  s.textContent=`
-body.light-theme #tg-attach-sheet,
-body.theme-light #tg-attach-sheet{
-  background:#FFFFFF !important;
-  box-shadow:0 -8px 32px rgba(0,0,0,.12) !important;
-}
-body.light-theme .tg-att-item,
-body.theme-light .tg-att-item{ color:#1A1D21 !important; }
-body.light-theme .tg-att-handle,
-body.theme-light .tg-att-handle{ background:rgba(0,0,0,.15) !important; }
-body.light-theme #tg-voice-bar,
-body.theme-light #tg-voice-bar,
-body.light-theme #tg-voice-preview,
-body.theme-light #tg-voice-preview{
-  background:#FFFFFF !important;
-  box-shadow:0 -4px 24px rgba(0,0,0,.1) !important;
-}
-body.light-theme .tg-vb-time,
-body.theme-light .tg-vb-time{ color:#1A1D21 !important; }
-body.light-theme .tg-vb-cancel,
-body.theme-light .tg-vb-cancel{ color:#4C7CF3 !important; }
-/* keep circle recorder dark — camera UI */
+body.light-theme .tg-att-item { color:#1A1D21!important; }
+body.light-theme .tg-vb-time { color:#1A1D21!important; }
+body.light-theme .tg-vb-cancel { color:#4C7CF3!important; }
+body.light-theme .tg-att-handle { background:rgba(0,0,0,.15)!important; }
 `;
   document.head.appendChild(s);
-  console.log('[SL] TG light sheets OK');
+  // force light unless dark chosen
+  try {
+    var t = localStorage.getItem('sl_theme');
+    if (t !== 'dark') {
+      localStorage.setItem('sl_theme','light');
+      localStorage.setItem('sl_night_mode','0');
+      document.body.classList.add('light-theme','theme-light');
+      document.documentElement.classList.add('light-theme');
+    }
+  } catch(e){}
+  console.log('[SL] light final OK');
 })();
 
 </script>
