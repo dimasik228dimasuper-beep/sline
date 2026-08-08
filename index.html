@@ -8119,386 +8119,695 @@ sendMessage = async function(type='text', fileUrl=null, content=null){
   return _origSendMessage(type, fileUrl, content);
 };
 
-// ---------- Story privacy ----------
+// ---------- Story privacy + WhatsApp-style editor ----------
 document.getElementById('story-input').onchange=function(e){
   const f=e.target.files[0]; if(!f||!myProfile) return; e.target.value='';
   openStoryEditor(f);
 };
 
-/** Story editor: text + photo overlays, then publish */
-async function openStoryEditor(file){
-  if(!file || !myProfile) return;
-  const isVideo = /^video\//.test(file.type);
-  let bgUrl = null;
-  try{
-    bgUrl = await new Promise((resolve,reject)=>{
-      const r=new FileReader();
-      r.onload=()=>resolve(r.result);
-      r.onerror=reject;
-      r.readAsDataURL(file);
-    });
-  }catch(e){ showToast('Не удалось открыть файл'); return; }
+/** Entry menu: Photo / Text / Stickers (like WhatsApp status) */
+function openStoryCreateMenu(){
+  if(!myProfile){ try{showToast('Войдите в аккаунт');}catch(e){} return; }
+  document.getElementById('sl-story-menu')?.remove();
+  if(!document.getElementById('sl-story-menu-css')){
+    const st=document.createElement('style');
+    st.id='sl-story-menu-css';
+    st.textContent=`
+      #sl-story-menu-bd{position:fixed;inset:0;z-index:12990;background:rgba(0,0,0,.55)}
+      #sl-story-menu{
+        position:fixed;left:0;right:0;bottom:0;z-index:12991;
+        background:#1c1f2e;border-radius:20px 20px 0 0;
+        padding:10px 16px calc(20px + env(safe-area-inset-bottom,0px));
+        animation:slSmUp .22s ease;
+      }
+      @keyframes slSmUp{from{transform:translateY(100%)}to{transform:none}}
+      .sl-sm-handle{width:40px;height:4px;border-radius:2px;background:rgba(255,255,255,.2);margin:4px auto 14px}
+      .sl-sm-title{font-size:17px;font-weight:700;color:#fff;text-align:center;margin-bottom:16px}
+      .sl-sm-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+      .sl-sm-item{
+        display:flex;flex-direction:column;align-items:center;gap:8px;
+        border:none;background:transparent;color:#fff;cursor:pointer;padding:8px 4px;
+      }
+      .sl-sm-ico{
+        width:56px;height:56px;border-radius:50%;
+        display:flex;align-items:center;justify-content:center;font-size:24px;
+        background:rgba(255,255,255,.1);
+      }
+      .sl-sm-ico.green{background:#25D366}
+      .sl-sm-ico.blue{background:#4C7CF3}
+      .sl-sm-ico.purple{background:#8B5CF6}
+      .sl-sm-ico.orange{background:#F59E0B}
+      .sl-sm-item span{font-size:12px;opacity:.9}
+      .sl-sm-item:active .sl-sm-ico{transform:scale(.92)}
+    `;
+    document.head.appendChild(st);
+  }
+  const bd=document.createElement('div'); bd.id='sl-story-menu-bd';
+  const sheet=document.createElement('div'); sheet.id='sl-story-menu';
+  sheet.innerHTML=`
+    <div class="sl-sm-handle"></div>
+    <div class="sl-sm-title">Новая история</div>
+    <div class="sl-sm-grid">
+      <button type="button" class="sl-sm-item" data-a="photo"><span class="sl-sm-ico green">📷</span><span>Фото</span></button>
+      <button type="button" class="sl-sm-item" data-a="text"><span class="sl-sm-ico blue">Aa</span><span>Текст</span></button>
+      <button type="button" class="sl-sm-item" data-a="sticker"><span class="sl-sm-ico purple">✨</span><span>Стикер</span></button>
+      <button type="button" class="sl-sm-item" data-a="album"><span class="sl-sm-ico orange">🖼️</span><span>Галерея</span></button>
+      <button type="button" class="sl-sm-item" data-a="video"><span class="sl-sm-ico" style="background:#EF4444">🎬</span><span>Видео</span></button>
+      <button type="button" class="sl-sm-item" data-a="cancel"><span class="sl-sm-ico">✕</span><span>Отмена</span></button>
+    </div>`;
+  document.body.appendChild(bd);
+  document.body.appendChild(sheet);
+  const close=()=>{ bd.remove(); sheet.remove(); };
+  bd.onclick=close;
+  sheet.querySelectorAll('[data-a]').forEach(btn=>{
+    btn.onclick=()=>{
+      const a=btn.dataset.a; close();
+      if(a==='cancel') return;
+      if(a==='text'){ openStoryEditor(null, {mode:'text'}); return; }
+      if(a==='sticker'){ openStoryEditor(null, {mode:'sticker'}); return; }
+      const inp=document.getElementById('story-input');
+      if(!inp) return;
+      if(a==='video') inp.accept='video/*';
+      else if(a==='photo') inp.accept='image/*';
+      else inp.accept='image/*,video/*';
+      inp.click();
+    };
+  });
+}
+window.openStoryCreateMenu = openStoryCreateMenu;
 
-  const layers = []; // {type:'text'|'image', ...}
+/** WhatsApp-like story editor: media/text bg, text styles, stickers, caption */
+async function openStoryEditor(file, opts){
+  opts = opts || {};
+  if(!myProfile) return;
+  document.getElementById('story-editor')?.remove();
+
+  const isVideo = file ? /^video\//.test(file.type) : false;
+  const textOnly = !file;
+  let bgUrl = null;
+  if(file){
+    try{
+      bgUrl = await new Promise((resolve,reject)=>{
+        const r=new FileReader();
+        r.onload=()=>resolve(r.result);
+        r.onerror=reject;
+        r.readAsDataURL(file);
+      });
+    }catch(e){ showToast('Не удалось открыть файл'); return; }
+  }
+
+  const PATTERNS = [
+    'radial-gradient(ellipse at 20% 20%,#1a2450 0%,#0a0a12 70%)',
+    'linear-gradient(160deg,#0B1120,#1a1035 50%,#0a1628)',
+    'linear-gradient(135deg,#1a0a0a,#3b0a1a 40%,#0a0a12)',
+    'linear-gradient(180deg,#0a1810,#06120a)',
+    'radial-gradient(circle at 70% 30%,#2a1a4a,#0B1120 60%)',
+    'linear-gradient(135deg,#1e293b,#0f172a)',
+    '#0a0a0a',
+    '#111827',
+    '#1a1035',
+    '#0f172a'
+  ];
+  let patternIdx = 0;
+
+  const COLORS = ['#FFFFFF','#000000','#FF3B5C','#FF6B35','#FFD166','#22c55e','#2DD4BF','#4C7CF3','#8B5CF6','#EC4899','#F0708A','#A3E635'];
+  const FONTS = [
+    {id:'sans', label:'Aa', family:'Inter,-apple-system,sans-serif', weight:'700'},
+    {id:'serif', label:'Aa', family:'Georgia,serif', weight:'700', style:'italic'},
+    {id:'mono', label:'Aa', family:'ui-monospace,Menlo,monospace', weight:'600'},
+    {id:'round', label:'Aa', family:'system-ui,sans-serif', weight:'800'},
+    {id:'thin', label:'Aa', family:'Inter,sans-serif', weight:'300'},
+    {id:'black', label:'Aa', family:'Arial Black,sans-serif', weight:'900'},
+    {id:'cond', label:'Aa', family:'Arial Narrow,sans-serif', weight:'700'}
+  ];
+  let textColor = '#FFFFFF';
+  let fontIdx = 0;
+  let textBg = false; // pill behind text (like WA link style)
+
+  const layers = []; // {type:'text'|'sticker', id, ...}
   let selected = -1;
   let drag = null;
+  let nextId = 1;
+
+  // Stickers catalog (emoji + simple SVG)
+  function emojiSvg(e){
+    return 'data:image/svg+xml,'+encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128"><text x="64" y="92" text-anchor="middle" font-size="88">${e}</text></svg>`);
+  }
+  const STICKERS = [
+    '😀','😂','😍','😎','🤔','🔥','❤️','👍','🎉','✨','☕','🍕','🐱','🐶','🌟','💯',
+    '🥳','😭','🥺','💪','🦄','🌈','🎵','⚡','🌹','🎂','🎁','👻','🤖','💬'
+  ].map((e,i)=>({id:'st_'+i, url:emojiSvg(e)}));
+
+  if(!document.getElementById('sl-se-css')){
+    const st=document.createElement('style');
+    st.id='sl-se-css';
+    st.textContent=`
+      #story-editor{position:fixed;inset:0;z-index:13000;background:#0a0a0a;display:flex;flex-direction:column;color:#fff}
+      #se-top{
+        display:flex;align-items:center;gap:8px;
+        padding:calc(10px + env(safe-area-inset-top,0px)) 10px 8px;
+        background:rgba(0,0,0,.4);z-index:5;position:relative;
+      }
+      #se-top .se-btn{
+        width:40px;height:40px;border:none;border-radius:50%;
+        background:rgba(255,255,255,.12);color:#fff;cursor:pointer;
+        display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;
+      }
+      #se-top .se-tools{flex:1;display:flex;justify-content:center;gap:6px;flex-wrap:wrap}
+      #se-top .se-tool{
+        width:38px;height:38px;border-radius:50%;border:none;
+        background:rgba(255,255,255,.1);color:#fff;cursor:pointer;
+        display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;
+      }
+      #se-top .se-tool.on{background:#4C7CF3}
+      #se-publish{
+        padding:10px 16px;border:none;border-radius:999px;
+        background:linear-gradient(135deg,#4C7CF3,#6D5DF6);color:#fff;font-weight:700;cursor:pointer;flex-shrink:0;
+      }
+      #se-stage{flex:1;position:relative;overflow:hidden;touch-action:none;user-select:none;background:#111}
+      #se-layers{position:absolute;inset:0;z-index:2}
+      .se-layer{
+        position:absolute;cursor:grab;transform:translate(-50%,-50%);
+        max-width:90%; text-align:center; outline:none;
+      }
+      .se-layer.sel{outline:2px dashed rgba(255,255,255,.55);outline-offset:6px;border-radius:8px}
+      .se-layer.dragging{cursor:grabbing;opacity:.95}
+      .se-text{
+        font-size:28px;line-height:1.25;word-break:break-word;
+        text-shadow:0 2px 8px rgba(0,0,0,.45);padding:4px 8px;min-width:40px;
+      }
+      .se-text.pill{
+        background:rgba(255,255,255,.92);color:#111!important;
+        border-radius:999px;padding:10px 18px;text-shadow:none;
+        font-size:16px;font-weight:600;max-width:85vw;
+      }
+      .se-sticker img{width:110px;height:110px;object-fit:contain;pointer-events:none;filter:drop-shadow(0 4px 12px rgba(0,0,0,.35))}
+      #se-bottom{
+        background:rgba(0,0,0,.75);z-index:5;
+        padding:8px 12px calc(10px + env(safe-area-inset-bottom,0px));
+      }
+      #se-caption{
+        width:100%;box-sizing:border-box;padding:12px 14px;border-radius:22px;
+        border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.08);
+        color:#fff;font-size:15px;outline:none;margin-bottom:8px;
+      }
+      #se-color-row{display:flex;align-items:center;gap:8px;overflow-x:auto;padding:4px 0 6px;scrollbar-width:none}
+      #se-color-row::-webkit-scrollbar{display:none}
+      .se-col{
+        width:28px;height:28px;border-radius:50%;border:2px solid transparent;flex-shrink:0;cursor:pointer;
+      }
+      .se-col.on{border-color:#fff;box-shadow:0 0 0 2px #4C7CF3}
+      #se-font-row{display:flex;gap:6px;overflow-x:auto;padding:4px 0;scrollbar-width:none}
+      #se-font-row::-webkit-scrollbar{display:none}
+      .se-font{
+        width:40px;height:40px;border-radius:50%;border:none;
+        background:rgba(255,255,255,.12);color:#fff;font-size:14px;cursor:pointer;flex-shrink:0;
+      }
+      .se-font.on{background:#4C7CF3}
+      #se-sticker-sheet{
+        position:absolute;left:0;right:0;bottom:0;z-index:20;
+        max-height:48vh;background:#1c1f2e;border-radius:16px 16px 0 0;
+        display:none;flex-direction:column;padding-bottom:env(safe-area-inset-bottom,0px);
+      }
+      #se-sticker-sheet.show{display:flex}
+      #se-sticker-sheet .se-stk-head{
+        display:flex;align-items:center;justify-content:space-between;
+        padding:12px 14px;border-bottom:1px solid rgba(255,255,255,.08);font-weight:700;
+      }
+      #se-sticker-grid{
+        display:grid;grid-template-columns:repeat(5,1fr);gap:8px;
+        padding:12px;overflow-y:auto;flex:1;
+      }
+      #se-sticker-grid button{
+        aspect-ratio:1;border:none;border-radius:12px;background:rgba(255,255,255,.06);
+        cursor:pointer;padding:4px;
+      }
+      #se-sticker-grid img{width:100%;height:100%;object-fit:contain}
+      #se-text-input-ov{
+        position:absolute;inset:0;z-index:15;background:rgba(0,0,0,.55);
+        display:none;align-items:center;justify-content:center;padding:24px;
+      }
+      #se-text-input-ov.show{display:flex}
+      #se-text-input-ov textarea{
+        width:100%;max-width:360px;min-height:80px;background:transparent;border:none;
+        color:#fff;font-size:28px;font-weight:700;text-align:center;outline:none;resize:none;
+        text-shadow:0 2px 10px rgba(0,0,0,.5);
+      }
+    `;
+    document.head.appendChild(st);
+  }
 
   const ov = document.createElement('div');
   ov.id = 'story-editor';
-  ov.style.cssText = 'position:fixed;inset:0;z-index:13000;background:#0a0a0a;display:flex;flex-direction:column;color:#fff;';
+  const bgStyle = textOnly ? PATTERNS[patternIdx] : '';
   ov.innerHTML = `
-    <div style="display:flex;align-items:center;gap:10px;padding:calc(10px + env(safe-area-inset-top,0px)) 12px 8px;background:rgba(0,0,0,.55);z-index:2">
-      <button type="button" id="se-close" style="width:40px;height:40px;border:none;border-radius:50%;background:rgba(255,255,255,.12);color:#fff;font-size:20px;cursor:pointer">×</button>
-      <div style="flex:1;font-weight:700;font-size:15px">Редактор истории</div>
-      <button type="button" id="se-publish" style="padding:10px 16px;border:none;border-radius:999px;background:linear-gradient(135deg,#4C7CF3,#6D5DF6);color:#fff;font-weight:700;cursor:pointer">Готово</button>
+    <div id="se-top">
+      <button type="button" class="se-btn" id="se-close" title="Закрыть">×</button>
+      <div class="se-tools">
+        <button type="button" class="se-tool" id="se-add-text" title="Текст">Aa</button>
+        <button type="button" class="se-tool" id="se-add-sticker" title="Стикеры">✨</button>
+        <button type="button" class="se-tool" id="se-bg-cycle" title="Фон" ${textOnly?'':'style="display:none"'}>🎨</button>
+        <button type="button" class="se-tool" id="se-pill" title="Подложка">▢</button>
+        <button type="button" class="se-tool" id="se-del" title="Удалить">🗑</button>
+      </div>
+      <button type="button" id="se-publish">Готово</button>
     </div>
-    <div id="se-stage" style="flex:1;position:relative;overflow:hidden;background:#111;touch-action:none;user-select:none">
-      ${isVideo
+    <div id="se-stage" style="${textOnly ? 'background:'+bgStyle : ''}">
+      ${!textOnly ? (isVideo
         ? `<video id="se-bg" src="${bgUrl}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover" playsinline muted loop autoplay></video>`
         : `<img id="se-bg" src="${bgUrl}" style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;pointer-events:none" alt="">`
-      }
-      <div id="se-layers" style="position:absolute;inset:0;z-index:2"></div>
+      ) : ''}
+      <div id="se-layers"></div>
+      <div id="se-text-input-ov"><textarea id="se-ti" placeholder="Введите текст" maxlength="200"></textarea></div>
+      <div id="se-sticker-sheet">
+        <div class="se-stk-head"><span>Стикеры</span><button type="button" id="se-stk-close" style="border:none;background:transparent;color:#5B9CFF;font-size:15px;font-weight:600;cursor:pointer">Готово</button></div>
+        <div id="se-sticker-grid"></div>
+      </div>
     </div>
-    <div style="padding:8px 12px;background:rgba(0,0,0,.65);z-index:2">
-      <input type="text" id="se-caption" maxlength="200" placeholder="Подпись под историей…" style="width:100%;box-sizing:border-box;padding:12px 14px;border-radius:12px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.08);color:#fff;font-size:15px;outline:none">
-    </div>
-    <div style="padding:10px 12px calc(12px + env(safe-area-inset-bottom,0px));background:rgba(0,0,0,.7);display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:center;z-index:2">
-      <button type="button" class="se-tool" id="se-add-text" style="padding:10px 14px;border-radius:12px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.08);color:#fff;font-weight:600;cursor:pointer">Aa Текст</button>
-      <button type="button" class="se-tool" id="se-add-photo" style="padding:10px 14px;border-radius:12px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.08);color:#fff;font-weight:600;cursor:pointer">🖼 Фото</button>
-      <button type="button" class="se-tool" id="se-color" style="padding:10px 14px;border-radius:12px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.08);color:#fff;font-weight:600;cursor:pointer">🎨 Цвет</button>
-      <button type="button" class="se-tool" id="se-size" style="padding:10px 14px;border-radius:12px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.08);color:#fff;font-weight:600;cursor:pointer">↕ Размер</button>
-      <button type="button" class="se-tool" id="se-del" style="padding:10px 14px;border-radius:12px;border:1px solid rgba(240,112,138,.5);background:rgba(240,112,138,.15);color:#f8a;font-weight:600;cursor:pointer">Удалить</button>
-    </div>
-    <input type="file" id="se-photo-input" accept="image/*" style="display:none">
-  `;
+    <div id="se-bottom">
+      <input type="text" id="se-caption" maxlength="200" placeholder="Добавить подпись…">
+      <div id="se-font-row"></div>
+      <div id="se-color-row"></div>
+    </div>`;
   document.body.appendChild(ov);
 
   const stage = ov.querySelector('#se-stage');
   const layersEl = ov.querySelector('#se-layers');
-  const colors = ['#ffffff','#000000','#FF4D6D','#F7B955','#2DD4BF','#4C7CF3','#6D5DF6','#7B2CBF','#FFE66D','#00E5FF'];
-  let colorIdx = 0;
+  const fontRow = ov.querySelector('#se-font-row');
+  const colorRow = ov.querySelector('#se-color-row');
 
-  function pct(n){ return Math.round(n*10)/10; }
+  FONTS.forEach((f,i)=>{
+    const b=document.createElement('button');
+    b.type='button'; b.className='se-font'+(i===0?' on':'');
+    b.textContent=f.label;
+    b.style.fontFamily=f.family;
+    b.style.fontWeight=f.weight;
+    if(f.style) b.style.fontStyle=f.style;
+    b.onclick=()=>{
+      fontIdx=i;
+      fontRow.querySelectorAll('.se-font').forEach((x,j)=>x.classList.toggle('on',j===i));
+      applyStyleToSelected();
+    };
+    fontRow.appendChild(b);
+  });
+  COLORS.forEach((c,i)=>{
+    const b=document.createElement('button');
+    b.type='button'; b.className='se-col'+(c===textColor?' on':'');
+    b.style.background=c;
+    if(c==='#FFFFFF') b.style.boxShadow='inset 0 0 0 1px rgba(0,0,0,.2)';
+    b.onclick=()=>{
+      textColor=c;
+      colorRow.querySelectorAll('.se-col').forEach(x=>x.classList.remove('on'));
+      b.classList.add('on');
+      applyStyleToSelected();
+    };
+    colorRow.appendChild(b);
+  });
+
+  // sticker grid
+  const grid=ov.querySelector('#se-sticker-grid');
+  STICKERS.forEach(s=>{
+    const b=document.createElement('button');
+    b.type='button';
+    b.innerHTML=`<img src="${s.url}" alt="">`;
+    b.onclick=()=>{
+      addSticker(s.url);
+      ov.querySelector('#se-sticker-sheet').classList.remove('show');
+    };
+    grid.appendChild(b);
+  });
 
   function renderLayers(){
-    layersEl.innerHTML = '';
-    layers.forEach((L, i)=>{
-      const el = document.createElement('div');
-      el.dataset.i = i;
-      el.style.cssText = 'position:absolute;left:'+L.x+'%;top:'+L.y+'%;transform:translate(-50%,-50%);cursor:move;touch-action:none;max-width:90%;z-index:'+(3+i)+';'
-        +(i===selected?'outline:2px solid #4C7CF3;outline-offset:4px;border-radius:8px;':'');
+    layersEl.innerHTML='';
+    layers.forEach((L,i)=>{
+      const el=document.createElement('div');
+      el.className='se-layer'+(i===selected?' sel':'');
+      el.dataset.idx=String(i);
+      el.style.left=(L.x*100)+'%';
+      el.style.top=(L.y*100)+'%';
+      el.style.transform=`translate(-50%,-50%) scale(${L.scale||1}) rotate(${L.rot||0}deg)`;
       if(L.type==='text'){
-        el.contentEditable = 'true';
-        el.spellcheck = false;
-        el.style.cssText += 'font-weight:800;font-size:'+L.size+'px;color:'+L.color+';text-shadow:0 2px 8px rgba(0,0,0,.55);padding:4px 8px;white-space:pre-wrap;word-break:break-word;text-align:center;min-width:40px;';
-        el.textContent = L.text || 'Текст';
-        el.addEventListener('input', ()=>{ L.text = el.textContent; });
-        el.addEventListener('pointerdown', e=>{ if(e.target===el){ /* allow edit */ }});
-      } else if(L.type==='image'){
-        el.innerHTML = '<img src="'+L.url+'" style="width:'+L.w+'px;height:auto;max-width:70vw;border-radius:8px;pointer-events:none;box-shadow:0 4px 20px rgba(0,0,0,.4)" alt="">';
+        const t=document.createElement('div');
+        t.className='se-text'+(L.pill?' pill':'');
+        t.textContent=L.text||'';
+        t.style.color=L.pill ? '#111' : (L.color||'#fff');
+        t.style.fontFamily=L.family||FONTS[0].family;
+        t.style.fontWeight=L.weight||'700';
+        t.style.fontStyle=L.fontStyle||'normal';
+        t.style.fontSize=(L.fontSize||28)+'px';
+        el.appendChild(t);
+      } else if(L.type==='sticker'){
+        el.classList.add('se-sticker');
+        const img=document.createElement('img');
+        img.src=L.url;
+        img.alt='';
+        el.appendChild(img);
       }
-      el.addEventListener('pointerdown', e=>{
-        if(L.type==='text' && e.target===el && !e.shiftKey){
-          // select + maybe drag
-        }
-        selected = i;
-        renderLayers();
-        const re = layersEl.querySelector('[data-i="'+i+'"]');
-        if(!re) return;
-        const rect = stage.getBoundingClientRect();
-        drag = {
-          i,
-          startX: e.clientX,
-          startY: e.clientY,
-          origX: L.x,
-          origY: L.y,
-          moved: false
-        };
-        try{ re.setPointerCapture(e.pointerId); }catch(err){}
-        e.preventDefault();
-      });
       layersEl.appendChild(el);
+    });
+    bindLayerPointers();
+  }
+
+  function applyStyleToSelected(){
+    if(selected<0 || !layers[selected] || layers[selected].type!=='text') return;
+    const L=layers[selected];
+    const f=FONTS[fontIdx];
+    L.color=textColor;
+    L.family=f.family;
+    L.weight=f.weight;
+    L.fontStyle=f.style||'normal';
+    L.pill=textBg;
+    renderLayers();
+  }
+
+  function addText(initial){
+    const L={
+      id: nextId++, type:'text',
+      text: initial||'Текст',
+      x:0.5, y:0.42, scale:1, rot:0,
+      color:textColor, family:FONTS[fontIdx].family,
+      weight:FONTS[fontIdx].weight, fontStyle:FONTS[fontIdx].style||'normal',
+      fontSize:28, pill:textBg
+    };
+    layers.push(L);
+    selected=layers.length-1;
+    renderLayers();
+    openTextEdit(selected);
+  }
+
+  function addSticker(url){
+    layers.push({
+      id: nextId++, type:'sticker', url,
+      x:0.5, y:0.45, scale:1, rot:0
+    });
+    selected=layers.length-1;
+    renderLayers();
+  }
+
+  function openTextEdit(idx){
+    selected=idx;
+    const L=layers[idx];
+    if(!L || L.type!=='text') return;
+    const tio=ov.querySelector('#se-text-input-ov');
+    const ta=ov.querySelector('#se-ti');
+    ta.value=L.text||'';
+    ta.style.color=L.pill?'#fff':(L.color||'#fff');
+    ta.style.fontFamily=L.family||FONTS[0].family;
+    ta.style.fontWeight=L.weight||'700';
+    tio.classList.add('show');
+    setTimeout(()=>{ ta.focus(); try{ta.select();}catch(e){} }, 50);
+    const finish=()=>{
+      L.text=(ta.value||'').trim() || 'Текст';
+      tio.classList.remove('show');
+      renderLayers();
+    };
+    ta.onblur=finish;
+    ta.onkeydown=e=>{ if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); ta.blur(); } };
+  }
+
+  function bindLayerPointers(){
+    layersEl.querySelectorAll('.se-layer').forEach(el=>{
+      el.onpointerdown=e=>{
+        e.preventDefault(); e.stopPropagation();
+        const idx=Number(el.dataset.idx);
+        selected=idx;
+        renderLayers();
+        const rect=stage.getBoundingClientRect();
+        const L=layers[idx];
+        drag={
+          idx,
+          ox:e.clientX - L.x*rect.width,
+          oy:e.clientY - L.y*rect.height,
+          startX:e.clientX, startY:e.clientY,
+          moved:false,
+          pid:e.pointerId
+        };
+        try{ el.setPointerCapture(e.pointerId); }catch(err){}
+        el.classList.add('dragging');
+      };
     });
   }
 
   stage.addEventListener('pointermove', e=>{
     if(!drag) return;
-    const rect = stage.getBoundingClientRect();
-    const dx = ((e.clientX - drag.startX) / rect.width) * 100;
-    const dy = ((e.clientY - drag.startY) / rect.height) * 100;
-    if(Math.abs(dx)+Math.abs(dy) > 0.5) drag.moved = true;
-    const L = layers[drag.i];
+    drag.moved=true;
+    const rect=stage.getBoundingClientRect();
+    const L=layers[drag.idx];
     if(!L) return;
-    L.x = Math.max(2, Math.min(98, drag.origX + dx));
-    L.y = Math.max(2, Math.min(98, drag.origY + dy));
-    const el = layersEl.querySelector('[data-i="'+drag.i+'"]');
-    if(el){ el.style.left = L.x+'%'; el.style.top = L.y+'%'; }
+    const nx = (e.clientX - rect.left) / rect.width;
+    const ny = (e.clientY - rect.top) / rect.height;
+    if(!drag._init){
+      drag.dx = nx - L.x;
+      drag.dy = ny - L.y;
+      drag._init = true;
+    }
+    L.x = Math.max(0.05, Math.min(0.95, nx - drag.dx));
+    L.y = Math.max(0.05, Math.min(0.95, ny - drag.dy));
+    const node=layersEl.querySelector('.se-layer[data-idx="'+drag.idx+'"]');
+    if(node){
+      node.style.left=(L.x*100)+'%';
+      node.style.top=(L.y*100)+'%';
+    }
   });
-  stage.addEventListener('pointerup', ()=>{ drag = null; });
-  stage.addEventListener('pointercancel', ()=>{ drag = null; });
+  const endDrag=e=>{
+    if(!drag) return;
+    const was=drag;
+    drag=null;
+    layersEl.querySelectorAll('.se-layer').forEach(n=>n.classList.remove('dragging'));
+    if(!was.moved && layers[was.idx]?.type==='text'){
+      openTextEdit(was.idx);
+    }
+  };
+  stage.addEventListener('pointerup', endDrag);
+  stage.addEventListener('pointercancel', endDrag);
 
-  ov.querySelector('#se-close').onclick = ()=> ov.remove();
-  ov.querySelector('#se-add-text').onclick = ()=>{
-    layers.push({ type:'text', text:'Текст', x:50, y:50, size:36, color: colors[colorIdx] });
-    selected = layers.length - 1;
-    renderLayers();
-    setTimeout(()=>{
-      const el = layersEl.querySelector('[data-i="'+selected+'"]');
-      if(el){ el.focus(); try{ document.execCommand('selectAll', false, null); }catch(e){} }
-    }, 50);
+  // Double-tap stage empty → add text
+  let lastTap=0;
+  stage.addEventListener('click', e=>{
+    if(e.target.closest('.se-layer') || e.target.closest('#se-sticker-sheet') || e.target.closest('#se-text-input-ov')) return;
+    const now=Date.now();
+    if(now-lastTap<320){ addText(''); }
+    lastTap=now;
+  });
+
+  ov.querySelector('#se-close').onclick=()=>ov.remove();
+  ov.querySelector('#se-add-text').onclick=()=>addText('');
+  ov.querySelector('#se-add-sticker').onclick=()=>{
+    ov.querySelector('#se-sticker-sheet').classList.add('show');
   };
-  ov.querySelector('#se-add-photo').onclick = ()=> ov.querySelector('#se-photo-input').click();
-  ov.querySelector('#se-photo-input').onchange = async (ev)=>{
-    const f2 = ev.target.files && ev.target.files[0];
-    ev.target.value = '';
-    if(!f2) return;
-    try{
-      const url = await new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(f2); });
-      // compress overlay a bit
-      let final = url;
-      try{
-        final = await new Promise((resolve)=>{
-          const img = new Image();
-          img.onload = ()=>{
-            const max = 640;
-            let w=img.width, h=img.height;
-            if(w>max||h>max){ if(w>h){h=Math.round(h*max/w);w=max;} else {w=Math.round(w*max/h);h=max;} }
-            const c=document.createElement('canvas'); c.width=w; c.height=h;
-            c.getContext('2d').drawImage(img,0,0,w,h);
-            resolve(c.toDataURL('image/jpeg', 0.85));
-          };
-          img.onerror=()=>resolve(url);
-          img.src=url;
-        });
-      }catch(e){}
-      layers.push({ type:'image', url: final, x:50, y:40, w: 160 });
-      selected = layers.length - 1;
-      renderLayers();
-    }catch(e){ showToast('Не удалось добавить фото'); }
+  ov.querySelector('#se-stk-close').onclick=()=>ov.querySelector('#se-sticker-sheet').classList.remove('show');
+  ov.querySelector('#se-bg-cycle').onclick=()=>{
+    if(!textOnly) return;
+    patternIdx=(patternIdx+1)%PATTERNS.length;
+    stage.style.background=PATTERNS[patternIdx];
   };
-  ov.querySelector('#se-color').onclick = ()=>{
-    if(selected < 0 || !layers[selected] || layers[selected].type!=='text'){
-      showToast('Выберите текстовый слой');
-      return;
-    }
-    colorIdx = (colorIdx + 1) % colors.length;
-    layers[selected].color = colors[colorIdx];
-    renderLayers();
+  ov.querySelector('#se-pill').onclick=function(){
+    textBg=!textBg;
+    this.classList.toggle('on', textBg);
+    applyStyleToSelected();
   };
-  ov.querySelector('#se-size').onclick = ()=>{
-    if(selected < 0 || !layers[selected]){ showToast('Выберите слой'); return; }
-    const L = layers[selected];
-    if(L.type==='text'){
-      L.size = L.size >= 56 ? 24 : L.size + 8;
-    } else if(L.type==='image'){
-      L.w = L.w >= 280 ? 100 : L.w + 40;
-    }
-    renderLayers();
-  };
-  ov.querySelector('#se-del').onclick = ()=>{
-    if(selected < 0){ showToast('Выберите слой'); return; }
-    layers.splice(selected, 1);
-    selected = -1;
+  ov.querySelector('#se-del').onclick=()=>{
+    if(selected<0) return;
+    layers.splice(selected,1);
+    selected=layers.length?Math.min(selected,layers.length-1):-1;
     renderLayers();
   };
 
+  // composite canvas for image publish
   async function compositeImage(){
-    // Draw background + layers to canvas (1080x1920 story aspect)
-    const W = 1080, H = 1920;
-    const c = document.createElement('canvas');
-    c.width = W; c.height = H;
-    const ctx = c.getContext('2d');
-    ctx.fillStyle = '#000';
-    ctx.fillRect(0,0,W,H);
-    const bg = await new Promise((resolve,reject)=>{
-      const img = new Image();
-      img.onload=()=>resolve(img);
-      img.onerror=reject;
-      img.src = bgUrl;
-    });
-    // object-fit: cover
-    const scale = Math.max(W/bg.width, H/bg.height);
-    const bw = bg.width*scale, bh = bg.height*scale;
-    ctx.drawImage(bg, (W-bw)/2, (H-bh)/2, bw, bh);
-
+    const w=1080, h=1920;
+    const canvas=document.createElement('canvas');
+    canvas.width=w; canvas.height=h;
+    const ctx=canvas.getContext('2d');
+    if(textOnly){
+      // parse simple gradients poorly — fill dark then pattern approx
+      ctx.fillStyle='#0B1120';
+      ctx.fillRect(0,0,w,h);
+      const g=ctx.createLinearGradient(0,0,w,h);
+      g.addColorStop(0,'#1a2450'); g.addColorStop(1,'#0a0a12');
+      ctx.fillStyle=g; ctx.fillRect(0,0,w,h);
+    } else if(bgUrl){
+      const img=await new Promise((res,rej)=>{
+        const im=new Image();
+        im.onload=()=>res(im); im.onerror=rej; im.src=bgUrl;
+      });
+      // cover
+      const scale=Math.max(w/img.width, h/img.height);
+      const iw=img.width*scale, ih=img.height*scale;
+      ctx.drawImage(img, (w-iw)/2, (h-ih)/2, iw, ih);
+    }
     for(const L of layers){
+      const cx=L.x*w, cy=L.y*h;
+      ctx.save();
+      ctx.translate(cx,cy);
+      ctx.rotate((L.rot||0)*Math.PI/180);
+      ctx.scale(L.scale||1, L.scale||1);
       if(L.type==='text'){
-        const text = (L.text||'').trim() || ' ';
-        ctx.font = '800 '+Math.round(L.size * (W/Math.min(stage.clientWidth||360, 420))) + 'px system-ui,sans-serif';
-        // approximate scale: editor size relative to stage
-        const fontPx = Math.max(20, Math.round((L.size/ (stage.clientWidth||360)) * W * 1.1));
-        ctx.font = '800 '+fontPx+'px system-ui, -apple-system, sans-serif';
-        ctx.fillStyle = L.color || '#fff';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.shadowColor = 'rgba(0,0,0,0.55)';
-        ctx.shadowBlur = 12;
-        ctx.shadowOffsetY = 3;
-        const x = (L.x/100)*W;
-        const y = (L.y/100)*H;
-        // multiline
-        const lines = text.split('\n');
-        const lh = fontPx * 1.2;
-        const startY = y - ((lines.length-1)*lh)/2;
-        lines.forEach((line,i)=> ctx.fillText(line, x, startY + i*lh));
-        ctx.shadowBlur = 0;
-      } else if(L.type==='image'){
+        const size=(L.fontSize||28)*3.2;
+        ctx.font=`${L.fontStyle||'normal'} ${L.weight||'700'} ${size}px ${L.family||'sans-serif'}`;
+        ctx.textAlign='center'; ctx.textBaseline='middle';
+        const lines=String(L.text||'').split('\n');
+        const lineH=size*1.25;
+        const totalH=lines.length*lineH;
+        if(L.pill){
+          const metrics=lines.map(t=>ctx.measureText(t).width);
+          const maxW=Math.max(...metrics, 40);
+          const padX=28, padY=18;
+          ctx.fillStyle='rgba(255,255,255,0.92)';
+          const rw=maxW+padX*2, rh=totalH+padY*2;
+          const r=rh/2;
+          ctx.beginPath();
+          ctx.moveTo(-rw/2+r, -rh/2);
+          ctx.arcTo(rw/2, -rh/2, rw/2, rh/2, r);
+          ctx.arcTo(rw/2, rh/2, -rw/2, rh/2, r);
+          ctx.arcTo(-rw/2, rh/2, -rw/2, -rh/2, r);
+          ctx.arcTo(-rw/2, -rh/2, rw/2, -rh/2, r);
+          ctx.closePath(); ctx.fill();
+          ctx.fillStyle='#111';
+        } else {
+          ctx.fillStyle=L.color||'#fff';
+          ctx.shadowColor='rgba(0,0,0,.45)'; ctx.shadowBlur=12;
+        }
+        lines.forEach((line,i)=>{
+          ctx.fillText(line, 0, -totalH/2 + lineH/2 + i*lineH);
+        });
+      } else if(L.type==='sticker' && L.url){
         try{
-          const im = await new Promise((resolve,reject)=>{
-            const img=new Image(); img.onload=()=>resolve(img); img.onerror=reject; img.src=L.url;
+          const im=await new Promise((res,rej)=>{
+            const img=new Image();
+            img.onload=()=>res(img); img.onerror=rej; img.src=L.url;
           });
-          const targetW = (L.w / (stage.clientWidth||360)) * W;
-          const targetH = targetW * (im.height/(im.width||1));
-          const x = (L.x/100)*W - targetW/2;
-          const y = (L.y/100)*H - targetH/2;
-          ctx.drawImage(im, x, y, targetW, targetH);
+          const s=320;
+          ctx.drawImage(im, -s/2, -s/2, s, s);
         }catch(e){}
       }
+      ctx.restore();
     }
-    return c.toDataURL('image/jpeg', 0.88);
+    return canvas.toDataURL('image/jpeg', 0.88);
   }
 
-  async function publishStory(mediaUrl, mediaType, overlays, caption, sourceFile){
-    const audience = await chooseStoryAudience();
-    if(!audience) return;
+  function dataUrlToFile(dataUrl, name){
     try{
-      showLoader();
-      const expires = new Date(Date.now()+86400000).toISOString();
-      const cap = (caption||'').trim().slice(0, 200);
+      const arr=dataUrl.split(',');
+      const mime=(arr[0].match(/:(.*?);/)||[])[1]||'image/jpeg';
+      const bstr=atob(arr[1]); const n=bstr.length; const u8=new Uint8Array(n);
+      for(let i=0;i<n;i++) u8[i]=bstr.charCodeAt(i);
+      return new File([u8], name||'story.jpg', {type:mime});
+    }catch(e){ return null; }
+  }
 
-      // 1) Upload media to Supabase Storage so everyone can load the URL
+  // reuse existing publish path if defined later in same scope — redefine compatible publishStory local
+  async function publishStory(mediaUrl, mediaType, overlays, caption, sourceFile){
+    if(typeof window._slPublishStoryImpl === 'function'){
+      return window._slPublishStoryImpl(mediaUrl, mediaType, overlays, caption, sourceFile);
+    }
+    // Fallback: local + supabase insert (same as before simplified)
+    showLoader();
+    try{
+      const expires = new Date(Date.now()+24*3600*1000).toISOString();
       let publicUrl = mediaUrl;
-      const isData = typeof mediaUrl === 'string' && mediaUrl.startsWith('data:');
       try{
-        if(sourceFile && sourceFile instanceof Blob){
-          const up = await uploadFileToStorage(sourceFile, 'stories');
-          if(up.ok && up.url) publicUrl = up.url;
-          else console.warn('story storage file', up.error);
-        } else if(isData){
-          const name = mediaType==='video' ? 'story.mp4' : 'story.jpg';
-          // compress image data URL further before upload if huge
-          let toUp = mediaUrl;
-          if(mediaType==='image' && dataUrlBytes(mediaUrl) > 900*1024){
-            try{ toUp = await compressImageDataUrl(mediaUrl, 1080, 0.72); }catch(e){}
+        if(sourceFile && typeof sourceFile === 'object'){
+          const path = `stories/${myProfile.id}_${Date.now()}_${sourceFile.name||'story.bin'}`;
+          const up = await sb.storage.from('media').upload(path, sourceFile, {upsert:true, contentType:sourceFile.type||'image/jpeg'});
+          if(!up.error){
+            const {data:pub}=sb.storage.from('media').getPublicUrl(path);
+            if(pub?.publicUrl) publicUrl=pub.publicUrl;
           }
-          const up = await uploadDataUrlToStorage(toUp, 'stories', name);
-          if(up.ok && up.url) publicUrl = up.url;
-          else {
-            console.warn('story storage dataurl', up.error);
-            // last resort: tiny image as data url in DB (may still fail if too large)
-            if(mediaType==='image'){
-              try{ publicUrl = await compressImageDataUrl(mediaUrl, 720, 0.55); }catch(e){}
-            }
-          }
-        } else if(typeof mediaUrl === 'string' && /^https?:\/\//i.test(mediaUrl)){
-          publicUrl = mediaUrl; // already remote
+        } else if(typeof mediaUrl==='string' && mediaUrl.startsWith('data:') && typeof uploadDataUrlToStorage==='function'){
+          const up = await uploadDataUrlToStorage(mediaUrl, 'stories', mediaType==='video'?'story.mp4':'story.jpg');
+          if(up.ok && up.url) publicUrl=up.url;
         }
-      }catch(upErr){ console.warn('story upload', upErr); }
-
-      // Prefer never storing multi-MB data URLs in DB
-      if(typeof publicUrl === 'string' && publicUrl.startsWith('data:') && dataUrlBytes(publicUrl) > 600*1024){
-        showToast(currentLang==='en'
-          ? 'Create public Storage bucket «media» in Supabase so stories are visible to everyone'
-          : 'Создайте публичный бакет Storage «media» в Supabase — иначе история только у вас');
-      }
-
+      }catch(e){ console.warn(e); }
       const localStory = {
-        id: 'local_'+Date.now(),
-        user_id: myProfile.id,
-        media_url: publicUrl,
-        type: mediaType,
-        expires_at: expires,
-        created_at: new Date().toISOString(),
-        audience,
-        overlays: overlays || null,
-        caption: cap || null
+        id:'local_'+Date.now(), user_id:myProfile.id, media_url:publicUrl, type:mediaType,
+        expires_at:expires, created_at:new Date().toISOString(),
+        overlays:overlays||null, caption:caption||null, audience:{mode:'all'}
       };
-      addLocalStory(localStory);
-      try{ storage.setItem('sl_story_audience_'+myProfile.id, JSON.stringify(audience)); }catch(e){}
-
-      let published = false;
+      try{ if(typeof addLocalStory==='function') addLocalStory(localStory); }catch(e){}
       try{
-        const payload = {
-          user_id: myProfile.id,
-          media_url: publicUrl,
-          type: mediaType,
-          expires_at: expires
-        };
-        if(cap) payload.caption = cap;
-        let ins = await sb.from('stories').insert(payload).select();
-        // Retry without caption if column missing
+        const payload={user_id:myProfile.id, media_url:publicUrl, type:mediaType, expires_at:expires};
+        if(caption) payload.caption=caption;
+        let ins=await sb.from('stories').insert(payload).select();
         if(ins.error && /caption|column/i.test(String(ins.error.message||''))){
-          delete payload.caption;
-          ins = await sb.from('stories').insert(payload).select();
+          delete payload.caption; ins=await sb.from('stories').insert(payload).select();
         }
-        if(ins.error){
-          console.warn('story insert', ins.error);
-          // RLS / size — try without huge data
-          showToast((currentLang==='en'?'Could not publish to server: ':'Не удалось опубликовать: ')+String(ins.error.message||ins.error).slice(0,80));
-        } else {
-          published = true;
-          if(ins.data?.[0]?.id){
-            const arr=getLocalStories().map(s=>s.id===localStory.id?{...s,id:ins.data[0].id, media_url: publicUrl}:s);
-            setLocalStories(arr);
-          }
-          showToast(currentLang==='en'?'Story published — everyone can see it':'История опубликована — её видят все');
-        }
-      }catch(err){
-        console.warn(err);
-        showToast(currentLang==='en'?'Publish error':'Ошибка публикации');
-      }
-      await loadStories();
-      if(!published){
-        console.warn('story stayed local only');
-      }
-    }catch(err){ showToast(friendlyError(err)); }
+        if(ins.error) showToast('Сохранено локально: '+String(ins.error.message||'').slice(0,60));
+        else showToast('История опубликована');
+      }catch(e){ showToast('История сохранена локально'); }
+      try{ await loadStories(); }catch(e){}
+    }catch(e){ showToast('Ошибка публикации'); console.warn(e); }
     finally{ hideLoader(); }
   }
 
+  // Capture original publishStory from outer scope if we can — patched after
   ov.querySelector('#se-publish').onclick = async ()=>{
     try{
-      const caption = (ov.querySelector('#se-caption')?.value || '').trim();
-      if(isVideo){
-        const overlays = layers.map(L=>({...L}));
+      const caption=(ov.querySelector('#se-caption')?.value||'').trim();
+      if(isVideo && file){
+        const overlays=layers.map(L=>({...L}));
         ov.remove();
-        // Upload original File to Storage (not base64)
-        await publishStory(bgUrl, 'video', overlays.length ? overlays : null, caption, file);
-      } else {
-        showLoader();
-        let out;
-        let srcFile = null;
-        if(layers.length){
-          out = await compositeImage();
-          srcFile = dataUrlToFile(out, 'story.jpg');
-        } else {
-          try{
-            const prep = await prepareMediaForUpload(file, 'story');
-            if(prep.ok){
-              out = prep.dataUrl;
-              // if already uploaded via storage in prepareMedia
-              if(prep.via==='storage' && prep.dataUrl && /^https?:/i.test(prep.dataUrl)){
-                ov.remove();
-                hideLoader();
-                await publishStory(prep.dataUrl, 'image', null, caption, null);
-                return;
-              }
-            } else out = bgUrl;
-          }catch(e){ out = bgUrl; }
-          srcFile = file;
-        }
-        ov.remove();
-        hideLoader();
-        await publishStory(out, 'image', null, caption, srcFile);
+        await publishStory(bgUrl, 'video', overlays.length?overlays:null, caption, file);
+        return;
       }
+      showLoader();
+      let out;
+      if(textOnly || layers.length){
+        out = await compositeImage();
+      } else {
+        out = bgUrl;
+      }
+      const srcFile = out ? dataUrlToFile(out, 'story.jpg') : file;
+      ov.remove();
+      hideLoader();
+      await publishStory(out||bgUrl, 'image', null, caption, srcFile);
     }catch(e){
       hideLoader();
       showToast('Ошибка сохранения');
       console.warn(e);
     }
   };
+
+  // Auto-start based on mode
+  if(opts.mode==='text' || textOnly){
+    setTimeout(()=>addText(''), 200);
+  } else if(opts.mode==='sticker'){
+    setTimeout(()=>ov.querySelector('#se-sticker-sheet').classList.add('show'), 200);
+  }
 }
 
 window.openStoryEditor = openStoryEditor;
+
+// Route + button to create menu instead of raw file input
+(function bindStoryEntry(){
+  function rebind(){
+    const bar=document.getElementById('add-story-btn-bar');
+    if(bar && bar.dataset.seMenu!=='1'){
+      bar.dataset.seMenu='1';
+      bar.onclick=e=>{ e.preventDefault(); e.stopPropagation(); openStoryCreateMenu(); };
+    }
+    const side=document.getElementById('add-story-btn-side');
+    if(side && side.dataset.seMenu!=='1'){
+      side.dataset.seMenu='1';
+      side.onclick=e=>{ e.preventDefault(); e.stopPropagation(); openStoryCreateMenu(); };
+    }
+  }
+  rebind();
+  setTimeout(rebind, 500);
+  setTimeout(rebind, 2000);
+  // after loadStories redraws bar
+  const _ls = window.loadStories;
+  if(typeof loadStories === 'function' && !window._slStoryMenuHook){
+    window._slStoryMenuHook = 1;
+    const orig = loadStories;
+    loadStories = async function(){
+      const r = await orig.apply(this, arguments);
+      setTimeout(rebind, 50);
+      return r;
+    };
+  }
+})();
+
 
 function chooseStoryAudience(){
   return new Promise(res=>{
