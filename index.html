@@ -20560,31 +20560,9 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
   }
 
   window.openStickerPackManager = function openStickerPackManager(){
-    const ov=document.createElement('div');
-    ov.className='modal-overlay';
-    ov.style.zIndex='22000';
-    const list=getCustomStickers();
-    ov.innerHTML=`<div class="modal" style="max-width:440px;max-height:90vh;overflow:auto">
-      <button class="close-x" id="pk-x">×</button>
-      <h3>Стикерпак</h3>
-      <p style="font-size:12px;color:var(--muted);margin-bottom:10px">Ваши стикеры: ${list.length}</p>
-      <button class="btn-primary" id="pk-add" style="width:100%;margin-bottom:12px">Добавить стикерпак</button>
-      <button class="btn-secondary" id="pk-add-one" style="width:100%;margin-bottom:12px">Добавить стикер</button>
-      <div class="sl-stk-grid" id="pk-grid">${list.map(s=>`<img src="${s.url}" data-id="${s.id}">`).join('')||'<div class="sl-stk-empty">Пока пусто — добавьте стикер</div>'}</div>
-    </div>`;
-    document.body.appendChild(ov);
-    ov.querySelector('#pk-x').onclick=()=>ov.remove();
-    ov.querySelector('#pk-add').onclick=()=>{ ov.remove(); openAddStickerFlow(); };
-    ov.querySelector('#pk-add-one').onclick=()=>{ ov.remove(); openAddStickerFlow(); };
-    ov.querySelectorAll('#pk-grid img').forEach(img=>{
-      img.onclick=()=>{
-        if(confirm('Удалить этот стикер?')){
-          setCustomStickers(getCustomStickers().filter(s=>s.id!==img.dataset.id));
-          img.remove();
-          toast('Удалено');
-        }
-      };
-    });
+    // redirected to Telegram-style panel
+    try{ if(typeof window.slOpenStickerPanel==='function') return window.slOpenStickerPanel(); }catch(e){}
+    try{ document.getElementById('tg2-panel')?.classList.add('show'); }catch(e){}
   }
 
   function renderStickerPanelContent(){
@@ -23415,6 +23393,178 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
   closePanel();
 
   console.log('[SL] Telegram sticker UI 1:1 ready');
+})();
+
+
+
+
+/* ===== SL: FORCE Telegram sticker panel, kill old modal ===== */
+(function(){
+  'use strict';
+  if(window._slForceTgStk) return;
+  window._slForceTgStk = 1;
+
+  // Kill any open old modals immediately and on interval
+  function killOldModals(){
+    document.querySelectorAll('.modal-overlay, .modal, [class*="modal"]').forEach(el=>{
+      const t=(el.textContent||'');
+      if(/Стикерпак|Добавить стикерпак|Ваши стикеры/i.test(t) && !el.closest('#tg2-panel')){
+        try{ el.remove(); }catch(e){ el.style.display='none'; }
+      }
+    });
+    // specific ids from old pack
+    ['sticker-pack-modal','sl-pack-modal','pack-manager'].forEach(id=>{
+      const el=document.getElementById(id);
+      if(el) try{ el.remove(); }catch(e){}
+    });
+  }
+  killOldModals();
+  setInterval(killOldModals, 800);
+
+  // Override ALL entry points to old manager → new panel
+  function openNew(){
+    try{
+      if(typeof window.slOpenStickerPanel==='function'){
+        window.slOpenStickerPanel();
+        return;
+      }
+    }catch(e){}
+    // fallback: click-show tg2
+    const p=document.getElementById('tg2-panel');
+    if(p){ p.classList.add('show'); p.style.display='flex'; }
+  }
+  function closeNew(){
+    try{ window.slCloseStickerPanel?.(); }catch(e){}
+    const p=document.getElementById('tg2-panel');
+    if(p){ p.classList.remove('show'); p.style.display='none'; }
+  }
+
+  window.openStickerPackManager = openNew;
+  window.slOpenStickerPackShop = openNew;
+  window.openStickerPanel = openNew;
+  window.slOpenStickerPanel = window.slOpenStickerPanel || openNew;
+
+  // Hard-bind sticker button: remove old listeners by clone
+  function forceBind(){
+    const media = document.getElementById('composer-media-btns') || document.querySelector('.composer-media-btns');
+    let btn = document.getElementById('sticker-btn') || document.getElementById('sl-stk-btn');
+    if(!media && !btn) return;
+
+    if(btn){
+      const neo = btn.cloneNode(true);
+      neo.id = 'sticker-btn';
+      neo.dataset.tg2 = '1';
+      neo.dataset.force = '1';
+      neo.style.cssText = 'display:flex!important;visibility:visible!important;opacity:1!important;width:40px;height:40px;align-items:center;justify-content:center;pointer-events:auto!important';
+      btn.parentNode.replaceChild(neo, btn);
+      btn = neo;
+    } else if(media){
+      btn = document.createElement('button');
+      btn.type='button';
+      btn.id='sticker-btn';
+      btn.className='icon-btn composer-side';
+      btn.title='Стикеры';
+      btn.innerHTML=`<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="9" cy="10" r="1.3" fill="currentColor" stroke="none"/><circle cx="15" cy="10" r="1.3" fill="currentColor" stroke="none"/><path d="M8 15c1.2 1.5 2.8 2.2 4 2.2s2.8-.7 4-2.2"/></svg>`;
+      media.insertBefore(btn, media.firstChild);
+    }
+    if(!btn) return;
+    btn.onclick = function(e){
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      const p=document.getElementById('tg2-panel');
+      if(p && p.classList.contains('show')) closeNew();
+      else openNew();
+    };
+  }
+  forceBind();
+  setTimeout(forceBind, 300);
+  setTimeout(forceBind, 1000);
+  setTimeout(forceBind, 2500);
+
+  // Ensure tg2 panel exists and looks right; improve sticker visuals
+  // Replace emoji-only stickers with drawn icon stickers
+  function iconSvg(kind){
+    // Simple colorful sticker-like icons (not plain emoji text)
+    const map = {
+      smile: `<circle cx="64" cy="64" r="60" fill="#FFC83D"/><circle cx="44" cy="52" r="6" fill="#3D2B1F"/><circle cx="84" cy="52" r="6" fill="#3D2B1F"/><path d="M40 78c8 14 40 14 48 0" stroke="#3D2B1F" stroke-width="5" fill="none" stroke-linecap="round"/>`,
+      joy: `<circle cx="64" cy="64" r="60" fill="#FFC83D"/><path d="M30 50c4-10 14-10 18 0M80 50c4-10 14-10 18 0" stroke="#3D2B1F" stroke-width="5" fill="none"/><path d="M36 78c10 18 46 18 56 0" stroke="#3D2B1F" stroke-width="5" fill="none"/><path d="M34 88c6 8 16 12 30 12s24-4 30-12" fill="#5B9CFF" opacity=".35"/>`,
+      heart: `<path d="M64 110 S10 70 10 48 C10 28 28 18 44 28 C52 18 64 28 64 28 C64 28 76 18 84 28 C100 18 118 28 118 48 C118 70 64 110 64 110Z" fill="#FF4D6D"/>`,
+      fire: `<path d="M64 20 C50 40 40 50 40 72 C40 96 52 110 64 110 C76 110 88 96 88 72 C88 58 80 48 76 40 C70 52 66 52 64 20Z" fill="#FF6B35"/><path d="M64 55 C58 65 54 70 54 82 C54 94 58 100 64 100 C70 100 74 94 74 82 C74 74 70 68 64 55Z" fill="#FFD166"/>`,
+      thumb: `<rect x="48" y="52" width="44" height="48" rx="10" fill="#FFC83D"/><path d="M48 60 C40 60 34 52 38 44 C42 36 52 38 54 48 L54 60" fill="#FFC83D"/><rect x="52" y="56" width="8" height="36" rx="3" fill="#F0B429" opacity=".5"/>`,
+      party: `<circle cx="64" cy="78" r="36" fill="#7C5CFF"/><path d="M64 20 L72 70 L56 70 Z" fill="#FF6B9D"/><circle cx="30" cy="40" r="6" fill="#FFD166"/><circle cx="98" cy="36" r="5" fill="#5B9CFF"/><circle cx="90" cy="58" r="4" fill="#FF6B35"/>`,
+      cool: `<circle cx="64" cy="64" r="60" fill="#FFC83D"/><rect x="22" y="48" width="84" height="18" rx="6" fill="#2B2F3A"/><rect x="30" y="52" width="28" height="10" rx="3" fill="#5B9CFF"/><rect x="70" y="52" width="28" height="10" rx="3" fill="#5B9CFF"/><path d="M44 86c8 10 32 10 40 0" stroke="#3D2B1F" stroke-width="4" fill="none"/>`,
+      think: `<circle cx="64" cy="58" r="48" fill="#FFC83D"/><circle cx="48" cy="50" r="5" fill="#3D2B1F"/><circle cx="76" cy="50" r="5" fill="#3D2B1F"/><circle cx="80" cy="72" r="7" fill="none" stroke="#3D2B1F" stroke-width="4"/><circle cx="96" cy="96" r="6" fill="#FFC83D"/><circle cx="108" cy="110" r="4" fill="#FFC83D"/>`,
+      sad: `<circle cx="64" cy="64" r="60" fill="#FFC83D"/><circle cx="44" cy="52" r="6" fill="#3D2B1F"/><circle cx="84" cy="52" r="6" fill="#3D2B1F"/><path d="M40 92c8-12 40-12 48 0" stroke="#3D2B1F" stroke-width="5" fill="none"/><path d="M36 44c4 8 12 8 16 0" stroke="#5B9CFF" stroke-width="3" fill="none"/>`,
+      pray: `<ellipse cx="48" cy="70" rx="18" ry="28" fill="#FFDBAC"/><ellipse cx="80" cy="70" rx="18" ry="28" fill="#FFDBAC"/><path d="M48 50 C48 30 80 30 80 50" fill="#4A90E2"/><path d="M40 98 h48" stroke="#FFDBAC" stroke-width="8"/>`,
+      hundred: `<text x="64" y="88" text-anchor="middle" font-size="64" font-weight="900" fill="#FF3B5C" font-family="Arial Black,sans-serif">100</text>`,
+      spark: `<path d="M64 10 L72 50 L112 50 L80 74 L92 114 L64 90 L36 114 L48 74 L16 50 L56 50 Z" fill="#FFD166"/>`,
+      dog: `<ellipse cx="64" cy="72" rx="40" ry="36" fill="#E8B86D"/><circle cx="36" cy="40" r="16" fill="#E8B86D"/><circle cx="92" cy="40" r="16" fill="#E8B86D"/><circle cx="50" cy="70" r="5" fill="#3D2B1F"/><circle cx="78" cy="70" r="5" fill="#3D2B1F"/><ellipse cx="64" cy="84" rx="10" ry="7" fill="#F5D0C5"/><path d="M56 92c4 6 12 6 16 0" stroke="#3D2B1F" stroke-width="3" fill="none"/>`,
+      cat: `<ellipse cx="64" cy="74" rx="38" ry="34" fill="#FFC83D"/><path d="M28 50 L40 20 L52 50Z" fill="#FFC83D"/><path d="M76 50 L88 20 L100 50Z" fill="#FFC83D"/><circle cx="50" cy="70" r="5" fill="#3D2B1F"/><circle cx="78" cy="70" r="5" fill="#3D2B1F"/><path d="M64 78 l0 10" stroke="#FF6B9D" stroke-width="3"/><path d="M40 80 h-16M40 86 h-14M88 80 h16M88 86 h14" stroke="#3D2B1F" stroke-width="2"/>`,
+      pizza: `<circle cx="64" cy="64" r="54" fill="#F4A261"/><path d="M64 64 L64 12 A52 52 0 0 1 110 90 Z" fill="#E76F51"/><circle cx="70" cy="40" r="6" fill="#9B2226"/><circle cx="88" cy="60" r="5" fill="#9B2226"/><circle cx="72" cy="72" r="5" fill="#9B2226"/>`,
+      music: `<circle cx="40" cy="90" r="16" fill="#7C5CFF"/><circle cx="96" cy="78" r="14" fill="#7C5CFF"/><path d="M56 90 L56 28 L110 18 L110 78" stroke="#7C5CFF" stroke-width="10" fill="none"/>`,
+      star: `<path d="M64 12 L78 50 L118 50 L86 74 L98 114 L64 90 L30 114 L42 74 L10 50 L50 50 Z" fill="#FFD166"/>`,
+      muscle: `<ellipse cx="70" cy="70" rx="36" ry="30" fill="#FFDBAC"/><circle cx="40" cy="48" r="22" fill="#FFDBAC"/><path d="M20 48 C10 40 12 28 24 28 C32 20 44 28 42 40" fill="#FFDBAC"/>`,
+      flower: `<circle cx="64" cy="64" r="16" fill="#FFD166"/><ellipse cx="64" cy="30" rx="14" ry="20" fill="#FF6B9D"/><ellipse cx="64" cy="98" rx="14" ry="20" fill="#FF6B9D"/><ellipse cx="30" cy="64" rx="20" ry="14" fill="#FF6B9D"/><ellipse cx="98" cy="64" rx="20" ry="14" fill="#FF6B9D"/><ellipse cx="40" cy="40" rx="14" ry="16" fill="#FF8FAB"/><ellipse cx="88" cy="40" rx="14" ry="16" fill="#FF8FAB"/><ellipse cx="40" cy="88" rx="14" ry="16" fill="#FF8FAB"/><ellipse cx="88" cy="88" rx="14" ry="16" fill="#FF8FAB"/>`,
+      reindeer: `<ellipse cx="64" cy="78" rx="36" ry="32" fill="#C68642"/><circle cx="48" cy="72" r="6" fill="#1a1a1a"/><circle cx="80" cy="72" r="6" fill="#1a1a1a"/><circle cx="64" cy="88" r="10" fill="#E74C3C"/><path d="M40 48 C30 20 18 18 20 30 M40 48 C36 28 48 22 44 36" stroke="#8B5A2B" stroke-width="5" fill="none"/><path d="M88 48 C98 20 110 18 108 30 M88 48 C92 28 80 22 84 36" stroke="#8B5A2B" stroke-width="5" fill="none"/><rect x="40" y="100" width="16" height="18" rx="4" fill="#F5F5F5"/><rect x="72" y="100" width="16" height="18" rx="4" fill="#F5F5F5"/>`,
+    };
+    const g = map[kind] || map.smile;
+    return 'data:image/svg+xml,'+encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">${g}</svg>`);
+  }
+
+  // Inject better stickers into tg2 if present
+  const BETTER = [
+    'smile','joy','heart','fire','thumb','party','cool','think','sad','pray',
+    'hundred','spark','dog','cat','pizza','music','star','muscle','flower','reindeer'
+  ].map((k,i)=>({id:'ic_'+i, url:iconSvg(k), kind:k}));
+
+  // Patch catalog if tg2 exists in memory - re-seed via localStorage recent/fav empty ok
+  // Override render by updating CATALOG through panel reopen
+  const origOpen = window.slOpenStickerPanel;
+  window.slOpenStickerPanel = function(){
+    // Ensure panel
+    try{ if(typeof origOpen==='function') origOpen(); }catch(e){}
+    const p=document.getElementById('tg2-panel');
+    if(p){
+      p.classList.add('show');
+      p.style.display='flex';
+      // Replace grid images that are emoji-svg with icon stickers once
+      setTimeout(()=>{
+        const cells=[...document.querySelectorAll('#tg2-body .tg2-cell img')];
+        // if looks sparse, inject better set into popular section
+        const body=document.getElementById('tg2-body');
+        if(body && !body.dataset.icons){
+          body.dataset.icons='1';
+          const sec=document.createElement('div');
+          sec.className='tg2-sec';
+          sec.innerHTML=`<div class="tg2-sec-h"><span>СТИКЕРЫ SLINE</span></div>
+            <div class="tg2-grid">${BETTER.map(s=>
+              `<button type="button" class="tg2-cell" data-url="${s.url}"><img src="${s.url}" alt=""></button>`
+            ).join('')}</div>`;
+          body.insertBefore(sec, body.firstChild);
+          sec.querySelectorAll('.tg2-cell').forEach(c=>{
+            c.onclick=()=>{
+              try{
+                if(typeof sendMessage==='function'){
+                  if(!activePartner && !activeGroup){ showToast('Откройте чат'); return; }
+                  sendMessage('sticker', c.dataset.url, '');
+                }
+              }catch(e){}
+              closeNew();
+            };
+          });
+        }
+      }, 50);
+    } else {
+      openNew();
+    }
+  };
+
+  // Also expose for other callers
+  window.openStickerPackManager = function(){ window.slOpenStickerPanel(); };
+  window.slOpenStickerPackShop = function(){ window.slOpenStickerPanel(); };
+
+  console.log('[SL] forced Telegram sticker panel, old modal killed');
 })();
 
 
