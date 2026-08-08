@@ -2439,6 +2439,7 @@ body.theme-light .topbar {
       </div>
       <div class="settings-section">
         <div class="settings-section-title" data-i18n="sec_appearance">Оформление</div>
+        <div class="settings-item" id="settings-change-theme"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg><span class="item-text">Сменить тему</span></div>
         <div class="settings-item" id="settings-wallpaper"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg><span class="item-text" data-i18n="it_wallpaper">Настроить обои</span></div>
         <div class="settings-item" id="settings-emoji-status"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01"/></svg><span class="item-text" data-i18n="it_emojistatus">Эмодзи статус</span></div>
         <div class="settings-item" id="settings-emoji-avatar"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9 10h.01M15 10h.01M8 15c1 1 2 1.5 4 1.5s3-.5 4-1.5"/></svg><span class="item-text" data-i18n="it_emojiavatar">Эмодзи аватар</span></div>
@@ -3480,6 +3481,7 @@ async function onAuthenticated(user){
   document.getElementById('auth-screen').style.display='none';
   document.getElementById('app-screen').style.display='flex';
   updateAllUIs();
+  try{ if(typeof slMaybeShowThemeOnboarding==='function') slMaybeShowThemeOnboarding(); }catch(e){}
   // inline list spinners only — avoid sticky full-screen overlay on login
   try{
     await loadChats(); await loadGroups(); await loadStories();
@@ -7218,6 +7220,192 @@ try{
 window.slSetThemeMode = slSetThemeMode;
 window.slIsThemeAuto = slIsThemeAuto;
 window.slResolveTheme = slResolveTheme;
+
+/* ===== Full-screen theme picker (first launch + settings) ===== */
+const THEME_CHOSEN_KEY = 'sl_theme_chosen';
+function slThemePickerCSS(){
+  if(document.getElementById('sl-theme-pick-css')) return;
+  const st=document.createElement('style');
+  st.id='sl-theme-pick-css';
+  st.textContent=`
+  #sl-theme-pick{
+    position:fixed; inset:0; z-index:50000;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    padding:24px 20px calc(28px + env(safe-area-inset-bottom,0px));
+    background:radial-gradient(ellipse at 30% 0%, #1a2450 0%, #0B1120 55%, #070b14 100%);
+    color:#F4F7FB; animation:slTpIn .28s ease;
+  }
+  #sl-theme-pick.light-preview{
+    background:radial-gradient(ellipse at 30% 0%, #e8eefc 0%, #F4F6F9 55%, #eef1f6 100%);
+    color:#1A1D21;
+  }
+  @keyframes slTpIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+  .sl-tp-brand{display:flex;align-items:center;gap:12px;margin-bottom:8px}
+  .sl-tp-logo{
+    width:48px;height:48px;border-radius:14px;
+    background:linear-gradient(135deg,#4C7CF3,#6D5DF6);
+    display:flex;align-items:center;justify-content:center;
+    box-shadow:0 8px 24px rgba(76,124,243,.35);
+  }
+  .sl-tp-logo svg{width:26px;height:26px}
+  .sl-tp-title{font-size:28px;font-weight:800;letter-spacing:-.03em;margin:12px 0 6px;text-align:center}
+  .sl-tp-sub{font-size:15px;opacity:.7;text-align:center;margin-bottom:28px;max-width:320px;line-height:1.4}
+  .sl-tp-cards{display:flex;flex-direction:column;gap:12px;width:100%;max-width:360px}
+  .sl-tp-card{
+    display:flex;align-items:center;gap:14px;
+    padding:16px 18px;border-radius:18px;cursor:pointer;
+    border:2px solid rgba(255,255,255,.1);
+    background:rgba(255,255,255,.06);
+    transition:transform .15s, border-color .15s, background .15s;
+    -webkit-tap-highlight-color:transparent;
+  }
+  #sl-theme-pick.light-preview .sl-tp-card{
+    background:rgba(255,255,255,.85); border-color:rgba(0,0,0,.08);
+    box-shadow:0 4px 16px rgba(0,0,0,.06);
+  }
+  .sl-tp-card:active{transform:scale(.98)}
+  .sl-tp-card.on{border-color:#4C7CF3; background:rgba(76,124,243,.18)}
+  #sl-theme-pick.light-preview .sl-tp-card.on{background:rgba(76,124,243,.12)}
+  .sl-tp-ico{
+    width:52px;height:52px;border-radius:14px;flex-shrink:0;
+    display:flex;align-items:center;justify-content:center;font-size:26px;
+    background:rgba(255,255,255,.1);
+  }
+  #sl-theme-pick.light-preview .sl-tp-ico{background:rgba(0,0,0,.05)}
+  .sl-tp-card-text{flex:1;min-width:0}
+  .sl-tp-card-name{font-size:16px;font-weight:700}
+  .sl-tp-card-desc{font-size:13px;opacity:.65;margin-top:2px}
+  .sl-tp-check{
+    width:24px;height:24px;border-radius:50%;border:2px solid rgba(255,255,255,.25);
+    display:flex;align-items:center;justify-content:center;flex-shrink:0;
+    font-size:14px;font-weight:800;color:transparent;
+  }
+  .sl-tp-card.on .sl-tp-check{background:#4C7CF3;border-color:#4C7CF3;color:#fff}
+  #sl-theme-pick.light-preview .sl-tp-check{border-color:rgba(0,0,0,.15)}
+  .sl-tp-continue{
+    margin-top:28px;width:100%;max-width:360px;padding:16px;
+    border:none;border-radius:16px;font-size:16px;font-weight:700;cursor:pointer;
+    background:linear-gradient(135deg,#4C7CF3,#6D5DF6);color:#fff;
+    box-shadow:0 10px 28px rgba(76,124,243,.4);
+  }
+  .sl-tp-continue:active{transform:scale(.98)}
+  .sl-tp-continue:disabled{opacity:.45;cursor:default;box-shadow:none}
+  .sl-tp-hint{margin-top:14px;font-size:12px;opacity:.5;text-align:center}
+  `;
+  document.head.appendChild(st);
+}
+
+function slShowThemePicker(opts){
+  opts = opts || {};
+  const firstTime = !!opts.firstTime;
+  const force = !!opts.force;
+  try{
+    if(firstTime && !force && storage.getItem(THEME_CHOSEN_KEY)==='1') return false;
+  }catch(e){}
+  if(document.getElementById('sl-theme-pick')) return true;
+  slThemePickerCSS();
+
+  let selected = 'auto';
+  try{
+    const t = storage.getItem(THEME_KEY);
+    if(!t || t==='auto' || t==='system') selected = 'auto';
+    else if(t==='light') selected = 'light';
+    else selected = 'dark';
+  }catch(e){}
+
+  const ov = document.createElement('div');
+  ov.id = 'sl-theme-pick';
+  if(selected==='light' || (selected==='auto' && typeof slSystemIsLight==='function' && slSystemIsLight())){
+    ov.classList.add('light-preview');
+  }
+  ov.innerHTML = `
+    <div class="sl-tp-brand">
+      <div class="sl-tp-logo"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg></div>
+    </div>
+    <div class="sl-tp-title">${firstTime ? 'Какую тему предпочитаете?' : 'Сменить тему'}</div>
+    <div class="sl-tp-sub">${firstTime
+      ? 'Выберите оформление приложения. Позже можно изменить в Настройках → Оформление.'
+      : 'Выберите тему. Изменения применяются сразу.'}</div>
+    <div class="sl-tp-cards">
+      <div class="sl-tp-card ${selected==='auto'?'on':''}" data-mode="auto">
+        <div class="sl-tp-ico">🖥️</div>
+        <div class="sl-tp-card-text">
+          <div class="sl-tp-card-name">Как в системе</div>
+          <div class="sl-tp-card-desc">Автоматически светлая или тёмная</div>
+        </div>
+        <div class="sl-tp-check">✓</div>
+      </div>
+      <div class="sl-tp-card ${selected==='dark'?'on':''}" data-mode="dark">
+        <div class="sl-tp-ico">🌙</div>
+        <div class="sl-tp-card-text">
+          <div class="sl-tp-card-name">Тёмная</div>
+          <div class="sl-tp-card-desc">Комфортно вечером и ночью</div>
+        </div>
+        <div class="sl-tp-check">✓</div>
+      </div>
+      <div class="sl-tp-card ${selected==='light'?'on':''}" data-mode="light">
+        <div class="sl-tp-ico">☀️</div>
+        <div class="sl-tp-card-text">
+          <div class="sl-tp-card-name">Светлая</div>
+          <div class="sl-tp-card-desc">Чистый дневной интерфейс</div>
+        </div>
+        <div class="sl-tp-check">✓</div>
+      </div>
+    </div>
+    <button type="button" class="sl-tp-continue" id="sl-tp-ok">${firstTime ? 'Продолжить' : 'Готово'}</button>
+    <div class="sl-tp-hint">Настройки → Оформление → Сменить тему</div>
+  `;
+  document.body.appendChild(ov);
+
+  function previewMode(mode){
+    selected = mode;
+    ov.querySelectorAll('.sl-tp-card').forEach(c=>c.classList.toggle('on', c.dataset.mode===mode));
+    // live preview
+    if(typeof slSetThemeMode==='function') slSetThemeMode(mode);
+    else if(typeof applyTheme==='function'){
+      try{
+        if(mode==='auto') storage.removeItem(THEME_KEY);
+        else storage.setItem(THEME_KEY, mode);
+        applyTheme();
+      }catch(e){}
+    }
+    const isLight = (typeof slResolveTheme==='function' ? slResolveTheme() : mode) === 'light'
+      || (mode==='light')
+      || (mode==='auto' && typeof slSystemIsLight==='function' && slSystemIsLight());
+    ov.classList.toggle('light-preview', !!isLight);
+  }
+
+  ov.querySelectorAll('.sl-tp-card').forEach(card=>{
+    card.onclick = ()=> previewMode(card.dataset.mode);
+  });
+
+  ov.querySelector('#sl-tp-ok').onclick = ()=>{
+    if(typeof slSetThemeMode==='function') slSetThemeMode(selected);
+    try{ storage.setItem(THEME_CHOSEN_KEY, '1'); }catch(e){}
+    ov.remove();
+    try{
+      if(typeof showToast==='function'){
+        const labels={auto:'Как в системе',dark:'Тёмная тема',light:'Светлая тема'};
+        showToast(labels[selected]||'Тема сохранена');
+      }
+    }catch(e){}
+    try{ if(typeof opts.onDone==='function') opts.onDone(selected); }catch(e){}
+  };
+
+  return true;
+}
+window.slShowThemePicker = slShowThemePicker;
+window.slOpenThemePicker = function(){ return slShowThemePicker({ firstTime:false, force:true }); };
+
+function slMaybeShowThemeOnboarding(){
+  try{
+    if(storage.getItem(THEME_CHOSEN_KEY)==='1') return;
+  }catch(e){}
+  // slight delay so app shell is visible under it
+  setTimeout(()=>{ try{ slShowThemePicker({ firstTime:true }); }catch(e){ console.warn(e); } }, 350);
+}
+window.slMaybeShowThemeOnboarding = slMaybeShowThemeOnboarding;
+
 function applyWallpaperPreset(){
   const w=storage.getItem(WALLPAPER_KEY);
   const list=document.getElementById('messages-list'); if(!list) return;
@@ -7226,6 +7414,12 @@ function applyWallpaperPreset(){
   else list.style.backgroundImage=`url(${w})`;
 }
 applyTheme();
+(function bindChangeTheme(){
+  const el=document.getElementById('settings-change-theme');
+  if(!el || el.dataset.bound==='1') return;
+  el.dataset.bound='1';
+  el.onclick=()=>{ try{ window.slOpenThemePicker(); }catch(e){ console.warn(e); } };
+})();
 document.getElementById('settings-wallpaper').onclick=()=>{
   const _savedTheme=storage.getItem(THEME_KEY);
   const _isAuto=(!_savedTheme || _savedTheme==='auto' || _savedTheme==='system');
@@ -19755,6 +19949,7 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
         <div class="sl-appear-row" id="ap-chat-themes"><span>Темы для чатов</span><span class="arrow">›</span></div>
         <div class="sl-appear-row" id="ap-wallpapers"><span>Обои для чатов</span><span class="arrow">›</span></div>
         <div class="sl-appear-row" id="ap-colors"><span>Персональные цвета</span><span style="display:flex;align-items:center;gap:8px"><span class="sl-color-dot" id="ap-dot"></span><span class="arrow">›</span></span></div>
+        <div class="sl-appear-row" id="ap-change-theme"><span>Сменить тему</span><span class="arrow">›</span></div>
         <div class="sl-appear-row" id="ap-night"><span>Ночной режим</span>
           <div class="toggle-switch ${night?'on':''}" id="ap-night-tg"></div>
         </div>
@@ -19814,6 +20009,10 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
       const label = mode==='auto' ? 'Как в системе' : (mode==='dark' ? 'Ночной режим' : 'Дневной режим');
       toast(label);
     };
+    ov.querySelector('#ap-change-theme')?.addEventListener('click', ()=>{
+      ov.remove();
+      try{ window.slOpenThemePicker(); }catch(e){}
+    });
     ov.querySelector('#ap-chat-themes').onclick=()=>toast('Выберите карточку темы выше');
     ov.querySelector('#ap-wallpapers').onclick=()=>{
       const colors=['#0B1120','#0a1628','#120a18','#0a1810','#1a0a0a','#0E1626'];
@@ -25642,6 +25841,14 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
 })();
 
 
+
+/* theme picker settings safety bind */
+document.addEventListener('click', function(e){
+  const t = e.target.closest && e.target.closest('#settings-change-theme, [data-action="change-theme"]');
+  if(!t) return;
+  e.preventDefault();
+  try{ window.slOpenThemePicker(); }catch(err){}
+}, true);
 </script>
 </body>
 </html>
