@@ -1610,20 +1610,37 @@ body.chats-selecting .sw-clip .sel-check{display:flex}
 </head>
 <body class="light-theme theme-light">
 <script>
-/* Early light theme — before anything else */
+/* Early theme — apply BEFORE paint */
 (function(){
   try {
     var LS = localStorage;
     var t = LS.getItem('sl_theme');
     var night = LS.getItem('sl_night_mode');
-    // Clear stuck dark if user wants light default
-    if (!t || t === 'light') {
-      document.documentElement.classList.add('light-theme');
-      document.body.classList.add('light-theme', 'theme-light');
+    // dark if either key says so
+    var isDark = (t === 'dark') || (night === '1');
+    var isLight = !isDark;
+    // default = light only when nothing set
+    if (t == null && night == null) {
+      isLight = true;
+      isDark = false;
       LS.setItem('sl_theme', 'light');
       LS.setItem('sl_night_mode', '0');
-    } else if (t === 'dark' || night === '1') {
+    }
+    // sync keys
+    if (isDark) {
+      LS.setItem('sl_theme', 'dark');
+      LS.setItem('sl_night_mode', '1');
+      document.documentElement.classList.remove('light-theme', 'theme-light');
+      document.body.classList.remove('light-theme', 'theme-light');
       document.body.classList.add('theme-dark', 'night-mode');
+      document.documentElement.classList.add('theme-dark');
+    } else {
+      LS.setItem('sl_theme', 'light');
+      LS.setItem('sl_night_mode', '0');
+      document.documentElement.classList.remove('theme-dark');
+      document.body.classList.remove('theme-dark', 'night-mode');
+      document.documentElement.classList.add('light-theme', 'theme-light');
+      document.body.classList.add('light-theme', 'theme-light');
     }
   } catch(e) {}
 })();
@@ -7015,6 +7032,7 @@ function applyTheme(){
   document.body.classList.toggle('night-mode', !isLight);
   document.documentElement.classList.toggle('light-theme', isLight);
   document.documentElement.classList.toggle('theme-light', isLight);
+  document.documentElement.classList.toggle('theme-dark', !isLight);
   try { storage.setItem('sl_night_mode', isLight ? '0' : '1'); } catch(e){}
 }
 if(window.matchMedia){
@@ -19596,7 +19614,14 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
       this.classList.toggle('on');
       const on=this.classList.contains('on');
       LS.setItem('sl_night_mode', on?'1':'0');
+      LS.setItem('sl_theme', on?'dark':'light');
       document.body.classList.toggle('light-theme', !on);
+      document.body.classList.toggle('theme-light', !on);
+      document.body.classList.toggle('theme-dark', on);
+      document.body.classList.toggle('night-mode', on);
+      document.documentElement.classList.toggle('light-theme', !on);
+      document.documentElement.classList.toggle('theme-light', !on);
+      document.documentElement.classList.toggle('theme-dark', on);
       toast(on?'Ночной режим':'Дневной режим');
     };
     ov.querySelector('#ap-chat-themes').onclick=()=>toast('Выберите карточку темы выше');
@@ -25575,17 +25600,15 @@ body.theme-dark #tg-attach-sheet, body.theme-dark #tg-voice-bar {
     try {
       var t = localStorage.getItem('sl_theme');
       var night = localStorage.getItem('sl_night_mode');
-      var isLight;
-      if (t === 'dark' || night === '1') isLight = false;
-      else if (t === 'light' || night === '0') isLight = true;
-      else isLight = true; // default light
-
+      var isDark = (t === 'dark') || (night === '1');
+      var isLight = !isDark;
       document.body.classList.toggle('light-theme', isLight);
       document.body.classList.toggle('theme-light', isLight);
-      document.body.classList.toggle('theme-dark', !isLight);
-      document.body.classList.toggle('night-mode', !isLight);
+      document.body.classList.toggle('theme-dark', isDark);
+      document.body.classList.toggle('night-mode', isDark);
       document.documentElement.classList.toggle('light-theme', isLight);
       document.documentElement.classList.toggle('theme-light', isLight);
+      document.documentElement.classList.toggle('theme-dark', isDark);
     } catch (e) {}
   }
 
