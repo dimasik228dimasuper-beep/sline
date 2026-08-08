@@ -1883,9 +1883,21 @@ body.theme-light .topbar {
   border: 1px solid rgba(255,255,255,.1) !important;
   box-shadow: 0 20px 60px rgba(0,0,0,.35), 0 0 0 1px rgba(91,140,255,.08) !important;
   animation: slPop .4s var(--spring) both;
-  background: rgba(26,34,45,.95) !important;
+  background: var(--panel) !important;
   backdrop-filter: blur(24px) !important;
 }
+body.light-theme .auth-card,
+body.theme-light .auth-card {
+  background: #FFFFFF !important;
+  border: 1px solid rgba(0,0,0,.08) !important;
+  box-shadow: 0 16px 48px rgba(0,0,0,.1) !important;
+  color: #1A1D21 !important;
+}
+body.light-theme .auth-card::before,
+body.theme-light .auth-card::before {
+  opacity: .12 !important;
+}
+
 .auth-card::before {
   opacity: .45 !important;
   filter: blur(60px) !important;
@@ -6986,10 +6998,12 @@ const WALLPAPER_KEY='sl_wallpaper', THEME_KEY='sl_theme';
 function applyTheme(){
   let t=storage.getItem(THEME_KEY);
   if(!t){ t = 'light'; }
-  document.body.classList.toggle('theme-light', t==='light');
-  document.body.classList.toggle('light-theme', t==='light');
-  document.documentElement.classList.toggle('light-theme', t==='light');
-  document.documentElement.classList.toggle('theme-light', t==='light');
+  const isLight = t==='light';
+  document.body.classList.toggle('theme-light', isLight);
+  document.body.classList.toggle('light-theme', isLight);
+  document.documentElement.classList.toggle('light-theme', isLight);
+  document.documentElement.classList.toggle('theme-light', isLight);
+  try { storage.setItem('sl_night_mode', isLight ? '0' : '1'); } catch(e){}
 }
 if(window.matchMedia){
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', ()=>{ if(!storage.getItem(THEME_KEY)) applyTheme(); });
@@ -25505,9 +25519,18 @@ body.light-theme .icon-btn { border-color: rgba(0,0,0,.1) !important; color: #6B
 
   function applyLight() {
     try {
-      if (LS.getItem('sl_night_mode') !== '1') {
+      const themeKey = LS.getItem('sl_theme');
+      const night = LS.getItem('sl_night_mode');
+      let isLight;
+      if (themeKey === 'dark' || night === '1') isLight = false;
+      else if (themeKey === 'light' || night === '0') isLight = true;
+      else isLight = true; // default = white
+      if (isLight) {
         document.body.classList.add('light-theme', 'theme-light');
-        document.documentElement.classList.add('light-theme');
+        document.documentElement.classList.add('light-theme', 'theme-light');
+      } else {
+        document.body.classList.remove('light-theme', 'theme-light');
+        document.documentElement.classList.remove('light-theme', 'theme-light');
       }
     } catch (e) {}
   }
@@ -25530,6 +25553,39 @@ body.light-theme .icon-btn { border-color: rgba(0,0,0,.1) !important; color: #6B
   [100,500,1500,3000].forEach(t => setTimeout(applyLight, t));
 
   console.log('[SL] Complete light theme — everything white');
+})();
+
+
+/* TG sheets light overrides */
+(function(){
+  if(window._slTgLight) return; window._slTgLight=1;
+  const s=document.createElement('style');
+  s.id='sl-tg-light';
+  s.textContent=`
+body.light-theme #tg-attach-sheet,
+body.theme-light #tg-attach-sheet{
+  background:#FFFFFF !important;
+  box-shadow:0 -8px 32px rgba(0,0,0,.12) !important;
+}
+body.light-theme .tg-att-item,
+body.theme-light .tg-att-item{ color:#1A1D21 !important; }
+body.light-theme .tg-att-handle,
+body.theme-light .tg-att-handle{ background:rgba(0,0,0,.15) !important; }
+body.light-theme #tg-voice-bar,
+body.theme-light #tg-voice-bar,
+body.light-theme #tg-voice-preview,
+body.theme-light #tg-voice-preview{
+  background:#FFFFFF !important;
+  box-shadow:0 -4px 24px rgba(0,0,0,.1) !important;
+}
+body.light-theme .tg-vb-time,
+body.theme-light .tg-vb-time{ color:#1A1D21 !important; }
+body.light-theme .tg-vb-cancel,
+body.theme-light .tg-vb-cancel{ color:#4C7CF3 !important; }
+/* keep circle recorder dark — camera UI */
+`;
+  document.head.appendChild(s);
+  console.log('[SL] TG light sheets OK');
 })();
 
 </script>
