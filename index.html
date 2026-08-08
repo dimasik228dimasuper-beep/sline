@@ -21810,13 +21810,13 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
         background:transparent !important; border:none !important;
       }
       /* undo old "remove stickers" CSS if still present */
-      #sticker-btn, #sl-stk-panel, .sl-stk-panel {
-        display:revert;
-      }
       #sticker-btn{
         display:flex !important; visibility:visible !important; opacity:1 !important;
         width:40px !important; height:40px !important; pointer-events:auto !important;
       }
+      /* panel hidden by default — only .show opens it */
+      #sl-stk-panel, .sl-stk-panel { display:none !important; }
+      #sl-stk-panel.show, .sl-stk-panel.show { display:flex !important; }
     `;
     document.head.appendChild(st);
     // kill anti-sticker CSS
@@ -21828,7 +21828,7 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
   bindStickerBtn();
   setTimeout(bindStickerBtn, 500);
   setTimeout(bindStickerBtn, 2000);
-  setTimeout(()=>{ try{ ensurePanel(); renderPanel(); }catch(e){} }, 800);
+  /* no auto-open panel */
 
   // Expose
   window.slOpenStickerPanel = openPanel;
@@ -21851,6 +21851,190 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
   try{ _obs.observe(document.body, {childList:true, subtree:true}); }catch(e){}
 
   console.log('[SL] stickers: tap to send, chat sticker opens pack');
+})();
+
+
+
+
+/* ===== SL: sticker panel close + no auto-open + proper sticker bubbles ===== */
+(function(){
+  'use strict';
+  if(window._slStkCloseFix) return;
+  window._slStkCloseFix = 1;
+
+  function hideAllStickerPanels(){
+    document.querySelectorAll('#sl-stk-panel, .sl-stk-panel, #sticker-panel').forEach(p=>{
+      p.classList.remove('show');
+      p.style.display = 'none';
+    });
+  }
+
+  // Force closed on load
+  hideAllStickerPanels();
+  setTimeout(hideAllStickerPanels, 100);
+  setTimeout(hideAllStickerPanels, 600);
+  setTimeout(hideAllStickerPanels, 1500);
+
+  // CSS override — highest priority
+  if(!document.getElementById('sl-stk-close-css')){
+    const st = document.createElement('style');
+    st.id = 'sl-stk-close-css';
+    st.textContent = `
+      #sl-stk-panel.sl-stk-panel,
+      .sl-stk-panel,
+      #sticker-panel {
+        display: none !important;
+      }
+      #sl-stk-panel.sl-stk-panel.show,
+      .sl-stk-panel.show,
+      #sticker-panel.show {
+        display: flex !important;
+        flex-direction: column !important;
+        position: absolute !important;
+        bottom: 70px !important;
+        left: 0 !important;
+        right: 0 !important;
+        z-index: 40 !important;
+        max-height: 42vh !important;
+        background: var(--panel) !important;
+        border-top: 1px solid var(--line) !important;
+      }
+      #sl-stk-close, .sl-stk-head .icon-btn {
+        pointer-events: auto !important;
+        z-index: 5 !important;
+        cursor: pointer !important;
+        min-width: 36px !important;
+        min-height: 36px !important;
+      }
+      /* sticker in chat: no bubble background like Telegram */
+      .bubble.bubble-sticker,
+      .bubble:has(> img.sticker-animated) {
+        background: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+        padding: 4px !important;
+      }
+      .bubble img.sticker-animated {
+        max-width: 150px;
+        max-height: 150px;
+        background: transparent !important;
+        cursor: pointer;
+      }
+    `;
+    document.head.appendChild(st);
+  }
+
+  // Reliable close bindings
+  function bindClose(){
+    document.querySelectorAll('#sl-stk-close, #sticker-panel .close-x').forEach(btn=>{
+      btn.onclick = (e)=>{
+        e.preventDefault();
+        e.stopPropagation();
+        hideAllStickerPanels();
+      };
+    });
+  }
+  bindClose();
+  setInterval(bindClose, 2000);
+
+  // Click outside panel + not on sticker button → close
+  document.addEventListener('pointerdown', (e)=>{
+    const panel = document.querySelector('#sl-stk-panel.show, .sl-stk-panel.show, #sticker-panel.show');
+    if(!panel) return;
+    if(panel.contains(e.target)) return;
+    if(e.target.closest('#sticker-btn, #sl-stk-btn, .composer-smile')) return;
+    hideAllStickerPanels();
+  }, true);
+
+  // Escape closes
+  document.addEventListener('keydown', (e)=>{
+    if(e.key === 'Escape') hideAllStickerPanels();
+  });
+
+  // Override open/close helpers
+  window.slCloseStickerPanel = hideAllStickerPanels;
+  const _open = window.slOpenStickerPanel;
+  window.slOpenStickerPanel = function(url){
+    hideAllStickerPanels();
+    if(typeof _open === 'function') _open(url);
+    else {
+      const p = document.getElementById('sl-stk-panel');
+      if(p){ p.style.display='flex'; p.classList.add('show'); }
+    }
+    bindClose();
+  };
+
+  // Fix: sticker messages showing as "[media] sticker" text
+  if(typeof renderMessage === 'function' && !window._slStkRenderFix){
+    window._slStkRenderFix = 1;
+    const _rm = renderMessage;
+    renderMessage = function(msg, isGroup){
+      try{
+        if(msg && (msg.type==='sticker' || (!msg.type && msg.file_url && /sticker/i.test(msg.content||'')))){
+          msg = {...msg, type:'sticker', content: msg.content && !/^\[media\]/i.test(msg.content) ? msg.content : ''};
+        }
+        // strip bad placeholder text
+        if(msg && msg.type==='sticker' && msg.content && /\[media\]\s*sticker/i.test(msg.content)){
+          msg = {...msg, content:''};
+        }
+      }catch(e){}
+      return _rm.call(this, msg, isGroup);
+    };
+  }
+
+  // After render, convert leftover "[media] sticker" bubbles to images if file_url in data
+  function scrubMediaStickerText(){
+    document.querySelectorAll('.bubble').forEach(b=>{
+      const t = (b.textContent||'').trim();
+      if(/^\[media\]\s*sticker$/i.test(t.replace(/\d{1,2}:\d{2}/,'').trim()) || t.includes('[media] sticker')){
+        // try find img sibling or data
+        const row = b.closest('.bubble-row');
+        // if there's no sticker img, leave — can't recover url easily
+        const imgs = b.querySelectorAll('img');
+        if(imgs.length){
+          // remove text nodes that say [media] sticker
+          [...b.childNodes].forEach(n=>{
+            if(n.nodeType===3 && /\[media\]/i.test(n.textContent||'')) n.textContent='';
+          });
+        }
+      }
+      const img = b.querySelector('img.sticker-animated');
+      if(img) b.classList.add('bubble-sticker');
+    });
+  }
+  setInterval(scrubMediaStickerText, 1500);
+
+  // Sticker button: ONLY toggle, never stuck open
+  function bindBtn(){
+    const btn = document.getElementById('sticker-btn') || document.getElementById('sl-stk-btn');
+    if(!btn || btn.dataset.closeFix==='1') return;
+    btn.dataset.closeFix = '1';
+    btn.addEventListener('click', (e)=>{
+      e.preventDefault();
+      e.stopPropagation();
+      const panel = document.getElementById('sl-stk-panel') || document.querySelector('.sl-stk-panel');
+      if(!panel){
+        try{ window.slOpenStickerPanel?.(); }catch(err){}
+        return;
+      }
+      if(panel.classList.contains('show')){
+        hideAllStickerPanels();
+      } else {
+        // open
+        try{
+          if(typeof window.slRenderStickerPanel==='function') window.slRenderStickerPanel();
+        }catch(err){}
+        panel.classList.add('show');
+        panel.style.display = 'flex';
+        bindClose();
+      }
+    }, true);
+  }
+  bindBtn();
+  setTimeout(bindBtn, 500);
+  setTimeout(bindBtn, 2000);
+
+  console.log('[SL] sticker panel: closed by default, close works');
 })();
 
 
