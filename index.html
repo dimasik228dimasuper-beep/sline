@@ -4079,13 +4079,27 @@ function toggleVoicePlay(wrap, btn){
   if(!wrap._audio){
     wrap._audio=new Audio(src);
     wrap._audio.playbackRate=currentPlaybackSpeed;
-    wrap._audio.onended=()=>{ btn.innerHTML=playIconSvg; };
+    wrap._audio.onended=()=>{ try{btn.innerHTML=playIconSvg;}catch(e){} try{window.slMiniPlayer&&window.slMiniPlayer.onEnded();}catch(e){} };
+    wrap._audio.ontimeupdate=()=>{ try{window.slMiniPlayer&&window.slMiniPlayer.onTime();}catch(e){} };
+    wrap._audio.onplay=()=>{ try{window.slMiniPlayer&&window.slMiniPlayer.onPlay();}catch(e){} };
+    wrap._audio.onpause=()=>{ try{window.slMiniPlayer&&window.slMiniPlayer.onPause();}catch(e){} };
   }
   const a=wrap._audio;
-  a.playbackRate=currentPlaybackSpeed;
-  if(a.paused){ a.play(); btn.innerHTML=pauseIconSvg; }
+  a.playbackRate=(typeof currentPlaybackSpeed!=='undefined'?currentPlaybackSpeed:1);
+  // pause other voices
+  try{
+    document.querySelectorAll('.voice-bubble').forEach(w=>{
+      if(w!==wrap && w._audio && !w._audio.paused){ w._audio.pause(); const b=w.querySelector('.voice-play-btn'); if(b&&typeof playIconSvg!=='undefined') b.innerHTML=playIconSvg; }
+    });
+  }catch(e){}
+  if(a.paused){ a.play().catch(()=>{}); btn.innerHTML=pauseIconSvg; }
   else { a.pause(); btn.innerHTML=playIconSvg; }
-  wrap.querySelector('.voice-speed').textContent=currentPlaybackSpeed+'×';
+  const sp=wrap.querySelector('.voice-speed'); if(sp) sp.textContent=(typeof currentPlaybackSpeed!=='undefined'?currentPlaybackSpeed:1)+'×';
+  try{
+    const mid=wrap.dataset.mid||'';
+    const title=document.getElementById('chat-partner-name')?.textContent||'Голосовое';
+    window.slMiniPlayer&&window.slMiniPlayer.attach({audio:a, btn, wrap, title, mid, peerId: activePartner?.id||activeGroup?.id||null});
+  }catch(e){}
 }
 
 
@@ -12673,7 +12687,7 @@ function scheduleBirthdayAfterAppReady(){
 
   // --- Proxy manager stub ---
   document.getElementById('settings-devices')?.insertAdjacentHTML('afterend',
-    `<div class="settings-item" id="settings-proxy"><span class="item-text">Прокси / узлы</span></div>`);
+    `<div class="settings-item" id="settings-proxy-removed" style="display:none"><span class="item-text"></span></div>`);
   document.getElementById('settings-proxy')?.addEventListener('click', ()=>{
     const ov=document.createElement('div');
     ov.className='modal-overlay';
@@ -20471,6 +20485,1038 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
   try{ obs.observe(document.documentElement, {childList:true, subtree:true}); }catch(e){}
 
   console.log('[SL] stickers removed');
+})();
+
+
+
+/* ===== SL FEATURE PACK v9 — floating mini voice player ===== */
+(function(){
+  'use strict';
+  if(window._slPackV9) return;
+  window._slPackV9 = 1;
+
+  const CSS = `
+  #sl-mini-player{
+    position:fixed; left:12px; right:12px; z-index:18000;
+    bottom:calc(64px + var(--safe-bottom,0px));
+    display:none; align-items:center; gap:10px;
+    padding:10px 12px; border-radius:16px;
+    background:rgba(19,27,46,.94); border:1px solid var(--line);
+    box-shadow:0 10px 32px rgba(0,0,0,.45);
+    backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px);
+    color:var(--text); font-size:13px;
+    transform:translateY(120%); opacity:0;
+    transition:transform .28s cubic-bezier(.2,.8,.2,1), opacity .22s;
+  }
+  body.in-chat #sl-mini-player{ bottom:calc(12px + var(--safe-bottom,0px)); }
+  #sl-mini-player.show{ display:flex; transform:translateY(0); opacity:1; }
+  #sl-mini-player .mp-play{
+    width:40px;height:40px;border-radius:50%;border:none;flex-shrink:0;
+    background:linear-gradient(135deg,var(--accent-a),var(--accent-b)); color:#fff;
+    display:flex;align-items:center;justify-content:center;cursor:pointer;
+  }
+  #sl-mini-player .mp-play svg{width:18px;height:18px;fill:currentColor}
+  #sl-mini-player .mp-body{flex:1;min-width:0;cursor:pointer}
+  #sl-mini-player .mp-title{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #sl-mini-player .mp-sub{font-size:11px;color:var(--muted);margin-top:2px}
+  #sl-mini-player .mp-bar{
+    height:3px; background:var(--line); border-radius:99px; margin-top:6px; overflow:hidden;
+  }
+  #sl-mini-player .mp-bar > i{
+    display:block; height:100%; width:0%;
+    background:linear-gradient(90deg,var(--accent-a),var(--accent-b));
+    border-radius:99px; transition:width .15s linear;
+  }
+  #sl-mini-player .mp-close{
+    width:32px;height:32px;border:none;border-radius:50%;
+    background:transparent;color:var(--muted);font-size:18px;cursor:pointer;flex-shrink:0;
+  }
+  #sl-mini-player .mp-close:active{color:var(--text)}
+  `;
+
+  if(!document.getElementById('sl-mini-css')){
+    const st=document.createElement('style');
+    st.id='sl-mini-css';
+    st.textContent=CSS;
+    document.head.appendChild(st);
+  }
+
+  let el=document.getElementById('sl-mini-player');
+  if(!el){
+    el=document.createElement('div');
+    el.id='sl-mini-player';
+    el.innerHTML=`
+      <button type="button" class="mp-play" id="mp-play" aria-label="Play/Pause"></button>
+      <div class="mp-body" id="mp-body">
+        <div class="mp-title" id="mp-title">Голосовое</div>
+        <div class="mp-sub" id="mp-sub">0:00 / 0:00</div>
+        <div class="mp-bar"><i id="mp-fill"></i></div>
+      </div>
+      <button type="button" class="mp-close" id="mp-close" aria-label="Close">✕</button>
+    `;
+    document.body.appendChild(el);
+  }
+
+  const playSvg = '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>';
+  const pauseSvg = '<svg viewBox="0 0 24 24"><path d="M6 5h4v14H6zm8 0h4v14h-4z"/></svg>';
+
+  function fmt(t){
+    t=Math.max(0, Math.floor(t||0));
+    const m=Math.floor(t/60), s=t%60;
+    return m+':'+String(s).padStart(2,'0');
+  }
+
+  const state = {
+    audio: null,
+    btn: null,
+    wrap: null,
+    title: 'Голосовое',
+    mid: null,
+    peerId: null,
+    visible: false
+  };
+
+  function shouldShow(){
+    if(!state.audio) return false;
+    // show when not paused OR when user left chat while it was playing / paused mid-way
+    if(state.audio.ended) return false;
+    const inChat = document.body.classList.contains('in-chat');
+    // Always show if playing; if paused mid-way and left chat, still show
+    if(!state.audio.paused) return true;
+    if(!inChat && state.audio.currentTime > 0.15 && state.audio.currentTime < (state.audio.duration||1e9)-0.2) return true;
+    return false;
+  }
+
+  function updateUI(){
+    const show = shouldShow();
+    el.classList.toggle('show', show);
+    state.visible = show;
+    const playBtn = el.querySelector('#mp-play');
+    if(playBtn) playBtn.innerHTML = (state.audio && !state.audio.paused) ? pauseSvg : playSvg;
+    const title = el.querySelector('#mp-title');
+    if(title) title.textContent = state.title || 'Голосовое';
+    updateTime();
+  }
+
+  function updateTime(){
+    const a = state.audio;
+    const sub = el.querySelector('#mp-sub');
+    const fill = el.querySelector('#mp-fill');
+    if(!a){
+      if(sub) sub.textContent = '0:00 / 0:00';
+      if(fill) fill.style.width = '0%';
+      return;
+    }
+    const cur = a.currentTime||0;
+    const dur = a.duration && isFinite(a.duration) ? a.duration : 0;
+    if(sub) sub.textContent = fmt(cur)+' / '+(dur?fmt(dur):'…');
+    if(fill) fill.style.width = (dur ? Math.min(100, (cur/dur)*100) : 0)+'%';
+  }
+
+  window.slMiniPlayer = {
+    attach(opts){
+      opts = opts||{};
+      state.audio = opts.audio||null;
+      state.btn = opts.btn||null;
+      state.wrap = opts.wrap||null;
+      state.title = opts.title || 'Голосовое';
+      state.mid = opts.mid||null;
+      state.peerId = opts.peerId||null;
+      updateUI();
+    },
+    onPlay(){ updateUI(); },
+    onPause(){ updateUI(); },
+    onTime(){ updateTime(); },
+    onEnded(){
+      try{
+        if(state.btn && typeof playIconSvg!=='undefined') state.btn.innerHTML=playIconSvg;
+      }catch(e){}
+      el.classList.remove('show');
+      state.visible=false;
+    },
+    hide(){ el.classList.remove('show'); state.visible=false; },
+    stop(){
+      try{ if(state.audio){ state.audio.pause(); state.audio.currentTime=0; } }catch(e){}
+      try{ if(state.btn && typeof playIconSvg!=='undefined') state.btn.innerHTML=playIconSvg; }catch(e){}
+      state.audio=null;
+      el.classList.remove('show');
+      state.visible=false;
+    }
+  };
+
+  el.querySelector('#mp-play').onclick = (e)=>{
+    e.stopPropagation();
+    const a=state.audio; if(!a) return;
+    if(a.paused) a.play().catch(()=>{});
+    else a.pause();
+    try{
+      if(state.btn){
+        state.btn.innerHTML = a.paused ? (typeof playIconSvg!=='undefined'?playIconSvg:playSvg)
+          : (typeof pauseIconSvg!=='undefined'?pauseIconSvg:pauseSvg);
+      }
+    }catch(err){}
+    updateUI();
+  };
+
+  el.querySelector('#mp-close').onclick = (e)=>{
+    e.stopPropagation();
+    window.slMiniPlayer.stop();
+  };
+
+  el.querySelector('#mp-body').onclick = ()=>{
+    // return to chat where voice lives
+    try{
+      if(state.peerId){
+        const contact = (typeof contacts!=='undefined' && contacts.find?.(c=>String(c.id)===String(state.peerId)));
+        const group = (typeof groups!=='undefined' && groups.find?.(g=>String(g.id)===String(state.peerId)));
+        if(contact && typeof openChat==='function') openChat(contact);
+        else if(group && typeof openGroup==='function') openGroup(group);
+      }
+    }catch(e){}
+  };
+
+  // Observe leaving / entering chat
+  const obs = new MutationObserver(()=> updateUI());
+  obs.observe(document.body, { attributes:true, attributeFilter:['class'] });
+
+  // Also poll lightly for time when playing
+  setInterval(()=>{
+    if(state.audio && !state.audio.paused) updateTime();
+    else if(state.visible) updateUI();
+  }, 500);
+
+  // When back button leaves chat, keep player
+  document.addEventListener('click', (e)=>{
+    const back = e.target.closest('#back-btn, .back-btn, [data-back]');
+    if(back) setTimeout(updateUI, 50);
+  }, true);
+
+  console.log('[SL] mini voice player ready');
+})();
+
+
+
+/* ===== SL FEATURE PACK v9 ===== */
+(function(){
+  'use strict';
+  if(window._slPackV9) return;
+  window._slPackV9 = 1;
+  const LS = (typeof storage!=='undefined'?storage:localStorage);
+  const toast=(m)=>{ try{showToast(m);}catch(e){console.log(m);} };
+  const AI_KEY = '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';
+  try{ if(!LS.getItem('sl_ai_chat_key')) LS.setItem('sl_ai_chat_key', AI_KEY); }catch(e){}
+
+  /* ========== 2) Beautiful animated buttons ========== */
+  if(!document.getElementById('sl-btn-anim-css')){
+    const st=document.createElement('style');
+    st.id='sl-btn-anim-css';
+    st.textContent=`
+      .btn-primary, .btn-secondary, .send-btn, .icon-btn, .bottom-tab, .settings-item,
+      .social-tab, .social-close, .folder-tab, .contact, button, .story-item {
+        transition: transform .18s cubic-bezier(.34,1.4,.64,1), box-shadow .2s, background .2s, opacity .15s, color .15s !important;
+        touch-action: manipulation;
+      }
+      .btn-primary{
+        background:linear-gradient(135deg,var(--accent-a),var(--accent-b))!important;
+        border:none!important; border-radius:14px!important; font-weight:700!important;
+        box-shadow:0 6px 18px rgba(76,124,243,.35);
+      }
+      .btn-primary:active, .btn-secondary:active, .icon-btn:active, .send-btn:active,
+      .bottom-tab:active, .settings-item:active, .social-tab:active, button:active {
+        transform: scale(.94) !important;
+      }
+      .btn-secondary{
+        border-radius:14px!important; border:1px solid var(--line)!important;
+        background:rgba(255,255,255,.04)!important;
+      }
+      .btn-primary:hover{ box-shadow:0 8px 24px rgba(76,124,243,.45); }
+      .settings-item{ border-radius:12px; margin:2px 8px; }
+      .settings-item:hover{ background:var(--panel-hover)!important; }
+      .bottom-tab.active{ color:var(--accent-a); transform:translateY(-1px); }
+      .sl-press{ animation:slPress .28s ease; }
+      @keyframes slPress{ 0%{transform:scale(1)} 40%{transform:scale(.92)} 100%{transform:scale(1)} }
+      /* onboarding */
+      #sl-onboard{position:fixed;inset:0;z-index:99999;background:radial-gradient(ellipse at 50% 30%,#1a2440 0%,#0B1120 70%);
+        display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px;text-align:center;
+        color:#E7ECF5; font-family:inherit;}
+      #sl-onboard .ob-logo{width:96px;height:96px;border-radius:28px;margin-bottom:28px;
+        background:linear-gradient(135deg,#4C7CF3,#6D5DF6); display:flex;align-items:center;justify-content:center;
+        box-shadow:0 16px 48px rgba(76,124,243,.4); animation:obFloat 3s ease-in-out infinite;}
+      @keyframes obFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+      #sl-onboard h1{font-size:28px;font-weight:800;margin:0 0 12px;letter-spacing:-.02em}
+      #sl-onboard p{font-size:15px;color:#7C8AA5;line-height:1.5;max-width:300px;margin:0 0 36px}
+      #sl-onboard .btn-primary{padding:14px 48px;font-size:16px;min-width:200px}
+      /* interesting stories section */
+      .stories-section-label{font-size:11px;color:var(--muted);padding:4px 16px 2px;letter-spacing:.04em;text-transform:uppercase}
+      .stories-interesting{display:flex;gap:12px;padding:6px 16px 10px;overflow-x:auto;-webkit-overflow-scrolling:touch}
+      /* sticker creator */
+      .sl-sticker-ui .preview{width:160px;height:160px;border-radius:24px;background:var(--input-bg);margin:12px auto;
+        display:flex;align-items:center;justify-content:center;overflow:hidden;border:1px solid var(--line)}
+      .sl-sticker-ui .preview img{max-width:100%;max-height:100%;object-fit:contain}
+      /* fullscreen cam */
+      #sl-fs-cam{position:fixed;inset:0;z-index:50000;background:#000;display:flex;flex-direction:column}
+      #sl-fs-cam video{flex:1;width:100%;object-fit:cover;background:#000}
+      #sl-fs-cam video:not(.mirror-on){transform:none}
+      #sl-fs-cam .fs-bar{position:absolute;left:0;right:0;bottom:0;padding:20px 16px calc(20px + env(safe-area-inset-bottom));
+        display:flex;align-items:center;justify-content:center;gap:20px;background:linear-gradient(transparent,rgba(0,0,0,.7))}
+      #sl-fs-cam .fs-rec{width:72px;height:72px;border-radius:50%;border:4px solid #fff;background:#F0708A;cursor:pointer}
+      #sl-fs-cam .fs-rec.on{background:#fff;border-radius:16px;width:56px;height:56px}
+      #sl-fs-cam .fs-masks{position:absolute;top:calc(12px + env(safe-area-inset-top));left:0;right:0;
+        display:flex;gap:8px;padding:8px 12px;overflow-x:auto;justify-content:center}
+      #sl-fs-cam .fs-mask{width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,.15);border:2px solid transparent;
+        display:flex;align-items:center;justify-content:center;font-size:22px;cursor:pointer;flex-shrink:0}
+      #sl-fs-cam .fs-mask.on{border-color:#4C7CF3;background:rgba(76,124,243,.35)}
+      #sl-fs-cam .fs-close{position:absolute;top:calc(12px + env(safe-area-inset-top));right:12px;width:40px;height:40px;
+        border-radius:50%;background:rgba(0,0,0,.5);color:#fff;border:none;font-size:20px;cursor:pointer;z-index:2}
+      /* AI chat */
+      .sl-ai-chat{display:flex;flex-direction:column;height:min(70vh,520px)}
+      .sl-ai-msgs{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:10px}
+      .sl-ai-msg{max-width:85%;padding:10px 14px;border-radius:16px;font-size:14px;line-height:1.4}
+      .sl-ai-msg.user{align-self:flex-end;background:linear-gradient(135deg,var(--accent-a),var(--accent-b));color:#fff}
+      .sl-ai-msg.bot{align-self:flex-start;background:var(--panel-hover);border:1px solid var(--line)}
+      .sl-ai-input{display:flex;gap:8px;padding:10px;border-top:1px solid var(--line)}
+      .sl-ai-input input{flex:1;padding:12px 14px;border-radius:14px;border:1px solid var(--line);background:var(--input-bg);color:var(--text)}
+      /* search social */
+      .sl-social-search{padding:8px 12px;border-bottom:1px solid var(--line)}
+      .sl-social-search input{width:100%;padding:10px 14px;border-radius:12px;border:1px solid var(--line);
+        background:var(--input-bg);color:var(--text);font-size:14px;box-sizing:border-box}
+    `;
+    document.head.appendChild(st);
+  }
+  // ripple press class
+  document.addEventListener('pointerdown', e=>{
+    const t=e.target.closest('button, .btn-primary, .btn-secondary, .icon-btn, .settings-item, .bottom-tab, .social-tab');
+    if(!t) return;
+    t.classList.remove('sl-press');
+    void t.offsetWidth;
+    t.classList.add('sl-press');
+  }, {passive:true});
+
+  /* ========== 5) Remove proxy ========== */
+  function killProxy(){
+    document.getElementById('settings-proxy')?.remove();
+    document.getElementById('settings-proxy-removed')?.remove();
+    document.querySelectorAll('.settings-item').forEach(el=>{
+      if(/прокси|proxy/i.test(el.textContent||'')) el.remove();
+    });
+  }
+  killProxy();
+  setTimeout(killProxy, 800);
+  setTimeout(killProxy, 2500);
+
+  /* ========== 4) Onboarding splash ========== */
+  function showOnboarding(){
+    if(LS.getItem('sl_onboard_done')==='1') return;
+    if(document.getElementById('sl-onboard')) return;
+    // only before auth / not logged in
+    try{
+      if(LS.getItem('sl_logged_in')==='1') return;
+    }catch(e){}
+    const ov=document.createElement('div');
+    ov.id='sl-onboard';
+    ov.innerHTML=`
+      <div class="ob-logo"><svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg></div>
+      <h1>SLine</h1>
+      <p>SLine — анонимный мессенджер со звонками и голосовыми.</p>
+      <button type="button" class="btn-primary" id="ob-next">Далее</button>`;
+    document.body.appendChild(ov);
+    // hide auth while onboard
+    const auth=document.getElementById('auth-screen');
+    if(auth) auth.style.visibility='hidden';
+    ov.querySelector('#ob-next').onclick=()=>{
+      LS.setItem('sl_onboard_done','1');
+      ov.style.opacity='0';
+      ov.style.transition='opacity .35s';
+      setTimeout(()=>{
+        ov.remove();
+        if(auth) auth.style.visibility='';
+      }, 350);
+    };
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', showOnboarding);
+  else showOnboarding();
+  setTimeout(showOnboarding, 100);
+
+  /* ========== 1) Custom stickers ========== */
+  function getMyStickers(){
+    try{ return JSON.parse(LS.getItem('sl_my_stickers')||'[]'); }catch(e){ return []; }
+  }
+  function setMyStickers(a){ LS.setItem('sl_my_stickers', JSON.stringify(a)); }
+
+  async function moderateSticker(dataUrl){
+    // Client-side basic checks + optional AI
+    // Basic: reject if too small
+    return new Promise((resolve)=>{
+      const img=new Image();
+      img.onload=async()=>{
+        if(img.width<32||img.height<32){ resolve({ok:false, reason:'Слишком маленькое изображение'}); return; }
+        // try AI moderation via OpenAI if key
+        const key=LS.getItem('sl_ai_chat_key')||AI_KEY;
+        try{
+          const ctrl=new AbortController();
+          const t=setTimeout(()=>ctrl.abort(), 12000);
+          const res=await fetch('https://api.openai.com/v1/chat/completions',{
+            method:'POST',
+            headers:{'Authorization':'Bearer '+key,'Content-Type':'application/json'},
+            signal:ctrl.signal,
+            body:JSON.stringify({
+              model:'gpt-4o-mini',
+              max_tokens:80,
+              messages:[
+                {role:'system', content:'You moderate sticker images for a messenger. Reply ONLY JSON: {"ok":true} or {"ok":false,"reason":"..."}. Reject violence, porn, hate, illegal content. Allow normal memes, animals, emoji-like images.'},
+                {role:'user', content:[
+                  {type:'text', text:'Is this sticker allowed?'},
+                  {type:'image_url', image_url:{url: dataUrl.slice(0, 200)<dataUrl.length && dataUrl.length>200000 ? dataUrl.slice(0,100)+'...' : dataUrl}}
+                ]}
+              ]
+            })
+          });
+          clearTimeout(t);
+          if(res.ok){
+            const data=await res.json();
+            const raw=(data.choices?.[0]?.message?.content||'').trim();
+            try{
+              const j=JSON.parse(raw.replace(/```json|```/g,'').trim());
+              resolve(j.ok!==false ? {ok:true} : {ok:false, reason:j.reason||'Запретный контент'});
+              return;
+            }catch(e){
+              if(/not ok|reject|forbidden|violat/i.test(raw)) resolve({ok:false, reason:'Запретный контент'});
+              else resolve({ok:true});
+              return;
+            }
+          }
+        }catch(e){ console.warn('moderation fallback', e); }
+        // fallback allow (network/CORS)
+        resolve({ok:true});
+      };
+      img.onerror=()=>resolve({ok:false, reason:'Не удалось загрузить'});
+      img.src=dataUrl;
+    });
+  }
+
+  function removeBgSimple(dataUrl){
+    return new Promise((resolve,reject)=>{
+      const img=new Image();
+      img.crossOrigin='anonymous';
+      img.onload=()=>{
+        const c=document.createElement('canvas');
+        const w=img.width, h=img.height;
+        c.width=w; c.height=h;
+        const ctx=c.getContext('2d');
+        ctx.drawImage(img,0,0);
+        const id=ctx.getImageData(0,0,w,h);
+        const d=id.data;
+        // sample corner as bg
+        const corners=[[0,0],[w-1,0],[0,h-1],[w-1,h-1]];
+        let sr=0,sg=0,sb=0;
+        corners.forEach(([x,y])=>{
+          const i=(y*w+x)*4; sr+=d[i]; sg+=d[i+1]; sb+=d[i+2];
+        });
+        sr/=4; sg/=4; sb/=4;
+        const thr=48;
+        for(let i=0;i<d.length;i+=4){
+          const dr=d[i]-sr, dg=d[i+1]-sg, db=d[i+2]-sb;
+          if(dr*dr+dg*dg+db*db < thr*thr) d[i+3]=0;
+        }
+        ctx.putImageData(id,0,0);
+        resolve(c.toDataURL('image/png'));
+      };
+      img.onerror=reject;
+      img.src=dataUrl;
+    });
+  }
+
+  window.slOpenStickerCreator = function(){
+    const ov=document.createElement('div');
+    ov.className='modal-overlay';
+    ov.style.zIndex='23000';
+    let step=1, packName='', dataUrl='', processed='';
+    function render(){
+      if(step===1){
+        ov.innerHTML=`<div class="modal sl-sticker-ui" style="max-width:400px">
+          <button class="close-x" id="sc-x">×</button>
+          <h3>Добавить стикерпак</h3>
+          <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Создайте свой набор стикеров</p>
+          <div class="field"><label>Название пака</label>
+            <input id="sc-name" placeholder="Мой пак" style="width:100%;padding:12px;border-radius:12px;border:1px solid var(--line);background:var(--input-bg);color:var(--text);box-sizing:border-box">
+          </div>
+          <button class="btn-primary" id="sc-next" style="width:100%;margin-top:12px">Добавить стикер</button>
+        </div>`;
+        ov.querySelector('#sc-x').onclick=()=>ov.remove();
+        ov.querySelector('#sc-next').onclick=()=>{
+          packName=(ov.querySelector('#sc-name').value||'Мой пак').trim();
+          step=2; render();
+        };
+      } else if(step===2){
+        ov.innerHTML=`<div class="modal sl-sticker-ui" style="max-width:400px">
+          <button class="close-x" id="sc-x">×</button>
+          <h3>Добавить стикер</h3>
+          <p style="font-size:13px;color:var(--muted)">Загрузите фото (PNG/JPG)</p>
+          <input type="file" id="sc-file" accept="image/*" style="width:100%;margin:12px 0">
+          <div class="preview" id="sc-prev"><span style="color:var(--muted)">Превью</span></div>
+          <div id="sc-actions" style="display:none;flex-direction:column;gap:8px">
+            <button class="btn-primary" id="sc-nobg" style="width:100%">Удалить фон</button>
+            <button class="btn-secondary" id="sc-keep" style="width:100%">Оставить так</button>
+          </div>
+        </div>`;
+        ov.querySelector('#sc-x').onclick=()=>ov.remove();
+        ov.querySelector('#sc-file').onchange=e=>{
+          const f=e.target.files?.[0]; if(!f) return;
+          const r=new FileReader();
+          r.onload=ev=>{
+            dataUrl=ev.target.result;
+            const prev=ov.querySelector('#sc-prev');
+            prev.innerHTML=`<img src="${dataUrl}">`;
+            ov.querySelector('#sc-actions').style.display='flex';
+          };
+          r.readAsDataURL(f);
+        };
+        ov.querySelector('#sc-nobg').onclick=async()=>{
+          toast('Удаляю фон…');
+          try{ processed=await removeBgSimple(dataUrl); }
+          catch(e){ processed=dataUrl; }
+          step=3; render();
+        };
+        ov.querySelector('#sc-keep').onclick=()=>{ processed=dataUrl; step=3; render(); };
+      } else if(step===3){
+        ov.innerHTML=`<div class="modal sl-sticker-ui" style="max-width:400px">
+          <button class="close-x" id="sc-x">×</button>
+          <h3>Проверка</h3>
+          <div class="preview"><img src="${processed}"></div>
+          <p style="font-size:13px;color:var(--muted);text-align:center">ИИ проверяет стикер…</p>
+          <button class="btn-primary" id="sc-go" style="width:100%">Добавить в список</button>
+        </div>`;
+        ov.querySelector('#sc-x').onclick=()=>ov.remove();
+        const go=ov.querySelector('#sc-go');
+        go.onclick=async()=>{
+          go.disabled=true; go.textContent='Проверка…';
+          const mod=await moderateSticker(processed);
+          if(!mod.ok){
+            toast('Ошибка: '+(mod.reason||'запретный контент'));
+            go.disabled=false; go.textContent='Добавить в список';
+            return;
+          }
+          const list=getMyStickers();
+          list.push({id:'st_'+Date.now(), pack:packName, url:processed, at:Date.now()});
+          setMyStickers(list);
+          toast('Стикер добавлен в «'+packName+'»');
+          ov.remove();
+        };
+      }
+    }
+    document.body.appendChild(ov);
+    render();
+  };
+
+  // Sticker button in composer - opens creator / my stickers
+  function ensureStickerBtn(){
+    const media=document.getElementById('composer-media-btns');
+    if(!media) return;
+    let btn=document.getElementById('sticker-btn');
+    if(!btn){
+      btn=document.createElement('button');
+      btn.type='button'; btn.id='sticker-btn'; btn.className='icon-btn composer-side';
+      btn.title='Стикеры';
+      btn.innerHTML=`<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="9" cy="10" r="1.2" fill="currentColor" stroke="none"/><circle cx="15" cy="10" r="1.2" fill="currentColor" stroke="none"/><path d="M8 15c1.2 1.5 2.8 2.2 4 2.2s2.8-.7 4-2.2"/></svg>`;
+      media.insertBefore(btn, media.firstChild);
+    }
+    btn.style.display='flex';
+    btn.onclick=e=>{
+      e.preventDefault(); e.stopPropagation();
+      openMyStickersPanel();
+    };
+  }
+  function openMyStickersPanel(){
+    const list=getMyStickers();
+    const ov=document.createElement('div');
+    ov.className='modal-overlay';
+    ov.innerHTML=`<div class="modal" style="max-width:400px;max-height:80vh;display:flex;flex-direction:column">
+      <button class="close-x" id="ms-x">×</button>
+      <h3>Стикеры</h3>
+      <button class="btn-primary" id="ms-add" style="width:100%;margin:8px 0">Добавить стикерпак</button>
+      <div id="ms-grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;overflow-y:auto;flex:1;padding:4px 0"></div>
+    </div>`;
+    document.body.appendChild(ov);
+    ov.querySelector('#ms-x').onclick=()=>ov.remove();
+    ov.querySelector('#ms-add').onclick=()=>{ ov.remove(); window.slOpenStickerCreator(); };
+    const grid=ov.querySelector('#ms-grid');
+    if(!list.length){
+      grid.innerHTML='<div style="grid-column:1/-1;text-align:center;color:var(--muted);padding:20px">Пока нет стикеров</div>';
+    } else {
+      list.forEach(s=>{
+        const img=document.createElement('img');
+        img.src=s.url; img.style.cssText='width:100%;aspect-ratio:1;object-fit:contain;border-radius:12px;background:var(--input-bg);cursor:pointer';
+        img.onclick=()=>{
+          if(typeof sendMessage==='function') sendMessage('sticker', s.url, '');
+          ov.remove();
+        };
+        grid.appendChild(img);
+      });
+    }
+  }
+  setTimeout(ensureStickerBtn, 600);
+  setInterval(ensureStickerBtn, 5000);
+  // undo no-stickers kill for our button
+  window._slNoStickers = 0;
+  try{
+    const obs=document.getElementById('sl-no-stickers-css');
+    if(obs) obs.textContent = obs.textContent.replace(/#sticker-btn[^}]*}/g,'/* restored */');
+  }catch(e){}
+
+  /* ========== 3) Stories → Interesting for non-contacts ========== */
+  (function patchStories(){
+    if(typeof loadStories!=='function' || window._slStoriesInteresting) return;
+    window._slStoriesInteresting = 1;
+    const _ls = loadStories;
+    loadStories = async function(){
+      await _ls.apply(this, arguments);
+      try{
+        const bar=document.getElementById('stories-bar');
+        if(!bar) return;
+        const contactIds=new Set((contacts||[]).map(c=>String(c.id)));
+        if(myProfile) contactIds.add(String(myProfile.id));
+        const items=[...bar.querySelectorAll('.story-item[data-uid]')];
+        const interesting=[];
+        items.forEach(el=>{
+          const uid=el.getAttribute('data-uid');
+          if(uid && !contactIds.has(String(uid))) interesting.push(el);
+        });
+        if(!interesting.length) return;
+        // move to interesting section after bar
+        let sec=document.getElementById('stories-interesting-wrap');
+        if(!sec){
+          sec=document.createElement('div');
+          sec.id='stories-interesting-wrap';
+          sec.innerHTML=`<div class="stories-section-label">Интересное</div><div class="stories-interesting" id="stories-interesting"></div>`;
+          bar.parentNode.insertBefore(sec, bar.nextSibling);
+        }
+        const box=sec.querySelector('#stories-interesting');
+        interesting.forEach(el=>box.appendChild(el));
+      }catch(e){ console.warn(e); }
+    };
+  })();
+
+  /* ========== 6+7) Fast SPosts/SVideo + search ========== */
+  (function fastSocial(){
+    // Cache feeds
+    window._slPostsCache = window._slPostsCache || {html:'', at:0, items:[]};
+    window._slVideoCache = window._slVideoCache || {html:'', at:0, items:[]};
+
+    function injectSearch(overlayId, bodyId, kind){
+      const ov=document.getElementById(overlayId);
+      if(!ov || ov.querySelector('.sl-social-search')) return;
+      const top=ov.querySelector('.social-topbar');
+      if(!top) return;
+      const wrap=document.createElement('div');
+      wrap.className='sl-social-search';
+      wrap.innerHTML=`<input type="search" placeholder="Поиск…" id="${kind}-search-inp" autocomplete="off">`;
+      top.after(wrap);
+      wrap.querySelector('input').oninput=function(){
+        const q=this.value.trim().toLowerCase();
+        const body=document.getElementById(bodyId);
+        if(!body) return;
+        body.querySelectorAll('[data-search]').forEach(el=>{
+          const t=(el.getAttribute('data-search')||el.textContent||'').toLowerCase();
+          el.style.display = !q || t.includes(q) ? '' : 'none';
+        });
+        // also cards without attr
+        body.querySelectorAll('.post-card, .video-card, article, .feed-item').forEach(el=>{
+          if(el.hasAttribute('data-search')) return;
+          const t=(el.textContent||'').toLowerCase();
+          el.style.display = !q || t.includes(q) ? '' : 'none';
+        });
+      };
+    }
+
+    if(typeof openPostsOverlay==='function'){
+      const _op=openPostsOverlay;
+      openPostsOverlay=function(){
+        injectSearch('posts-overlay','posts-body','posts');
+        const body=document.getElementById('posts-body');
+        // show cache immediately
+        if(body && window._slPostsCache.html && Date.now()-window._slPostsCache.at<60000){
+          body.innerHTML=window._slPostsCache.html;
+        }
+        return _op.apply(this, arguments);
+      };
+    }
+    if(typeof openVideoOverlay==='function'){
+      const _ov=openVideoOverlay;
+      openVideoOverlay=function(){
+        injectSearch('video-overlay','video-body','video');
+        const body=document.getElementById('video-body');
+        if(body && window._slVideoCache.html && Date.now()-window._slVideoCache.at<60000){
+          body.innerHTML=window._slVideoCache.html;
+        }
+        return _ov.apply(this, arguments);
+      };
+    }
+    if(typeof renderPostsFeed==='function'){
+      const _rp=renderPostsFeed;
+      renderPostsFeed=async function(body){
+        try{
+          // timeout guard
+          const p=_rp.apply(this, arguments);
+          const r=await Promise.race([
+            p,
+            new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')), 8000))
+          ]);
+          try{
+            if(body && body.innerHTML){
+              window._slPostsCache={html:body.innerHTML, at:Date.now()};
+              body.querySelectorAll('.post-card, article, .feed-item, [class*="post"]').forEach(el=>{
+                if(!el.getAttribute('data-search')) el.setAttribute('data-search', (el.textContent||'').slice(0,200));
+              });
+            }
+          }catch(e){}
+          return r;
+        }catch(e){
+          console.warn('posts feed', e);
+          if(body && window._slPostsCache.html) body.innerHTML=window._slPostsCache.html;
+          else if(body) body.innerHTML='<div style="padding:24px;text-align:center;color:var(--muted)">Лента пуста или не загрузилась.<br><button class="btn-secondary" onclick="openPostsOverlay()">Обновить</button></div>';
+        }
+      };
+    }
+    // video feed if exists
+    try{
+      if(typeof renderVideoFeed==='function'){
+        const _rv=renderVideoFeed;
+        renderVideoFeed=async function(body){
+          try{
+            await Promise.race([_rv.apply(this,arguments), new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),8000))]);
+            if(body?.innerHTML) window._slVideoCache={html:body.innerHTML,at:Date.now()};
+          }catch(e){
+            if(body && window._slVideoCache.html) body.innerHTML=window._slVideoCache.html;
+            else if(body) body.innerHTML='<div style="padding:24px;text-align:center;color:var(--muted)">Видео не загрузились.<br><button class="btn-secondary" onclick="openVideoOverlay()">Обновить</button></div>';
+          }
+        };
+      }
+    }catch(e){}
+  })();
+
+  /* ========== 8) Profile link ========== */
+  setTimeout(()=>{
+    if(document.getElementById('settings-profile-link')) return;
+    const host=document.getElementById('settings-my-link')?.parentNode || document.getElementById('settings-edit-profile')?.parentNode;
+    if(!host) return;
+    const row=document.createElement('div');
+    row.className='settings-item'; row.id='settings-profile-link';
+    row.innerHTML=`<svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
+      <span class="item-text">Ссылка на аккаунт</span>`;
+    host.appendChild(row);
+    row.onclick=()=>{
+      const cur=LS.getItem('sl_profile_link')||(myProfile?.profile_link)||'';
+      const ov=document.createElement('div'); ov.className='modal-overlay';
+      ov.innerHTML=`<div class="modal" style="max-width:400px">
+        <button class="close-x" id="pl-x">×</button>
+        <h3>Ссылка на аккаунт</h3>
+        <p style="font-size:13px;color:var(--muted);margin-bottom:10px">Прикрепите ссылку (сайт, соцсеть и т.д.)</p>
+        <input id="pl-inp" type="url" placeholder="https://…" value="${String(cur).replace(/"/g,'&quot;')}" style="width:100%;padding:12px;border-radius:12px;border:1px solid var(--line);background:var(--input-bg);color:var(--text);box-sizing:border-box">
+        <button class="btn-primary" id="pl-save" style="width:100%;margin-top:12px">Сохранить</button>
+      </div>`;
+      document.body.appendChild(ov);
+      ov.querySelector('#pl-x').onclick=()=>ov.remove();
+      ov.querySelector('#pl-save').onclick=async()=>{
+        const v=ov.querySelector('#pl-inp').value.trim();
+        LS.setItem('sl_profile_link', v);
+        try{
+          if(myProfile){ myProfile.profile_link=v; }
+          if(typeof sb!=='undefined' && myProfile?.id){
+            await sb.from('profiles').update({ profile_link:v }).eq('id', myProfile.id);
+          }
+        }catch(e){}
+        toast(v?'Ссылка сохранена':'Ссылка удалена');
+        ov.remove();
+      };
+    };
+  }, 700);
+
+  /* ========== 9) SVideo fullscreen camera, no mirror, masks, no heavy compress ========== */
+  window.slOpenFsCamera = function(onDone){
+    const ov=document.createElement('div');
+    ov.id='sl-fs-cam';
+    const masks=['','😺','🐶','😎','🎭','👑','🔥','💫'];
+    ov.innerHTML=`
+      <button class="fs-close" id="fs-x">×</button>
+      <div class="fs-masks">${masks.map((m,i)=>`<div class="fs-mask ${i===0?'on':''}" data-m="${m}">${m||'∅'}</div>`).join('')}</div>
+      <video id="fs-vid" autoplay playsinline muted></video>
+      <canvas id="fs-canvas" style="display:none"></canvas>
+      <div class="fs-bar">
+        <button type="button" class="fs-rec" id="fs-rec" title="Снять"></button>
+      </div>`;
+    document.body.appendChild(ov);
+    let stream=null, recorder=null, chunks=[], recording=false, mask='';
+    const vid=ov.querySelector('#fs-vid');
+    // NO mirror for final orientation - user asked not mirrored
+    vid.classList.remove('mirror-on');
+    vid.style.transform='none';
+
+    (async()=>{
+      try{
+        stream=await navigator.mediaDevices.getUserMedia({
+          video:{ facingMode:'user', width:{ideal:1280}, height:{ideal:720} },
+          audio:true
+        });
+        vid.srcObject=stream;
+        // display can be mirrored for UX while recording selfie but user said not mirrored
+        vid.style.transform='none';
+      }catch(e){ toast('Нет доступа к камере'); ov.remove(); }
+    })();
+
+    ov.querySelectorAll('.fs-mask').forEach(el=>{
+      el.onclick=()=>{
+        ov.querySelectorAll('.fs-mask').forEach(x=>x.classList.remove('on'));
+        el.classList.add('on');
+        mask=el.dataset.m||'';
+        let overlay=ov.querySelector('.fs-mask-overlay');
+        if(!overlay){
+          overlay=document.createElement('div');
+          overlay.className='fs-mask-overlay';
+          overlay.style.cssText='position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:120px;pointer-events:none;opacity:.85';
+          ov.insertBefore(overlay, ov.querySelector('.fs-bar'));
+        }
+        overlay.textContent=mask;
+      };
+    });
+
+    ov.querySelector('#fs-x').onclick=()=>{
+      try{ recorder?.stop(); }catch(e){}
+      try{ stream?.getTracks().forEach(t=>t.stop()); }catch(e){}
+      ov.remove();
+    };
+
+    ov.querySelector('#fs-rec').onclick=()=>{
+      const btn=ov.querySelector('#fs-rec');
+      if(!recording){
+        chunks=[];
+        try{
+          // high quality, minimal compress
+          const mime = MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')
+            ? 'video/webm;codecs=vp9,opus'
+            : 'video/webm';
+          recorder=new MediaRecorder(stream, { mimeType:mime, videoBitsPerSecond:8000000, audioBitsPerSecond:128000 });
+        }catch(e){
+          recorder=new MediaRecorder(stream);
+        }
+        recorder.ondataavailable=e=>{ if(e.data.size) chunks.push(e.data); };
+        recorder.onstop=()=>{
+          const blob=new Blob(chunks,{type:'video/webm'});
+          try{ stream?.getTracks().forEach(t=>t.stop()); }catch(e){}
+          ov.remove();
+          if(typeof onDone==='function') onDone(blob);
+        };
+        recorder.start(100);
+        recording=true;
+        btn.classList.add('on');
+        toast('Идёт запись…');
+        setTimeout(()=>{ if(recording && recorder.state==='recording'){ recorder.stop(); recording=false; } }, 60000);
+      } else {
+        recording=false;
+        btn.classList.remove('on');
+        try{ recorder.stop(); }catch(e){}
+      }
+    };
+  };
+
+  // Hook SVideo record button
+  document.addEventListener('click', e=>{
+    const t=e.target.closest('#cp-rec, [data-svideo-rec], button');
+    if(!t) return;
+    const label=(t.textContent||'')+(t.id||'');
+    if(t.id==='cp-rec' || /снять|запись|record/i.test(label) && t.closest('#video-overlay, #video-body')){
+      // optional: only intercept explicit record in video create
+      if(t.id==='cp-rec' || t.dataset.svideoRec){
+        e.preventDefault(); e.stopPropagation();
+        window.slOpenFsCamera(blob=>{
+          const url=URL.createObjectURL(blob);
+          const prev=document.querySelector('#cp-preview');
+          if(prev) prev.innerHTML=`<video src="${url}" style="max-width:100%;border-radius:12px;max-height:480px" controls playsinline></video>`;
+          try{
+            if(typeof mediaObjectUrl!=='undefined') mediaObjectUrl=url;
+            if(typeof mediaData!=='undefined') mediaData=url;
+            if(typeof mediaType!=='undefined') mediaType='video';
+            if(typeof mediaFile!=='undefined') mediaFile=new File([blob],'svideo.webm',{type:'video/webm'});
+          }catch(err){}
+          window._slLastVideoBlob=blob;
+          window._slLastVideoUrl=url;
+          toast('Видео готово');
+        });
+      }
+    }
+  }, true);
+
+  /* ========== 10) AI Chat ========== */
+  window.slOpenAiChat = function(){
+    const key=LS.getItem('sl_ai_chat_key')||AI_KEY;
+    const ov=document.createElement('div');
+    ov.className='modal-overlay';
+    ov.innerHTML=`<div class="modal" style="max-width:440px;padding:0;overflow:hidden">
+      <div style="padding:14px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center">
+        <h3 style="flex:1;margin:0">ИИ чат</h3>
+        <button class="close-x" id="ai-x" style="position:static">×</button>
+      </div>
+      <div class="sl-ai-chat">
+        <div class="sl-ai-msgs" id="ai-msgs">
+          <div class="sl-ai-msg bot">Привет! Я ИИ-помощник SLine. Спроси что угодно.</div>
+        </div>
+        <div class="sl-ai-input">
+          <input id="ai-inp" placeholder="Сообщение…" autocomplete="off">
+          <button class="btn-primary" id="ai-send" style="padding:12px 16px">→</button>
+        </div>
+      </div>
+    </div>`;
+    document.body.appendChild(ov);
+    const msgs=ov.querySelector('#ai-msgs');
+    const inp=ov.querySelector('#ai-inp');
+    const history=[{role:'system', content:'Ты полезный ассистент в мессенджере SLine. Отвечай кратко на русском.'}];
+    ov.querySelector('#ai-x').onclick=()=>ov.remove();
+    async function send(){
+      const text=inp.value.trim(); if(!text) return;
+      inp.value='';
+      history.push({role:'user', content:text});
+      msgs.innerHTML+=`<div class="sl-ai-msg user">${text.replace(/</g,'&lt;')}</div>`;
+      msgs.scrollTop=msgs.scrollHeight;
+      const wait=document.createElement('div');
+      wait.className='sl-ai-msg bot'; wait.textContent='…';
+      msgs.appendChild(wait);
+      try{
+        const res=await fetch('https://api.openai.com/v1/chat/completions',{
+          method:'POST',
+          headers:{'Authorization':'Bearer '+key,'Content-Type':'application/json'},
+          body:JSON.stringify({ model:'gpt-4o-mini', messages:history, max_tokens:800 })
+        });
+        if(!res.ok) throw new Error('API '+res.status);
+        const data=await res.json();
+        const reply=(data.choices?.[0]?.message?.content||'').trim()||'Нет ответа';
+        history.push({role:'assistant', content:reply});
+        wait.textContent=reply;
+      }catch(e){
+        wait.textContent='Не удалось связаться с ИИ (сеть/CORS). Ключ сохранён в настройках.';
+        console.warn(e);
+      }
+      msgs.scrollTop=msgs.scrollHeight;
+    }
+    ov.querySelector('#ai-send').onclick=send;
+    inp.onkeydown=e=>{ if(e.key==='Enter') send(); };
+  };
+
+  /* ========== 11) Screen time lock ========== */
+  function checkScreenTime(){
+    try{
+      const conf=JSON.parse(LS.getItem('sl_screen_time')||'null');
+      if(!conf || !conf.enabled) return;
+      const now=new Date();
+      const mins=now.getHours()*60+now.getMinutes();
+      const [sh,sm]=(conf.start||'23:00').split(':').map(Number);
+      const [eh,em]=(conf.end||'07:00').split(':').map(Number);
+      let start=sh*60+sm, end=eh*60+em;
+      let locked=false;
+      if(start<end) locked = mins>=start && mins<end;
+      else locked = mins>=start || mins<end; // overnight
+      if(locked && !document.getElementById('sl-screen-lock')){
+        showScreenLock();
+      }
+    }catch(e){}
+  }
+  function showScreenLock(){
+    if(document.getElementById('sl-screen-lock')) return;
+    const ov=document.createElement('div');
+    ov.id='sl-screen-lock';
+    ov.style.cssText='position:fixed;inset:0;z-index:100000;background:#0B1120;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#E7ECF5;padding:24px';
+    ov.innerHTML=`
+      <div style="font-size:48px;margin-bottom:12px">⏱</div>
+      <h2 style="margin:0 0 8px">Экранное время</h2>
+      <p style="color:#7C8AA5;text-align:center;margin:0 0 20px">Мессенджер заблокирован по расписанию.<br>Введите PIN для отмены.</p>
+      <input id="st-pin" type="password" inputmode="numeric" maxlength="8" placeholder="PIN" style="padding:14px 18px;border-radius:14px;border:1px solid #212C46;background:#131B2E;color:#fff;font-size:18px;text-align:center;width:180px">
+      <button class="btn-primary" id="st-unlock" style="margin-top:14px;min-width:180px">Разблокировать</button>`;
+    document.body.appendChild(ov);
+    const tryUnlock=()=>{
+      const pin=ov.querySelector('#st-pin').value;
+      const saved=LS.getItem('sl_screen_pin')||LS.getItem('sl_pin')||'0000';
+      if(pin && pin===saved){
+        // disable for today rest or turn off
+        const conf=JSON.parse(LS.getItem('sl_screen_time')||'{}');
+        conf.unlockedUntil=Date.now()+60*60*1000; // 1h
+        LS.setItem('sl_screen_time', JSON.stringify(conf));
+        ov.remove();
+        toast('Разблокировано на 1 час');
+      } else toast('Неверный PIN');
+    };
+    ov.querySelector('#st-unlock').onclick=tryUnlock;
+    ov.querySelector('#st-pin').onkeydown=e=>{ if(e.key==='Enter') tryUnlock(); };
+  }
+  // respect unlock window
+  setInterval(()=>{
+    try{
+      const conf=JSON.parse(LS.getItem('sl_screen_time')||'null');
+      if(conf?.unlockedUntil && Date.now()<conf.unlockedUntil) return;
+    }catch(e){}
+    checkScreenTime();
+  }, 15000);
+  setTimeout(checkScreenTime, 2000);
+
+  window.slOpenScreenTime = function(){
+    const conf=JSON.parse(LS.getItem('sl_screen_time')||'{"enabled":false,"start":"23:00","end":"07:00"}');
+    const ov=document.createElement('div'); ov.className='modal-overlay';
+    ov.innerHTML=`<div class="modal" style="max-width:400px">
+      <button class="close-x" id="st-x">×</button>
+      <h3>Экранное время</h3>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:12px">Блокировка мессенджера по расписанию. Отмена — PIN-код.</p>
+      <div class="field"><label>Включить</label>
+        <div class="toggle-switch ${conf.enabled?'on':''}" id="st-en"></div>
+      </div>
+      <div class="field"><label>Начало блокировки</label>
+        <input type="time" id="st-start" value="${conf.start||'23:00'}" style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--input-bg);color:var(--text)">
+      </div>
+      <div class="field"><label>Конец блокировки</label>
+        <input type="time" id="st-end" value="${conf.end||'07:00'}" style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--input-bg);color:var(--text)">
+      </div>
+      <div class="field"><label>PIN для отмены</label>
+        <input type="password" id="st-pin-set" inputmode="numeric" maxlength="8" placeholder="4–8 цифр" value="${LS.getItem('sl_screen_pin')||''}" style="width:100%;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--input-bg);color:var(--text);box-sizing:border-box">
+      </div>
+      <button class="btn-primary" id="st-save" style="width:100%;margin-top:8px">Сохранить</button>
+    </div>`;
+    document.body.appendChild(ov);
+    ov.querySelector('#st-x').onclick=()=>ov.remove();
+    ov.querySelector('#st-en').onclick=function(){ this.classList.toggle('on'); };
+    ov.querySelector('#st-save').onclick=()=>{
+      const enabled=ov.querySelector('#st-en').classList.contains('on');
+      const start=ov.querySelector('#st-start').value||'23:00';
+      const end=ov.querySelector('#st-end').value||'07:00';
+      const pin=ov.querySelector('#st-pin-set').value.trim();
+      if(enabled && pin.length<4){ toast('Укажите PIN (мин. 4 цифры)'); return; }
+      if(pin) LS.setItem('sl_screen_pin', pin);
+      LS.setItem('sl_screen_time', JSON.stringify({enabled, start, end}));
+      toast('Сохранено');
+      ov.remove();
+      checkScreenTime();
+    };
+  };
+
+  /* Settings rows: AI chat + Screen time */
+  setTimeout(()=>{
+    const host=document.getElementById('settings-notifications')?.parentNode
+      || document.getElementById('settings-about')?.parentNode;
+    if(!host) return;
+    if(!document.getElementById('settings-ai-chat')){
+      const r=document.createElement('div');
+      r.className='settings-item'; r.id='settings-ai-chat';
+      r.innerHTML=`<svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 100 20 10 10 0 000-20z"/><path d="M8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01"/></svg>
+        <span class="item-text">ИИ чат</span>`;
+      host.appendChild(r);
+      r.onclick=()=>window.slOpenAiChat();
+    }
+    if(!document.getElementById('settings-screen-time')){
+      const r=document.createElement('div');
+      r.className='settings-item'; r.id='settings-screen-time';
+      r.innerHTML=`<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+        <span class="item-text">Экранное время</span>`;
+      host.appendChild(r);
+      r.onclick=()=>window.slOpenScreenTime();
+    }
+  }, 800);
+
+  console.log('[SL] pack v9 ready');
 })();
 
 </script>
