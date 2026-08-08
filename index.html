@@ -1823,12 +1823,39 @@ body.theme-light .topbar {
 
 /* Bottom tabs */
 .bottom-tabs, .bottom-nav, #bottom-tabs {
-  background: rgba(26,34,45,.9) !important;
+  background: var(--panel) !important;
   backdrop-filter: blur(20px) !important;
   -webkit-backdrop-filter: blur(20px) !important;
   border-top: 1px solid var(--line) !important;
   box-shadow: 0 -4px 24px rgba(0,0,0,.12);
 }
+body.light-theme .bottom-tabs,
+body.theme-light .bottom-tabs,
+body.light-theme .bottom-nav,
+body.theme-light .bottom-nav,
+body.light-theme #bottom-tabs,
+body.theme-light #bottom-tabs {
+  background: #FFFFFF !important;
+  background-color: #FFFFFF !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  box-shadow: 0 -2px 16px rgba(0,0,0,.06) !important;
+  border-top-color: rgba(0,0,0,.08) !important;
+}
+body.light-theme .bottom-tab,
+body.theme-light .bottom-tab {
+  color: #8B9BB4 !important;
+}
+body.light-theme .bottom-tab.active,
+body.theme-light .bottom-tab.active {
+  color: #4C7CF3 !important;
+  background: rgba(76,124,243,.12) !important;
+}
+body.light-theme .bottom-tab.active svg,
+body.theme-light .bottom-tab.active svg {
+  stroke: #4C7CF3 !important;
+}
+
 .bottom-tab {
   border-radius: 14px !important;
   margin: 4px !important;
@@ -25389,6 +25416,295 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
   console.log('[SL] modern UI active');
 })();
 
+
+
+
+/* ===== SL COMPLETE LIGHT THEME — everything white ===== */
+(function(){
+  'use strict';
+  if (window._slLightComplete) return;
+  window._slLightComplete = 1;
+
+  const CSS = `
+/* Variables */
+body.light-theme, body.theme-light, html.light-theme {
+  --bg: #F4F6F9 !important;
+  --panel: #FFFFFF !important;
+  --panel-hover: #EEF1F5 !important;
+  --line: rgba(0,0,0,.08) !important;
+  --text: #1A1D21 !important;
+  --muted: #6B7A90 !important;
+  --input-bg: #F0F2F5 !important;
+  --bubble-them: #FFFFFF !important;
+  background: #F4F6F9 !important;
+  color: #1A1D21 !important;
+}
+
+/* AUTH — fully white card */
+body.light-theme #auth-screen,
+body.theme-light #auth-screen {
+  background: #F4F6F9 !important;
+}
+body.light-theme .auth-card,
+body.theme-light .auth-card {
+  background: #FFFFFF !important;
+  border: 1px solid rgba(0,0,0,.08) !important;
+  color: #1A1D21 !important;
+  box-shadow: 0 16px 48px rgba(0,0,0,.1) !important;
+}
+body.light-theme .auth-card::before,
+body.theme-light .auth-card::before {
+  opacity: .12 !important;
+  filter: blur(60px) !important;
+}
+body.light-theme .brand-name,
+body.theme-light .brand-name { color: #1A1D21 !important; }
+body.light-theme .auth-sub,
+body.theme-light .auth-sub { color: #6B7A90 !important; }
+body.light-theme .tabs,
+body.theme-light .tabs {
+  background: #F0F2F5 !important;
+  border-color: rgba(0,0,0,.08) !important;
+}
+body.light-theme .tab { color: #6B7A90 !important; }
+body.light-theme .tab.active {
+  background: #FFFFFF !important;
+  color: #1A1D21 !important;
+  box-shadow: 0 1px 4px rgba(0,0,0,.06);
+}
+body.light-theme .field label { color: #6B7A90 !important; }
+body.light-theme .field input {
+  background: #F0F2F5 !important;
+  border: 1px solid rgba(0,0,0,.1) !important;
+  color: #1A1D21 !important;
+}
+body.light-theme .btn-secondary {
+  background: #F0F2F5 !important;
+  color: #1A1D21 !important;
+  border: 1px solid rgba(0,0,0,.08) !important;
+}
+body.light-theme .auth-msg { color: #FF6B81 !important; }
+
+/* BOTTOM TABS — white */
+body.light-theme .bottom-tabs,
+body.theme-light .bottom-tabs,
+body.light-theme .bottom-nav,
+body.theme-light .bottom-nav,
+body.light-theme #bottom-tabs {
+  background: #FFFFFF !important;
+  background-color: #FFFFFF !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  border-top: 1px solid rgba(0,0,0,.08) !important;
+  box-shadow: 0 -2px 16px rgba(0,0,0,.05) !important;
+}
+body.light-theme .bottom-tab { color: #8B9BB4 !important; background: transparent !important; }
+body.light-theme .bottom-tab.active {
+  color: #4C7CF3 !important;
+  background: rgba(76,124,243,.12) !important;
+  border-radius: 14px !important;
+}
+body.light-theme .bottom-tab svg { stroke: currentColor !important; fill: none !important; }
+body.light-theme .bottom-tab.active svg { stroke: #4C7CF3 !important; }
+
+/* SIDEBAR / LIST */
+body.light-theme .sidebar,
+body.light-theme .sidebar-header,
+body.light-theme .sidebar-scroll,
+body.light-theme .chats-layout {
+  background: #FFFFFF !important;
+  border-color: rgba(0,0,0,.08) !important;
+  color: #1A1D21 !important;
+}
+body.light-theme .contact,
+body.light-theme .sw-clip,
+body.light-theme .sw-front {
+  background: #FFFFFF !important;
+  color: #1A1D21 !important;
+}
+body.light-theme .contact:hover,
+body.light-theme .contact.active,
+body.light-theme .sw-front.active {
+  background: #EEF1F5 !important;
+}
+body.light-theme .contact-name { color: #1A1D21 !important; }
+body.light-theme .contact-sub,
+body.light-theme .contact-time,
+body.light-theme .me-tag,
+body.light-theme .me-name { color: #6B7A90 !important; }
+body.light-theme .me-name { color: #1A1D21 !important; }
+
+body.light-theme .search-box input {
+  background: #F0F2F5 !important;
+  border: 1px solid rgba(0,0,0,.08) !important;
+  color: #1A1D21 !important;
+}
+body.light-theme .search-box input::placeholder { color: #8B9BB4 !important; }
+
+/* CHAT */
+body.light-theme .chat-header,
+body.light-theme .chat-pane {
+  background: #FFFFFF !important;
+  border-color: rgba(0,0,0,.08) !important;
+  color: #1A1D21 !important;
+}
+body.light-theme .chat-title { color: #1A1D21 !important; }
+body.light-theme .messages { background: #F4F6F9 !important; }
+body.light-theme .bubble.them {
+  background: #FFFFFF !important;
+  border: 1px solid rgba(0,0,0,.08) !important;
+  color: #1A1D21 !important;
+}
+body.light-theme .composer {
+  background: #FFFFFF !important;
+  border-top: 1px solid rgba(0,0,0,.08) !important;
+}
+body.light-theme .composer-input-shell {
+  background: #F0F2F5 !important;
+  border: 1px solid rgba(0,0,0,.1) !important;
+}
+body.light-theme .composer textarea { color: #1A1D21 !important; background: transparent !important; }
+body.light-theme .composer .icon-btn,
+body.light-theme .composer-smile { color: #6B7A90 !important; }
+
+/* SETTINGS */
+body.light-theme .settings-page,
+body.light-theme .settings-item,
+body.light-theme #page-settings {
+  background: #FFFFFF !important;
+  color: #1A1D21 !important;
+  border-color: rgba(0,0,0,.08) !important;
+}
+body.light-theme .settings-item:active { background: #EEF1F5 !important; }
+
+/* MODALS / SHEETS */
+body.light-theme .modal,
+body.light-theme .sl-sheet,
+body.light-theme .modal-overlay .modal {
+  background: #FFFFFF !important;
+  color: #1A1D21 !important;
+  border-color: rgba(0,0,0,.08) !important;
+}
+body.light-theme .sl-sheet-hdr {
+  background: #FFFFFF !important;
+  border-bottom: 1px solid rgba(0,0,0,.08) !important;
+}
+
+/* FOLDER TABS / STORIES */
+body.light-theme .stories-bar,
+body.light-theme .folder-tabs {
+  background: #FFFFFF !important;
+  border-color: rgba(0,0,0,.08) !important;
+}
+body.light-theme .folder-tab {
+  background: #F0F2F5 !important;
+  color: #6B7A90 !important;
+}
+body.light-theme .folder-tab.active {
+  background: #4C7CF3 !important;
+  color: #FFFFFF !important;
+}
+
+/* PAGES */
+body.light-theme #app-screen,
+body.light-theme .app-page,
+body.light-theme #page-chats,
+body.light-theme #page-calls,
+body.light-theme #page-settings {
+  background: #F4F6F9 !important;
+}
+
+/* ICONS */
+body.light-theme .icon-btn {
+  border-color: rgba(0,0,0,.1) !important;
+  color: #6B7A90 !important;
+  background: transparent !important;
+}
+body.light-theme .icon-btn:hover {
+  color: #1A1D21 !important;
+  border-color: #4C7CF3 !important;
+}
+
+/* UNREAD */
+body.light-theme .unread-badge {
+  background: #4C7CF3 !important;
+  color: #FFFFFF !important;
+}
+`;
+
+  const st = document.createElement('style');
+  st.id = 'sl-light-complete';
+  st.textContent = CSS;
+  document.head.appendChild(st);
+
+  // Second pass — kill any remaining dark tabs
+  const st2 = document.createElement('style');
+  st2.id = 'sl-light-tabs-kill';
+  st2.textContent = `
+body.light-theme .bottom-tabs,
+body.theme-light .bottom-tabs {
+  background: #FFFFFF !important;
+  background-color: #FFFFFF !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+body.light-theme .auth-card,
+body.theme-light .auth-card {
+  background: #FFFFFF !important;
+  color: #1A1D21 !important;
+}
+`;
+  document.head.appendChild(st2);
+
+  const LS = (typeof storage !== 'undefined' ? storage : localStorage);
+
+  function applyLight() {
+    try {
+      const night = LS.getItem('sl_night_mode');
+      // Light by default unless user explicitly chose night
+      if (night !== '1') {
+        document.body.classList.add('light-theme', 'theme-light');
+        document.documentElement.classList.add('light-theme');
+        LS.setItem('sl_force_light', '1');
+      } else {
+        document.body.classList.remove('light-theme', 'theme-light');
+        document.documentElement.classList.remove('light-theme');
+      }
+    } catch (e) {}
+  }
+
+  window.slToggleLightTheme = function (on) {
+    if (on === true || on === undefined) {
+      LS.setItem('sl_night_mode', '0');
+      LS.setItem('sl_force_light', '1');
+      document.body.classList.add('light-theme', 'theme-light');
+      document.documentElement.classList.add('light-theme');
+    } else {
+      LS.setItem('sl_night_mode', '1');
+      LS.removeItem('sl_force_light');
+      document.body.classList.remove('light-theme', 'theme-light');
+      document.documentElement.classList.remove('light-theme');
+    }
+  };
+
+  // Apply immediately + on load + delayed (for late DOM)
+  applyLight();
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', applyLight);
+  }
+  window.addEventListener('load', applyLight);
+  setTimeout(applyLight, 100);
+  setTimeout(applyLight, 500);
+  setTimeout(applyLight, 1500);
+  setTimeout(applyLight, 3000);
+
+  // Watch body class changes from other packs
+  try {
+    new MutationObserver(applyLight).observe(document.body, { attributes: true, attributeFilter: ['class'] });
+  } catch (e) {}
+
+  console.log('[SL] Complete light theme active — everything white');
+})();
 
 </script>
 </body>
