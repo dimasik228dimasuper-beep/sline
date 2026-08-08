@@ -1616,22 +1616,23 @@ body.chats-selecting .sw-clip .sel-check{display:flex}
 </head>
 <body>
 <script>
-/* Early theme — default DARK like original */
+/* Early theme — default DARK; one-time reset of stuck light */
 (function(){
   try {
     var LS = localStorage;
+    // One-time migration: previous builds forced light into storage
+    if (LS.getItem('sl_theme_ver') !== '3') {
+      LS.setItem('sl_theme', 'dark');
+      LS.setItem('sl_night_mode', '1');
+      LS.setItem('sl_theme_ver', '3');
+    }
     var t = LS.getItem('sl_theme');
     var night = LS.getItem('sl_night_mode');
-    // Explicit light only when user chose light
-    var isLight = (t === 'light') || (night === '0' && t !== 'dark');
-    // If night explicitly 1 or theme dark → dark
+    var isLight = (t === 'light');
     if (t === 'dark' || night === '1') isLight = false;
-    // Nothing saved → DARK (original default)
-    if (t == null && night == null) isLight = false;
+    if (t == null && night == null) isLight = false; // default dark
 
     if (isLight) {
-      LS.setItem('sl_theme', 'light');
-      LS.setItem('sl_night_mode', '0');
       document.documentElement.classList.add('light-theme', 'theme-light');
       document.documentElement.classList.remove('theme-dark');
       if (document.body) {
@@ -1639,13 +1640,25 @@ body.chats-selecting .sw-clip .sel-check{display:flex}
         document.body.classList.remove('theme-dark', 'night-mode');
       }
     } else {
-      LS.setItem('sl_theme', 'dark');
-      LS.setItem('sl_night_mode', '1');
       document.documentElement.classList.add('theme-dark');
       document.documentElement.classList.remove('light-theme', 'theme-light');
       if (document.body) {
         document.body.classList.add('theme-dark', 'night-mode');
         document.body.classList.remove('light-theme', 'theme-light');
+      }
+      // nuclear vars immediately
+      var r = document.documentElement.style;
+      r.setProperty('--bg', '#0F1419');
+      r.setProperty('--panel', '#1A222D');
+      r.setProperty('--panel-hover', '#243041');
+      r.setProperty('--line', 'rgba(255,255,255,.08)');
+      r.setProperty('--text', '#F4F7FB');
+      r.setProperty('--muted', '#8B9BB4');
+      r.setProperty('--input-bg', '#151C27');
+      r.setProperty('--bubble-them', '#243041');
+      if (document.body) {
+        document.body.style.background = '#0F1419';
+        document.body.style.color = '#F4F7FB';
       }
     }
     window.__slIsLight = isLight;
