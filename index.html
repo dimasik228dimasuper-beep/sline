@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ru" class="light-theme">
+<html lang="ru">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
@@ -1608,7 +1608,7 @@ body.chats-selecting .sw-clip .sel-check{display:flex}
 
 </style>
 </head>
-<body class="light-theme theme-light">
+<body>
 <script>
 /* Early theme — apply BEFORE paint */
 (function(){
@@ -1616,32 +1616,38 @@ body.chats-selecting .sw-clip .sel-check{display:flex}
     var LS = localStorage;
     var t = LS.getItem('sl_theme');
     var night = LS.getItem('sl_night_mode');
-    // dark if either key says so
-    var isDark = (t === 'dark') || (night === '1');
-    var isLight = !isDark;
-    // default = light only when nothing set
-    if (t == null && night == null) {
-      isLight = true;
+    var isDark;
+
+    if (t === 'dark' || night === '1') {
+      isDark = true;
+    } else if (t === 'light' || night === '0') {
       isDark = false;
-      LS.setItem('sl_theme', 'light');
-      LS.setItem('sl_night_mode', '0');
+    } else {
+      // nothing saved → follow system
+      isDark = !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
     }
-    // sync keys
+
     if (isDark) {
       LS.setItem('sl_theme', 'dark');
       LS.setItem('sl_night_mode', '1');
-      document.documentElement.classList.remove('light-theme', 'theme-light');
-      document.body.classList.remove('light-theme', 'theme-light');
-      document.body.classList.add('theme-dark', 'night-mode');
+      document.documentElement.className = (document.documentElement.className || '').replace(/\b(light-theme|theme-light)\b/g, '').trim();
       document.documentElement.classList.add('theme-dark');
+      // body may not exist yet if script is in head; if in body, clean it
+      if (document.body) {
+        document.body.classList.remove('light-theme', 'theme-light');
+        document.body.classList.add('theme-dark', 'night-mode');
+      }
     } else {
       LS.setItem('sl_theme', 'light');
       LS.setItem('sl_night_mode', '0');
-      document.documentElement.classList.remove('theme-dark');
-      document.body.classList.remove('theme-dark', 'night-mode');
+      document.documentElement.className = (document.documentElement.className || '').replace(/\b(theme-dark)\b/g, '').trim();
       document.documentElement.classList.add('light-theme', 'theme-light');
-      document.body.classList.add('light-theme', 'theme-light');
+      if (document.body) {
+        document.body.classList.remove('theme-dark', 'night-mode');
+        document.body.classList.add('light-theme', 'theme-light');
+      }
     }
+    window.__slIsDark = isDark;
   } catch(e) {}
 })();
 </script>
@@ -7024,7 +7030,9 @@ function showInfoDialog(title, text){
 const WALLPAPER_KEY='sl_wallpaper', THEME_KEY='sl_theme';
 function applyTheme(){
   let t=storage.getItem(THEME_KEY);
-  if(!t){ t = 'light'; }
+  if(!t){
+    t = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+  }
   const isLight = t==='light';
   document.body.classList.toggle('theme-light', isLight);
   document.body.classList.toggle('light-theme', isLight);
@@ -25600,7 +25608,11 @@ body.theme-dark #tg-attach-sheet, body.theme-dark #tg-voice-bar {
     try {
       var t = localStorage.getItem('sl_theme');
       var night = localStorage.getItem('sl_night_mode');
-      var isDark = (t === 'dark') || (night === '1');
+      var isDark;
+      if (t === 'dark' || night === '1') isDark = true;
+      else if (t === 'light' || night === '0') isDark = false;
+      else isDark = !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+
       var isLight = !isDark;
       document.body.classList.toggle('light-theme', isLight);
       document.body.classList.toggle('theme-light', isLight);
@@ -25609,6 +25621,32 @@ body.theme-dark #tg-attach-sheet, body.theme-dark #tg-voice-bar {
       document.documentElement.classList.toggle('light-theme', isLight);
       document.documentElement.classList.toggle('theme-light', isLight);
       document.documentElement.classList.toggle('theme-dark', isDark);
+
+      // nuclear: set CSS variables directly so nothing can override
+      var root = document.documentElement;
+      if (isDark) {
+        root.style.setProperty('--bg', '#0F1419');
+        root.style.setProperty('--panel', '#1A222D');
+        root.style.setProperty('--panel-hover', '#243041');
+        root.style.setProperty('--line', 'rgba(255,255,255,.08)');
+        root.style.setProperty('--text', '#F4F7FB');
+        root.style.setProperty('--muted', '#8B9BB4');
+        root.style.setProperty('--input-bg', '#151C27');
+        root.style.setProperty('--bubble-them', '#243041');
+        document.body.style.background = '#0F1419';
+        document.body.style.color = '#F4F7FB';
+      } else {
+        root.style.setProperty('--bg', '#F4F6F9');
+        root.style.setProperty('--panel', '#FFFFFF');
+        root.style.setProperty('--panel-hover', '#EEF1F5');
+        root.style.setProperty('--line', 'rgba(0,0,0,.08)');
+        root.style.setProperty('--text', '#1A1D21');
+        root.style.setProperty('--muted', '#6B7A90');
+        root.style.setProperty('--input-bg', '#F0F2F5');
+        root.style.setProperty('--bubble-them', '#FFFFFF');
+        document.body.style.background = '#F4F6F9';
+        document.body.style.color = '#1A1D21';
+      }
     } catch (e) {}
   }
 
