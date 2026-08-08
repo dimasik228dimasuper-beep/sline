@@ -22039,6 +22039,716 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
 
 
 
+
+/* ===== SL: fix mixed chats + sticker bubbles ===== */
+(function(){
+  'use strict';
+  if(window._slChatIsoFix) return;
+  window._slChatIsoFix = 1;
+  const toast=(m)=>{ try{showToast(m);}catch(e){} };
+
+  // Generation token: ignore stale async loads
+  window._slChatGen = window._slChatGen || 0;
+  function chatKey(){
+    try{
+      if(typeof activeGroup!=='undefined' && activeGroup && activeGroup.id) return 'g:'+activeGroup.id;
+      if(typeof activePartner!=='undefined' && activePartner && activePartner.id) return 'u:'+activePartner.id;
+    }catch(e){}
+    return '';
+  }
+  function bumpGen(){
+    window._slChatGen = (window._slChatGen||0)+1;
+    const list=document.getElementById('messages-list');
+    if(list){
+      list.dataset.chatKey = chatKey();
+      list.dataset.chatGen = String(window._slChatGen);
+      list.innerHTML = '';
+    }
+    return window._slChatGen;
+  }
+
+  function msgBelongsToActive(msg){
+    if(!msg) return false;
+    try{
+      if(typeof activeGroup!=='undefined' && activeGroup && activeGroup.id){
+        return String(msg.group_id||'')===String(activeGroup.id);
+      }
+      if(typeof activePartner!=='undefined' && activePartner && activePartner.id && myProfile){
+        if(msg.group_id) return false;
+        const me=String(myProfile.id);
+        const peer=String(activePartner.id);
+        const s=String(msg.sender_id||''), r=String(msg.receiver_id||'');
+        // self-notes
+        if(peer===me) return s===me && r===me;
+        return (s===me && r===peer) || (s===peer && r===me);
+      }
+    }catch(e){}
+    return false;
+  }
+
+  // Patch openChat / openGroup to bump gen & clear list first
+  if(typeof openChat==='function' && !window._slOpenChatIso){
+    window._slOpenChatIso=1;
+    const _oc=openChat;
+    openChat=async function(partner){
+      bumpGen();
+      const gen=window._slChatGen;
+      const r=await _oc.apply(this, arguments);
+      // if user already switched away, clear wrong content
+      if(gen!==window._slChatGen){
+        const list=document.getElementById('messages-list');
+        if(list && list.dataset.chatGen!==String(window._slChatGen)) list.innerHTML='';
+      }
+      return r;
+    };
+  }
+  if(typeof openGroup==='function' && !window._slOpenGroupIso){
+    window._slOpenGroupIso=1;
+    const _og=openGroup;
+    openGroup=async function(group){
+      bumpGen();
+      return await _og.apply(this, arguments);
+    };
+  }
+
+  // Patch loadMessages to respect generation
+  if(typeof loadMessages==='function' && !window._slLoadMsgIso){
+    window._slLoadMsgIso=1;
+    const _lm=loadMessages;
+    loadMessages=async function(){
+      const gen=window._slChatGen;
+      const key=chatKey();
+      const list=document.getElementById('messages-list');
+      if(list){ list.innerHTML=''; list.dataset.chatKey=key; list.dataset.chatGen=String(gen); }
+      try{
+        await _lm.apply(this, arguments);
+      }catch(e){ console.warn('loadMessages', e); }
+      // stale?
+      if(gen!==window._slChatGen){
+        console.warn('[SL] stale loadMessages discarded');
+        return;
+      }
+      // remove messages that don't belong
+      if(list){
+        list.querySelectorAll('.bubble-row').forEach(row=>{
+          // can't always read msg; rely on data attributes if present
+        });
+      }
+    };
+  }
+  if(typeof loadGroupMessages==='function' && !window._slLoadGrpIso){
+    window._slLoadGrpIso=1;
+    const _lg=loadGroupMessages;
+    loadGroupMessages=async function(){
+      const gen=window._slChatGen;
+      const list=document.getElementById('messages-list');
+      if(list){ list.innerHTML=''; list.dataset.chatGen=String(gen); }
+      await _lg.apply(this, arguments);
+      if(gen!==window._slChatGen) console.warn('[SL] stale loadGroupMessages discarded');
+    };
+  }
+
+  // Patch renderMessage: isolation + sticker fix
+  if(typeof renderMessage==='function' && !window._slRenderIso){
+    window._slRenderIso=1;
+    const _rm=renderMessage;
+    renderMessage=function(msg, isGroup){
+      try{
+        if(!msg) return;
+        // Isolation: do not paint into wrong chat
+        if(!msgBelongsToActive(msg)){
+          // allow during initial load when active matches loosely
+          const list=document.getElementById('messages-list');
+          const gen=list && list.dataset.chatGen;
+          if(gen && String(gen)!==String(window._slChatGen)) return;
+          if(activePartner || activeGroup){
+            if(!msgBelongsToActive(msg)){
+              console.warn('[SL] blocked cross-chat render', msg.id, msg.sender_id, msg.receiver_id, msg.group_id);
+              return;
+            }
+          }
+        }
+
+        // Fix sticker / media placeholders
+        if(msg.type==='sticker' || (msg.file_url && /sticker/i.test(String(msg.type||msg.content||'')))){
+          const url = msg.file_url || (String(msg.content||'').startsWith('data:') ? msg.content : '') || (String(msg.content||'').startsWith('http') ? msg.content : '');
+          msg = {...msg, type:'sticker', file_url: url || msg.file_url, content: ''};
+        }
+        if(msg.content && /^\[media\]/i.test(String(msg.content).trim())){
+          if(msg.file_url){
+            const t = (msg.type && msg.type!=='text') ? msg.type : 'image';
+            msg = {...msg, type:t, content:''};
+          } else {
+            // hide useless placeholder
+            msg = {...msg, content: ''};
+          }
+        }
+      }catch(e){ console.warn(e); }
+      return _rm.call(this, msg, isGroup);
+    };
+  }
+
+  // Patch buildMessageBody for stickers without file_url
+  if(typeof buildMessageBody==='function' && !window._slBmbFix){
+    window._slBmbFix=1;
+    const _b=buildMessageBody;
+    buildMessageBody=function(msg, replyHtml, bodyText){
+      try{
+        if(msg && msg.type==='sticker'){
+          const src = msg.file_url || (bodyText && (bodyText.startsWith('data:')||bodyText.startsWith('http')) ? bodyText : '');
+          if(src){
+            return `${replyHtml||''}<img src="${src}" class="sticker-animated" alt="sticker" style="max-width:150px;max-height:150px;background:transparent">`;
+          }
+          return `${replyHtml||''}<span style="opacity:.5">🎫</span>`;
+        }
+        if(bodyText && /^\[media\]\s*sticker/i.test(String(bodyText).trim())){
+          if(msg && msg.file_url){
+            return `${replyHtml||''}<img src="${msg.file_url}" class="sticker-animated" alt="sticker" style="max-width:150px;max-height:150px">`;
+          }
+          return `${replyHtml||''}`;
+        }
+      }catch(e){}
+      return _b.apply(this, arguments);
+    };
+  }
+
+  // Patch sendMessage: always pass sticker url correctly, never "[media] sticker"
+  if(typeof sendMessage==='function' && !window._slSendStickerFix){
+    window._slSendStickerFix=1;
+    const _sm=sendMessage;
+    sendMessage=async function(type='text', fileUrl=null, content=null){
+      if(type==='sticker'){
+        const url = fileUrl || content || '';
+        if(!url){ toast('Нет стикера'); return; }
+        // content empty so UI doesn't show text
+        return await _sm.call(this, 'sticker', url, '');
+      }
+      return await _sm.apply(this, arguments);
+    };
+  }
+
+  // Scrub already-rendered bad bubbles
+  function scrubChat(){
+    document.querySelectorAll('#messages-list .bubble').forEach(b=>{
+      const raw=(b.textContent||'').replace(/\d{1,2}:\d{2}/g,'').replace(/[✓✔]/g,'').trim();
+      if(/^\[media\]/i.test(raw)){
+        const row=b.closest('.bubble-row');
+        const img=b.querySelector('img');
+        if(!img){
+          // remove placeholder text nodes
+          [...b.childNodes].forEach(n=>{
+            if(n.nodeType===3 && /\[media\]/i.test(n.textContent||'')) n.textContent='';
+            if(n.nodeType===1 && n.classList && !n.classList.contains('bubble-time') && /\[media\]/i.test(n.textContent||'')){
+              if(!n.querySelector('img,video,audio')) n.textContent='';
+            }
+          });
+        }
+      }
+    });
+  }
+  setInterval(scrubChat, 2000);
+
+  // Soften aggressive loadChats that can wipe/reorder
+  // (already throttled in v7)
+
+  console.log('[SL] chat isolation + sticker render fix');
+})();
+
+
+
+
+/* ===== SL: Telegram-style sticker panel UI ===== */
+(function(){
+  'use strict';
+  if(window._slTgStickerUI) return;
+  window._slTgStickerUI = 1;
+  const LS = (typeof storage!=='undefined'?storage:localStorage);
+  const toast=(m)=>{ try{showToast(m);}catch(e){console.log(m);} };
+  const STK_KEY='sl_custom_stickers_v12';
+  const FAV_KEY='sl_fav_stickers';
+
+  function getStickers(){
+    try{ return JSON.parse(LS.getItem(STK_KEY)||'[]'); }catch(e){ return []; }
+  }
+  function setStickers(a){ try{ LS.setItem(STK_KEY, JSON.stringify(a.slice(0,300))); }catch(e){} }
+  function getFavs(){
+    try{ return JSON.parse(LS.getItem(FAV_KEY)||'[]'); }catch(e){ return []; }
+  }
+  function setFavs(a){ try{ LS.setItem(FAV_KEY, JSON.stringify(a.slice(0,100))); }catch(e){} }
+
+  function emojiSvg(emoji, bg){
+    bg = bg || '#1c1f2e';
+    const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128"><rect width="128" height="128" rx="28" fill="${bg}"/><text x="64" y="84" text-anchor="middle" font-size="72">${emoji}</text></svg>`;
+    return 'data:image/svg+xml,'+encodeURIComponent(svg);
+  }
+
+  // Built-in packs (Telegram-like)
+  const BUILTIN = [
+    {
+      id:'popular', name:'Популярные', icon:'⭐',
+      stickers:['😀','😂','🥰','😍','🔥','👍','🎉','😎','🤔','😢','🙏','💯','✨','💪','🙌','❤️','🤣','😘','🤝','👏']
+        .map((e,i)=>({id:'pop_'+i, url:emojiSvg(e, ['#2a2d3e','#1a2332','#252040'][i%3]), emoji:e}))
+    },
+    {
+      id:'animals', name:'Звери', icon:'🐱',
+      stickers:['🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼','🐨','🐯','🦁','🐮','🐷','🐸','🐵']
+        .map((e,i)=>({id:'an_'+i, url:emojiSvg(e), emoji:e}))
+    },
+    {
+      id:'food', name:'Еда', icon:'🍕',
+      stickers:['🍕','🍔','🍟','🌭','🍿','🧁','🍩','🍪','🎂','🍫','🍎','🍇','🍉','🍓','🍑']
+        .map((e,i)=>({id:'fd_'+i, url:emojiSvg(e,'#2a1f18'), emoji:e}))
+    },
+    {
+      id:'activity', name:'Активность', icon:'⚽',
+      stickers:['⚽','🏀','🎮','🎯','🎵','🎬','📱','💻','✈️','🚀','🚗','⚡️','🌟','💎','🏆']
+        .map((e,i)=>({id:'ac_'+i, url:emojiSvg(e,'#1a2a22'), emoji:e}))
+    },
+    {
+      id:'faces', name:'Лица', icon:'🥳',
+      stickers:['🥳','😱','😤','😴','🤩','😇','🤗','🤫','🤐','🤨','😐','😑','😶','🙄','😏']
+        .map((e,i)=>({id:'fc_'+i, url:emojiSvg(e), emoji:e}))
+    }
+  ];
+
+  function allPacks(){
+    const custom = getStickers();
+    const packs = BUILTIN.map(p=>({...p}));
+    if(custom.length){
+      packs.unshift({
+        id:'mine', name:'Мои', icon:'📎',
+        stickers: custom.map(s=>({id:s.id, url:s.url, emoji:s.emoji||''}))
+      });
+    }
+    return packs;
+  }
+
+  function sendSticker(url){
+    if(!url) return;
+    try{
+      if(!activePartner && !activeGroup){ toast('Откройте чат'); return; }
+    }catch(e){}
+    try{
+      if(typeof sendMessage==='function') sendMessage('sticker', url, '');
+    }catch(e){ toast('Не удалось отправить'); }
+    closePanel();
+  }
+
+  function closePanel(){
+    const p=document.getElementById('tg-stk-panel');
+    if(p){ p.classList.remove('show'); p.style.display='none'; }
+    document.querySelectorAll('#sl-stk-panel, .sl-stk-panel, #sticker-panel').forEach(el=>{
+      el.classList.remove('show'); el.style.display='none';
+    });
+  }
+
+  function openPanel(tab){
+    ensurePanel();
+    const p=document.getElementById('tg-stk-panel');
+    if(!p) return;
+    p.classList.add('show');
+    p.style.display='flex';
+    switchTab(tab||'stickers');
+  }
+
+  let activePackId = 'popular';
+  let activeTab = 'stickers';
+
+  function switchTab(tab){
+    activeTab = tab;
+    const p=document.getElementById('tg-stk-panel');
+    if(!p) return;
+    p.querySelectorAll('.tg-stk-tab').forEach(t=>{
+      t.classList.toggle('on', t.dataset.tab===tab);
+    });
+    renderBody();
+  }
+
+  function renderBody(){
+    const body=document.getElementById('tg-stk-body');
+    if(!body) return;
+    const q=(document.getElementById('tg-stk-search')?.value||'').trim().toLowerCase();
+
+    if(activeTab==='emoji'){
+      const emojis='😀😁😂🤣😃😄😅😆😉😊😋😎😍😘🥰😗😙😚🙂🤗🤩🤔🤨😐😑😶🙄😏😣😥😮🤐😯😪😫🥱😴😌😛😜😝🤤😒😓😔😕🙃🤑😲☹️🙁😖😞😟😤😢😭😦😧😨😩🤯😬😰😱🥵🥶😳🤪😵😡😠🤬😷🤒🤕🤢🤮🥴😇🥳🥺🤡🤠😈👿💀☠️👻👽🤖💩😺😸😹😻😼😽🙀😿😾👋🤚🖐✋🖖👌🤌🤏✌️🤞🤟🤘🤙👈👉👆🖕👇☝️👍👎✊👊🤛🤜👏🙌👐🤲🤝🙏✍️💅🤳💪🦾🦿🦵🦶👂🦻👃🧠🫀🫁🦷🦴👀👁👅👄💋'.split('');
+      body.innerHTML=`<div class="tg-stk-section"><div class="tg-stk-emoji-grid">${
+        emojis.filter(e=>!q||e.includes(q)).map(e=>`<button type="button" class="tg-emoji-cell" data-e="${e}">${e}</button>`).join('')
+      }</div></div>`;
+      body.querySelectorAll('.tg-emoji-cell').forEach(btn=>{
+        btn.onclick=()=>{
+          try{
+            const input=document.getElementById('message-input');
+            if(input){
+              input.value+=(btn.dataset.e||'');
+              input.dispatchEvent(new Event('input',{bubbles:true}));
+              document.getElementById('composer')?.classList.add('has-text');
+              document.getElementById('send-btn')?.classList.add('visible');
+            }
+          }catch(e){}
+        };
+      });
+      return;
+    }
+
+    if(activeTab==='gif'){
+      body.innerHTML=`<div class="tg-stk-empty">GIF скоро — пока отправьте стикер или эмодзи</div>`;
+      return;
+    }
+
+    // stickers tab
+    const packs=allPacks();
+    const favs=getFavs();
+    let html='';
+
+    // pack strip already separate
+
+    // favorites
+    if(favs.length && !q){
+      html+=`<div class="tg-stk-section"><div class="tg-stk-label">ИЗБРАННЫЕ СТИКЕРЫ</div><div class="tg-stk-grid">`;
+      favs.forEach(s=>{
+        html+=`<button type="button" class="tg-stk-cell" data-url="${s.url}"><img src="${s.url}" alt=""></button>`;
+      });
+      html+=`</div></div>`;
+    }
+
+    // active pack or search all
+    if(q){
+      html+=`<div class="tg-stk-section"><div class="tg-stk-label">ПОИСК</div><div class="tg-stk-grid">`;
+      packs.forEach(p=>{
+        p.stickers.forEach(s=>{
+          if((s.emoji||'').includes(q) || (p.name||'').toLowerCase().includes(q)){
+            html+=`<button type="button" class="tg-stk-cell" data-url="${s.url}"><img src="${s.url}" alt=""></button>`;
+          }
+        });
+      });
+      html+=`</div></div>`;
+    } else {
+      const pack = packs.find(p=>p.id===activePackId) || packs[0];
+      if(pack){
+        html+=`<div class="tg-stk-section"><div class="tg-stk-label">${escape(pack.name).toUpperCase()}</div><div class="tg-stk-grid">`;
+        pack.stickers.forEach(s=>{
+          html+=`<button type="button" class="tg-stk-cell" data-url="${s.url}" data-id="${s.id||''}"><img src="${s.url}" alt=""></button>`;
+        });
+        html+=`</div></div>`;
+      }
+      // popular section if not already on popular
+      if(pack && pack.id!=='popular'){
+        const pop=packs.find(p=>p.id==='popular');
+        if(pop){
+          html+=`<div class="tg-stk-section"><div class="tg-stk-label">ПОПУЛЯРНЫЕ СТИКЕРЫ</div><div class="tg-stk-grid">`;
+          pop.stickers.slice(0,12).forEach(s=>{
+            html+=`<button type="button" class="tg-stk-cell" data-url="${s.url}"><img src="${s.url}" alt=""></button>`;
+          });
+          html+=`</div></div>`;
+        }
+      }
+    }
+
+    body.innerHTML = html || `<div class="tg-stk-empty">Нет стикеров</div>`;
+
+    body.querySelectorAll('.tg-stk-cell').forEach(cell=>{
+      cell.onclick=()=>{
+        const url=cell.dataset.url;
+        sendSticker(url);
+        // add to favs lightly
+        try{
+          const favs=getFavs();
+          if(url && !favs.some(f=>f.url===url)){
+            favs.unshift({url, id:'f_'+Date.now()});
+            setFavs(favs);
+          }
+        }catch(e){}
+      };
+      // long-press favorite toggle
+      let t=null;
+      cell.addEventListener('pointerdown',()=>{
+        t=setTimeout(()=>{
+          const url=cell.dataset.url;
+          let favs=getFavs();
+          if(favs.some(f=>f.url===url)) favs=favs.filter(f=>f.url!==url);
+          else favs.unshift({url, id:'f_'+Date.now()});
+          setFavs(favs);
+          toast('Избранное обновлено');
+          renderBody();
+        },500);
+      });
+      cell.addEventListener('pointerup',()=>clearTimeout(t));
+      cell.addEventListener('pointerleave',()=>clearTimeout(t));
+    });
+
+    renderPackStrip();
+  }
+
+  function escape(s){
+    return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  function renderPackStrip(){
+    const strip=document.getElementById('tg-stk-packs');
+    if(!strip) return;
+    const packs=allPacks();
+    strip.innerHTML = packs.map(p=>`
+      <button type="button" class="tg-pack-ico ${p.id===activePackId?'on':''}" data-id="${p.id}" title="${escape(p.name)}">
+        <span class="tg-pack-emoji">${p.icon||'📦'}</span>
+      </button>
+    `).join('') + `
+      <button type="button" class="tg-pack-ico" id="tg-stk-add" title="Добавить">
+        <span class="tg-pack-emoji">➕</span>
+      </button>`;
+    strip.querySelectorAll('.tg-pack-ico[data-id]').forEach(b=>{
+      b.onclick=()=>{
+        activePackId=b.dataset.id;
+        renderBody();
+      };
+    });
+    const add=strip.querySelector('#tg-stk-add');
+    if(add) add.onclick=()=>{
+      try{ window.openStickerPackManager?.(); }catch(e){}
+      try{ window.slOpenStickerPackShop?.(); }catch(e){}
+    };
+  }
+
+  function ensurePanel(){
+    if(document.getElementById('tg-stk-panel')) return;
+    // hide old panels permanently
+    document.querySelectorAll('#sl-stk-panel, .sl-stk-panel, #sticker-panel').forEach(el=>{
+      el.style.display='none';
+      el.classList.remove('show');
+    });
+
+    const composer=document.getElementById('composer')||document.querySelector('.composer');
+    const panel=document.createElement('div');
+    panel.id='tg-stk-panel';
+    panel.className='tg-stk-panel';
+    panel.innerHTML=`
+      <div class="tg-stk-top">
+        <div class="tg-stk-packs" id="tg-stk-packs"></div>
+      </div>
+      <div class="tg-stk-search-row">
+        <div class="tg-stk-search-wrap">
+          <svg class="tg-stk-search-ico" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+          <input type="search" id="tg-stk-search" placeholder="Поиск" autocomplete="off">
+        </div>
+        <div class="tg-stk-reacts">
+          <button type="button" class="tg-react" data-e="❤️">❤️</button>
+          <button type="button" class="tg-react" data-e="👍">👍</button>
+          <button type="button" class="tg-react" data-e="👎">👎</button>
+          <button type="button" class="tg-react" data-e="🔥">🔥</button>
+          <button type="button" class="tg-react" data-e="🥰">🥰</button>
+          <button type="button" class="tg-react" data-e="👏">👏</button>
+          <button type="button" class="tg-react" data-e="😁">😁</button>
+          <button type="button" class="tg-react" data-e="🤔">🤔</button>
+          <button type="button" class="tg-react" data-e="😱">😱</button>
+        </div>
+      </div>
+      <div class="tg-stk-body" id="tg-stk-body"></div>
+      <div class="tg-stk-bottom">
+        <div class="tg-stk-tabs">
+          <button type="button" class="tg-stk-tab" data-tab="gif">GIF</button>
+          <button type="button" class="tg-stk-tab on" data-tab="stickers">Стикеры</button>
+          <button type="button" class="tg-stk-tab" data-tab="emoji">Эмодзи</button>
+        </div>
+        <button type="button" class="tg-stk-gear" id="tg-stk-gear" title="Настройки">⚙</button>
+        <button type="button" class="tg-stk-x" id="tg-stk-x" title="Закрыть">×</button>
+      </div>
+    `;
+    if(composer && composer.parentNode){
+      composer.parentNode.insertBefore(panel, composer);
+    } else document.body.appendChild(panel);
+
+    panel.querySelector('#tg-stk-x').onclick=(e)=>{ e.stopPropagation(); closePanel(); };
+    panel.querySelector('#tg-stk-gear').onclick=()=>{
+      try{ window.openStickerPackManager?.(); }catch(e){}
+    };
+    panel.querySelectorAll('.tg-stk-tab').forEach(t=>{
+      t.onclick=()=>switchTab(t.dataset.tab);
+    });
+    panel.querySelector('#tg-stk-search').oninput=()=>renderBody();
+    panel.querySelectorAll('.tg-react').forEach(b=>{
+      b.onclick=()=>{
+        try{
+          const input=document.getElementById('message-input');
+          if(input){
+            input.value+=(b.dataset.e||'');
+            input.dispatchEvent(new Event('input',{bubbles:true}));
+            document.getElementById('composer')?.classList.add('has-text');
+            document.getElementById('send-btn')?.classList.add('visible');
+          }
+        }catch(e){}
+      };
+    });
+
+    // click outside
+    document.addEventListener('pointerdown', (e)=>{
+      const p=document.getElementById('tg-stk-panel');
+      if(!p || !p.classList.contains('show')) return;
+      if(p.contains(e.target)) return;
+      if(e.target.closest('#sticker-btn, #sl-stk-btn')) return;
+      closePanel();
+    }, true);
+  }
+
+  // CSS
+  if(!document.getElementById('tg-stk-css')){
+    const st=document.createElement('style');
+    st.id='tg-stk-css';
+    st.textContent=`
+      .tg-stk-panel{
+        position:absolute; left:0; right:0; bottom:calc(58px + env(safe-area-inset-bottom,0px));
+        z-index:50; display:none; flex-direction:column;
+        height:min(52vh, 420px); max-height:52vh;
+        background:#1c1f2e; border-top:1px solid rgba(255,255,255,.08);
+        border-radius:16px 16px 0 0;
+        box-shadow:0 -12px 40px rgba(0,0,0,.45);
+        overflow:hidden;
+        font-family:inherit;
+      }
+      .tg-stk-panel.show{ display:flex !important; }
+      /* kill old panels */
+      #sl-stk-panel, .sl-stk-panel, #sticker-panel { display:none !important; }
+
+      .tg-stk-top{ flex-shrink:0; border-bottom:1px solid rgba(255,255,255,.06); }
+      .tg-stk-packs{
+        display:flex; gap:4px; padding:8px 10px; overflow-x:auto;
+        -webkit-overflow-scrolling:touch; scrollbar-width:none;
+      }
+      .tg-stk-packs::-webkit-scrollbar{display:none}
+      .tg-pack-ico{
+        width:40px; height:40px; border-radius:12px; border:none;
+        background:transparent; color:#fff; cursor:pointer;
+        display:flex; align-items:center; justify-content:center;
+        flex-shrink:0; transition:background .15s, transform .12s;
+      }
+      .tg-pack-ico.on{ background:rgba(255,255,255,.12); }
+      .tg-pack-ico:active{ transform:scale(.92); }
+      .tg-pack-emoji{ font-size:22px; line-height:1; }
+
+      .tg-stk-search-row{
+        display:flex; align-items:center; gap:6px;
+        padding:8px 10px; flex-shrink:0;
+      }
+      .tg-stk-search-wrap{
+        flex:1; min-width:0; position:relative; display:flex; align-items:center;
+      }
+      .tg-stk-search-ico{ position:absolute; left:10px; color:rgba(255,255,255,.4); pointer-events:none; }
+      #tg-stk-search{
+        width:100%; padding:8px 12px 8px 34px; border-radius:20px;
+        border:none; background:rgba(255,255,255,.08); color:#fff;
+        font-size:14px; outline:none;
+      }
+      #tg-stk-search::placeholder{ color:rgba(255,255,255,.35); }
+      .tg-stk-reacts{
+        display:flex; gap:2px; overflow-x:auto; max-width:48%;
+        scrollbar-width:none; flex-shrink:0;
+      }
+      .tg-stk-reacts::-webkit-scrollbar{display:none}
+      .tg-react{
+        width:30px; height:30px; border:none; background:transparent;
+        font-size:16px; cursor:pointer; border-radius:8px; flex-shrink:0;
+        display:flex; align-items:center; justify-content:center;
+      }
+      .tg-react:active{ background:rgba(255,255,255,.1); }
+
+      .tg-stk-body{
+        flex:1; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch;
+        padding:4px 0 8px;
+      }
+      .tg-stk-section{ padding:4px 0 10px; }
+      .tg-stk-label{
+        font-size:11px; font-weight:700; letter-spacing:.06em;
+        color:rgba(255,255,255,.4); padding:6px 14px 8px;
+        text-transform:uppercase;
+      }
+      .tg-stk-grid{
+        display:grid; grid-template-columns:repeat(auto-fill, minmax(72px, 1fr));
+        gap:4px; padding:0 8px;
+      }
+      .tg-stk-cell{
+        aspect-ratio:1; border:none; background:transparent; border-radius:14px;
+        cursor:pointer; padding:4px; display:flex; align-items:center; justify-content:center;
+        transition:background .12s, transform .12s;
+      }
+      .tg-stk-cell:active{ background:rgba(255,255,255,.08); transform:scale(.92); }
+      .tg-stk-cell img{ width:100%; height:100%; object-fit:contain; pointer-events:none; }
+
+      .tg-stk-emoji-grid{
+        display:grid; grid-template-columns:repeat(8, 1fr); gap:2px; padding:0 8px;
+      }
+      .tg-emoji-cell{
+        aspect-ratio:1; border:none; background:transparent; font-size:26px;
+        cursor:pointer; border-radius:10px; display:flex; align-items:center; justify-content:center;
+      }
+      .tg-emoji-cell:active{ background:rgba(255,255,255,.1); }
+
+      .tg-stk-empty{ padding:40px 20px; text-align:center; color:rgba(255,255,255,.4); font-size:14px; }
+
+      .tg-stk-bottom{
+        flex-shrink:0; display:flex; align-items:center; gap:6px;
+        padding:8px 10px calc(8px + env(safe-area-inset-bottom,0px));
+        border-top:1px solid rgba(255,255,255,.06); background:#161822;
+      }
+      .tg-stk-tabs{
+        flex:1; display:flex; background:rgba(255,255,255,.06);
+        border-radius:20px; padding:3px; gap:2px;
+      }
+      .tg-stk-tab{
+        flex:1; border:none; background:transparent; color:rgba(255,255,255,.45);
+        font-size:13px; font-weight:600; padding:8px 0; border-radius:18px; cursor:pointer;
+        transition:background .15s, color .15s;
+      }
+      .tg-stk-tab.on{
+        background:rgba(255,255,255,.14); color:#fff;
+      }
+      .tg-stk-gear, .tg-stk-x{
+        width:36px; height:36px; border-radius:50%; border:none;
+        background:rgba(255,255,255,.06); color:rgba(255,255,255,.7);
+        font-size:18px; cursor:pointer; display:flex; align-items:center; justify-content:center;
+        flex-shrink:0;
+      }
+      .tg-stk-x{ font-size:22px; }
+      .tg-stk-gear:active, .tg-stk-x:active{ background:rgba(255,255,255,.14); }
+
+      @media(max-width:380px){
+        .tg-stk-reacts{ display:none; }
+        .tg-stk-grid{ grid-template-columns:repeat(auto-fill, minmax(64px, 1fr)); }
+      }
+    `;
+    document.head.appendChild(st);
+  }
+
+  // Bind sticker button → this panel only
+  function bindBtn(){
+    const btn=document.getElementById('sticker-btn')||document.getElementById('sl-stk-btn');
+    if(!btn) return;
+    // replace listeners
+    if(btn.dataset.tgUi==='1') return;
+    btn.dataset.tgUi='1';
+    btn.addEventListener('click', (e)=>{
+      e.preventDefault();
+      e.stopPropagation();
+      const p=document.getElementById('tg-stk-panel');
+      if(p && p.classList.contains('show')) closePanel();
+      else openPanel('stickers');
+    }, true);
+  }
+
+  // Override old open helpers
+  window.slOpenStickerPanel = function(){ openPanel('stickers'); };
+  window.slCloseStickerPanel = closePanel;
+  window.slRenderStickerPanel = function(){ ensurePanel(); renderBody(); };
+
+  ensurePanel();
+  bindBtn();
+  setTimeout(bindBtn, 600);
+  setTimeout(bindBtn, 2000);
+  // keep closed
+  closePanel();
+
+  console.log('[SL] Telegram-style sticker panel ready');
+})();
+
+
+
 </script>
 </body>
 </html>
