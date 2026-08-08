@@ -1616,37 +1616,46 @@ body.chats-selecting .sw-clip .sel-check{display:flex}
 </head>
 <body>
 <script>
-/* Early theme — default DARK; one-time reset of stuck light */
+/* Early theme — default DARK; light if user chose light */
 (function(){
   try {
     var LS = localStorage;
-    // One-time migration: previous builds forced light into storage
     if (LS.getItem('sl_theme_ver') !== '3') {
       LS.setItem('sl_theme', 'dark');
       LS.setItem('sl_night_mode', '1');
       LS.setItem('sl_theme_ver', '3');
     }
     var t = LS.getItem('sl_theme');
-    var night = LS.getItem('sl_night_mode');
+    // theme key is source of truth
     var isLight = (t === 'light');
-    if (t === 'dark' || night === '1') isLight = false;
-    if (t == null && night == null) isLight = false; // default dark
-
+    if (t !== 'light' && t !== 'dark') {
+      isLight = (LS.getItem('sl_night_mode') === '0');
+    }
     if (isLight) {
+      LS.setItem('sl_theme', 'light');
+      LS.setItem('sl_night_mode', '0');
       document.documentElement.classList.add('light-theme', 'theme-light');
       document.documentElement.classList.remove('theme-dark');
+      var r = document.documentElement.style;
+      r.setProperty('--bg', '#F4F6F9');
+      r.setProperty('--panel', '#FFFFFF');
+      r.setProperty('--panel-hover', '#EEF1F5');
+      r.setProperty('--line', 'rgba(0,0,0,.08)');
+      r.setProperty('--text', '#1A1D21');
+      r.setProperty('--muted', '#6B7A90');
+      r.setProperty('--input-bg', '#F0F2F5');
+      r.setProperty('--bubble-them', '#FFFFFF');
       if (document.body) {
         document.body.classList.add('light-theme', 'theme-light');
         document.body.classList.remove('theme-dark', 'night-mode');
+        document.body.style.background = '#F4F6F9';
+        document.body.style.color = '#1A1D21';
       }
     } else {
+      LS.setItem('sl_theme', 'dark');
+      LS.setItem('sl_night_mode', '1');
       document.documentElement.classList.add('theme-dark');
       document.documentElement.classList.remove('light-theme', 'theme-light');
-      if (document.body) {
-        document.body.classList.add('theme-dark', 'night-mode');
-        document.body.classList.remove('light-theme', 'theme-light');
-      }
-      // nuclear vars immediately
       var r = document.documentElement.style;
       r.setProperty('--bg', '#0F1419');
       r.setProperty('--panel', '#1A222D');
@@ -1657,6 +1666,8 @@ body.chats-selecting .sw-clip .sel-check{display:flex}
       r.setProperty('--input-bg', '#151C27');
       r.setProperty('--bubble-them', '#243041');
       if (document.body) {
+        document.body.classList.add('theme-dark', 'night-mode');
+        document.body.classList.remove('light-theme', 'theme-light');
         document.body.style.background = '#0F1419';
         document.body.style.color = '#F4F7FB';
       }
@@ -7044,9 +7055,12 @@ function showInfoDialog(title, text){
 const WALLPAPER_KEY='sl_wallpaper', THEME_KEY='sl_theme';
 function applyTheme(){
   let t=storage.getItem(THEME_KEY);
-  // default = dark (original); light only if explicitly chosen
   if(!t){ t = 'dark'; }
   const isLight = t==='light';
+  try {
+    storage.setItem(THEME_KEY, t);
+    storage.setItem('sl_night_mode', isLight ? '0' : '1');
+  } catch(e){}
   document.body.classList.toggle('theme-light', isLight);
   document.body.classList.toggle('light-theme', isLight);
   document.body.classList.toggle('theme-dark', !isLight);
@@ -7054,7 +7068,31 @@ function applyTheme(){
   document.documentElement.classList.toggle('light-theme', isLight);
   document.documentElement.classList.toggle('theme-light', isLight);
   document.documentElement.classList.toggle('theme-dark', !isLight);
-  try { storage.setItem('sl_night_mode', isLight ? '0' : '1'); } catch(e){}
+  // nuclear CSS vars (inline) so nothing overrides
+  var root = document.documentElement;
+  if (isLight) {
+    root.style.setProperty('--bg', '#F4F6F9');
+    root.style.setProperty('--panel', '#FFFFFF');
+    root.style.setProperty('--panel-hover', '#EEF1F5');
+    root.style.setProperty('--line', 'rgba(0,0,0,.08)');
+    root.style.setProperty('--text', '#1A1D21');
+    root.style.setProperty('--muted', '#6B7A90');
+    root.style.setProperty('--input-bg', '#F0F2F5');
+    root.style.setProperty('--bubble-them', '#FFFFFF');
+    document.body.style.background = '#F4F6F9';
+    document.body.style.color = '#1A1D21';
+  } else {
+    root.style.setProperty('--bg', '#0F1419');
+    root.style.setProperty('--panel', '#1A222D');
+    root.style.setProperty('--panel-hover', '#243041');
+    root.style.setProperty('--line', 'rgba(255,255,255,.08)');
+    root.style.setProperty('--text', '#F4F7FB');
+    root.style.setProperty('--muted', '#8B9BB4');
+    root.style.setProperty('--input-bg', '#151C27');
+    root.style.setProperty('--bubble-them', '#243041');
+    document.body.style.background = '#0F1419';
+    document.body.style.color = '#F4F7FB';
+  }
 }
 if(window.matchMedia){
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', ()=>{ if(!storage.getItem(THEME_KEY)) applyTheme(); });
@@ -19643,6 +19681,30 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
       document.documentElement.classList.toggle('light-theme', !on);
       document.documentElement.classList.toggle('theme-light', !on);
       document.documentElement.classList.toggle('theme-dark', on);
+      var root = document.documentElement;
+      if (!on) {
+        root.style.setProperty('--bg', '#F4F6F9');
+        root.style.setProperty('--panel', '#FFFFFF');
+        root.style.setProperty('--panel-hover', '#EEF1F5');
+        root.style.setProperty('--line', 'rgba(0,0,0,.08)');
+        root.style.setProperty('--text', '#1A1D21');
+        root.style.setProperty('--muted', '#6B7A90');
+        root.style.setProperty('--input-bg', '#F0F2F5');
+        root.style.setProperty('--bubble-them', '#FFFFFF');
+        document.body.style.background = '#F4F6F9';
+        document.body.style.color = '#1A1D21';
+      } else {
+        root.style.setProperty('--bg', '#0F1419');
+        root.style.setProperty('--panel', '#1A222D');
+        root.style.setProperty('--panel-hover', '#243041');
+        root.style.setProperty('--line', 'rgba(255,255,255,.08)');
+        root.style.setProperty('--text', '#F4F7FB');
+        root.style.setProperty('--muted', '#8B9BB4');
+        root.style.setProperty('--input-bg', '#151C27');
+        root.style.setProperty('--bubble-them', '#243041');
+        document.body.style.background = '#0F1419';
+        document.body.style.color = '#F4F7FB';
+      }
       toast(on?'Ночной режим':'Дневной режим');
     };
     ov.querySelector('#ap-chat-themes').onclick=()=>toast('Выберите карточку темы выше');
@@ -25619,13 +25681,17 @@ body.theme-dark #tg-attach-sheet, body.theme-dark #tg-voice-bar {
 
   function apply() {
     try {
+      // Prefer explicit sl_theme; keep keys in sync
       var t = localStorage.getItem('sl_theme');
       var night = localStorage.getItem('sl_night_mode');
-      var isLight = false; // default DARK
-      if (t === 'light') isLight = true;
-      if (t === 'dark' || night === '1') isLight = false;
-      if (night === '0' && t !== 'dark') isLight = true;
-      if (t == null && night == null) isLight = false;
+      if (t !== 'light' && t !== 'dark') {
+        // no explicit theme → dark default
+        t = (night === '0') ? 'light' : 'dark';
+      }
+      // theme key wins; sync night to match
+      var isLight = (t === 'light');
+      localStorage.setItem('sl_theme', isLight ? 'light' : 'dark');
+      localStorage.setItem('sl_night_mode', isLight ? '0' : '1');
 
       document.body.classList.toggle('light-theme', isLight);
       document.body.classList.toggle('theme-light', isLight);
