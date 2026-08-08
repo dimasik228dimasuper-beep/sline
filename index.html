@@ -6904,17 +6904,9 @@ function renderPollUI(row,msg){
 
 // ---------- ATTACH (photo/file/poll) ----------
 document.getElementById('attach-btn').onclick=()=>{
+  if(typeof window.slOpenAttachMenu==='function') return window.slOpenAttachMenu();
   if(!activePartner&&!activeGroup) return;
-  const ov=document.createElement('div'); ov.className='modal-overlay';
-  ov.innerHTML=`<div class="modal"><button class="close-x" id="at-close">×</button>
-    <div class="settings-item" id="at-photo" style="padding-left:0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg><span class="item-text">Фото / видео</span></div>
-    <div class="settings-item" id="at-file" style="padding-left:0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg><span class="item-text">Файл</span></div>
-    <div class="settings-item" id="at-poll" style="padding-left:0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg><span class="item-text">Опрос</span></div></div>`;
-  document.body.appendChild(ov);
-  ov.querySelector('#at-close').onclick=()=>ov.remove();
-  ov.querySelector('#at-photo').onclick=()=>{ ov.remove(); document.getElementById('photo-input').click(); };
-  ov.querySelector('#at-file').onclick=()=>{ ov.remove(); document.getElementById('file-input').click(); };
-  ov.querySelector('#at-poll').onclick=()=>{ ov.remove(); openPollCreator(); };
+  try{ document.getElementById('photo-input')?.click(); }catch(e){}
 };
 
 // ---------- Post-process every rendered message (checkmarks, formatting, poll/gift, reactions) ----------
@@ -23565,6 +23557,285 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
   window.slOpenStickerPackShop = function(){ window.slOpenStickerPanel(); };
 
   console.log('[SL] forced Telegram sticker panel, old modal killed');
+})();
+
+
+
+
+/* ===== SL: Telegram attach menu (скрепка) — all free ===== */
+(function(){
+  'use strict';
+  if(window._slAttachMenuTg) return;
+  window._slAttachMenuTg = 1;
+
+  function toast(m){ try{ showToast(m); }catch(e){ console.log(m); } }
+
+  function closeMenu(){
+    document.getElementById('tg-attach-sheet')?.remove();
+    document.getElementById('tg-attach-backdrop')?.remove();
+  }
+
+  function openGallery(){
+    closeMenu();
+    const inp = document.getElementById('photo-input') || document.querySelector('input[type=file][accept*="image"]');
+    if(inp){ inp.accept='image/*,video/*'; inp.click(); }
+    else toast('Галерея недоступна');
+  }
+  function openFile(){
+    closeMenu();
+    const inp = document.getElementById('file-input');
+    if(inp){ inp.accept='*/*'; inp.click(); }
+    else toast('Файлы недоступны');
+  }
+  function openAudio(){
+    closeMenu();
+    const inp = document.getElementById('file-input');
+    if(inp){ inp.accept='audio/*,.mp3,.m4a,.ogg,.wav,.aac'; inp.click(); }
+    else toast('Звук недоступен');
+  }
+  function openLocation(){
+    closeMenu();
+    if(!navigator.geolocation){ toast('Геолокация недоступна'); return; }
+    toast('Определение геопозиции…');
+    navigator.geolocation.getCurrentPosition(async pos=>{
+      const {latitude:lat, longitude:lng} = pos.coords;
+      const text = `📍 ${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+      try{
+        if(typeof sendMessage==='function') sendMessage('text', text, '');
+        else toast(text);
+      }catch(e){ toast(text); }
+    }, ()=>toast('Не удалось определить местоположение'), {enableHighAccuracy:true, timeout:10000});
+  }
+  function openPoll(){
+    closeMenu();
+    try{ if(typeof openPollCreator==='function') openPollCreator(); else toast('Опросы скоро'); }catch(e){ toast('Опросы скоро'); }
+  }
+  function openContact(){
+    closeMenu();
+    // simple contact picker from known contacts
+    try{
+      const list = (typeof contacts!=='undefined' && Array.isArray(contacts)) ? contacts : [];
+      if(!list.length){ toast('Нет контактов'); return; }
+      const ov=document.createElement('div');
+      ov.id='tg-contact-pick';
+      ov.style.cssText='position:fixed;inset:0;z-index:300;background:rgba(0,0,0,.55);display:flex;align-items:flex-end;';
+      const sheet=document.createElement('div');
+      sheet.style.cssText='background:#1c1f2e;border-radius:16px 16px 0 0;max-height:70vh;width:100%;overflow:auto;padding:12px 0 24px;';
+      sheet.innerHTML=`<div style="text-align:center;padding:8px 0 12px;font-weight:600;color:#fff">Контакты</div>`+
+        list.slice(0,40).map(c=>{
+          const name=(c.display_name||c.username||c.id||'?');
+          return `<button type="button" data-id="${c.id}" style="display:flex;align-items:center;gap:12px;width:100%;border:none;background:transparent;color:#fff;padding:12px 16px;text-align:left;font-size:15px;cursor:pointer">
+            <span style="width:40px;height:40px;border-radius:50%;background:#3A7AFE;display:flex;align-items:center;justify-content:center;font-weight:700">${(name[0]||'?').toUpperCase()}</span>
+            <span>${name}</span>
+          </button>`;
+        }).join('');
+      ov.appendChild(sheet);
+      document.body.appendChild(ov);
+      ov.onclick=e=>{ if(e.target===ov) ov.remove(); };
+      sheet.querySelectorAll('button[data-id]').forEach(b=>{
+        b.onclick=()=>{
+          const c=list.find(x=>String(x.id)===b.dataset.id);
+          ov.remove();
+          if(!c) return;
+          const text=`👤 ${c.display_name||c.username||''}\n@${c.username||c.id}`;
+          try{ if(typeof sendMessage==='function') sendMessage('text', text, ''); }catch(e){}
+        };
+      });
+    }catch(e){ toast('Контакты недоступны'); }
+  }
+  function openArticle(){
+    closeMenu();
+    const text = prompt('Текст статьи / сообщения:');
+    if(text && text.trim()){
+      try{ if(typeof sendMessage==='function') sendMessage('text', text.trim(), ''); }catch(e){}
+    }
+  }
+  function openGift(){
+    closeMenu();
+    // free gift picker (no premium)
+    const gifts=['🎁','🌹','🎂','🧸','💝','💐','⭐','💎','🎉','🦄'];
+    const ov=document.createElement('div');
+    ov.style.cssText='position:fixed;inset:0;z-index:300;background:rgba(0,0,0,.55);display:flex;align-items:flex-end;';
+    const sheet=document.createElement('div');
+    sheet.style.cssText='background:#1c1f2e;border-radius:16px 16px 0 0;width:100%;padding:16px 16px 28px;';
+    sheet.innerHTML=`<div style="text-align:center;font-weight:600;color:#fff;margin-bottom:14px">Подарок</div>
+      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px">
+        ${gifts.map(g=>`<button type="button" data-g="${g}" style="aspect-ratio:1;border:none;border-radius:14px;background:rgba(255,255,255,.08);font-size:28px;cursor:pointer">${g}</button>`).join('')}
+      </div>`;
+    ov.appendChild(sheet);
+    document.body.appendChild(ov);
+    ov.onclick=e=>{ if(e.target===ov) ov.remove(); };
+    sheet.querySelectorAll('button[data-g]').forEach(b=>{
+      b.onclick=()=>{
+        ov.remove();
+        try{ if(typeof sendMessage==='function') sendMessage('text', b.dataset.g+' Подарок!', ''); }catch(e){}
+      };
+    });
+  }
+  function openWallet(){
+    closeMenu();
+    toast('Кошелёк — скоро (бесплатно)');
+  }
+  function openChecklist(){
+    closeMenu();
+    // free checklist
+    const title = prompt('Название списка задач:') || 'Список задач';
+    const items=[];
+    for(let i=0;i<5;i++){
+      const t=prompt(`Задача ${i+1} (пусто = готово):`);
+      if(!t) break;
+      items.push(t);
+    }
+    if(!items.length) return;
+    const body = `✅ ${title}\n`+items.map((t,i)=>`${i+1}. ☐ ${t}`).join('\n');
+    try{ if(typeof sendMessage==='function') sendMessage('text', body, ''); }catch(e){}
+  }
+
+  function openAttachMenu(){
+    try{ if(!activePartner && !activeGroup){ toast('Откройте чат'); return; } }catch(e){}
+    closeMenu();
+
+    if(!document.getElementById('tg-attach-css')){
+      const st=document.createElement('style');
+      st.id='tg-attach-css';
+      st.textContent=`
+        #tg-attach-backdrop{
+          position:fixed; inset:0; z-index:280;
+          background:rgba(0,0,0,.45);
+        }
+        #tg-attach-sheet{
+          position:fixed; left:0; right:0; bottom:0; z-index:281;
+          background:#1c1f2e;
+          border-radius:16px 16px 0 0;
+          padding:10px 0 calc(12px + env(safe-area-inset-bottom,0px));
+          box-shadow:0 -8px 32px rgba(0,0,0,.45);
+          animation:tgAttachUp .22s ease;
+        }
+        @keyframes tgAttachUp{ from{ transform:translateY(100%); opacity:.6 } to{ transform:none; opacity:1 } }
+        .tg-att-scroll{
+          display:flex; gap:4px; overflow-x:auto; padding:8px 12px 4px;
+          scrollbar-width:none; -webkit-overflow-scrolling:touch;
+        }
+        .tg-att-scroll::-webkit-scrollbar{ display:none }
+        .tg-att-item{
+          flex:0 0 auto; width:72px;
+          display:flex; flex-direction:column; align-items:center; gap:6px;
+          border:none; background:transparent; color:rgba(255,255,255,.9);
+          cursor:pointer; padding:6px 4px; font-size:11px;
+        }
+        .tg-att-ico{
+          width:52px; height:52px; border-radius:50%;
+          display:flex; align-items:center; justify-content:center;
+          background:rgba(255,255,255,.1);
+        }
+        .tg-att-ico svg{ width:24px; height:24px; }
+        .tg-att-item:active .tg-att-ico{ transform:scale(.92); background:rgba(255,255,255,.16); }
+        .tg-att-ico.blue{ background:#3A7AFE; }
+        .tg-att-ico.purple{ background:#8B5CF6; }
+        .tg-att-ico.pink{ background:#EC4899; }
+        .tg-att-ico.green{ background:#10B981; }
+        .tg-att-ico.orange{ background:#F59E0B; }
+        .tg-att-ico.cyan{ background:#06B6D4; }
+        .tg-att-ico.red{ background:#EF4444; }
+        .tg-att-ico.indigo{ background:#6366F1; }
+        .tg-att-label{ text-align:center; line-height:1.2; max-width:72px; }
+        .tg-att-handle{
+          width:36px; height:4px; border-radius:2px;
+          background:rgba(255,255,255,.2); margin:0 auto 6px;
+        }
+      `;
+      document.head.appendChild(st);
+    }
+
+    const bd=document.createElement('div');
+    bd.id='tg-attach-backdrop';
+    bd.onclick=closeMenu;
+
+    const sheet=document.createElement('div');
+    sheet.id='tg-attach-sheet';
+    sheet.innerHTML=`
+      <div class="tg-att-handle"></div>
+      <div class="tg-att-scroll">
+        <button type="button" class="tg-att-item" data-a="gallery">
+          <span class="tg-att-ico blue"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg></span>
+          <span class="tg-att-label">Галерея</span>
+        </button>
+        <button type="button" class="tg-att-item" data-a="article">
+          <span class="tg-att-ico purple"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg></span>
+          <span class="tg-att-label">Статья</span>
+        </button>
+        <button type="button" class="tg-att-item" data-a="gift">
+          <span class="tg-att-ico pink"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><rect x="3" y="8" width="18" height="13" rx="2"/><path d="M12 8v13M3 12h18M12 8c-2-3-6-3-6 0 0 2 3 3 6 4 3-1 6-2 6-4 0-3-4-3-6 0z"/></svg></span>
+          <span class="tg-att-label">Подарок</span>
+        </button>
+        <button type="button" class="tg-att-item" data-a="wallet">
+          <span class="tg-att-ico green"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><rect x="2" y="6" width="20" height="14" rx="2"/><path d="M2 10h20M16 14h2"/></svg></span>
+          <span class="tg-att-label">Кошелёк</span>
+        </button>
+        <button type="button" class="tg-att-item" data-a="file">
+          <span class="tg-att-ico indigo"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg></span>
+          <span class="tg-att-label">Файл</span>
+        </button>
+        <button type="button" class="tg-att-item" data-a="location">
+          <span class="tg-att-ico red"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg></span>
+          <span class="tg-att-label">Геопозиция</span>
+        </button>
+        <button type="button" class="tg-att-item" data-a="poll">
+          <span class="tg-att-ico orange"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg></span>
+          <span class="tg-att-label">Опрос</span>
+        </button>
+        <button type="button" class="tg-att-item" data-a="checklist">
+          <span class="tg-att-ico cyan"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg></span>
+          <span class="tg-att-label">Список</span>
+        </button>
+        <button type="button" class="tg-att-item" data-a="audio">
+          <span class="tg-att-ico blue"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><circle cx="12" cy="12" r="9"/><polygon points="10 8 16 12 10 16 10 8" fill="#fff" stroke="none"/></svg></span>
+          <span class="tg-att-label">Звук</span>
+        </button>
+        <button type="button" class="tg-att-item" data-a="contact">
+          <span class="tg-att-ico purple"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
+          <span class="tg-att-label">Контакт</span>
+        </button>
+      </div>`;
+
+    document.body.appendChild(bd);
+    document.body.appendChild(sheet);
+
+    const map = {
+      gallery: openGallery,
+      article: openArticle,
+      gift: openGift,
+      wallet: openWallet,
+      file: openFile,
+      location: openLocation,
+      poll: openPoll,
+      checklist: openChecklist,
+      audio: openAudio,
+      contact: openContact
+    };
+    sheet.querySelectorAll('[data-a]').forEach(btn=>{
+      btn.onclick = (e)=>{ e.stopPropagation(); (map[btn.dataset.a]||closeMenu)(); };
+    });
+  }
+
+  window.slOpenAttachMenu = openAttachMenu;
+
+  function bindAttach(){
+    const btn = document.getElementById('attach-btn');
+    if(!btn || btn.dataset.tgAtt==='1') return;
+    btn.dataset.tgAtt = '1';
+    btn.addEventListener('click', function(e){
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      openAttachMenu();
+    }, true);
+  }
+  bindAttach();
+  setTimeout(bindAttach, 500);
+  setTimeout(bindAttach, 2000);
+
+  console.log('[SL] Telegram attach menu ready (all free)');
 })();
 
 
