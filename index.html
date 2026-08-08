@@ -1626,50 +1626,45 @@ body.chats-selecting .sw-clip .sel-check{display:flex}
       LS.setItem('sl_theme_ver', '3');
     }
     var t = LS.getItem('sl_theme');
-    // theme key is source of truth
     var isLight = (t === 'light');
     if (t !== 'light' && t !== 'dark') {
       isLight = (LS.getItem('sl_night_mode') === '0');
+      LS.setItem('sl_theme', isLight ? 'light' : 'dark');
     }
+    LS.setItem('sl_night_mode', isLight ? '0' : '1');
+    var html = document.documentElement;
+    html.classList.remove('light-theme','theme-light','theme-dark','night-mode');
     if (isLight) {
-      LS.setItem('sl_theme', 'light');
-      LS.setItem('sl_night_mode', '0');
-      document.documentElement.classList.add('light-theme', 'theme-light');
-      document.documentElement.classList.remove('theme-dark');
-      var r = document.documentElement.style;
-      r.setProperty('--bg', '#F4F6F9');
-      r.setProperty('--panel', '#FFFFFF');
-      r.setProperty('--panel-hover', '#EEF1F5');
-      r.setProperty('--line', 'rgba(0,0,0,.08)');
-      r.setProperty('--text', '#1A1D21');
-      r.setProperty('--muted', '#6B7A90');
-      r.setProperty('--input-bg', '#F0F2F5');
-      r.setProperty('--bubble-them', '#FFFFFF');
+      html.classList.add('light-theme','theme-light');
+      html.style.setProperty('--bg','#F4F6F9');
+      html.style.setProperty('--panel','#FFFFFF');
+      html.style.setProperty('--panel-hover','#EEF1F5');
+      html.style.setProperty('--line','rgba(0,0,0,.08)');
+      html.style.setProperty('--text','#1A1D21');
+      html.style.setProperty('--muted','#6B7A90');
+      html.style.setProperty('--input-bg','#F0F2F5');
+      html.style.setProperty('--bubble-them','#FFFFFF');
       if (document.body) {
-        document.body.classList.add('light-theme', 'theme-light');
-        document.body.classList.remove('theme-dark', 'night-mode');
-        document.body.style.background = '#F4F6F9';
-        document.body.style.color = '#1A1D21';
+        document.body.classList.remove('light-theme','theme-light','theme-dark','night-mode');
+        document.body.classList.add('light-theme','theme-light');
+        document.body.style.background='#F4F6F9';
+        document.body.style.color='#1A1D21';
       }
     } else {
-      LS.setItem('sl_theme', 'dark');
-      LS.setItem('sl_night_mode', '1');
-      document.documentElement.classList.add('theme-dark');
-      document.documentElement.classList.remove('light-theme', 'theme-light');
-      var r = document.documentElement.style;
-      r.setProperty('--bg', '#0F1419');
-      r.setProperty('--panel', '#1A222D');
-      r.setProperty('--panel-hover', '#243041');
-      r.setProperty('--line', 'rgba(255,255,255,.08)');
-      r.setProperty('--text', '#F4F7FB');
-      r.setProperty('--muted', '#8B9BB4');
-      r.setProperty('--input-bg', '#151C27');
-      r.setProperty('--bubble-them', '#243041');
+      html.classList.add('theme-dark');
+      html.style.setProperty('--bg','#0F1419');
+      html.style.setProperty('--panel','#1A222D');
+      html.style.setProperty('--panel-hover','#243041');
+      html.style.setProperty('--line','rgba(255,255,255,.08)');
+      html.style.setProperty('--text','#F4F7FB');
+      html.style.setProperty('--muted','#8B9BB4');
+      html.style.setProperty('--input-bg','#151C27');
+      html.style.setProperty('--bubble-them','#243041');
       if (document.body) {
-        document.body.classList.add('theme-dark', 'night-mode');
-        document.body.classList.remove('light-theme', 'theme-light');
-        document.body.style.background = '#0F1419';
-        document.body.style.color = '#F4F7FB';
+        document.body.classList.remove('light-theme','theme-light','theme-dark','night-mode');
+        document.body.classList.add('theme-dark','night-mode');
+        document.body.style.background='#0F1419';
+        document.body.style.color='#F4F7FB';
       }
     }
     window.__slIsLight = isLight;
@@ -7058,18 +7053,26 @@ function applyTheme(){
   if(!t){ t = 'dark'; }
   const isLight = t==='light';
   try {
-    storage.setItem(THEME_KEY, t);
+    storage.setItem(THEME_KEY, isLight ? 'light' : 'dark');
     storage.setItem('sl_night_mode', isLight ? '0' : '1');
   } catch(e){}
-  document.body.classList.toggle('theme-light', isLight);
-  document.body.classList.toggle('light-theme', isLight);
-  document.body.classList.toggle('theme-dark', !isLight);
-  document.body.classList.toggle('night-mode', !isLight);
-  document.documentElement.classList.toggle('light-theme', isLight);
-  document.documentElement.classList.toggle('theme-light', isLight);
-  document.documentElement.classList.toggle('theme-dark', !isLight);
-  // nuclear CSS vars (inline) so nothing overrides
-  var root = document.documentElement;
+
+  var body = document.body;
+  var html = document.documentElement;
+
+  // REMOVE first, then ADD (toggle can leave both)
+  body.classList.remove('light-theme','theme-light','theme-dark','night-mode');
+  html.classList.remove('light-theme','theme-light','theme-dark','night-mode');
+
+  if (isLight) {
+    body.classList.add('light-theme','theme-light');
+    html.classList.add('light-theme','theme-light');
+  } else {
+    body.classList.add('theme-dark','night-mode');
+    html.classList.add('theme-dark');
+  }
+
+  var root = html;
   if (isLight) {
     root.style.setProperty('--bg', '#F4F6F9');
     root.style.setProperty('--panel', '#FFFFFF');
@@ -7079,8 +7082,9 @@ function applyTheme(){
     root.style.setProperty('--muted', '#6B7A90');
     root.style.setProperty('--input-bg', '#F0F2F5');
     root.style.setProperty('--bubble-them', '#FFFFFF');
-    document.body.style.background = '#F4F6F9';
-    document.body.style.color = '#1A1D21';
+    root.style.setProperty('--bubble-me', 'linear-gradient(135deg,#4C7CF3 0%,#6D5DF6 100%)');
+    body.style.background = '#F4F6F9';
+    body.style.color = '#1A1D21';
   } else {
     root.style.setProperty('--bg', '#0F1419');
     root.style.setProperty('--panel', '#1A222D');
@@ -7090,10 +7094,29 @@ function applyTheme(){
     root.style.setProperty('--muted', '#8B9BB4');
     root.style.setProperty('--input-bg', '#151C27');
     root.style.setProperty('--bubble-them', '#243041');
-    document.body.style.background = '#0F1419';
-    document.body.style.color = '#F4F7FB';
+    root.style.setProperty('--bubble-me', 'linear-gradient(135deg,#5B8CFF 0%,#6B7BFF 100%)');
+    body.style.background = '#0F1419';
+    body.style.color = '#F4F7FB';
   }
+
+  // Force-repaint key panels
+  try {
+    var sel = ['.bottom-tabs','.sidebar','.auth-card','#auth-screen','#app-screen','.settings-page','.composer','.messages','.contact','.tg-stk-panel','.tg-stk-bottom','#tg-attach-sheet','#tg-voice-bar'];
+    sel.forEach(function(s){
+      document.querySelectorAll(s).forEach(function(el){
+        if (isLight) {
+          el.style.background = (s==='#auth-screen'||s==='#app-screen'||s==='.messages'||s==='.settings-page') ? '#F4F6F9' : '#FFFFFF';
+          el.style.color = '#1A1D21';
+        } else {
+          el.style.background = (s==='#auth-screen'||s==='#app-screen'||s==='.messages') ? '#0F1419' : '#1A222D';
+          el.style.color = '#F4F7FB';
+        }
+      });
+    });
+  } catch(e){}
 }
+
+window.applyTheme = applyTheme;
 if(window.matchMedia){
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', ()=>{ if(!storage.getItem(THEME_KEY)) applyTheme(); });
 }
@@ -19674,36 +19697,22 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
       const on=this.classList.contains('on');
       LS.setItem('sl_night_mode', on?'1':'0');
       LS.setItem('sl_theme', on?'dark':'light');
-      document.body.classList.toggle('light-theme', !on);
-      document.body.classList.toggle('theme-light', !on);
-      document.body.classList.toggle('theme-dark', on);
-      document.body.classList.toggle('night-mode', on);
-      document.documentElement.classList.toggle('light-theme', !on);
-      document.documentElement.classList.toggle('theme-light', !on);
-      document.documentElement.classList.toggle('theme-dark', on);
-      var root = document.documentElement;
-      if (!on) {
-        root.style.setProperty('--bg', '#F4F6F9');
-        root.style.setProperty('--panel', '#FFFFFF');
-        root.style.setProperty('--panel-hover', '#EEF1F5');
-        root.style.setProperty('--line', 'rgba(0,0,0,.08)');
-        root.style.setProperty('--text', '#1A1D21');
-        root.style.setProperty('--muted', '#6B7A90');
-        root.style.setProperty('--input-bg', '#F0F2F5');
-        root.style.setProperty('--bubble-them', '#FFFFFF');
-        document.body.style.background = '#F4F6F9';
-        document.body.style.color = '#1A1D21';
+      if (typeof applyTheme === 'function') {
+        try { applyTheme(); } catch(e) {}
       } else {
-        root.style.setProperty('--bg', '#0F1419');
-        root.style.setProperty('--panel', '#1A222D');
-        root.style.setProperty('--panel-hover', '#243041');
-        root.style.setProperty('--line', 'rgba(255,255,255,.08)');
-        root.style.setProperty('--text', '#F4F7FB');
-        root.style.setProperty('--muted', '#8B9BB4');
-        root.style.setProperty('--input-bg', '#151C27');
-        root.style.setProperty('--bubble-them', '#243041');
-        document.body.style.background = '#0F1419';
-        document.body.style.color = '#F4F7FB';
+        document.body.classList.remove('light-theme','theme-light','theme-dark','night-mode');
+        document.documentElement.classList.remove('light-theme','theme-light','theme-dark');
+        if (on) {
+          document.body.classList.add('theme-dark','night-mode');
+          document.documentElement.classList.add('theme-dark');
+          document.body.style.background='#0F1419';
+          document.body.style.color='#F4F7FB';
+        } else {
+          document.body.classList.add('light-theme','theme-light');
+          document.documentElement.classList.add('light-theme','theme-light');
+          document.body.style.background='#F4F6F9';
+          document.body.style.color='#1A1D21';
+        }
       }
       toast(on?'Ночной режим':'Дневной режим');
     };
@@ -25681,49 +25690,37 @@ body.theme-dark #tg-attach-sheet, body.theme-dark #tg-voice-bar {
 
   function apply() {
     try {
-      // Prefer explicit sl_theme; keep keys in sync
       var t = localStorage.getItem('sl_theme');
-      var night = localStorage.getItem('sl_night_mode');
       if (t !== 'light' && t !== 'dark') {
-        // no explicit theme → dark default
-        t = (night === '0') ? 'light' : 'dark';
+        t = (localStorage.getItem('sl_night_mode') === '0') ? 'light' : 'dark';
+        localStorage.setItem('sl_theme', t);
       }
-      // theme key wins; sync night to match
+      localStorage.setItem('sl_night_mode', t === 'light' ? '0' : '1');
+      if (typeof applyTheme === 'function') {
+        try { applyTheme(); return; } catch(e) {}
+      }
+      // fallback if applyTheme not yet defined
       var isLight = (t === 'light');
-      localStorage.setItem('sl_theme', isLight ? 'light' : 'dark');
-      localStorage.setItem('sl_night_mode', isLight ? '0' : '1');
-
-      document.body.classList.toggle('light-theme', isLight);
-      document.body.classList.toggle('theme-light', isLight);
-      document.body.classList.toggle('theme-dark', !isLight);
-      document.body.classList.toggle('night-mode', !isLight);
-      document.documentElement.classList.toggle('light-theme', isLight);
-      document.documentElement.classList.toggle('theme-light', isLight);
-      document.documentElement.classList.toggle('theme-dark', !isLight);
-
-      var root = document.documentElement;
+      var body = document.body, html = document.documentElement;
+      if (!body) return;
+      body.classList.remove('light-theme','theme-light','theme-dark','night-mode');
+      html.classList.remove('light-theme','theme-light','theme-dark','night-mode');
       if (isLight) {
-        root.style.setProperty('--bg', '#F4F6F9');
-        root.style.setProperty('--panel', '#FFFFFF');
-        root.style.setProperty('--panel-hover', '#EEF1F5');
-        root.style.setProperty('--line', 'rgba(0,0,0,.08)');
-        root.style.setProperty('--text', '#1A1D21');
-        root.style.setProperty('--muted', '#6B7A90');
-        root.style.setProperty('--input-bg', '#F0F2F5');
-        root.style.setProperty('--bubble-them', '#FFFFFF');
-        document.body.style.background = '#F4F6F9';
-        document.body.style.color = '#1A1D21';
+        body.classList.add('light-theme','theme-light');
+        html.classList.add('light-theme','theme-light');
+        html.style.setProperty('--bg','#F4F6F9');
+        html.style.setProperty('--panel','#FFFFFF');
+        html.style.setProperty('--text','#1A1D21');
+        body.style.background='#F4F6F9';
+        body.style.color='#1A1D21';
       } else {
-        root.style.setProperty('--bg', '#0F1419');
-        root.style.setProperty('--panel', '#1A222D');
-        root.style.setProperty('--panel-hover', '#243041');
-        root.style.setProperty('--line', 'rgba(255,255,255,.08)');
-        root.style.setProperty('--text', '#F4F7FB');
-        root.style.setProperty('--muted', '#8B9BB4');
-        root.style.setProperty('--input-bg', '#151C27');
-        root.style.setProperty('--bubble-them', '#243041');
-        document.body.style.background = '#0F1419';
-        document.body.style.color = '#F4F7FB';
+        body.classList.add('theme-dark','night-mode');
+        html.classList.add('theme-dark');
+        html.style.setProperty('--bg','#0F1419');
+        html.style.setProperty('--panel','#1A222D');
+        html.style.setProperty('--text','#F4F7FB');
+        body.style.background='#0F1419';
+        body.style.color='#F4F7FB';
       }
     } catch (e) {}
   }
