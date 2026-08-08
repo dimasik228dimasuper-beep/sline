@@ -17,9 +17,14 @@
 <title>SLine</title>
 <style>
 :root {
-  --bg:#0B1120; --panel:#131B2E; --panel-hover:#1A2440; --line:#212C46; --text:#E7ECF5; --muted:#7C8AA5;
-  --accent-a:#4C7CF3; --accent-b:#6D5DF6; --mint:#2DD4BF; --danger:#F0708A;
-  --safe-bottom:env(safe-area-inset-bottom,0px); --safe-top:env(safe-area-inset-top,0px); --input-bg:#0E1626;
+  --bg:#0F1419; --panel:#1A222D; --panel-hover:#243041; --line:rgba(255,255,255,.08); --text:#F4F7FB; --muted:#8B9BB4;
+  --accent-a:#5B8CFF; --accent-b:#7B6CFF; --mint:#3EE0C6; --danger:#FF6B81;
+  --safe-bottom:env(safe-area-inset-bottom,0px); --safe-top:env(safe-area-inset-top,0px); --input-bg:#151C27;
+  --bubble-me:linear-gradient(135deg,#5B8CFF 0%,#6B7BFF 100%);
+  --bubble-them:#243041;
+  --radius:16px; --radius-sm:12px; --radius-lg:22px;
+  --shadow-sm:0 2px 8px rgba(0,0,0,.18); --shadow-md:0 8px 28px rgba(0,0,0,.28);
+  --spring:cubic-bezier(.22,1,.36,1);
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;user-select:none!important;-webkit-user-select:none!important}
 html,body{
@@ -1644,6 +1649,376 @@ html.sl-booting::before{
 body.sl-ready html.sl-booting::before,
 html.sl-ready.sl-booting::before{display:none}
 html.sl-ready.sl-booting::before{display:none!important}
+
+
+/* ===== SL Modern UI 2026 — light feel, fluid animations ===== */
+:root {
+  --bg:#0F1419 !important;
+  --panel:#1A222D !important;
+  --panel-hover:#243041 !important;
+  --line:rgba(255,255,255,.08) !important;
+  --text:#F4F7FB !important;
+  --muted:#8B9BB4 !important;
+  --accent-a:#5B8CFF !important;
+  --accent-b:#7B6CFF !important;
+  --mint:#3EE0C6 !important;
+  --danger:#FF6B81 !important;
+  --input-bg:#151C27 !important;
+}
+
+body.theme-light {
+  --bg:#F2F4F8 !important;
+  --panel:#FFFFFF !important;
+  --panel-hover:#EEF2F8 !important;
+  --line:rgba(15,20,30,.08) !important;
+  --text:#0F172A !important;
+  --muted:#64748B !important;
+  --input-bg:#F1F5F9 !important;
+  --bubble-them:#E8EEF6 !important;
+  --shadow-sm:0 2px 10px rgba(15,23,42,.06) !important;
+  --shadow-md:0 10px 30px rgba(15,23,42,.1) !important;
+}
+
+html, body {
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif !important;
+  -webkit-font-smoothing: antialiased;
+  letter-spacing: -.01em;
+  background: var(--bg) !important;
+}
+
+/* Soft ambient background */
+body::before {
+  content:"";
+  position:fixed; inset:0; pointer-events:none; z-index:0;
+  background:
+    radial-gradient(1200px 600px at 10% -10%, rgba(91,140,255,.18), transparent 55%),
+    radial-gradient(900px 500px at 100% 0%, rgba(123,108,255,.12), transparent 50%),
+    radial-gradient(700px 400px at 50% 100%, rgba(62,224,198,.06), transparent 45%);
+  opacity:.9;
+}
+#app, .app, main, .pages, #main-app { position:relative; z-index:1; }
+
+/* Buttons — springy */
+.btn-primary, .btn-secondary, .icon-btn, .bottom-tab, .social-tab,
+.sl-sheet button, .modal button, .composer button, .attach-menu button {
+  transition: transform .22s var(--spring,cubic-bezier(.22,1,.36,1)),
+              background .2s ease, box-shadow .25s ease, opacity .2s ease, border-color .2s ease !important;
+}
+.btn-primary {
+  background: linear-gradient(135deg, #5B8CFF, #7B6CFF) !important;
+  box-shadow: 0 6px 20px rgba(91,140,255,.35) !important;
+  border-radius: 14px !important;
+  font-weight: 700 !important;
+}
+.btn-primary:active, .btn-secondary:active, .icon-btn:active, .bottom-tab:active {
+  transform: scale(.94) !important;
+}
+.btn-primary:hover {
+  box-shadow: 0 8px 28px rgba(91,140,255,.45) !important;
+  filter: brightness(1.05);
+}
+.btn-secondary {
+  border-radius: 14px !important;
+  background: rgba(255,255,255,.04) !important;
+  backdrop-filter: blur(8px);
+}
+.icon-btn {
+  border-radius: 12px !important;
+  transition: transform .2s var(--spring), background .2s, color .2s !important;
+}
+.icon-btn:hover {
+  background: rgba(91,140,255,.12) !important;
+  color: var(--accent-a) !important;
+}
+
+/* Contacts list — airy cards */
+.contact, .sw-front, .sw-clip .contact {
+  border-radius: 16px !important;
+  transition: background .2s ease, transform .22s var(--spring), box-shadow .25s ease !important;
+}
+.contact:hover, .contact.active, .sw-front.active {
+  background: var(--panel-hover) !important;
+}
+.contact:active, .sw-front:active {
+  transform: scale(.985);
+}
+.contact.active, .sw-front.active {
+  box-shadow: inset 3px 0 0 var(--accent-a), 0 0 0 1px rgba(91,140,255,.12) !important;
+}
+.unread-badge {
+  background: linear-gradient(135deg,#5B8CFF,#7B6CFF) !important;
+  box-shadow: 0 3px 10px rgba(91,140,255,.45) !important;
+  animation: slBadgePop .35s var(--spring);
+}
+@keyframes slBadgePop {
+  from { transform: scale(0); opacity:0; }
+  to { transform: scale(1); opacity:1; }
+}
+
+/* Chat bubbles */
+.bubble {
+  border-radius: 18px !important;
+  box-shadow: var(--shadow-sm) !important;
+  animation: slMsgIn .28s var(--spring) both;
+  transition: transform .15s ease !important;
+}
+.bubble.me {
+  background: linear-gradient(135deg, #5B8CFF 0%, #6B7BFF 55%, #7B6CFF 100%) !important;
+  color: #fff !important;
+  border-bottom-right-radius: 6px !important;
+}
+.bubble.them {
+  background: var(--bubble-them, #243041) !important;
+  border-bottom-left-radius: 6px !important;
+}
+@keyframes slMsgIn {
+  from { opacity:0; transform: translateY(10px) scale(.96); }
+  to { opacity:1; transform: translateY(0) scale(1); }
+}
+.bubble-row {
+  animation: slMsgIn .28s var(--spring) both;
+}
+
+/* Composer */
+.composer, #composer {
+  background: rgba(26,34,45,.92) !important;
+  backdrop-filter: blur(20px) saturate(1.2) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(1.2) !important;
+  border-top: 1px solid var(--line) !important;
+  box-shadow: 0 -8px 32px rgba(0,0,0,.15);
+}
+body.theme-light .composer, body.theme-light #composer {
+  background: rgba(255,255,255,.92) !important;
+}
+#message-input, .composer textarea, .composer input {
+  border-radius: 22px !important;
+  background: var(--input-bg) !important;
+  border: 1px solid transparent !important;
+  transition: border-color .2s, box-shadow .2s, background .2s !important;
+}
+#message-input:focus, .composer textarea:focus {
+  border-color: rgba(91,140,255,.45) !important;
+  box-shadow: 0 0 0 3px rgba(91,140,255,.15) !important;
+}
+#send-btn, .send-btn {
+  border-radius: 50% !important;
+  background: linear-gradient(135deg,#5B8CFF,#7B6CFF) !important;
+  box-shadow: 0 4px 14px rgba(91,140,255,.4) !important;
+  transition: transform .22s var(--spring), box-shadow .2s !important;
+}
+#send-btn:active, .send-btn:active { transform: scale(.88) !important; }
+
+/* Header / sidebar */
+.sidebar, .chat-header, .topbar, .social-header {
+  background: rgba(26,34,45,.85) !important;
+  backdrop-filter: blur(18px) saturate(1.15) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(1.15) !important;
+  border-color: var(--line) !important;
+}
+body.theme-light .sidebar,
+body.theme-light .chat-header,
+body.theme-light .topbar {
+  background: rgba(255,255,255,.88) !important;
+}
+
+/* Bottom tabs */
+.bottom-tabs, .bottom-nav, #bottom-tabs {
+  background: rgba(26,34,45,.9) !important;
+  backdrop-filter: blur(20px) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+  border-top: 1px solid var(--line) !important;
+  box-shadow: 0 -4px 24px rgba(0,0,0,.12);
+}
+.bottom-tab {
+  border-radius: 14px !important;
+  margin: 4px !important;
+}
+.bottom-tab.active {
+  color: var(--accent-a) !important;
+  background: rgba(91,140,255,.12) !important;
+}
+.bottom-tab.active svg { stroke: var(--accent-a) !important; fill: none; }
+
+/* Sheets & modals */
+.sl-sheet, .modal, .modal-overlay .modal, .attach-sheet, .bottom-sheet {
+  border-radius: 24px 24px 0 0 !important;
+  box-shadow: var(--shadow-md) !important;
+  animation: slSheetUp .38s var(--spring) both !important;
+  background: var(--panel) !important;
+  border: 1px solid var(--line) !important;
+}
+@keyframes slSheetUp {
+  from { transform: translateY(100%); opacity:.6; }
+  to { transform: translateY(0); opacity:1; }
+}
+.modal-overlay {
+  animation: slFadeIn .25s ease both;
+  background: rgba(8,12,20,.55) !important;
+  backdrop-filter: blur(6px) !important;
+}
+@keyframes slFadeIn {
+  from { opacity:0; }
+  to { opacity:1; }
+}
+.modal {
+  border-radius: 22px !important;
+  animation: slPop .32s var(--spring) both !important;
+}
+@keyframes slPop {
+  from { opacity:0; transform: scale(.92) translateY(12px); }
+  to { opacity:1; transform: scale(1) translateY(0); }
+}
+
+/* Auth card */
+.auth-card {
+  border-radius: 28px !important;
+  border: 1px solid rgba(255,255,255,.1) !important;
+  box-shadow: 0 20px 60px rgba(0,0,0,.35), 0 0 0 1px rgba(91,140,255,.08) !important;
+  animation: slPop .4s var(--spring) both;
+  background: rgba(26,34,45,.95) !important;
+  backdrop-filter: blur(24px) !important;
+}
+.auth-card::before {
+  opacity: .45 !important;
+  filter: blur(60px) !important;
+}
+
+/* Avatars */
+.avatar {
+  box-shadow: 0 2px 8px rgba(0,0,0,.2);
+  transition: transform .22s var(--spring), box-shadow .25s !important;
+}
+.avatar:active { transform: scale(.92); }
+
+/* Search */
+.search-box input, .cd-input, .field input, .sl-sheet-search {
+  border-radius: 14px !important;
+  transition: border-color .2s, box-shadow .2s, background .2s !important;
+}
+.search-box input:focus, .cd-input:focus, .field input:focus {
+  border-color: rgba(91,140,255,.5) !important;
+  box-shadow: 0 0 0 3px rgba(91,140,255,.12) !important;
+}
+
+/* Settings rows */
+.settings-item {
+  border-radius: 14px !important;
+  transition: background .2s ease, transform .18s var(--spring) !important;
+  margin: 2px 0;
+}
+.settings-item:active { transform: scale(.98); background: var(--panel-hover) !important; }
+
+/* Toggle */
+.toggle-switch {
+  transition: background .25s ease !important;
+}
+.toggle-switch::after, .toggle-switch .knob {
+  transition: transform .28s var(--spring) !important;
+}
+
+/* Social overlays */
+.social-overlay, #posts-overlay, #video-overlay {
+  animation: slFadeIn .3s ease both;
+}
+.social-title {
+  font-weight: 800 !important;
+  letter-spacing: -.02em !important;
+}
+.post-card, .vs-slide {
+  border-radius: 18px !important;
+  overflow: hidden;
+  animation: slMsgIn .35s var(--spring) both;
+}
+
+/* Page transitions */
+.page, .screen, [id^="page-"] {
+  transition: opacity .25s ease, transform .3s var(--spring) !important;
+}
+
+/* Chat open */
+#chat-screen, .chat-view, .chat-panel {
+  animation: slChatIn .32s var(--spring) both;
+}
+@keyframes slChatIn {
+  from { opacity:0; transform: translateX(18px); }
+  to { opacity:1; transform: translateX(0); }
+}
+
+/* Toast */
+.toast, .sl-inapp-toast, [class*="toast"] {
+  border-radius: 14px !important;
+  backdrop-filter: blur(16px) !important;
+  box-shadow: var(--shadow-md) !important;
+  animation: slPop .3s var(--spring) both !important;
+}
+
+/* Attach menu icons */
+.attach-item, .sl-attach-item, [class*="attach"] .item {
+  transition: transform .22s var(--spring), background .2s !important;
+  border-radius: 16px !important;
+}
+.attach-item:active, .sl-attach-item:active {
+  transform: scale(.9);
+}
+
+/* Scrollbars soft */
+*::-webkit-scrollbar { width: 5px; height: 5px; }
+*::-webkit-scrollbar-thumb {
+  background: rgba(139,155,180,.35);
+  border-radius: 99px;
+}
+*::-webkit-scrollbar-track { background: transparent; }
+
+/* Empty states softer */
+.empty-state {
+  color: var(--muted) !important;
+  font-weight: 500 !important;
+  letter-spacing: -.01em;
+  opacity: .85;
+}
+
+/* Status / online dot pulse */
+.online-dot, .status-dot, .presence-dot {
+  box-shadow: 0 0 0 0 rgba(62,224,198,.5);
+  animation: slPulse 2s ease infinite;
+}
+@keyframes slPulse {
+  0% { box-shadow: 0 0 0 0 rgba(62,224,198,.45); }
+  70% { box-shadow: 0 0 0 6px rgba(62,224,198,0); }
+  100% { box-shadow: 0 0 0 0 rgba(62,224,198,0); }
+}
+
+/* Sticker panel polish */
+.sticker-panel, #sticker-panel, .tg-sticker-panel {
+  border-radius: 20px 20px 0 0 !important;
+  box-shadow: 0 -12px 40px rgba(0,0,0,.3) !important;
+}
+
+/* Reduce "heavy bunker" feel */
+.sidebar { border-right: 1px solid var(--line) !important; }
+.contact-name { font-weight: 650 !important; letter-spacing: -.015em; }
+.contact-sub { opacity: .9; }
+
+/* Mic / circle button */
+#circle-btn, .circle-btn, .mic-btn {
+  transition: transform .22s var(--spring), box-shadow .2s, background .2s !important;
+}
+#circle-btn:active, .circle-btn:active { transform: scale(.9); }
+
+/* Skeleton shimmer for loaders */
+.sl-loader-inline, .sl-spinner {
+  animation: slSpin .7s linear infinite;
+}
+@keyframes slSpin { to { transform: rotate(360deg); } }
+
+/* Prefers reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    transition-duration: .01ms !important;
+  }
+}
+
 </style>
 
 <div id="auth-screen">
@@ -2978,33 +3353,122 @@ async function handleDeepLink(){
   } else if((m = path.match(/\/channel\/@?([a-zA-Z0-9_]+)/i))){
     const uname = m[1].toLowerCase();
     let group=null;
-    try{ const {data}=await sb.from('groups').select('*').eq('username', uname).maybeSingle(); group=data; }catch(e){}
-    if(group){ await joinOrOpenGroup(group); }
-    else showToast(currentLang==='en' ? 'Channel not found' : 'Канал не найден');
+    // 1) local memory
+    try{ group = (groups||[]).find(g=>g && (String(g.username||'').toLowerCase()===uname || String(g.name||'').toLowerCase()===uname)); }catch(e){}
+    // 2) username column
+    if(!group){ try{ const {data}=await sb.from('groups').select('*').eq('username', uname).maybeSingle(); group=data; }catch(e){} }
+    // 3) description marker / name
+    if(!group){
+      try{
+        const {data}=await sb.from('groups').select('*').eq('type','channel').limit(200);
+        const rows=data||[];
+        group = rows.find(g=> String(g.username||'').toLowerCase()===uname
+          || String(g.name||'').toLowerCase()===uname
+          || /__public__:@?([a-z0-9_]+)/i.test(String(g.description||'')) && (String(g.description).toLowerCase().includes('@'+uname) || String(g.description).toLowerCase().includes(':'+uname))
+          || String(g.description||'').toLowerCase().includes('public:@'+uname));
+      }catch(e){}
+    }
+    // 4) local public directory
+    if(!group){
+      try{
+        const dir=JSON.parse(localStorage.getItem('sl_public_dir')||'[]');
+        const hit=dir.find(x=>String(x.username||'').toLowerCase()===uname);
+        if(hit){
+          try{ const {data}=await sb.from('groups').select('*').eq('id', hit.id).maybeSingle(); group=data||hit; }
+          catch(e){ group=hit; }
+        }
+      }catch(e){}
+    }
+    if(group){
+      group = {...group, type:'channel', is_public:true, username: group.username||uname};
+      await joinOrOpenGroup(group);
+    } else showToast(currentLang==='en' ? 'Channel not found' : 'Канал не найден');
+  } else if((m = path.match(/\/join\/([a-zA-Z0-9_-]+)/i))){
+    const code = m[1];
+    let group = null;
+    // local groups
+    try{ group = (groups||[]).find(g=>g && (g.invite_code===code || String(g.invite_code||'')===code)); }catch(e){}
+    // DB by invite_code
+    if(!group){ try{ const {data}=await sb.from('groups').select('*').eq('invite_code', code).maybeSingle(); group=data; }catch(e){} }
+    // description marker
+    if(!group){
+      try{
+        const {data}=await sb.from('groups').select('*').limit(300);
+        group = (data||[]).find(g=> String(g.invite_code||'')===code
+          || String(g.description||'').includes('__invite__:'+code)
+          || String(g.description||'').includes('invite:'+code));
+      }catch(e){}
+    }
+    // local meta / invite index
+    if(!group){
+      try{
+        const idx=JSON.parse(localStorage.getItem('sl_invite_index')||'{}');
+        const hit=idx[code];
+        if(hit){
+          try{ const {data}=await sb.from('groups').select('*').eq('id', hit.id||hit).maybeSingle(); group=data||hit; }
+          catch(e){ group = typeof hit==='object'?hit:{id:hit}; }
+        }
+      }catch(e){}
+    }
+    if(!group){
+      try{
+        for(let i=0;i<localStorage.length;i++){
+          const k=localStorage.key(i);
+          if(k&&k.startsWith('sl_group_meta_')){
+            const meta=JSON.parse(localStorage.getItem(k)||'{}');
+            if(meta.invite_code===code){
+              const id=k.slice('sl_group_meta_'.length);
+              try{ const {data}=await sb.from('groups').select('*').eq('id', id).maybeSingle(); group=data||{id,...meta}; }
+              catch(e){ group={id,...meta}; }
+              break;
+            }
+          }
+        }
+      }catch(e){}
+    }
+    if(group){
+      group = {...group, _joinedViaInvite:true};
+      await joinOrOpenGroup(group);
+    } else showToast(currentLang==='en' ? 'Invite link invalid' : 'Ссылка-приглашение недействительна');
   } else if((m = path.match(/\/group\/([a-zA-Z0-9-]+)/i))){
     const gid = m[1];
-    let group = groups.find(g=>g.id===gid);
+    let group = (groups||[]).find(g=>g && String(g.id)===String(gid));
     if(!group){ try{ const {data}=await sb.from('groups').select('*').eq('id', gid).maybeSingle(); group=data; }catch(e){} }
-    if(group){ await joinOrOpenGroup(group); }
+    if(group){ group={...group, _joinedViaInvite:true}; await joinOrOpenGroup(group); }
     else showToast(currentLang==='en' ? 'Group not found' : 'Группа не найдена');
   }
   pendingDeepLink='';
   try{ history.replaceState(null,'', location.pathname); }catch(e){}
 }
 async function joinOrOpenGroup(group){
-  const already = groups.some(g=>g.id===group.id);
+  if(!group || !group.id){ showToast('Не найдено'); return; }
+  if(!myProfile?.id){ showToast('Войдите в аккаунт'); return; }
+  const already = (groups||[]).some(g=>g && String(g.id)===String(group.id));
+  const viaInvite = !!(group._joinedViaInvite || group.invite_code);
+  const isPub = !!(group.is_public || group.username || (group.description && /__public__:@|public:@/i.test(String(group.description))));
   if(!already){
-    if(group.type==='channel' && group.is_public){
+    // Public channel, private channel via link, or group via invite/link — always try to join
+    const canJoin = (group.type==='channel') || viaInvite || group.type==='group' || !group.type;
+    if(canJoin){
       try{ await sb.from('group_members').insert({group_id:group.id, user_id:myProfile.id, role:'member'}); }catch(e){}
-      await loadGroups();
-      showToast(currentLang==='en' ? 'Joined the channel' : 'Вы подписались на канал');
+      try{ await loadGroups(); }catch(e){}
+      if(!(groups||[]).some(g=>g && String(g.id)===String(group.id))){
+        groups = groups || [];
+        groups.unshift({...group, myRole:'member', is_public: isPub || !!group.is_public});
+      }
+      if(group.type==='channel'){
+        showToast(currentLang==='en' ? 'Joined the channel' : 'Вы подписались на канал');
+      } else {
+        showToast(currentLang==='en' ? 'Joined the group' : 'Вы вступили в группу');
+      }
     } else {
       showToast(currentLang==='en' ? 'This is a private group — ask an admin to add you' : 'Это приватная группа — попросите админа добавить вас');
       return;
     }
   }
-  const fresh = groups.find(g=>g.id===group.id) || group;
-  switchPage('chats'); openGroup(fresh);
+  const fresh = (groups||[]).find(g=>g && String(g.id)===String(group.id)) || group;
+  try{ switchPage('chats'); }catch(e){}
+  try{ openGroup(fresh); }catch(e){ console.warn(e); }
 }
 
 // ========== DATA ==========
@@ -8362,7 +8826,8 @@ window.openCreateGroupFlow = function(){
       if(!name) return;
       createBtn.disabled=true; createBtn.textContent='Создание…';
       try{
-        await window.slDoCreateGroup({name, memberIds, avatarData, isChannel:false});
+        const inv = (typeof slRandCode==='function'?slRandCode(16):('g'+Math.random().toString(36).slice(2,12)));
+        await window.slDoCreateGroup({name, memberIds, avatarData, isChannel:false, isPublic:false, inviteCode:inv});
         slCloseSheet(sheet);
       }catch(e){
         createBtn.disabled=false; createBtn.textContent='Создать группу';
@@ -8620,18 +9085,91 @@ window.slDoCreateGroup = async function({name, description, memberIds, avatarDat
   // Persist channel flags locally (DB may lack is_public / username columns)
   if(data?.id && isChannel){
     try{
+      // embed public marker in description so catalog/deep-link can find without columns
+      let desc = description || data.description || '';
+      if(isPublic && username){
+        if(!/__public__:/i.test(desc)) desc = (desc ? desc+'\n' : '') + '__public__:@' + String(username).toLowerCase();
+        try{
+          await sb.from('groups').update({
+            description: desc,
+            is_public: true,
+            username: String(username).toLowerCase()
+          }).eq('id', data.id);
+        }catch(e){
+          try{ await sb.from('groups').update({description: desc}).eq('id', data.id); }catch(e2){}
+        }
+        data.description = desc;
+      }
       const meta = {
         type: 'channel',
         is_public: !!isPublic,
         username: username || null,
         invite_code: inviteCode || null,
-        description: description || null
+        description: desc || null,
+        name: data.name || name,
+        id: data.id,
+        color: data.color
       };
       localStorage.setItem('sl_group_meta_'+data.id, JSON.stringify(meta));
       data.is_public = !!isPublic;
       data.type = 'channel';
       if(username) data.username = username;
       if(inviteCode) data.invite_code = inviteCode;
+      // global public directory (this device + helps same-browser sessions)
+      if(isPublic){
+        try{
+          let dir=JSON.parse(localStorage.getItem('sl_public_dir')||'[]');
+          dir = dir.filter(x=>String(x.id)!==String(data.id) && String(x.username||'').toLowerCase()!==String(username||'').toLowerCase());
+          dir.unshift({
+            id: data.id,
+            name: data.name || name,
+            username: username || null,
+            description: desc,
+            avatar_url: data.avatar_url || null,
+            color: data.color || '#4C7CF3',
+            type: 'channel',
+            is_public: true,
+            owner_id: myProfile.id
+          });
+          localStorage.setItem('sl_public_dir', JSON.stringify(dir.slice(0,200)));
+        }catch(e){}
+      }
+    }catch(e){}
+  }
+
+  // Always ensure invite link for groups & private channels
+  if(data?.id){
+    try{
+      let code = inviteCode || data.invite_code;
+      if(!code && !isPublic){
+        code = (typeof slRandCode==='function'?slRandCode(16):('x'+Math.random().toString(36).slice(2,14)));
+      }
+      if(code){
+        let desc = data.description || description || '';
+        if(!/__invite__:/i.test(desc)) desc = (desc?desc+'\n':'') + '__invite__:' + code;
+        try{
+          await sb.from('groups').update({invite_code: code, description: desc}).eq('id', data.id);
+        }catch(e){
+          try{ await sb.from('groups').update({description: desc}).eq('id', data.id); }catch(e2){}
+        }
+        data.invite_code = code;
+        data.description = desc;
+        try{
+          const meta = JSON.parse(localStorage.getItem('sl_group_meta_'+data.id)||'{}');
+          meta.invite_code = code;
+          meta.id = data.id;
+          meta.name = data.name || name;
+          meta.type = isChannel ? 'channel' : (data.type||'group');
+          meta.is_public = !!isPublic;
+          if(username) meta.username = username;
+          localStorage.setItem('sl_group_meta_'+data.id, JSON.stringify(meta));
+        }catch(e){}
+        try{
+          const idx = JSON.parse(localStorage.getItem('sl_invite_index')||'{}');
+          idx[code] = {id: data.id, name: data.name||name, type: isChannel?'channel':'group', invite_code: code};
+          localStorage.setItem('sl_invite_index', JSON.stringify(idx));
+        }catch(e){}
+      }
     }catch(e){}
   }
 
@@ -9854,26 +10392,60 @@ async function toggleFollow(userId, btn){
   }
   if(btn){ const f=followingSet.has(userId); btn.classList.toggle('following', f); btn.textContent = f ? (currentLang==='en'?'Following':'Вы подписаны') : (currentLang==='en'?'Follow':'Подписаться'); }
 }
+function getLocalSocialPosts(){
+  try{ return JSON.parse(localStorage.getItem('sl_local_posts')||'[]'); }catch(e){ return []; }
+}
+function setLocalSocialPosts(arr){
+  try{ localStorage.setItem('sl_local_posts', JSON.stringify((arr||[]).slice(0,80))); }catch(e){}
+}
+function saveLocalSocialPost(post){
+  try{
+    const arr = getLocalSocialPosts().filter(p=>String(p.id)!==String(post.id));
+    arr.unshift(post);
+    setLocalSocialPosts(arr);
+  }catch(e){}
+}
 async function fetchPosts(kind, userId){
-  // Faster feed: fewer rows, light profile fields, 8s timeout
-  let q = sb.from('posts').select('id,user_id,kind,media_url,media_type,caption,hashtags,created_at,from_story').eq('kind', kind).order('created_at',{ascending:false}).limit(12);
-  if(userId) q = q.eq('user_id', userId);
-  const timed = Promise.race([
-    withTable(q, 'posts'),
-    new Promise(res=>setTimeout(()=>res({data:[],error:{message:'timeout'}}), 8000))
-  ]);
-  const {data} = await timed;
-  const list = (data||[]).filter(p=>!p.from_story);
-  const ids=[...new Set(list.map(p=>p.user_id))];
+  // DB + local fallback so published videos always show
+  let list = [];
+  try{
+    let q = sb.from('posts').select('id,user_id,kind,media_url,media_type,caption,hashtags,created_at,from_story').eq('kind', kind).order('created_at',{ascending:false}).limit(40);
+    if(userId) q = q.eq('user_id', userId);
+    const timed = Promise.race([
+      withTable(q, 'posts'),
+      new Promise(res=>setTimeout(()=>res({data:[],error:{message:'timeout'}}), 10000))
+    ]);
+    const {data} = await timed;
+    list = (data||[]).filter(p=>!p.from_story);
+  }catch(e){ console.warn('fetchPosts db', e); }
+
+  // Merge local posts (same kind)
+  try{
+    let locals = getLocalSocialPosts().filter(p=>p && p.kind===kind && !p.from_story);
+    if(userId) locals = locals.filter(p=>String(p.user_id)===String(userId));
+    const seen = new Set(list.map(p=>String(p.id)));
+    for(const p of locals){
+      if(!seen.has(String(p.id))){ list.push(p); seen.add(String(p.id)); }
+    }
+  }catch(e){}
+
+  // Sort newest first
+  list.sort((a,b)=> new Date(b.created_at||0) - new Date(a.created_at||0));
+  list = list.slice(0, 40);
+
+  const ids=[...new Set(list.map(p=>p.user_id).filter(Boolean))];
   let profs={};
   if(ids.length){
-    const pr = Promise.race([
-      withTable(sb.from('profiles').select('id,username,first_name,avatar_url,color,email').in('id',ids),'profiles'),
-      new Promise(res=>setTimeout(()=>res({data:[]}), 5000))
-    ]);
-    const {data:prs}=await pr;
-    (prs||[]).forEach(p=>profs[p.id]=p);
+    try{
+      const pr = Promise.race([
+        withTable(sb.from('profiles').select('id,username,first_name,avatar_url,color,email').in('id',ids),'profiles'),
+        new Promise(res=>setTimeout(()=>res({data:[]}), 5000))
+      ]);
+      const {data:prs}=await pr;
+      (prs||[]).forEach(p=>profs[p.id]=p);
+    }catch(e){}
   }
+  if(myProfile) profs[myProfile.id] = profs[myProfile.id] || myProfile;
   return list.map(p=>({...p, author:profs[p.user_id]||{id:p.user_id,username:'user'}}));
 }
 function openPostsOverlay(){ document.getElementById('posts-overlay').classList.add('show'); switchPostsTab('feed'); }
@@ -10305,14 +10877,36 @@ function renderCreatePost(body, kind){
         // try to re-upload is not possible without File — warn only
         showToast(currentLang==='en'?'Large video: prefer re-selecting the file':'Большое видео лучше выбрать файлом заново');
       }
-      const {error} = await withTable(sb.from('posts').insert({user_id:myProfile.id, kind, media_url:outData, media_type:mediaType, caption, hashtags}), 'posts');
-      if(!error){
-        markPublished();
-        showToast(currentLang==='en'?'Published!':'Опубликовано!');
-        if(kind==='video') switchVideoTab('feed'); else switchPostsTab('feed');
-      } else {
-        setBtnLoading(btn,false);
-      }
+      const postId = (crypto.randomUUID && crypto.randomUUID()) || ('local_'+Date.now());
+      const localPost = {
+        id: postId,
+        user_id: myProfile.id,
+        kind,
+        media_url: outData,
+        media_type: mediaType,
+        caption,
+        hashtags,
+        created_at: new Date().toISOString(),
+        from_story: false
+      };
+      try{ saveLocalSocialPost(localPost); }catch(e){}
+      let error = null;
+      try{
+        const r = await withTable(sb.from('posts').insert({user_id:myProfile.id, kind, media_url:outData, media_type:mediaType, caption, hashtags}).select().single(), 'posts');
+        error = r.error;
+        if(r.data && r.data.id){
+          try{
+            // replace local id with server id
+            const arr = getLocalSocialPosts().filter(p=>String(p.id)!==String(postId));
+            arr.unshift({...localPost, ...r.data});
+            setLocalSocialPosts(arr);
+          }catch(e){}
+        }
+      }catch(e){ error = e; }
+      // Always show as published if we have media locally
+      markPublished();
+      showToast(error ? (currentLang==='en'?'Saved on device':'Сохранено на устройстве') : (currentLang==='en'?'Published!':'Опубликовано!'));
+      if(kind==='video') switchVideoTab('feed'); else switchPostsTab('feed');
     }catch(e){
       setBtnLoading(btn,false);
       showToast(friendlyError(e));
@@ -10366,7 +10960,7 @@ async function renderVideoFeed(body){
   await loadFollowing();
   const list = await fetchPosts('video');
   body.innerHTML = '';
-  await renderSocialStoriesBar(body);
+  // NO stories/statuses in SVideo — only the video feed
   if(!list.length){
     const empty=document.createElement('div');
     empty.className='empty-state';
@@ -15895,25 +16489,77 @@ html.sl-tv .composer textarea { min-height: 52px; font-size: 17px; }
       <div class="sl-sheet-body"><div style="padding:12px 16px"><input class="cd-input" id="cat-q" placeholder="Поиск…" style="width:100%;box-sizing:border-box"></div><div id="cat-list" style="padding-bottom:40px">Загрузка…</div></div>`;
     document.body.appendChild(sheet);
     sheet.querySelector('#cat-back').onclick=()=>sheet.remove();
-    let all=[];
+    const isPubCh = (g)=>{
+      if(!g) return false;
+      if(g.type && g.type!=='channel') return false;
+      if(g.is_public) return true;
+      if(g.username) return true;
+      const d=String(g.description||'');
+      if(/__public__:|public:@/i.test(d)) return true;
+      return false;
+    };
+    const byId = new Map();
+    const add = (g)=>{
+      if(!g || !g.id) return;
+      if(!isPubCh(g) && g.type!=='channel') return;
+      const prev = byId.get(String(g.id));
+      byId.set(String(g.id), prev ? {...prev, ...g} : {...g, type:'channel'});
+    };
+    // A) try public filter
     try{
-      const {data}=await sb.from('groups').select('id,name,username,description,avatar_url,is_public,type').eq('type','channel').eq('is_public',true).limit(100);
-      all=data||[];
-    }catch(e){ all=(groups||[]).filter(g=>g.type==='channel'&&(g.is_public||g.username)); }
+      const {data}=await sb.from('groups').select('id,name,username,description,avatar_url,is_public,type,color,owner_id').eq('type','channel').eq('is_public',true).limit(200);
+      (data||[]).forEach(add);
+    }catch(e){}
+    // B) all channels (schema/RLS may ignore is_public)
+    try{
+      const {data}=await sb.from('groups').select('id,name,username,description,avatar_url,is_public,type,color,owner_id').eq('type','channel').limit(200);
+      (data||[]).forEach(g=>{ if(isPubCh(g) || g.username || g.is_public!==false) add({...g, is_public: !!(g.is_public||g.username||isPubCh(g))}); });
+    }catch(e){}
+    // C) my groups that are public
+    try{ (groups||[]).forEach(g=>{ if(isPubCh(g) || (g.type==='channel' && (g.is_public||g.username))) add(g); }); }catch(e){}
+    // D) local meta keys
+    try{
+      for(let i=0;i<localStorage.length;i++){
+        const k=localStorage.key(i);
+        if(k && k.startsWith('sl_group_meta_')){
+          const id=k.slice('sl_group_meta_'.length);
+          try{
+            const meta=JSON.parse(localStorage.getItem(k)||'{}');
+            if(meta.is_public || meta.username){
+              let base = (groups||[]).find(x=>String(x.id)===String(id)) || {id, name: meta.username||'Канал', type:'channel'};
+              add({...base, ...meta, type:'channel', is_public:true});
+            }
+          }catch(e){}
+        }
+      }
+    }catch(e){}
+    // E) public directory
+    try{
+      const dir=JSON.parse(localStorage.getItem('sl_public_dir')||'[]');
+      dir.forEach(add);
+    }catch(e){}
+    let all=[...byId.values()].filter(g=>isPubCh(g) || g.username || g.is_public);
+    // dedupe by username prefer
     function paint(q=''){
       q=q.trim().toLowerCase();
-      const rows=all.filter(g=>!q || (g.name||'').toLowerCase().includes(q) || (g.username||'').toLowerCase().includes(q));
+      const rows=all.filter(g=>!q || (g.name||'').toLowerCase().includes(q) || (g.username||'').toLowerCase().includes(q) || (g.description||'').toLowerCase().includes(q));
       const box=sheet.querySelector('#cat-list');
-      if(!rows.length){ box.innerHTML='<div style="padding:24px;text-align:center;color:var(--muted)">Ничего не найдено</div>'; return; }
-      box.innerHTML=rows.map(g=>`<div class="sl-catalog-row" data-id="${g.id}">
-        <div class="avatar" style="width:48px;height:48px;border-radius:50%;background:${g.color||'#4C7CF3'};display:flex;align-items:center;justify-content:center;font-weight:800;color:#fff;overflow:hidden">${g.avatar_url?`<img src="${esc(g.avatar_url)}" style="width:100%;height:100%;object-fit:cover">`:(g.name||'C')[0]}</div>
-        <div style="flex:1;min-width:0"><div style="font-weight:700">${esc(g.name)}</div><div style="font-size:12px;color:var(--muted)">${g.username?'@'+esc(g.username):esc((g.description||'').slice(0,60))}</div></div>
+      if(!rows.length){ box.innerHTML='<div style="padding:24px;text-align:center;color:var(--muted)">Ничего не найдено<br><span style="font-size:12px;opacity:.7">Создайте публичный канал с @username — он появится здесь</span></div>'; return; }
+      const esc = (typeof window.esc==='function'?window.esc:(typeof slEsc==='function'?slEsc:s=>String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))));
+      box.innerHTML=rows.map(g=>`<div class="sl-catalog-row" data-id="${g.id}" style="display:flex;gap:12px;align-items:center;padding:12px 16px;cursor:pointer;border-bottom:1px solid var(--line)">
+        <div class="avatar" style="width:48px;height:48px;border-radius:50%;background:${g.color||'#4C7CF3'};display:flex;align-items:center;justify-content:center;font-weight:800;color:#fff;overflow:hidden;flex-shrink:0">${g.avatar_url?`<img src="${esc(g.avatar_url)}" style="width:100%;height:100%;object-fit:cover">`:esc((g.name||'C')[0]||'C')}</div>
+        <div style="flex:1;min-width:0"><div style="font-weight:700">${esc(g.name||'Канал')}</div><div style="font-size:12px;color:var(--muted)">${g.username?'@'+esc(g.username):esc((g.description||'').replace(/__public__:@?[a-z0-9_]+/gi,'').slice(0,60))}</div></div>
       </div>`).join('');
       box.querySelectorAll('.sl-catalog-row').forEach(row=>{
-        row.onclick=()=>{
+        row.onclick=async()=>{
           const g=all.find(x=>String(x.id)===row.dataset.id);
           sheet.remove();
-          if(g){ try{ openGroup(g); }catch(e){} }
+          if(g){
+            try{
+              if(typeof joinOrOpenGroup==='function') await joinOrOpenGroup({...g, type:'channel', is_public:true});
+              else openGroup(g);
+            }catch(e){ try{ openGroup(g); }catch(e2){} }
+          }
         };
       });
     }
@@ -24461,6 +25107,287 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
   console.log('[SL] message persist fix active');
 })();
 
+
+
+
+/* ===== SL: public channels catalog + deep links ===== */
+(function(){
+  'use strict';
+  if(window._slPubChanFix) return;
+  window._slPubChanFix = 1;
+
+  async function resolvePublicChannel(uname){
+    uname = String(uname||'').toLowerCase().replace(/^@/,'');
+    if(!uname) return null;
+    let group = null;
+    try{ group = (groups||[]).find(g=>g && (String(g.username||'').toLowerCase()===uname)); }catch(e){}
+    if(!group && typeof sb!=='undefined'){
+      try{ const {data}=await sb.from('groups').select('*').eq('username', uname).maybeSingle(); group=data; }catch(e){}
+    }
+    if(!group && typeof sb!=='undefined'){
+      try{
+        const {data}=await sb.from('groups').select('*').eq('type','channel').limit(200);
+        group = (data||[]).find(g=>{
+          if(String(g.username||'').toLowerCase()===uname) return true;
+          if(String(g.name||'').toLowerCase()===uname) return true;
+          const d=String(g.description||'').toLowerCase();
+          if(d.includes('__public__:@'+uname) || d.includes('public:@'+uname)) return true;
+          return false;
+        });
+      }catch(e){}
+    }
+    if(!group){
+      try{
+        const dir=JSON.parse(localStorage.getItem('sl_public_dir')||'[]');
+        const hit=dir.find(x=>String(x.username||'').toLowerCase()===uname);
+        if(hit){
+          if(typeof sb!=='undefined'){
+            try{ const {data}=await sb.from('groups').select('*').eq('id', hit.id).maybeSingle(); group=data||hit; }catch(e){ group=hit; }
+          } else group=hit;
+        }
+      }catch(e){}
+    }
+    if(group) group={...group, type:'channel', is_public:true, username: group.username||uname};
+    return group;
+  }
+  window.slResolvePublicChannel = resolvePublicChannel;
+
+  window.addEventListener('hashchange', async ()=>{
+    try{
+      const h = location.hash||'';
+      const m = h.match(/#\/channel\/@?([a-zA-Z0-9_]+)/i);
+      if(!m || !myProfile) return;
+      const g = await resolvePublicChannel(m[1]);
+      if(g && typeof joinOrOpenGroup==='function') await joinOrOpenGroup(g);
+      else if(!g) showToast('Канал не найден');
+    }catch(e){}
+  });
+
+  // Re-bind link clicks for #/channel/
+  document.addEventListener('click', async (e)=>{
+    const a = e.target.closest && e.target.closest('a[href]');
+    if(!a) return;
+    const href = a.getAttribute('href')||'';
+    const m = href.match(/#\/channel\/@?([a-zA-Z0-9_]+)/i) || href.match(/\/channel\/@?([a-zA-Z0-9_]+)/i);
+    if(!m) return;
+    e.preventDefault(); e.stopPropagation();
+    const g = await resolvePublicChannel(m[1]);
+    if(g && typeof joinOrOpenGroup==='function') await joinOrOpenGroup(g);
+    else showToast('Канал не найден');
+  }, true);
+
+  console.log('[SL] public channel fix active');
+})();
+
+
+
+/* ===== SL: private channel + group invite links ===== */
+(function(){
+  'use strict';
+  if(window._slInviteLinksFix) return;
+  window._slInviteLinksFix = 1;
+
+  function origin(){
+    try{ return (typeof slSiteOrigin==='function'?slSiteOrigin(): (location.origin||'')); }catch(e){ return location.origin||''; }
+  }
+  function randCode(n){
+    if(typeof slRandCode==='function') return slRandCode(n||16);
+    const a='abcdefghijklmnopqrstuvwxyz0123456789';
+    let s=''; for(let i=0;i<(n||16);i++) s+=a[Math.floor(Math.random()*a.length)];
+    return s;
+  }
+
+  window.slEnsureInviteCode = async function(group){
+    if(!group || !group.id) return null;
+    if(group.invite_code) return group.invite_code;
+    // local meta
+    try{
+      const meta=JSON.parse(localStorage.getItem('sl_group_meta_'+group.id)||'{}');
+      if(meta.invite_code){ group.invite_code=meta.invite_code; return meta.invite_code; }
+    }catch(e){}
+    const code = randCode(16);
+    let desc = group.description || '';
+    if(!/__invite__:/i.test(desc)) desc = (desc?desc+'\n':'') + '__invite__:' + code;
+    try{
+      await sb.from('groups').update({invite_code: code, description: desc}).eq('id', group.id);
+    }catch(e){
+      try{ await sb.from('groups').update({description: desc}).eq('id', group.id); }catch(e2){}
+    }
+    group.invite_code = code;
+    group.description = desc;
+    try{
+      const meta=JSON.parse(localStorage.getItem('sl_group_meta_'+group.id)||'{}');
+      meta.invite_code=code; meta.id=group.id; meta.name=group.name;
+      meta.type=group.type||'group';
+      localStorage.setItem('sl_group_meta_'+group.id, JSON.stringify(meta));
+    }catch(e){}
+    try{
+      const idx=JSON.parse(localStorage.getItem('sl_invite_index')||'{}');
+      idx[code]={id:group.id, name:group.name, type:group.type||'group', invite_code:code};
+      localStorage.setItem('sl_invite_index', JSON.stringify(idx));
+    }catch(e){}
+    return code;
+  };
+
+  window.slGroupInviteLink = async function(group){
+    if(!group) return origin();
+    // public channel with username
+    if(group.type==='channel' && (group.is_public || group.username) && group.username){
+      return origin() + '/#/channel/' + group.username;
+    }
+    const code = await window.slEnsureInviteCode(group);
+    if(code) return origin() + '/#/join/' + code;
+    return origin() + '/#/group/' + group.id;
+  };
+
+  // Patch group settings copy link
+  document.addEventListener('click', async (e)=>{
+    const btn = e.target.closest && e.target.closest('#gs-copy-link, #cp-copy-link, [data-action="copy-group-link"]');
+    if(!btn) return;
+    e.preventDefault(); e.stopPropagation();
+    const g = activeGroup;
+    if(!g){ showToast('Нет чата'); return; }
+    try{
+      const link = await window.slGroupInviteLink(g);
+      await navigator.clipboard.writeText(link);
+      showToast('Ссылка скопирована');
+    }catch(err){
+      try{
+        const link = await window.slGroupInviteLink(g);
+        prompt('Ссылка:', link);
+      }catch(e2){ showToast('Не удалось скопировать'); }
+    }
+  }, true);
+
+  // hashchange for #/join/ and #/group/
+  window.addEventListener('hashchange', async ()=>{
+    try{
+      if(!myProfile) return;
+      const h = location.hash||'';
+      let m;
+      if((m = h.match(/#\/join\/([a-zA-Z0-9_-]+)/i))){
+        pendingDeepLink = h;
+        if(typeof handleDeepLink==='function') await handleDeepLink();
+      } else if((m = h.match(/#\/group\/([a-zA-Z0-9-]+)/i))){
+        pendingDeepLink = h;
+        if(typeof handleDeepLink==='function') await handleDeepLink();
+      }
+    }catch(e){}
+  });
+
+  // Click handler for invite links in messages
+  document.addEventListener('click', async (e)=>{
+    const a = e.target.closest && e.target.closest('a[href]');
+    if(!a) return;
+    const href = a.getAttribute('href')||'';
+    let m = href.match(/#\/join\/([a-zA-Z0-9_-]+)/i) || href.match(/\/join\/([a-zA-Z0-9_-]+)/i);
+    if(m){
+      e.preventDefault(); e.stopPropagation();
+      pendingDeepLink = '#/join/' + m[1];
+      if(typeof handleDeepLink==='function') await handleDeepLink();
+      return;
+    }
+    m = href.match(/#\/group\/([a-zA-Z0-9-]+)/i) || href.match(/\/group\/([a-zA-Z0-9-]+)/i);
+    if(m){
+      e.preventDefault(); e.stopPropagation();
+      pendingDeepLink = '#/group/' + m[1];
+      if(typeof handleDeepLink==='function') await handleDeepLink();
+    }
+  }, true);
+
+  // After open group settings — ensure invite exists for admin share
+  const _origOpenGroup = typeof openGroup==='function' ? openGroup : null;
+  if(_origOpenGroup && !window._slInviteOnOpen){
+    window._slInviteOnOpen = 1;
+    // soft: don't force on every open
+  }
+
+  console.log('[SL] invite links for private channels & groups');
+})();
+
+
+
+/* ===== SL: SVideo — no stories, reliable video feed ===== */
+(function(){
+  'use strict';
+  if(window._slSVideoNoStories) return;
+  window._slSVideoNoStories = 1;
+
+  // Never inject stories into video-body
+  if(typeof renderSocialStoriesBar === 'function'){
+    const _bar = renderSocialStoriesBar;
+    renderSocialStoriesBar = async function(container){
+      try{
+        if(container && (container.id==='video-body' || container.closest && container.closest('#video-overlay'))){
+          return; // skip stories in SVideo
+        }
+      }catch(e){}
+      return await _bar.apply(this, arguments);
+    };
+  }
+
+  // Clean existing stories bar if video feed re-renders
+  const obs = new MutationObserver(()=>{
+    try{
+      const vb = document.getElementById('video-body');
+      if(!vb) return;
+      vb.querySelectorAll('.stories-bar, [data-add-story], .story-item').forEach(el=>{
+        // only remove the bar strip, not random story items elsewhere
+        if(el.classList.contains('stories-bar') || el.closest('.stories-bar')){
+          el.closest('.stories-bar')?.remove();
+        }
+      });
+      vb.querySelectorAll('.stories-bar').forEach(el=>el.remove());
+    }catch(e){}
+  });
+  try{
+    const root = document.getElementById('video-overlay') || document.body;
+    obs.observe(root, {childList:true, subtree:true});
+  }catch(e){}
+
+  console.log('[SL] SVideo: stories removed, local feed enabled');
+})();
+
+
+
+/* ===== SL: modern UI polish hooks ===== */
+(function(){
+  'use strict';
+  if(window._slModernUI) return;
+  window._slModernUI = 1;
+  document.documentElement.classList.add('sl-modern');
+  document.body.classList.add('sl-modern');
+
+  // Ripple on primary buttons
+  document.addEventListener('pointerdown', (e)=>{
+    const btn = e.target.closest('.btn-primary, .bottom-tab, .icon-btn, .contact, .settings-item');
+    if(!btn) return;
+    try{
+      btn.style.transition = 'transform .18s cubic-bezier(.22,1,.36,1)';
+    }catch(err){}
+  }, {passive:true});
+
+  // Smooth page switches
+  try{
+    const _sp = window.switchPage;
+    if(typeof _sp === 'function'){
+      window.switchPage = function(name){
+        const r = _sp.apply(this, arguments);
+        try{
+          const page = document.getElementById('page-'+name) || document.querySelector('[data-page="'+name+'"]');
+          if(page){
+            page.style.animation = 'none';
+            page.offsetHeight;
+            page.style.animation = 'slFadeIn .28s ease both';
+          }
+        }catch(e){}
+        return r;
+      };
+    }
+  }catch(e){}
+
+  console.log('[SL] modern UI active');
+})();
 
 
 </script>
