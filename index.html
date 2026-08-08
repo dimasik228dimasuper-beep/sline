@@ -21621,6 +21621,240 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
 
 
 
+
+/* ===== SL: stickers send + open pack on sticker click ===== */
+(function(){
+  'use strict';
+  if(window._slStickerSendFix) return;
+  window._slStickerSendFix = 1;
+  const LS = (typeof storage!=='undefined' ? storage : localStorage);
+  const toast = (m)=>{ try{ showToast(m); }catch(e){ console.log(m); } };
+  const STK_KEY = 'sl_custom_stickers_v12';
+
+  function getStickers(){
+    try{ return JSON.parse(LS.getItem(STK_KEY)||'[]'); }catch(e){ return []; }
+  }
+  function setStickers(arr){
+    try{ LS.setItem(STK_KEY, JSON.stringify(arr.slice(0,200))); }catch(e){}
+  }
+
+  // Default emoji stickers so user always has something to send
+  function ensureDefaultPack(){
+    let list = getStickers();
+    if(list.length) return list;
+    const emojis = ['😀','😂','❤️','🔥','👍','🎉','😎','🤔','😢','🙏','💯','✨','🐶','🐱','🍕','⚽','🎵','🌟','💪','🙌'];
+    list = emojis.map((e,i)=>({
+      id: 'def_'+i,
+      url: emojiToSvg(e),
+      emoji: e,
+      created: Date.now()
+    }));
+    setStickers(list);
+    return list;
+  }
+
+  function emojiToSvg(emoji){
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+      <rect width="128" height="128" rx="24" fill="#131B2E"/>
+      <text x="64" y="82" text-anchor="middle" font-size="72">${emoji}</text>
+    </svg>`;
+    return 'data:image/svg+xml,'+encodeURIComponent(svg);
+  }
+
+  function sendStickerNow(url){
+    if(!url){ toast('Нет стикера'); return; }
+    try{
+      if(typeof activePartner==='undefined' && typeof activeGroup==='undefined'){ toast('Откройте чат'); return; }
+      if(!activePartner && !activeGroup){ toast('Откройте чат'); return; }
+    }catch(e){}
+    try{
+      if(typeof sendMessage==='function'){
+        sendMessage('sticker', url, '');
+        return true;
+      }
+    }catch(e){ console.warn(e); }
+    toast('Не удалось отправить');
+    return false;
+  }
+
+  function ensurePanel(){
+    let panel = document.getElementById('sl-stk-panel');
+    if(panel) return panel;
+    const composer = document.getElementById('composer') || document.querySelector('.composer');
+    panel = document.createElement('div');
+    panel.id = 'sl-stk-panel';
+    panel.className = 'sl-stk-panel';
+    panel.innerHTML = `
+      <div class="sl-stk-head">
+        <h4>Стикеры</h4>
+        <button type="button" class="btn-secondary" id="sl-stk-manage" style="width:auto;padding:6px 12px;font-size:12px;margin:0">Добавить</button>
+        <button type="button" class="icon-btn" id="sl-stk-close" style="width:32px;height:32px">×</button>
+      </div>
+      <div class="sl-stk-grid"></div>`;
+    if(composer && composer.parentNode){
+      composer.parentNode.insertBefore(panel, composer);
+    } else {
+      document.body.appendChild(panel);
+    }
+    panel.querySelector('#sl-stk-close').onclick = ()=> panel.classList.remove('show');
+    panel.querySelector('#sl-stk-manage').onclick = ()=>{
+      try{ window.openStickerPackManager?.(); }catch(e){}
+    };
+    return panel;
+  }
+
+  function renderPanel(highlightUrl){
+    const panel = ensurePanel();
+    const grid = panel.querySelector('.sl-stk-grid');
+    if(!grid) return;
+    const list = ensureDefaultPack();
+    grid.innerHTML = list.map(s=>`
+      <img src="${s.url}" data-url="${s.url}" data-id="${s.id||''}"
+        class="sl-stk-item${highlightUrl && s.url===highlightUrl ? ' sl-stk-hl' : ''}"
+        style="width:72px;height:72px;object-fit:contain;cursor:pointer;border-radius:12px;background:var(--input-bg);padding:4px;${highlightUrl&&s.url===highlightUrl?'outline:2px solid var(--accent-a);':''}">
+    `).join('');
+
+    grid.querySelectorAll('img').forEach(img=>{
+      img.onclick = (e)=>{
+        e.preventDefault();
+        e.stopPropagation();
+        const url = img.dataset.url || img.src;
+        sendStickerNow(url);
+        panel.classList.remove('show');
+      };
+    });
+
+    if(highlightUrl){
+      const hl = grid.querySelector('.sl-stk-hl');
+      if(hl) setTimeout(()=> hl.scrollIntoView({block:'nearest', behavior:'smooth'}), 50);
+    }
+  }
+
+  function openPanel(highlightUrl){
+    const panel = ensurePanel();
+    renderPanel(highlightUrl);
+    panel.classList.add('show');
+  }
+
+  function closePanel(){
+    document.getElementById('sl-stk-panel')?.classList.remove('show');
+  }
+
+  // Bind sticker button → open panel (not manage)
+  function bindStickerBtn(){
+    const btn = document.getElementById('sticker-btn') || document.getElementById('sl-stk-btn');
+    if(!btn) return;
+    if(btn.dataset.sendFix==='1') return;
+    btn.dataset.sendFix = '1';
+    btn.addEventListener('click', function(e){
+      e.preventDefault();
+      e.stopPropagation();
+      const panel = document.getElementById('sl-stk-panel');
+      if(panel && panel.classList.contains('show')){
+        closePanel();
+        return;
+      }
+      openPanel();
+    }, true);
+  }
+
+  // Click sticker in chat → open pack with that sticker
+  document.addEventListener('click', function(e){
+    const img = e.target.closest('.bubble img.sticker-animated, .bubble img[class*="sticker"], .bubble-row img.sticker-animated');
+    if(!img) return;
+    // only if it's a sticker-looking message
+    const row = img.closest('.bubble-row, .bubble');
+    if(!row) return;
+    // Don't hijack if user is selecting text etc.
+    e.preventDefault();
+    e.stopPropagation();
+    const url = img.currentSrc || img.src || '';
+    // ensure this sticker is in our pack (add if from peer)
+    if(url){
+      let list = getStickers();
+      if(!list.some(s=>s.url===url)){
+        list.push({id:'got_'+Date.now(), url, created:Date.now()});
+        setStickers(list);
+      }
+    }
+    openPanel(url);
+  }, true);
+
+  // CSS
+  if(!document.getElementById('sl-stk-send-css')){
+    const st = document.createElement('style');
+    st.id = 'sl-stk-send-css';
+    st.textContent = `
+      .sl-stk-panel{
+        position:absolute; bottom:70px; left:0; right:0;
+        background:var(--panel); border-top:1px solid var(--line);
+        max-height:320px; overflow:hidden; display:none;
+        flex-direction:column; z-index:30;
+        box-shadow:0 -8px 32px rgba(0,0,0,.35);
+      }
+      .sl-stk-panel.show{ display:flex !important; }
+      .sl-stk-head{ display:flex; align-items:center; gap:8px; padding:10px 12px; border-bottom:1px solid var(--line); flex-shrink:0; }
+      .sl-stk-head h4{ flex:1; margin:0; font-size:14px; font-weight:700; }
+      .sl-stk-grid{
+        display:grid; grid-template-columns:repeat(auto-fill,minmax(72px,1fr));
+        gap:8px; padding:10px; overflow-y:auto; flex:1; -webkit-overflow-scrolling:touch;
+      }
+      .sl-stk-grid img, .sl-stk-item{
+        width:72px; height:72px; object-fit:contain; cursor:pointer;
+        border-radius:12px; background:var(--input-bg); padding:4px;
+        transition: transform .15s;
+      }
+      .sl-stk-grid img:active, .sl-stk-item:active{ transform:scale(1.12); }
+      .bubble img.sticker-animated, .bubble .sticker-animated{
+        max-width:140px; max-height:140px; cursor:pointer;
+        background:transparent !important; border:none !important;
+      }
+      /* undo old "remove stickers" CSS if still present */
+      #sticker-btn, #sl-stk-panel, .sl-stk-panel {
+        display:revert;
+      }
+      #sticker-btn{
+        display:flex !important; visibility:visible !important; opacity:1 !important;
+        width:40px !important; height:40px !important; pointer-events:auto !important;
+      }
+    `;
+    document.head.appendChild(st);
+    // kill anti-sticker CSS
+    try{ document.getElementById('sl-no-stickers-css')?.remove(); }catch(e){}
+  }
+
+  // Seed defaults + bind
+  try{ ensureDefaultPack(); }catch(e){}
+  bindStickerBtn();
+  setTimeout(bindStickerBtn, 500);
+  setTimeout(bindStickerBtn, 2000);
+  setTimeout(()=>{ try{ ensurePanel(); renderPanel(); }catch(e){} }, 800);
+
+  // Expose
+  window.slOpenStickerPanel = openPanel;
+  window.slSendSticker = sendStickerNow;
+  window.slRenderStickerPanel = renderPanel;
+
+  // Patch original sticker-panel grid too if it appears
+  const _obs = new MutationObserver(()=>{
+    document.querySelectorAll('#sticker-grid img, .sticker-grid img').forEach(img=>{
+      if(img.dataset.sendBound) return;
+      img.dataset.sendBound = '1';
+      img.onclick = (e)=>{
+        e.preventDefault(); e.stopPropagation();
+        sendStickerNow(img.dataset.url || img.src);
+        document.getElementById('sticker-panel')?.classList.remove('show');
+        closePanel();
+      };
+    });
+  });
+  try{ _obs.observe(document.body, {childList:true, subtree:true}); }catch(e){}
+
+  console.log('[SL] stickers: tap to send, chat sticker opens pack');
+})();
+
+
+
 </script>
 </body>
 </html>
