@@ -2118,7 +2118,7 @@ window._slNoStickers = 1;
 window._slPackV5 = 1;
 window._slPackV6 = 1;
 window.STICKER_PACKS = window.STICKER_PACKS || {};
-window.slOpenStickerPackShop = function(){};
+window.slOpenStickerPackShop = function(){ try{ if(typeof window.openStickerPackManager==='function') window.openStickerPackManager(); }catch(e){} };
 window.slMergeStickerPacks = function(){};
 
 let currentUser=null, myProfile=null, contacts=[], groups=[], activePartner=null, activeGroup=null;
@@ -12669,21 +12669,7 @@ function scheduleBirthdayAfterAppReady(){
   // intentionally disabled — no proxy UI
 
   // --- Sticker shop stub ---
-  window.openStickerShop=function(){
-    const ov=document.createElement('div');
-    ov.className='modal-overlay';
-    ov.innerHTML=`<div class="modal" style="max-width:420px"><h3>Магазин стикеров</h3>
-      <p style="font-size:13px;color:var(--muted)">Художники могут загружать паки. Без жёсткой модерации — ответственность на авторе.</p>
-      <button class="btn-primary" id="st-upload" style="width:100%">Загрузить пак (JSON/ZIP)</button>
-      <button class="btn-secondary" id="st-close" style="width:100%;margin-top:8px">Закрыть</button></div>`;
-    document.body.appendChild(ov);
-    ov.querySelector('#st-upload').onclick=()=>{
-      const inp=document.createElement('input'); inp.type='file'; inp.accept='.json,image/*';
-      inp.onchange=()=>{ showToast('Пак сохранён локально'); ov.remove(); };
-      inp.click();
-    };
-    ov.querySelector('#st-close').onclick=()=>ov.remove();
-  };
+  window.openStickerShop = function(){};
 
   // --- Mesh / offline note ---
   window.startMeshMode=function(){
@@ -17686,72 +17672,7 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
     }catch(e){}
   };
 
-  window.slOpenStickerPackShop = function(){
-    window.slMergeStickerPacks();
-    const owned=new Set(ownedPacks());
-    const clicks=packClicks();
-    const leftCd = Math.max(0, 30*60*1000 - (Date.now()-lastPackOpen()));
-    const ov=document.createElement('div');
-    ov.className='modal-overlay sl-pack-modal';
-    ov.innerHTML=`<div class="modal" style="max-width:440px">
-      <button class="close-x" id="pk-x">×</button>
-      <h3>Стикер-паки</h3>
-      <p style="font-size:12px;color:var(--muted);margin-bottom:8px">100 паков. Кликай по закрытому паку 10 раз, чтобы открыть. Лимит: 1 пак / 30 мин.
-      ${leftCd>0?'<br><b>Следующий через '+Math.ceil(leftCd/60000)+' мин.</b>':''}</p>
-      <div class="sl-pack-grid pack-grid" id="pk-grid"></div>
-      <button class="btn-secondary" id="pk-friend" style="width:100%;margin-top:10px">Пак друга (код)</button>
-    </div>`;
-    document.body.appendChild(ov);
-    ov.querySelector('#pk-x').onclick=()=>ov.remove();
-    const grid=ov.querySelector('#pk-grid');
-    ALL_PACKS.forEach(p=>{
-      const isOwned=owned.has(p.id);
-      const c=clicks[p.id]||0;
-      const tile=document.createElement('div');
-      tile.className='sl-pack-tile '+(isOwned?'owned':'locked');
-      tile.innerHTML=`<div class="emoji">${isOwned?p.emoji:'📦'}</div><div class="nm">${esc(p.name)}</div>
-        ${isOwned?'':`<div style="font-size:10px;color:var(--accent-a)">${c}/10</div>`}`;
-      tile.onclick=()=>{
-        if(isOwned){
-          try{ activeStickerPack=p.id; }catch(e){}
-          window.slMergeStickerPacks();
-          toast('Пак «'+p.name+'» активен — откройте стикеры в чате');
-          ov.remove();
-          try{ document.getElementById('sticker-btn')?.click(); }catch(e){}
-          return;
-        }
-        // cooldown
-        if(Date.now()-lastPackOpen() < 30*60*1000 && c===0){
-          const m=Math.ceil((30*60*1000-(Date.now()-lastPackOpen()))/60000);
-          toast('Подождите '+m+' мин. до следующего пака');
-          return;
-        }
-        const o=packClicks();
-        o[p.id]=(o[p.id]||0)+1;
-        setPackClicks(o);
-        if(o[p.id]>=10){
-          // open animation
-          ov.remove();
-          playOpenAnim(p);
-        } else {
-          tile.querySelector('div[style]') && (tile.querySelector('div[style]').textContent=o[p.id]+'/10');
-          toast('Клик '+o[p.id]+'/10');
-        }
-      };
-      grid.appendChild(tile);
-    });
-    ov.querySelector('#pk-friend').onclick=()=>{
-      const code=prompt('Введите код пака друга (например pack_12):');
-      if(!code) return;
-      const p=ALL_PACKS.find(x=>x.id===code.trim() || x.id==='pack_'+code.trim());
-      if(!p){ toast('Пак не найден'); return; }
-      const sh=JSON.parse(LS.getItem('sl_friend_packs')||'{}');
-      sh[p.id]=p;
-      LS.setItem('sl_friend_packs', JSON.stringify(sh));
-      window.slMergeStickerPacks();
-      toast('Пак друга добавлен: '+p.name);
-    };
-  };
+  window.slOpenStickerPackShop = function(){ try{ if(typeof window.openStickerPackManager==='function') window.openStickerPackManager(); }catch(e){} };
 
   function playOpenAnim(p){
     const ov=document.createElement('div');
@@ -17792,7 +17713,7 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
     const host=document.getElementById('settings-notifications')?.parentNode || document.querySelector('.settings-section');
     if(!host) return;
     const row=document.createElement('div');
-    row.className='settings-item'; row.id='settings-sticker-packs';
+    row.className='settings-item'; row.id='settings-sticker-packs-dead';
     row.innerHTML=`<svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01"/></svg><span class="item-text">Стикер-пак</span>`;
     host.appendChild(row);
     row.onclick=()=>window.slOpenStickerPackShop();
@@ -18119,93 +18040,7 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
   };
 
   // Override open shop — one pack per screen carousel
-  window.slOpenStickerPackShop = function(){
-    const own = new Set(ownedPacks());
-    const cl = clicks();
-    const ov = document.createElement('div');
-    ov.className = 'modal-overlay';
-    ov.style.zIndex = '22000';
-    ov.innerHTML = `<div class="modal" style="max-width:440px;padding:16px 12px 20px">
-      <button class="close-x" id="pk5-x">×</button>
-      <h3 style="text-align:center;margin-bottom:4px">Стикер-паки</h3>
-      <p style="text-align:center;font-size:12px;color:var(--muted);margin-bottom:8px">Листай паки · 10 нажатий чтобы открыть</p>
-      <div class="sl-pack-carousel" id="pk5-car"></div>
-      <div class="sl-pack-dots" id="pk5-dots"></div>
-      <button class="btn-secondary" id="pk5-friend" style="width:100%;margin-top:10px">Код пака друга</button>
-    </div>`;
-    document.body.appendChild(ov);
-    ov.querySelector('#pk5-x').onclick=()=>ov.remove();
-    const car = ov.querySelector('#pk5-car');
-    const dots = ov.querySelector('#pk5-dots');
-
-    ALL_PACKS.forEach((p, idx)=>{
-      const isOwn = own.has(p.id);
-      const c = cl[p.id]||0;
-      const slide = document.createElement('div');
-      slide.className = 'sl-pack-slide';
-      slide.innerHTML = `
-        <div class="sl-pack-hero ${isOwn?'owned':''}" data-id="${p.id}">
-          <img class="sl-pack-hero-ico" src="${p.preview}" alt="">
-          <div class="sl-pack-hero-title">${p.name}</div>
-          <div class="sl-pack-hero-sub">${isOwn?'Открыт — нажми, чтобы выбрать':'Нажми 10 раз, чтобы открыть'}</div>
-        </div>
-        <div class="sl-pack-progress"><i style="width:${isOwn?100:Math.min(100,c*(p.special?2:10))}%"></i></div>
-        <div style="font-size:13px;color:var(--muted)">${isOwn?'✓ В коллекции':(c+'/'+(p.special?50:10))}</div>`;
-      const hero = slide.querySelector('.sl-pack-hero');
-      const bar = slide.querySelector('.sl-pack-progress > i');
-      const sub = slide.querySelector('.sl-pack-hero-sub');
-      const cnt = slide.querySelector('div[style]');
-      hero.onclick = ()=>{
-        if(own.has(p.id)){
-          try{ activeStickerPack = p.id; }catch(e){}
-          window.slMergeStickerPacks();
-          toast('Пак «'+p.name+'»');
-          ov.remove();
-          openStickerPanel();
-          return;
-        }
-        const o = clicks();
-        o[p.id] = (o[p.id]||0)+1;
-        setClicks(o);
-        const n = o[p.id];
-        bar.style.width = Math.min(100,n*10)+'%';
-        cnt.textContent = n+'/10';
-        hero.style.transform = 'scale(0.94)';
-        setTimeout(()=>hero.style.transform='', 100);
-        if(n >= 10){
-          playOpen(p, ov);
-        } else {
-          toast(n+'/10');
-        }
-      };
-      car.appendChild(slide);
-      const d=document.createElement('span');
-      if(idx===0) d.className='on';
-      dots.appendChild(d);
-    });
-
-    // dots update on scroll
-    car.addEventListener('scroll', ()=>{
-      const w = car.clientWidth||1;
-      const i = Math.round(car.scrollLeft / w);
-      dots.querySelectorAll('span').forEach((s,idx)=>s.classList.toggle('on', idx===i));
-    }, {passive:true});
-
-    ov.querySelector('#pk5-friend').onclick=()=>{
-      const code = prompt('Код пака (например pack_0 или birds):');
-      if(!code) return;
-      const id = code.trim();
-      const p = ALL_PACKS.find(x=>x.id===id || x.id==='pack_'+id);
-      if(!p){ toast('Пак не найден'); return; }
-      const sh=JSON.parse(LS.getItem('sl_friend_packs')||'{}');
-      sh[p.id]=p; LS.setItem('sl_friend_packs', JSON.stringify(sh));
-      // also grant as owned for use
-      const ow=ownedPacks(); if(!ow.includes(p.id)){ ow.push(p.id); setOwned(ow); }
-      window.slMergeStickerPacks();
-      toast('Пак «'+p.name+'» добавлен');
-      ov.remove();
-    };
-  };
+  window.slOpenStickerPackShop = function(){ try{ if(typeof window.openStickerPackManager==='function') window.openStickerPackManager(); }catch(e){} };
 
   function playOpen(p, parentOv){
     try{ parentOv?.remove(); }catch(e){}
@@ -18295,7 +18130,7 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
       const host=document.getElementById('settings-notifications')?.parentNode;
       if(host){
         const r=document.createElement('div');
-        r.className='settings-item'; r.id='settings-sticker-packs';
+        r.className='settings-item'; r.id='settings-sticker-packs-dead';
         r.innerHTML=`<svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01"/></svg><span class="item-text">Стикер-пак</span>`;
         host.appendChild(r);
         r.onclick=()=>window.slOpenStickerPackShop();
@@ -18656,139 +18491,7 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
     }catch(e){}
   };
 
-  window.slOpenStickerPackShop = function(){
-    const own=new Set(owned());
-    const cl=clicks();
-    const ov=document.createElement('div');
-    ov.className='modal-overlay';
-    ov.style.zIndex='22000';
-    ov.innerHTML=`<div class="modal" style="max-width:440px;padding:16px 12px 20px">
-      <button class="close-x" id="pk6-x">×</button>
-      <h3 style="text-align:center">Стикер-паки</h3>
-      <p style="text-align:center;font-size:12px;color:var(--muted);margin:4px 0 8px">Листай · точка = переход · 10 нажатий = открыть</p>
-      <div class="sl-pack-carousel" id="pk6-car"></div>
-      <div class="sl-pack-dots" id="pk6-dots" style="max-height:48px;overflow-y:auto"></div>
-    </div>`;
-    document.body.appendChild(ov);
-    ov.querySelector('#pk6-x').onclick=()=>ov.remove();
-    const car=ov.querySelector('#pk6-car');
-    const dots=ov.querySelector('#pk6-dots');
-
-    ALL.forEach((p, idx)=>{
-      const isOwn=own.has(p.id);
-      const c=cl[p.id]||0;
-      const slide=document.createElement('div');
-      slide.className='sl-pack-slide';
-      const border = p.special ? 'box-shadow:0 0 0 2px #F7B955,0 16px 40px rgba(247,185,85,.35);' : '';
-      slide.innerHTML=`
-        <div class="sl-pack-hero ${isOwn?'owned':''}" data-id="${p.id}" style="${border}">
-          <img class="sl-pack-hero-ico" src="${p.preview}" alt="">
-          <div class="sl-pack-hero-title">${p.name}</div>
-          <div class="sl-pack-hero-sub">${p.special?'Самый редкий пак · 50 нажатий! ':''}${isOwn?'Открыт':'Нажми '+(p.special?50:10)+' раз'}</div>
-        </div>
-        <div class="sl-pack-progress"><i style="width:${isOwn?100:Math.min(100,c*(p.special?2:10))}%;${p.special?'background:linear-gradient(90deg,#F7B955,#F59E0B)':''}"></i></div>
-        <div class="pk6-cnt" style="font-size:13px;color:var(--muted)">${isOwn?'✓ В коллекции':(c+'/'+(p.special?50:10))}</div>
-        ${isOwn?`<button type="button" class="pk6-del" data-del="${p.id}" style="margin-top:10px;padding:8px 18px;font-size:13px;border-radius:12px;border:1px solid var(--danger);color:var(--danger);background:transparent;cursor:pointer">Удалить из коллекции</button>`:''}`;
-      const hero=slide.querySelector('.sl-pack-hero');
-      const bar=slide.querySelector('.sl-pack-progress > i');
-      const cnt=slide.querySelector('.pk6-cnt');
-      hero.onclick=()=>{
-        if(own.has(p.id)){
-          try{ activeStickerPack=p.id; }catch(e){}
-          window.slMergeStickerPacks();
-          toast(p.name);
-          ov.remove();
-          updateStickerBtnVisibility();
-          // open panel
-          const panel=document.getElementById('sticker-panel');
-          if(panel){
-            const keys=Object.keys(STICKER_PACKS);
-            const packsEl=document.getElementById('sticker-packs');
-            if(packsEl){
-              packsEl.innerHTML=keys.map(k=>`<div class="sticker-pack-tab ${k===p.id?'active':''}" data-pack="${k}">${STICKER_PACKS[k].name}</div>`).join('');
-              packsEl.querySelectorAll('.sticker-pack-tab').forEach(t=>{
-                t.onclick=()=>{ activeStickerPack=t.dataset.pack; packsEl.querySelectorAll('.sticker-pack-tab').forEach(x=>x.classList.toggle('active',x.dataset.pack===t.dataset.pack)); if(typeof renderStickerGrid==='function') renderStickerGrid(); };
-              });
-            }
-            if(typeof renderStickerGrid==='function') renderStickerGrid();
-            panel.classList.add('show');
-          }
-          return;
-        }
-        const need = p.special ? 50 : 10;
-        const o=clicks();
-        o[p.id]=(o[p.id]||0)+1;
-        setClicks(o);
-        const n=o[p.id];
-        bar.style.width=Math.min(100,(n/need)*100)+'%';
-        cnt.textContent=n+'/'+need;
-        if(n>=need){
-          // unlock
-          const ow=owned(); if(!ow.includes(p.id)) ow.push(p.id); setOwned(ow);
-          const oo=clicks(); delete oo[p.id]; setClicks(oo);
-          window.slMergeStickerPacks();
-          toast('Открыт: '+p.name);
-          // animation
-          const aov=document.createElement('div'); aov.className='sl-pack-open-ov';
-          aov.innerHTML=`<div class="sl-pack-box burst"><img src="${p.preview}" style="width:80px;height:80px"></div>
-            <div style="color:#fff;font-weight:800">${p.name}</div>
-            <div class="sl-pack-reward show">${p.stickers.map(s=>`<img src="${s}" style="width:44px;height:44px">`).join('')}</div>`;
-          document.body.appendChild(aov);
-          setTimeout(()=>aov.remove(), 2200);
-          // refresh current slide state
-          hero.classList.add('owned');
-          cnt.textContent='✓ В коллекции';
-          bar.style.width='100%';
-          updateStickerBtnVisibility();
-        } else toast(n+'/10');
-      };
-      car.appendChild(slide);
-      const delBtn = slide.querySelector('.pk6-del');
-      if(delBtn){
-        delBtn.onclick = (e)=>{
-          e.preventDefault(); e.stopPropagation();
-          if(!confirm('Удалить пак «'+p.name+'» из коллекции?')) return;
-          const ow = owned().filter(id => id !== p.id);
-          setOwned(ow);
-          // clear click progress too
-          const oo = clicks(); delete oo[p.id]; setClicks(oo);
-          window.slMergeStickerPacks();
-          toast('Пак удалён');
-          updateStickerBtnVisibility();
-          // refresh UI on this slide
-          hero.classList.remove('owned');
-          const sub = slide.querySelector('.sl-pack-hero-sub');
-          if(sub) sub.textContent = (p.special?'Самый редкий пак · 50 нажатий! ':'') + 'Нажми '+(p.special?50:10)+' раз';
-          const bar2 = slide.querySelector('.sl-pack-progress > i');
-          if(bar2) bar2.style.width = '0%';
-          if(cnt) cnt.textContent = '0/'+(p.special?50:10);
-          delBtn.remove();
-          // if no packs left, hide sticker btn
-          if(!owned().length){
-            try{ activeStickerPack = null; }catch(err){}
-          }
-        };
-      }
-
-      // 9) clickable dots
-      const d=document.createElement('span');
-      d.title=p.name;
-      d.style.cursor='pointer';
-      if(p.special){ d.style.background='#F7B955'; d.style.width='10px'; d.style.height='10px'; }
-      if(idx===0) d.classList.add('on');
-      d.onclick=()=>{
-        const w=car.clientWidth||1;
-        car.scrollTo({left: idx*w, behavior:'smooth'});
-      };
-      dots.appendChild(d);
-    });
-
-    car.addEventListener('scroll', ()=>{
-      const w=car.clientWidth||1;
-      const i=Math.round(car.scrollLeft/w);
-      dots.querySelectorAll('span').forEach((s,idx)=>s.classList.toggle('on', idx===i));
-    }, {passive:true});
-  };
+  window.slOpenStickerPackShop = function(){ try{ if(typeof window.openStickerPackManager==='function') window.openStickerPackManager(); }catch(e){} };
 
   // Rebind settings
   setTimeout(()=>{
@@ -19938,8 +19641,8 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
     'Выберите карточку темы выше':'Pick a theme card above',
     'Пак «':'Pack «','» открыт!':'» unlocked!','» добавлен':'» added',
     'Нажми 50 раз':'Tap 50 times','Самый редкий пак · 50 нажатий! ':'Rarest pack · 50 taps! ',
-    'Листай · точка = переход · 10 нажатий = открыть':'Swipe · dot = jump · 10 taps = unlock',
-    'Листай паки · 10 нажатий чтобы открыть':'Swipe packs · 10 taps to unlock',
+    '':'Swipe · dot = jump · 10 taps = unlock',
+    '':'Swipe packs · 10 taps to unlock',
     'Открытие «':'Opening «','»…':'»…',
     'Вставьте ключ':'Paste a key','Вставьте ключ или выберите «Только локальная»':'Paste a key or choose local only',
     'API снова будет пробоваться':'API will be tried again',
@@ -20414,7 +20117,7 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
   setTimeout(wipe, 2000);
 
   // No-op APIs
-  window.slOpenStickerPackShop = function(){};
+  window.slOpenStickerPackShop = function(){ try{ if(typeof window.openStickerPackManager==='function') window.openStickerPackManager(); }catch(e){} };
   window.slMergeStickerPacks = function(){ try{ window.STICKER_PACKS={}; }catch(e){} };
   window.openStickerPanel = function(){};
   try{ activeStickerPack = null; }catch(e){}
@@ -20742,7 +20445,7 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
     }
   }
 
-  function openAddStickerFlow(){
+  window.openAddStickerFlow = function openAddStickerFlow(){
     const ov=document.createElement('div');
     ov.className='modal-overlay';
     ov.style.zIndex='22000';
@@ -20809,7 +20512,7 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
     ov.querySelector('#stk-keep').onclick=()=>{ if(currentData) finalize(currentData); };
   }
 
-  function openStickerPackManager(){
+  window.openStickerPackManager = function openStickerPackManager(){
     const ov=document.createElement('div');
     ov.className='modal-overlay';
     ov.style.zIndex='22000';
@@ -21512,6 +21215,122 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
   console.log('[SL] pack v12 ready — stickers, animations, stories, social, AI, screentime, no-secret');
 })();
 
+
+
+
+/* ===== SL: permanently kill old sticker-pack gacha shop ===== */
+(function(){
+  'use strict';
+  if(window._slKillPackShop) return;
+  window._slKillPackShop = 1;
+
+  function nukeShopUI(){
+    try{
+      // Remove settings rows
+      ['settings-sticker-packs','settings-sticker-packs-dead'].forEach(id=>{
+        const el=document.getElementById(id); if(el) el.remove();
+      });
+      document.querySelectorAll('.settings-item').forEach(it=>{
+        const t=(it.textContent||'');
+        if(/стикер-?пак|sticker.?pack|магазин стикер/i.test(t)) it.remove();
+      });
+      // Close any open pack-shop modals
+      document.querySelectorAll('.modal-overlay, .sl-pack-modal, .sl-pack-open-ov').forEach(ov=>{
+        const t=(ov.textContent||'');
+        if(/Стикер-паки|100 паков|Пак друга|закрытому паку|Лимит:\s*1 пак/i.test(t)){
+          try{ ov.remove(); }catch(e){}
+        }
+      });
+      // Hide leftover CSS-driven pack UI
+      document.querySelectorAll('.sl-pack-carousel, .sl-pack-grid, .sl-pack-tile, .pack-grid').forEach(el=>{
+        try{ el.remove(); }catch(e){}
+      });
+    }catch(e){}
+  }
+
+  // Hard override — never show gacha shop
+  window.slOpenStickerPackShop = function(){ try{ if(typeof window.openStickerPackManager==='function') window.openStickerPackManager(); }catch(e){} };
+  window.openStickerShop = function(){};
+  window.openStickerPanel = window.openStickerPanel || function(){};
+
+  // Prevent older packs from re-binding settings
+  const _def = Object.defineProperty;
+  try{
+    let _fn = window.slOpenStickerPackShop;
+    Object.defineProperty(window, 'slOpenStickerPackShop', {
+      configurable: true,
+      get(){ return function(){ try{ if(typeof openStickerPackManager==='function') openStickerPackManager(); }catch(e){} }; },
+      set(v){ /* ignore reassignments from old packs */ }
+    });
+  }catch(e){}
+
+  nukeShopUI();
+  setTimeout(nukeShopUI, 300);
+  setTimeout(nukeShopUI, 1500);
+  setTimeout(nukeShopUI, 4000);
+
+  // Watch for modal injection of the old shop
+  try{
+    const mo = new MutationObserver((muts)=>{
+      for(const m of muts){
+        m.addedNodes && m.addedNodes.forEach(n=>{
+          if(n.nodeType!==1) return;
+          const t=(n.textContent||'');
+          if(/Стикер-паки|100 паков|Пак друга \(код\)|закрытому паку 10 раз/i.test(t) &&
+             (n.classList?.contains('modal-overlay') || n.querySelector?.('.modal') || n.classList?.contains('sl-pack-modal'))){
+            try{ n.remove(); }catch(e){}
+          }
+          if(n.id==='settings-sticker-packs' || /стикер-?пак/i.test(n.textContent||'') && n.classList?.contains('settings-item')){
+            // keep v12 custom manager only
+            if(n.id==='settings-sticker-packs') try{ n.remove(); }catch(e){}
+          }
+        });
+      }
+    });
+    mo.observe(document.documentElement, {childList:true, subtree:true});
+  }catch(e){}
+
+  // CSS hide any residual pack-shop chrome
+  if(!document.getElementById('sl-kill-pack-shop-css')){
+    const st=document.createElement('style');
+    st.id='sl-kill-pack-shop-css';
+    st.textContent = `
+      .sl-pack-modal, .sl-pack-open-ov, .sl-pack-carousel, .sl-pack-tile, .sl-pack-grid.pack-grid,
+      #settings-sticker-packs {
+        display:none!important; visibility:hidden!important; pointer-events:none!important;
+      }
+    `;
+    document.head.appendChild(st);
+  }
+
+  console.log('[SL] old sticker-pack shop killed');
+})();
+
+
+
+
+/* ===== FINAL: no gacha sticker shop ===== */
+(function(){
+  'use strict';
+  window.slOpenStickerPackShop = function(){
+    try{ window.openStickerPackManager?.(); }catch(e){}
+  };
+  window.openStickerShop = function(){};
+  function clean(){
+    document.querySelectorAll('#settings-sticker-packs, #settings-sticker-packs-dead').forEach(e=>e.remove());
+    document.querySelectorAll('.modal-overlay, .sl-pack-modal, .sl-pack-open-ov').forEach(ov=>{
+      const t = ov.textContent || '';
+      if(/Стикер-паки|закрытому паку|Пак друга|1 пак\s*\/\s*30/i.test(t)) ov.remove();
+    });
+  }
+  clean();
+  setTimeout(clean, 500);
+  setTimeout(clean, 2000);
+  try{
+    new MutationObserver(clean).observe(document.documentElement, {childList:true, subtree:true});
+  }catch(e){}
+  console.log('[SL] gacha shop removed');
+})();
 
 
 </script>
