@@ -2,6 +2,24 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8" />
+<script>
+(function(){
+  try{
+    var t = localStorage.getItem('sl_theme');
+    var light;
+    if(!t || t==='auto' || t==='system'){
+      light = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
+    } else {
+      light = t==='light';
+    }
+    var cls = light ? 'theme-light light-theme' : 'theme-dark night-mode';
+    document.documentElement.className = (document.documentElement.className||'').replace(/\b(theme-light|light-theme|theme-dark|night-mode)\b/g,'') + ' ' + cls;
+    document.documentElement.style.colorScheme = light ? 'light' : 'dark';
+    var m = document.querySelector('meta[name="theme-color"]');
+    if(m) m.setAttribute('content', light ? '#F4F6F9' : '#0F1419');
+  }catch(e){}
+})();
+</script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
 <meta name="theme-color" content="#4C7CF3" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -7110,10 +7128,25 @@ function showInfoDialog(title, text){
 
 // ---------- Theme + Wallpaper ----------
 const WALLPAPER_KEY='sl_wallpaper', THEME_KEY='sl_theme';
+function slSystemIsLight(){
+  try{
+    if(window.matchMedia) return window.matchMedia('(prefers-color-scheme: light)').matches;
+  }catch(e){}
+  return false;
+}
+function slResolveTheme(){
+  let t = null;
+  try{ t = storage.getItem(THEME_KEY); }catch(e){}
+  if(!t || t==='auto' || t==='system'){
+    return slSystemIsLight() ? 'light' : 'dark';
+  }
+  if(t==='light' || t==='dark') return t;
+  // legacy: respect night flag only if theme key missing handled above
+  return t==='0' || t==='day' ? 'light' : (t==='1' || t==='night' ? 'dark' : (slSystemIsLight()?'light':'dark'));
+}
 function applyTheme(){
-  let t=storage.getItem(THEME_KEY);
-  if(!t){ t = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches===false) ? 'light' : 'dark'; }
-  const isLight = t==='light';
+  const resolved = slResolveTheme();
+  const isLight = resolved==='light';
   document.body.classList.toggle('theme-light', isLight);
   document.body.classList.toggle('light-theme', isLight);
   document.body.classList.toggle('theme-dark', !isLight);
@@ -7146,10 +7179,45 @@ function applyTheme(){
     document.body.style.background = '#0F1419';
     document.body.style.color = '#F4F7FB';
   }
+  // meta theme-color + color-scheme for system UI (status bar, form controls)
+  try{
+    let meta = document.querySelector('meta[name="theme-color"]');
+    if(!meta){ meta=document.createElement('meta'); meta.setAttribute('name','theme-color'); document.head.appendChild(meta); }
+    meta.setAttribute('content', isLight ? '#F4F6F9' : '#0F1419');
+    document.documentElement.style.colorScheme = isLight ? 'light' : 'dark';
+  }catch(e){}
+  try{ window.dispatchEvent(new CustomEvent('sl-theme-change', {detail:{theme:resolved, isLight}})); }catch(e){}
+}
+function slIsThemeAuto(){
+  try{
+    const t = storage.getItem(THEME_KEY);
+    return !t || t==='auto' || t==='system';
+  }catch(e){ return true; }
+}
+function slSetThemeMode(mode){
+  // mode: 'auto' | 'light' | 'dark'
+  try{
+    if(mode==='auto' || mode==='system') storage.removeItem(THEME_KEY);
+    else storage.setItem(THEME_KEY, mode==='light'?'light':'dark');
+  }catch(e){}
+  applyTheme();
 }
 if(window.matchMedia){
-  window.matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', ()=>{ if(!storage.getItem(THEME_KEY)) applyTheme(); });
+  const mq = window.matchMedia('(prefers-color-scheme: dark)');
+  const onSys = ()=>{ if(slIsThemeAuto()) applyTheme(); };
+  if(mq.addEventListener) mq.addEventListener('change', onSys);
+  else if(mq.addListener) mq.addListener(onSys);
 }
+// also listen light media for some browsers
+try{
+  const mql = window.matchMedia('(prefers-color-scheme: light)');
+  const onL = ()=>{ if(slIsThemeAuto()) applyTheme(); };
+  if(mql.addEventListener) mql.addEventListener('change', onL);
+  else if(mql.addListener) mql.addListener(onL);
+}catch(e){}
+window.slSetThemeMode = slSetThemeMode;
+window.slIsThemeAuto = slIsThemeAuto;
+window.slResolveTheme = slResolveTheme;
 function applyWallpaperPreset(){
   const w=storage.getItem(WALLPAPER_KEY);
   const list=document.getElementById('messages-list'); if(!list) return;
@@ -7159,14 +7227,16 @@ function applyWallpaperPreset(){
 }
 applyTheme();
 document.getElementById('settings-wallpaper').onclick=()=>{
-  const curTheme=storage.getItem(THEME_KEY)||(document.body.classList.contains('theme-light')?'light':'dark');
+  const _savedTheme=storage.getItem(THEME_KEY);
+  const _isAuto=(!_savedTheme || _savedTheme==='auto' || _savedTheme==='system');
+  const curTheme=_isAuto ? (slSystemIsLight()?'light':'dark') : (_savedTheme==='light'?'light':'dark');
   const presets=['linear-gradient(135deg,#1e293b,#0f172a)','linear-gradient(135deg,#312e81,#1e1b4b)','linear-gradient(135deg,#164e63,#083344)','linear-gradient(135deg,#7c2d12,#431407)','linear-gradient(135deg,#365314,#1a2e05)','none'];
   const ov=document.createElement('div'); ov.className='modal-overlay';
   ov.innerHTML=`<div class="modal"><button class="close-x" id="wp-close">×</button>
     <h3>Настроить обои</h3>
-    <div class="settings-item" style="padding-left:0"><span class="item-text">Как в системе</span><div class="toggle-switch ${!storage.getItem(THEME_KEY)?'on':''}" id="wp-theme-auto"></div></div>
-    <div class="settings-item" style="padding-left:0"><span class="item-text">Тёмная тема</span><div class="toggle-switch ${curTheme==='dark'&&storage.getItem(THEME_KEY)?'on':''}" id="wp-theme-dark"></div></div>
-    <div class="settings-item" style="padding-left:0"><span class="item-text">Светлая тема</span><div class="toggle-switch ${curTheme==='light'&&storage.getItem(THEME_KEY)?'on':''}" id="wp-theme-light"></div></div>
+    <div class="settings-item" style="padding-left:0"><span class="item-text">Как в системе</span><div class="toggle-switch ${_isAuto?'on':''}" id="wp-theme-auto"></div></div>
+    <div class="settings-item" style="padding-left:0"><span class="item-text">Тёмная тема</span><div class="toggle-switch ${!_isAuto&&curTheme==='dark'?'on':''}" id="wp-theme-dark"></div></div>
+    <div class="settings-item" style="padding-left:0"><span class="item-text">Светлая тема</span><div class="toggle-switch ${!_isAuto&&curTheme==='light'?'on':''}" id="wp-theme-light"></div></div>
     <p style="font-size:12px;color:var(--muted);margin:12px 0 6px">Обои чата</p>
     <div class="gift-grid" id="wp-presets"></div>
     <button class="btn-secondary" id="wp-upload">Загрузить своё фото</button>
@@ -7181,9 +7251,9 @@ document.getElementById('settings-wallpaper').onclick=()=>{
     grid.appendChild(d);
   });
   const syncThemeToggles=(which)=>{ ['auto','dark','light'].forEach(k=>ov.querySelector('#wp-theme-'+k).classList.toggle('on',k===which)); };
-  ov.querySelector('#wp-theme-auto').onclick=function(){ storage.removeItem(THEME_KEY); applyTheme(); syncThemeToggles('auto'); };
-  ov.querySelector('#wp-theme-dark').onclick=function(){ storage.setItem(THEME_KEY,'dark'); try{storage.setItem('sl_night_mode','1');}catch(e){} applyTheme(); syncThemeToggles('dark'); };
-  ov.querySelector('#wp-theme-light').onclick=function(){ storage.setItem(THEME_KEY,'light'); try{storage.setItem('sl_night_mode','0');}catch(e){} applyTheme(); syncThemeToggles('light'); };
+  ov.querySelector('#wp-theme-auto').onclick=function(){ slSetThemeMode('auto'); syncThemeToggles('auto'); try{showToast('Тема как в системе');}catch(e){} };
+  ov.querySelector('#wp-theme-dark').onclick=function(){ slSetThemeMode('dark'); syncThemeToggles('dark'); };
+  ov.querySelector('#wp-theme-light').onclick=function(){ slSetThemeMode('light'); syncThemeToggles('light'); };
   ov.querySelector('#wp-upload').onclick=()=>ov.querySelector('#wp-file').click();
   ov.querySelector('#wp-file').onchange=function(e){
     const f=e.target.files[0]; if(!f) return;
@@ -19723,32 +19793,26 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
 
     ov.querySelector('#ap-back').onclick=()=>ov.remove();
     ov.querySelector('#ap-night-tg').onclick=function(){
-      this.classList.toggle('on');
-      const on=this.classList.contains('on');
-      LS.setItem('sl_night_mode', on?'1':'0');
-      LS.setItem('sl_theme', on?'dark':'light');
-      document.body.classList.toggle('light-theme', !on);
-      document.body.classList.toggle('theme-light', !on);
-      document.body.classList.toggle('theme-dark', on);
-      document.body.classList.toggle('night-mode', on);
-      document.documentElement.classList.toggle('light-theme', !on);
-      document.documentElement.classList.toggle('theme-light', !on);
-      document.documentElement.classList.toggle('theme-dark', on);
-      var r=document.documentElement.style;
-      if(!on){
-        r.setProperty('--bg','#F4F6F9'); r.setProperty('--panel','#FFFFFF');
-        r.setProperty('--panel-hover','#EEF1F5'); r.setProperty('--line','rgba(0,0,0,.08)');
-        r.setProperty('--text','#1A1D21'); r.setProperty('--muted','#6B7A90');
-        r.setProperty('--input-bg','#F0F2F5'); r.setProperty('--bubble-them','#FFFFFF');
-        document.body.style.background='#F4F6F9'; document.body.style.color='#1A1D21';
-      } else {
-        r.setProperty('--bg','#0F1419'); r.setProperty('--panel','#1A222D');
-        r.setProperty('--panel-hover','#243041'); r.setProperty('--line','rgba(255,255,255,.08)');
-        r.setProperty('--text','#F4F7FB'); r.setProperty('--muted','#8B9BB4');
-        r.setProperty('--input-bg','#151C27'); r.setProperty('--bubble-them','#243041');
-        document.body.style.background='#0F1419'; document.body.style.color='#F4F7FB';
+      // cycle: auto (system) → dark → light → auto
+      let mode = 'auto';
+      try{
+        const cur = LS.getItem('sl_theme');
+        if(!cur || cur==='auto' || cur==='system') mode = 'dark';
+        else if(cur==='dark') mode = 'light';
+        else mode = 'auto';
+      }catch(e){ mode='dark'; }
+      if(typeof slSetThemeMode==='function') slSetThemeMode(mode);
+      else {
+        try{
+          if(mode==='auto') LS.removeItem('sl_theme');
+          else LS.setItem('sl_theme', mode);
+        }catch(e){}
+        if(typeof applyTheme==='function') applyTheme();
       }
-      toast(on?'Ночной режим':'Дневной режим');
+      const isNight = (typeof slResolveTheme==='function' ? slResolveTheme() : 'dark') === 'dark';
+      this.classList.toggle('on', isNight);
+      const label = mode==='auto' ? 'Как в системе' : (mode==='dark' ? 'Ночной режим' : 'Дневной режим');
+      toast(label);
     };
     ov.querySelector('#ap-chat-themes').onclick=()=>toast('Выберите карточку темы выше');
     ov.querySelector('#ap-wallpapers').onclick=()=>{
