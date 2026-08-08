@@ -22749,6 +22749,676 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
 
 
 
+
+/* ===== SL: Telegram sticker panel 1:1 ===== */
+(function(){
+  'use strict';
+  if(window._slTgStickerUI2) return;
+  window._slTgStickerUI2 = 1;
+  const LS = (typeof storage!=='undefined'?storage:localStorage);
+  const toast=(m)=>{ try{showToast(m);}catch(e){console.log(m);} };
+
+  const KEYS = {
+    custom: 'sl_custom_stickers_v12',
+    fav: 'sl_fav_stickers',
+    recent: 'sl_recent_stickers',
+    packs: 'sl_installed_packs'
+  };
+
+  function load(k, d){ try{ return JSON.parse(LS.getItem(k)||JSON.stringify(d)); }catch(e){ return d; } }
+  function save(k, v){ try{ LS.setItem(k, JSON.stringify(v)); }catch(e){} }
+
+  // --- SVG sticker helpers (Telegram-like look) ---
+  function svgSticker(inner, w, h){
+    w=w||128; h=h||128;
+    const s=`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${inner}</svg>`;
+    return 'data:image/svg+xml,'+encodeURIComponent(s);
+  }
+  function emojiSticker(emoji){
+    return svgSticker(`<text x="64" y="88" text-anchor="middle" font-size="80">${emoji}</text>`);
+  }
+  function faceSticker(emoji){ return emojiSticker(emoji); }
+
+  // Catalog of installable packs (like Telegram sticker store)
+  const CATALOG = [
+    {
+      id:'chilled', name:'Chilled Cat', count:12, preview:['😺','😻','😼','🙀','😿','😾'],
+      stickers:['😺','😸','😹','😻','😼','😽','🙀','😿','😾','🐱','🐈','🐾'].map((e,i)=>({id:'ch_'+i,url:emojiSticker(e)}))
+    },
+    {
+      id:'lizard', name:'Green Lezard', count:10, preview:['🦎','🐸','🐊'],
+      stickers:['🦎','🐸','🐊','🐍','🐢','🐲','🐉','🦕','🦖','🐛'].map((e,i)=>({id:'lz_'+i,url:emojiSticker(e)}))
+    },
+    {
+      id:'donut', name:'Donut', count:10, preview:['🍩','🍪','🧁'],
+      stickers:['🍩','🍪','🧁','🎂','🍫','🍬','🍭','🍮','🍦','🍨'].map((e,i)=>({id:'dn_'+i,url:emojiSticker(e)}))
+    },
+    {
+      id:'moomin', name:'MOOMIN', count:16, preview:['🤍','🎩','☂️'],
+      stickers:['👻','🤍','🎩','☂️','🌸','🎨','❓','💤','❤️','🌊','🌈','🍼','🍀','⭐','🌙','🎵'].map((e,i)=>({id:'mm_'+i,url:emojiSticker(e)}))
+    },
+    {
+      id:'peach', name:'Peachy', count:8, preview:['🍑','🐻','🎀'],
+      stickers:['🍑','🐻','🎀','🌻','🌸','💗','🧸','✨'].map((e,i)=>({id:'ph_'+i,url:emojiSticker(e)}))
+    },
+    {
+      id:'faces', name:'Funny Faces', count:20, preview:['😂','😎','🤔'],
+      stickers:['😀','😂','🤣','😍','😎','🤔','😱','🤡','💀','💩','🥰','😤','😴','🤩','🙄','😏','🥺','😈','🤝','🔥'].map((e,i)=>({id:'ff_'+i,url:emojiSticker(e)}))
+    }
+  ];
+
+  function getInstalled(){
+    let ids = load(KEYS.packs, ['faces','peach','moomin']);
+    return CATALOG.filter(p=>ids.includes(p.id));
+  }
+  function installPack(id){
+    let ids = load(KEYS.packs, ['faces','peach','moomin']);
+    if(!ids.includes(id)){ ids.unshift(id); save(KEYS.packs, ids); }
+    toast('Стикерпак добавлен');
+    closeStore();
+    activeView='packs';
+    activePackId=id;
+    openPanel();
+    renderAll();
+  }
+
+  function getFavs(){ return load(KEYS.fav, []); }
+  function getRecent(){ return load(KEYS.recent, []); }
+  function getCustom(){ return load(KEYS.custom, []); }
+
+  function pushRecent(url){
+    let r=getRecent().filter(x=>x.url!==url);
+    r.unshift({url, id:'r_'+Date.now()});
+    save(KEYS.recent, r.slice(0,40));
+  }
+  function toggleFav(url){
+    let f=getFavs();
+    if(f.some(x=>x.url===url)) f=f.filter(x=>x.url!==url);
+    else f.unshift({url, id:'f_'+Date.now()});
+    save(KEYS.fav, f.slice(0,60));
+    toast('Избранное обновлено');
+  }
+
+  function sendSticker(url){
+    if(!url) return;
+    try{ if(!activePartner && !activeGroup){ toast('Откройте чат'); return; } }catch(e){}
+    pushRecent(url);
+    try{ if(typeof sendMessage==='function') sendMessage('sticker', url, ''); }catch(e){ toast('Ошибка отправки'); }
+    closePanel();
+  }
+
+  // --- state ---
+  let activeTab='stickers'; // stickers | gif | emoji
+  let activeView='home'; // home | packs | store | create
+  let activePackId=null;
+
+  function closePanel(){
+    const p=document.getElementById('tg2-panel');
+    if(p){ p.classList.remove('show'); p.style.display='none'; }
+    document.querySelectorAll('#tg-stk-panel,#sl-stk-panel,.sl-stk-panel,#sticker-panel').forEach(el=>{
+      el.classList.remove('show'); el.style.display='none';
+    });
+    hideMenu();
+  }
+  function openPanel(){
+    ensure();
+    const p=document.getElementById('tg2-panel');
+    if(!p) return;
+    p.classList.add('show');
+    p.style.display='flex';
+    activeView='home';
+    activeTab='stickers';
+    renderAll();
+  }
+
+  function hideMenu(){ document.getElementById('tg2-menu')?.remove(); }
+
+  function showStickerMenu(url, fromEl){
+    hideMenu();
+    const menu=document.createElement('div');
+    menu.id='tg2-menu';
+    menu.className='tg2-menu';
+    menu.innerHTML=`
+      <div class="tg2-menu-card">
+        <div class="tg2-menu-preview"><img src="${url}" alt=""></div>
+        <button type="button" data-a="send">↑  Отправить стикер</button>
+        <button type="button" data-a="fav">☆  Добавить в избранные</button>
+        <button type="button" data-a="pack">＋  Добавить в набор</button>
+      </div>
+      <div class="tg2-menu-backdrop"></div>`;
+    document.body.appendChild(menu);
+    menu.querySelector('.tg2-menu-backdrop').onclick=hideMenu;
+    menu.querySelector('[data-a="send"]').onclick=()=>{ hideMenu(); sendSticker(url); };
+    menu.querySelector('[data-a="fav"]').onclick=()=>{ toggleFav(url); hideMenu(); renderAll(); };
+    menu.querySelector('[data-a="pack"]').onclick=()=>{
+      const list=getCustom();
+      if(!list.some(s=>s.url===url)){ list.unshift({id:'c_'+Date.now(),url,created:Date.now()}); save(KEYS.custom,list); }
+      toast('Добавлено в «Мои»');
+      hideMenu(); renderAll();
+    };
+  }
+
+  function cell(url, extra){
+    return `<button type="button" class="tg2-cell" data-url="${url}" ${extra||''}><img src="${url}" alt=""></button>`;
+  }
+
+  function renderAll(){
+    const p=document.getElementById('tg2-panel');
+    if(!p) return;
+    // tabs
+    p.querySelectorAll('.tg2-tab').forEach(t=>t.classList.toggle('on', t.dataset.tab===activeTab));
+    renderStrip();
+    renderBody();
+  }
+
+  function renderStrip(){
+    const strip=document.getElementById('tg2-strip');
+    if(!strip) return;
+    const packs=getInstalled();
+    const custom=getCustom();
+    let html=`
+      <button type="button" class="tg2-ico ${activeView==='home'&&!activePackId?'on':''}" data-v="home" title="Популярные">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+      </button>
+      <button type="button" class="tg2-ico ${activeView==='fav'?'on':''}" data-v="fav" title="Избранные">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z"/></svg>
+      </button>
+      <button type="button" class="tg2-ico ${activeView==='recent'?'on':''}" data-v="recent" title="Недавние">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+      </button>`;
+    if(custom.length){
+      html+=`<button type="button" class="tg2-ico ${activePackId==='mine'?'on':''}" data-pack="mine" title="Мои">
+        <img src="${custom[0].url}" alt="">
+      </button>`;
+    }
+    packs.forEach(pk=>{
+      const thumb=pk.stickers[0]?.url||'';
+      html+=`<button type="button" class="tg2-ico ${activePackId===pk.id?'on':''}" data-pack="${pk.id}" title="${pk.name}">
+        <img src="${thumb}" alt="">
+      </button>`;
+    });
+    strip.innerHTML=html;
+    strip.querySelectorAll('[data-v]').forEach(b=>{
+      b.onclick=()=>{ activeView=b.dataset.v; activePackId=null; activeTab='stickers'; renderAll(); };
+    });
+    strip.querySelectorAll('[data-pack]').forEach(b=>{
+      b.onclick=()=>{ activeView='packs'; activePackId=b.dataset.pack; activeTab='stickers'; renderAll(); };
+    });
+  }
+
+  function section(title, items, opts){
+    if(!items || !items.length) return '';
+    const close = opts&&opts.closeable ? `<button type="button" class="tg2-sec-x" data-close="${opts.closeable}">×</button>` : '';
+    return `<div class="tg2-sec">
+      <div class="tg2-sec-h"><span>${title}</span>${close}</div>
+      <div class="tg2-grid">${items.map(s=>cell(s.url||s)).join('')}</div>
+    </div>`;
+  }
+
+  function renderBody(){
+    const body=document.getElementById('tg2-body');
+    if(!body) return;
+
+    if(activeTab==='gif'){
+      body.innerHTML=`<div class="tg2-empty">GIF — скоро<br><span style="font-size:12px;opacity:.6">Пока отправьте стикер</span></div>`;
+      return;
+    }
+    if(activeTab==='emoji'){
+      const rows='😀😁😂🤣😃😄😅😆😉😊😋😎😍😘🥰😗😙😚☺🙂🤗🤩🤔🤨😐😑😶🙄😏😣😥😮🤐😯😪😫🥱😴😌😛😜😝🤤😒😓😔😕🙃🤑😲☹🙁😖😞😟😤😢😭😦😧😨😩🤯😬😰😱🥵🥶😳🤪😵😡😠🤬😷🤒🤕🤢🤮🥴😇🥳🥺🤠🤡😈👿💀☠👻👽🤖💩😺😸😹😻😼😽🙀😿😾🙈🙉🙊💋💌💘💝💖💗💓💞💕💟❣💔❤🧡💛💚💙💜🤎🖤🤍💯💢💥💫💦💨🕳💣💬👁🗨🗩💭💤👋🤚🖐✋🖖👌🤌🤏✌🤞🤟🤘🤙👈👉👆🖕👇☝👍👎✊👊🤛🤜👏🙌👐🤲🤝🙏✍💅🤳💪🦾🦿🦵🦶👂🦻👃🧠🫀🫁🦷🦴👀👁👅👄'.match(/./gu)||[];
+      body.innerHTML=`<div class="tg2-emoji">${rows.map(e=>`<button type="button" class="tg2-em" data-e="${e}">${e}</button>`).join('')}</div>`;
+      body.querySelectorAll('.tg2-em').forEach(b=>{
+        b.onclick=()=>{
+          const input=document.getElementById('message-input');
+          if(!input) return;
+          input.value+=(b.dataset.e||'');
+          input.dispatchEvent(new Event('input',{bubbles:true}));
+          document.getElementById('composer')?.classList.add('has-text');
+          document.getElementById('send-btn')?.classList.add('visible');
+        };
+      });
+      return;
+    }
+
+    // stickers
+    let html='';
+    if(activeView==='fav'){
+      html+=section('ИЗБРАННЫЕ СТИКЕРЫ', getFavs());
+      if(!getFavs().length) html=`<div class="tg2-empty">Нет избранных<br><span style="font-size:12px;opacity:.6">Долгое нажатие на стикер → в избранное</span></div>`;
+    } else if(activeView==='recent'){
+      html+=section('НЕДАВНИЕ', getRecent());
+      if(!getRecent().length) html=`<div class="tg2-empty">Пока пусто</div>`;
+    } else if(activeView==='packs' && activePackId){
+      if(activePackId==='mine'){
+        html+=section('МОИ СТИКЕРЫ', getCustom());
+        html+=`<div class="tg2-create-row"><button type="button" id="tg2-create">＋ Создать стикер</button></div>`;
+      } else {
+        const pk=CATALOG.find(p=>p.id===activePackId);
+        if(pk) html+=section(pk.name.toUpperCase(), pk.stickers);
+      }
+    } else {
+      // home
+      const fav=getFavs();
+      const recent=getRecent();
+      const popular=CATALOG.find(p=>p.id==='faces')?.stickers.slice(0,12)||[];
+      if(fav.length) html+=section('ИЗБРАННЫЕ СТИКЕРЫ', fav, {closeable:'fav'});
+      if(recent.length) html+=section('НЕДАВНИЕ', recent, {closeable:'recent'});
+      html+=section('ПОПУЛЯРНЫЕ PREMIUM-СТИКЕРЫ', popular);
+      // pack previews
+      getInstalled().forEach(pk=>{
+        html+=section(pk.name.toUpperCase(), pk.stickers.slice(0,10));
+      });
+      html+=`<div class="tg2-create-row"><button type="button" id="tg2-create">＋ Создать стикер</button>
+        <button type="button" id="tg2-store">Магазин стикеров</button></div>`;
+    }
+    body.innerHTML=html||`<div class="tg2-empty">Нет стикеров</div>`;
+
+    // bind cells
+    body.querySelectorAll('.tg2-cell').forEach(c=>{
+      c.onclick=()=>sendSticker(c.dataset.url);
+      let t=null;
+      c.addEventListener('pointerdown', e=>{
+        t=setTimeout(()=>{ t=null; showStickerMenu(c.dataset.url, c); }, 450);
+      });
+      const clr=()=>{ if(t){ clearTimeout(t); t=null; } };
+      c.addEventListener('pointerup', clr);
+      c.addEventListener('pointerleave', clr);
+      c.addEventListener('pointercancel', clr);
+    });
+    body.querySelectorAll('[data-close]').forEach(b=>{
+      b.onclick=()=>{
+        if(b.dataset.close==='fav') save(KEYS.fav, []);
+        if(b.dataset.close==='recent') save(KEYS.recent, []);
+        renderAll();
+      };
+    });
+    body.querySelector('#tg2-create')?.addEventListener('click', openCreate);
+    body.querySelector('#tg2-store')?.addEventListener('click', openStore);
+  }
+
+  function openStore(){
+    ensure();
+    const p=document.getElementById('tg2-panel');
+    const body=document.getElementById('tg2-body');
+    const strip=document.getElementById('tg2-strip');
+    if(strip) strip.style.display='none';
+    const searchRow=document.getElementById('tg2-search-row');
+    if(searchRow) searchRow.innerHTML=`
+      <div class="tg2-store-bar">
+        <input type="search" id="tg2-store-q" placeholder="Поиск стикеров" autocomplete="off">
+        <button type="button" id="tg2-store-done">Готово</button>
+      </div>`;
+    const installed=new Set(load(KEYS.packs, []));
+    function paint(q){
+      q=(q||'').toLowerCase();
+      body.innerHTML=CATALOG.filter(p=>!q||p.name.toLowerCase().includes(q)).map(p=>`
+        <div class="tg2-store-item">
+          <div class="tg2-store-meta">
+            <div>
+              <div class="tg2-store-name">${p.name}</div>
+              <div class="tg2-store-count">${p.stickers.length} стикеров</div>
+            </div>
+            <button type="button" class="tg2-add-btn ${installed.has(p.id)?'done':''}" data-id="${p.id}">
+              ${installed.has(p.id)?'✓':'ДОБАВИТЬ'}
+            </button>
+          </div>
+          <div class="tg2-store-prev">${p.stickers.slice(0,6).map(s=>`<img src="${s.url}" alt="">`).join('')}</div>
+        </div>
+      `).join('');
+      body.querySelectorAll('.tg2-add-btn:not(.done)').forEach(b=>{
+        b.onclick=()=>installPack(b.dataset.id);
+      });
+    }
+    paint();
+    document.getElementById('tg2-store-q').oninput=e=>paint(e.target.value);
+    document.getElementById('tg2-store-done').onclick=()=>{
+      if(strip) strip.style.display='';
+      restoreSearchRow();
+      activeView='home';
+      renderAll();
+    };
+  }
+  function closeStore(){
+    const strip=document.getElementById('tg2-strip');
+    if(strip) strip.style.display='';
+    restoreSearchRow();
+  }
+
+  function restoreSearchRow(){
+    const row=document.getElementById('tg2-search-row');
+    if(!row) return;
+    row.innerHTML=`
+      <div class="tg2-search-wrap">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.3-4.3"/></svg>
+        <input type="search" id="tg2-q" placeholder="Поиск" autocomplete="off">
+      </div>
+      <div class="tg2-reacts">
+        <button type="button" data-e="❤️">❤️</button>
+        <button type="button" data-e="👍">👍</button>
+        <button type="button" data-e="👎">👎</button>
+        <button type="button" data-e="🔥">🔥</button>
+        <button type="button" data-e="🥰">🥰</button>
+        <button type="button" data-e="👏">👏</button>
+        <button type="button" data-e="😁">😁</button>
+        <button type="button" data-e="🤔">🤔</button>
+        <button type="button" data-e="🎉">🎉</button>
+      </div>`;
+    row.querySelector('#tg2-q').oninput=e=>{
+      const q=e.target.value.trim().toLowerCase();
+      if(!q){ renderBody(); return; }
+      const body=document.getElementById('tg2-body');
+      const all=[];
+      CATALOG.forEach(p=>p.stickers.forEach(s=>all.push(s)));
+      getCustom().forEach(s=>all.push(s));
+      body.innerHTML=section('ПОИСК', all.filter(s=>true).slice(0,40));
+      body.querySelectorAll('.tg2-cell').forEach(c=>{
+        c.onclick=()=>sendSticker(c.dataset.url);
+      });
+    };
+    row.querySelectorAll('.tg2-reacts button').forEach(b=>{
+      b.onclick=()=>{
+        const input=document.getElementById('message-input');
+        if(!input) return;
+        input.value+=(b.dataset.e||'');
+        input.dispatchEvent(new Event('input',{bubbles:true}));
+        document.getElementById('composer')?.classList.add('has-text');
+        document.getElementById('send-btn')?.classList.add('visible');
+      };
+    });
+  }
+
+  function openCreate(){
+    const inp=document.createElement('input');
+    inp.type='file'; inp.accept='image/*';
+    inp.onchange=async()=>{
+      const f=inp.files&&inp.files[0];
+      if(!f) return;
+      const reader=new FileReader();
+      reader.onload=()=>{
+        const url=reader.result;
+        // show preview actions like Telegram
+        const ov=document.createElement('div');
+        ov.id='tg2-create-ov';
+        ov.className='tg2-create-ov';
+        ov.innerHTML=`
+          <div class="tg2-create-inner">
+            <img src="${url}" alt="">
+            <div class="tg2-create-actions">
+              <button type="button" data-a="send">↑ Отправить стикер</button>
+              <button type="button" data-a="fav">☆ Добавить в избранные</button>
+              <button type="button" data-a="pack">＋ Добавить в набор</button>
+              <button type="button" data-a="cancel" class="muted">Отмена</button>
+            </div>
+          </div>`;
+        document.body.appendChild(ov);
+        ov.querySelector('[data-a="cancel"]').onclick=()=>ov.remove();
+        ov.querySelector('[data-a="send"]').onclick=()=>{ ov.remove(); sendSticker(url); };
+        ov.querySelector('[data-a="fav"]').onclick=()=>{ toggleFav(url); ov.remove(); renderAll(); };
+        ov.querySelector('[data-a="pack"]').onclick=()=>{
+          const list=getCustom();
+          list.unshift({id:'c_'+Date.now(), url, created:Date.now()});
+          save(KEYS.custom, list);
+          toast('Стикер создан');
+          ov.remove(); renderAll();
+        };
+      };
+      reader.readAsDataURL(f);
+    };
+    inp.click();
+  }
+
+  function ensure(){
+    // kill old panels
+    document.querySelectorAll('#tg-stk-panel,#sl-stk-panel,.sl-stk-panel,#sticker-panel').forEach(el=>{
+      el.style.display='none'; el.classList.remove('show');
+    });
+    if(document.getElementById('tg2-panel')) return;
+
+    const composer=document.getElementById('composer')||document.querySelector('.composer');
+    const panel=document.createElement('div');
+    panel.id='tg2-panel';
+    panel.className='tg2-panel';
+    panel.innerHTML=`
+      <div class="tg2-strip" id="tg2-strip"></div>
+      <div class="tg2-search-row" id="tg2-search-row"></div>
+      <div class="tg2-body" id="tg2-body"></div>
+      <div class="tg2-bottom">
+        <div class="tg2-tabs">
+          <button type="button" class="tg2-tab" data-tab="gif">GIF</button>
+          <button type="button" class="tg2-tab on" data-tab="stickers">Стикеры</button>
+          <button type="button" class="tg2-tab" data-tab="emoji">Эмодзи</button>
+        </div>
+        <button type="button" class="tg2-gear" id="tg2-gear" title="Настройки">⚙</button>
+        <button type="button" class="tg2-x" id="tg2-x" title="Закрыть">×</button>
+      </div>`;
+    if(composer&&composer.parentNode) composer.parentNode.insertBefore(panel, composer);
+    else document.body.appendChild(panel);
+
+    panel.querySelector('#tg2-x').onclick=e=>{ e.stopPropagation(); closePanel(); };
+    panel.querySelector('#tg2-gear').onclick=()=>openStore();
+    panel.querySelectorAll('.tg2-tab').forEach(t=>{
+      t.onclick=()=>{ activeTab=t.dataset.tab; activeView='home'; activePackId=null; renderAll(); };
+    });
+    restoreSearchRow();
+
+    document.addEventListener('pointerdown', e=>{
+      const p=document.getElementById('tg2-panel');
+      if(!p||!p.classList.contains('show')) return;
+      if(p.contains(e.target)) return;
+      if(e.target.closest('#sticker-btn,#sl-stk-btn,#tg2-menu,#tg2-create-ov')) return;
+      closePanel();
+    }, true);
+  }
+
+  // CSS — Telegram look
+  if(!document.getElementById('tg2-css')){
+    const st=document.createElement('style');
+    st.id='tg2-css';
+    st.textContent=`
+      #tg-stk-panel, .sl-stk-panel, #sl-stk-panel, #sticker-panel { display:none!important; }
+
+      .tg2-panel{
+        position:absolute; left:0; right:0;
+        bottom:calc(56px + env(safe-area-inset-bottom,0px));
+        z-index:60; display:none; flex-direction:column;
+        height:min(54vh, 460px); max-height:54vh;
+        background:#1c1f2e;
+        border-radius:14px 14px 0 0;
+        box-shadow:0 -8px 32px rgba(0,0,0,.5);
+        overflow:hidden;
+      }
+      .tg2-panel.show{ display:flex!important; }
+
+      .tg2-strip{
+        display:flex; gap:2px; padding:8px 8px 6px; overflow-x:auto;
+        border-bottom:1px solid rgba(255,255,255,.06);
+        scrollbar-width:none; flex-shrink:0;
+      }
+      .tg2-strip::-webkit-scrollbar{display:none}
+      .tg2-ico{
+        width:42px; height:42px; border-radius:12px; border:none;
+        background:transparent; color:rgba(255,255,255,.55);
+        display:flex; align-items:center; justify-content:center;
+        flex-shrink:0; cursor:pointer; overflow:hidden; padding:0;
+      }
+      .tg2-ico.on{ background:rgba(255,255,255,.12); color:#fff; }
+      .tg2-ico img{ width:100%; height:100%; object-fit:cover; }
+
+      .tg2-search-row{
+        display:flex; align-items:center; gap:6px; padding:6px 10px;
+        flex-shrink:0;
+      }
+      .tg2-search-wrap{
+        flex:1; min-width:0; display:flex; align-items:center; gap:6px;
+        background:rgba(255,255,255,.08); border-radius:18px; padding:0 10px;
+        color:rgba(255,255,255,.4);
+      }
+      #tg2-q, #tg2-store-q{
+        flex:1; border:none; background:transparent; color:#fff;
+        font-size:14px; padding:8px 0; outline:none; min-width:0;
+      }
+      #tg2-q::placeholder, #tg2-store-q::placeholder{ color:rgba(255,255,255,.35); }
+      .tg2-reacts{ display:flex; gap:1px; flex-shrink:0; max-width:46%; overflow-x:auto; scrollbar-width:none; }
+      .tg2-reacts::-webkit-scrollbar{display:none}
+      .tg2-reacts button{
+        width:28px; height:28px; border:none; background:transparent;
+        font-size:15px; cursor:pointer; border-radius:6px; flex-shrink:0;
+      }
+      .tg2-store-bar{ display:flex; gap:8px; width:100%; align-items:center; }
+      .tg2-store-bar input{
+        flex:1; border:none; background:rgba(255,255,255,.08); color:#fff;
+        border-radius:18px; padding:10px 14px; font-size:14px; outline:none;
+      }
+      #tg2-store-done{
+        border:none; background:transparent; color:#5B9CFF;
+        font-size:15px; font-weight:600; cursor:pointer; padding:8px;
+      }
+
+      .tg2-body{ flex:1; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch; padding-bottom:6px; }
+      .tg2-sec{ padding:2px 0 8px; }
+      .tg2-sec-h{
+        display:flex; align-items:center; justify-content:space-between;
+        padding:8px 14px 6px; font-size:11px; font-weight:700;
+        letter-spacing:.05em; color:rgba(255,255,255,.4); text-transform:uppercase;
+      }
+      .tg2-sec-x{
+        width:24px; height:24px; border:none; border-radius:50%;
+        background:rgba(255,255,255,.08); color:rgba(255,255,255,.5);
+        font-size:16px; cursor:pointer; line-height:1;
+      }
+      .tg2-grid{
+        display:grid; grid-template-columns:repeat(auto-fill,minmax(70px,1fr));
+        gap:2px; padding:0 6px;
+      }
+      .tg2-cell{
+        aspect-ratio:1; border:none; background:transparent; border-radius:12px;
+        padding:3px; cursor:pointer; display:flex; align-items:center; justify-content:center;
+      }
+      .tg2-cell:active{ background:rgba(255,255,255,.08); transform:scale(.94); }
+      .tg2-cell img{ width:100%; height:100%; object-fit:contain; pointer-events:none; }
+
+      .tg2-emoji{
+        display:grid; grid-template-columns:repeat(8,1fr); gap:2px; padding:8px;
+      }
+      .tg2-em{
+        aspect-ratio:1; border:none; background:transparent; font-size:26px;
+        border-radius:8px; cursor:pointer;
+      }
+      .tg2-em:active{ background:rgba(255,255,255,.1); }
+
+      .tg2-empty{ padding:48px 20px; text-align:center; color:rgba(255,255,255,.4); font-size:14px; line-height:1.5; }
+      .tg2-create-row{ display:flex; gap:8px; padding:12px 14px; flex-wrap:wrap; }
+      .tg2-create-row button, .tg2-add-btn{
+        border:none; border-radius:16px; padding:10px 16px; font-size:13px; font-weight:600;
+        background:rgba(255,255,255,.1); color:#fff; cursor:pointer;
+      }
+      .tg2-add-btn{ background:#3A7AFE; padding:8px 14px; font-size:12px; }
+      .tg2-add-btn.done{ background:rgba(255,255,255,.12); color:rgba(255,255,255,.5); }
+
+      .tg2-store-item{ padding:12px 14px; border-bottom:1px solid rgba(255,255,255,.05); }
+      .tg2-store-meta{ display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+      .tg2-store-name{ font-size:15px; font-weight:600; color:#fff; }
+      .tg2-store-count{ font-size:12px; color:rgba(255,255,255,.4); margin-top:2px; }
+      .tg2-store-prev{ display:flex; gap:6px; overflow:hidden; }
+      .tg2-store-prev img{ width:52px; height:52px; object-fit:contain; flex-shrink:0; }
+
+      .tg2-bottom{
+        flex-shrink:0; display:flex; align-items:center; gap:6px;
+        padding:8px 10px calc(8px + env(safe-area-inset-bottom,0px));
+        border-top:1px solid rgba(255,255,255,.06); background:#161822;
+      }
+      .tg2-tabs{
+        flex:1; display:flex; background:rgba(255,255,255,.06);
+        border-radius:20px; padding:3px;
+      }
+      .tg2-tab{
+        flex:1; border:none; background:transparent; color:rgba(255,255,255,.45);
+        font-size:13px; font-weight:600; padding:8px 0; border-radius:17px; cursor:pointer;
+      }
+      .tg2-tab.on{ background:rgba(255,255,255,.14); color:#fff; }
+      .tg2-gear, .tg2-x{
+        width:36px; height:36px; border-radius:50%; border:none;
+        background:rgba(255,255,255,.06); color:rgba(255,255,255,.7);
+        font-size:18px; cursor:pointer; flex-shrink:0;
+        display:flex; align-items:center; justify-content:center;
+      }
+      .tg2-x{ font-size:22px; }
+
+      .tg2-menu{ position:fixed; inset:0; z-index:200; display:flex; align-items:center; justify-content:center; }
+      .tg2-menu-backdrop{ position:absolute; inset:0; background:rgba(0,0,0,.55); }
+      .tg2-menu-card{
+        position:relative; z-index:1; background:#2a2d3c; border-radius:16px;
+        padding:16px; width:min(300px,86vw); display:flex; flex-direction:column; gap:4px;
+        box-shadow:0 16px 48px rgba(0,0,0,.5);
+      }
+      .tg2-menu-preview{ display:flex; justify-content:center; padding:12px; }
+      .tg2-menu-preview img{ width:120px; height:120px; object-fit:contain; }
+      .tg2-menu-card button{
+        border:none; background:transparent; color:#fff; text-align:left;
+        padding:12px 10px; font-size:15px; border-radius:10px; cursor:pointer;
+      }
+      .tg2-menu-card button:active{ background:rgba(255,255,255,.08); }
+      .tg2-menu-card button.muted{ color:rgba(255,255,255,.45); }
+
+      .tg2-create-ov{
+        position:fixed; inset:0; z-index:210; background:#0e0f14;
+        display:flex; flex-direction:column; align-items:center; justify-content:center;
+        padding:20px;
+      }
+      .tg2-create-inner{ display:flex; flex-direction:column; align-items:center; gap:20px; max-width:360px; width:100%; }
+      .tg2-create-inner img{ max-width:220px; max-height:220px; object-fit:contain; border-radius:20px; }
+      .tg2-create-actions{ display:flex; flex-direction:column; gap:6px; width:100%; }
+      .tg2-create-actions button{
+        border:none; background:rgba(255,255,255,.08); color:#fff;
+        padding:14px 16px; border-radius:12px; font-size:15px; text-align:left; cursor:pointer;
+      }
+      .tg2-create-actions button.muted{ color:rgba(255,255,255,.45); }
+
+      /* stickers in chat — no bubble chrome */
+      .bubble:has(> img.sticker-animated),
+      .bubble.bubble-sticker{
+        background:transparent!important; border:none!important;
+        box-shadow:none!important; padding:2px!important;
+      }
+      .bubble img.sticker-animated{
+        max-width:160px; max-height:160px; background:transparent!important;
+      }
+
+      @media(max-width:380px){
+        .tg2-reacts{ display:none; }
+        .tg2-grid{ grid-template-columns:repeat(auto-fill,minmax(64px,1fr)); }
+      }
+    `;
+    document.head.appendChild(st);
+  }
+
+  // Bind sticker button
+  function bindBtn(){
+    document.querySelectorAll('#sticker-btn,#sl-stk-btn').forEach(btn=>{
+      if(btn.dataset.tg2==='1') return;
+      btn.dataset.tg2='1';
+      btn.addEventListener('click', e=>{
+        e.preventDefault(); e.stopPropagation();
+        const p=document.getElementById('tg2-panel');
+        if(p&&p.classList.contains('show')) closePanel();
+        else openPanel();
+      }, true);
+    });
+  }
+
+  window.slOpenStickerPanel=openPanel;
+  window.slCloseStickerPanel=closePanel;
+
+  ensure();
+  bindBtn();
+  setTimeout(bindBtn, 500);
+  setTimeout(bindBtn, 2000);
+  closePanel();
+
+  console.log('[SL] Telegram sticker UI 1:1 ready');
+})();
+
+
+
 </script>
 </body>
 </html>
