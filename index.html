@@ -5034,12 +5034,7 @@ function showMsgCtx(e, msg){
     bubbleEl.style.zIndex='12002';
   }
 
-  // Reaction bar
-  const bar=document.createElement('div');
-  bar.className='msg-react-bar';
-  const reacts=['👍','❤️','😂','😮','😢','🙏'];
-  bar.innerHTML=reacts.map(r=>`<span data-r="${r}">${r}</span>`).join('')+'<div class="react-more" data-r="more">+</div>';
-  document.body.appendChild(bar);
+  // Reaction-only bar disabled — full context menu only
 
   // Menu items
   let items=`<div class="ctx-item" data-a="reply"><span class="ico"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 17H4a2 2 0 01-2-2V5a2 2 0 012-2h12a2 2 0 012 2v4"/><path d="M9 14l-5 3 5 3v-6z"/><path d="M22 11l-5-3v2h-4v2h4v2l5-3z"/></svg></span> Ответить</div>
@@ -5074,8 +5069,7 @@ function showMsgCtx(e, msg){
   // Measure after paint — keep menu fully in viewport (esp. bottom messages)
   requestAnimationFrame(()=>{
     const pad = 12;
-    const barH = 56;
-    const gap = 8;
+      const gap = 8;
     // Cap height so everything is reachable with scroll if needed
     const maxMenuH = Math.min(Math.floor(innerHeight * 0.58), 360);
     menu.style.maxHeight = maxMenuH + 'px';
@@ -5120,54 +5114,9 @@ function showMsgCtx(e, msg){
     menu.style.visibility = 'visible';
     menu.style.zIndex = '12020';
 
-    // Reaction bar — always fully visible, prefer opposite side of menu
-    const barW = bar.offsetWidth || 280;
-    let barLeft = x - barW / 2;
-    if(barLeft < pad) barLeft = pad;
-    if(barLeft + barW > innerWidth - pad) barLeft = Math.max(pad, innerWidth - barW - pad);
-
-    let barTop;
-    if(menuTop + 20 >= y){
-      // menu mostly below finger → bar above
-      barTop = Math.max(pad, Math.min(y - barH - 10, menuTop - barH - 6));
-    } else {
-      // menu above → bar between finger and menu bottom, or below finger
-      barTop = y + 10;
-      if(barTop + barH > menuTop - 4 && menuTop > pad + barH){
-        barTop = menuTop - barH - 6;
-      }
-      if(barTop + barH > innerHeight - pad) barTop = innerHeight - barH - pad;
-      if(barTop < pad) barTop = pad;
-    }
-    // no overlap with menu
-    if(!(barTop + barH <= menuTop + 2 || barTop >= menuTop + menuH - 2)){
-      if(menuTop > barH + pad) barTop = menuTop - barH - 6;
-      else barTop = Math.min(innerHeight - barH - pad, menuTop + menuH + 6);
-    }
-
-    bar.style.left = barLeft + 'px';
-    bar.style.top = barTop + 'px';
-    bar.style.zIndex = '12021';
   });
 
   window._slCtxIgnoreClickUntil = Date.now()+350;
-
-  bar.querySelectorAll('[data-r]').forEach(el=>{
-    el.onclick=async(ev)=>{
-      ev.stopPropagation();
-      closeMsgCtxUI();
-      if(el.dataset.r==='more'){ openReactionPicker(msg); return; }
-      try{
-        if(typeof toggleReaction==='function') toggleReaction(msg, el.dataset.r);
-        else if(typeof openReactionPicker==='function'){
-          const reactions=JSON.parse(msg.reactions||'{}');
-          reactions[el.dataset.r]=(reactions[el.dataset.r]||0)+1;
-          await sb.from('messages').update({reactions: JSON.stringify(reactions)}).eq('id', msg.id);
-          /* no full reload — keep messages on screen */
-        }
-      }catch(err){ showToast('Реакция: '+el.dataset.r); }
-    };
-  });
 
   menu.querySelectorAll('.ctx-item').forEach(it=>{
     it.onclick=async()=>{
@@ -17178,15 +17127,7 @@ html.sl-tv .composer textarea { min-height: 52px; font-size: 17px; }
       };
     });
   };
-  // long-press on bubbles → reactions
-  document.addEventListener('contextmenu', (e)=>{
-    const bub=e.target.closest?.('.bubble');
-    if(!bub) return;
-    const row=bub.closest('[data-mid]');
-    if(!row) return;
-    e.preventDefault();
-    window.slShowReactionPicker({id:row.dataset.mid}, e.clientX, e.clientY);
-  }, true);
+  // reaction-only contextmenu disabled (full menu via showMsgCtx only)
 
   // ---------- 3) Drafts in list ----------
   window.slGetDraft = function(id){ try{ return LS.getItem('sl_draft_'+id)||''; }catch(e){ return ''; } };
@@ -18089,28 +18030,7 @@ html.sl-tv .composer textarea { min-height: 52px; font-size: 17px; }
     };
   }
 
-  // ===== Long-press bubble → reaction picker (touch) =====
-  if(!window._slReactTouch){
-    window._slReactTouch=1;
-    let tmr=null, startX=0, startY=0;
-    document.addEventListener('touchstart', e=>{
-      const bub=e.target.closest?.('.bubble');
-      if(!bub) return;
-      const row=bub.closest('[data-mid], .bubble-row');
-      if(!row) return;
-      startX=e.touches[0].clientX; startY=e.touches[0].clientY;
-      tmr=setTimeout(()=>{
-        const mid=row.dataset.mid;
-        if(mid && window.slShowReactionPicker) window.slShowReactionPicker({id:mid}, startX, startY);
-      }, 450);
-    }, {passive:true});
-    document.addEventListener('touchmove', e=>{
-      if(!tmr) return;
-      const dx=Math.abs(e.touches[0].clientX-startX), dy=Math.abs(e.touches[0].clientY-startY);
-      if(dx>12||dy>12){ clearTimeout(tmr); tmr=null; }
-    }, {passive:true});
-    document.addEventListener('touchend', ()=>{ clearTimeout(tmr); tmr=null; }, {passive:true});
-  }
+  // reaction-only long-press disabled
 
   // ===== Quiet on channel subscribe =====
   const _cp = window.openChannelProfile;
