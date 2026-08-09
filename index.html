@@ -10073,6 +10073,27 @@ const NTFY_SERVER='https://ntfy.sh'; // optional fallback only
 const VAPID_PUBLIC_KEY='BKA5MB6Sk96yrNI2hLGBczAyxvi9bJue9LPbOMGK1aLyvcTuvB0FPccBdN0Y9kD94QIluG-3oUkhv66x0umJe4s';
 const PUSH_FN_URL = (typeof SUPABASE_URL!=='undefined'?SUPABASE_URL:'https://eshbyibuzvoztrsunvul.supabase.co') + '/functions/v1/push-notify';
 let swRegistration=null;
+// Early SW register so notifications work even before login (Android / closed PWA)
+(function earlySw(){
+  try{
+    if(!('serviceWorker' in navigator)) return;
+    if(location.protocol==='file:') return;
+    const boot = async ()=>{
+      try{
+        for(const src of ['./sw.js','sw.js']){
+          try{
+            const reg = await navigator.serviceWorker.register(src,{scope:'./'});
+            swRegistration = reg;
+            await navigator.serviceWorker.ready;
+            return;
+          }catch(e){}
+        }
+      }catch(e){}
+    };
+    if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', boot);
+    else boot();
+  }catch(e){}
+})();
 let ringtoneAudioCtx=null, ringtoneTimer=null;
 
 function urlBase64ToUint8Array(base64String){
@@ -10220,52 +10241,84 @@ async function initPushSystem(){
       console.info('[SL] Service Worker skipped (sandbox / insecure / file origin)');
     } else if('serviceWorker' in navigator){
       try{
-        const swCode = `
-          self.addEventListener('install', e => self.skipWaiting());
-          self.addEventListener('activate', e => e.waitUntil(self.clients.claim()));
-          self.addEventListener('notificationclick', e => {
-            e.notification.close();
-            const url = (e.notification.data && e.notification.data.url) || '/';
-            e.waitUntil(clients.matchAll({type:'window', includeUncontrolled:true}).then(list=>{
-              for(const c of list){ if('focus' in c) return c.focus(); }
-              return clients.openWindow(url);
-            }));
-          });
-          self.addEventListener('push', e => {
-            let data={title:'SLine', body:'Новое уведомление', urgent:false};
-            try{ if(e.data) data = Object.assign(data, e.data.json()); }catch(err){
-              try{ data.body = e.data.text(); }catch(e2){}
-            }
-            const vibrate = data.urgent ? [400,150,400,150,400,150,400] : [200,100,200,100,200];
-            e.waitUntil(self.registration.showNotification(data.title||'SLine', {
-              body: data.body||'',
-              tag: data.tag||'sl-push',
-              renotify: true,
-              vibrate,
-              requireInteraction: !!data.urgent,
-              silent: false,
-              data: {url: data.url||'/'}
-            }));
-          });
-        `;
-        const blob=new Blob([swCode],{type:'application/javascript'});
-        const blobUrl = URL.createObjectURL(blob);
-        try{
-          swRegistration = await navigator.serviceWorker.register(blobUrl,{scope:'./'});
-          await navigator.serviceWorker.ready;
-        }catch(regErr){
-          // SecurityError: sandboxed, no allow-same-origin, or blob SW blocked
-          const name = regErr && (regErr.name||'');
-          const msg = String(regErr && (regErr.message||regErr)||'');
-          if(name==='SecurityError' || /sandbox|allow-same-origin|Service Worker is disabled|opaque origin/i.test(msg)){
-            console.info('[SL] Service Worker disabled in this context:', msg.slice(0,120));
-          } else {
-            console.warn('[SL] SW register failed', regErr);
-          }
-          swRegistration = null;
-        }finally{
-          try{ URL.revokeObjectURL(blobUrl); }catch(e){}
+        // Prefer real file sw.js (works when app is closed / Android PWA). Fallback to inline blob.
+        let registered = false;
+        const candidates = ['./sw.js', 'sw.js', new URL('sw.js', location.href).pathname];
+        for(const src of candidates){
+          try{
+            const reg = await navigator.serviceWorker.register(src, { scope: './' });
+            swRegistration = reg;
+            await navigator.serviceWorker.ready;
+            registered = true;
+            console.info('[SL] SW registered from', src);
+            break;
+          }catch(e){ /* try next */ }
         }
+        if(!registered){
+          const swCode = `
+            self.addEventListener('install', e => self.skipWaiting());
+            self.addEventListener('activate', e => e.waitUntil(self.clients.claim()));
+            self.addEventListener('notificationclick', e => {
+              e.notification.close();
+              const url = (e.notification.data && e.notification.data.url) || './';
+              e.waitUntil(clients.matchAll({type:'window', includeUncontrolled:true}).then(list=>{
+                for(const c of list){ if('focus' in c) return c.focus(); }
+                if(clients.openWindow) return clients.openWindow(url);
+              }));
+            });
+            self.addEventListener('push', e => {
+              let data={title:'SLine', body:'Новое уведомление', urgent:false};
+              try{ if(e.data) data = Object.assign(data, e.data.json()); }catch(err){
+                try{ data.body = e.data.text(); }catch(e2){}
+              }
+              const vibrate = data.urgent ? [400,150,400,150,400,150,400] : [200,100,200,100,200];
+              e.waitUntil(self.registration.showNotification(data.title||'SLine', {
+                body: data.body||'',
+                tag: data.tag||'sl-push',
+                renotify: true,
+                vibrate,
+                requireInteraction: !!data.urgent,
+                silent: false,
+                data: {url: data.url||'./'}
+              }));
+            });
+            self.addEventListener('message', e => {
+              const msg = e.data || {};
+              if(msg.type === 'sl-show-notification'){
+                const o = msg.options || {};
+                e.waitUntil(self.registration.showNotification(msg.title||'SLine', {
+                  body: o.body||'', tag: o.tag||'sl-local', renotify: true,
+                  vibrate: o.vibrate||[200,100,200], requireInteraction: !!o.requireInteraction,
+                  icon: o.icon, badge: o.badge, data: o.data||{url:'./'}
+                }));
+              }
+            });
+          `;
+          // Keep blob URL alive — do NOT revoke (breaks SW on Android)
+          const blob = new Blob([swCode], { type: 'application/javascript' });
+          const blobUrl = URL.createObjectURL(blob);
+          try{
+            swRegistration = await navigator.serviceWorker.register(blobUrl, { scope: './' });
+            await navigator.serviceWorker.ready;
+            window._slSwBlobUrl = blobUrl;
+            console.info('[SL] SW registered from blob');
+          }catch(regErr){
+            const name = regErr && (regErr.name||'');
+            const msg = String(regErr && (regErr.message||regErr)||'');
+            if(name==='SecurityError' || /sandbox|allow-same-origin|Service Worker is disabled|opaque origin/i.test(msg)){
+              console.info('[SL] Service Worker disabled in this context:', msg.slice(0,120));
+            } else {
+              console.warn('[SL] SW register failed', regErr);
+            }
+            swRegistration = null;
+            try{ URL.revokeObjectURL(blobUrl); }catch(e){}
+          }
+        }
+        // Always refresh handle from ready
+        try{
+          const ready = await navigator.serviceWorker.ready;
+          if(ready) swRegistration = ready;
+        }catch(e){}
       }catch(e){
         console.info('[SL] SW unavailable', e && e.message ? e.message : e);
         swRegistration = null;
@@ -10275,7 +10328,6 @@ async function initPushSystem(){
       subscribeWebPush().catch(()=>{});
     }
   }catch(e){
-    // Never let push/SW break the app
     console.info('[SL] initPushSystem skipped', e && e.message ? e.message : e);
     swRegistration = null;
   }
@@ -10318,8 +10370,7 @@ async function requestNotifPermission(){
       vibratePhone([150,60,150]);
       // force show test without depending on pref checks mid-call
       const opts={body: currentLang==='en'?'Notifications are on':'Уведомления включены', tag:'sl-test', vibrate:[150,60,150]};
-      if(swRegistration) await swRegistration.showNotification('SLine', opts);
-      else new Notification('SLine', opts);
+      await showLocalNotification('SLine', opts.body||'', opts);
     }catch(e){ console.warn('test notif', e); }
     showToast(currentLang==='en'?'Notifications enabled':'Уведомления включены');
     return true;
@@ -10330,14 +10381,26 @@ async function requestNotifPermission(){
   }
 }
 
-function showLocalNotification(title, body, opts={}){
-  // System notifications: prefer explicit pref, but also fire if browser already granted
-  if(!('Notification' in window)) return;
+async function ensureSwRegistration(){
+  try{
+    if(swRegistration) return swRegistration;
+    if(!('serviceWorker' in navigator)) return null;
+    try{
+      swRegistration = await navigator.serviceWorker.ready;
+      if(swRegistration) return swRegistration;
+    }catch(e){}
+    try{ await initPushSystem(); }catch(e){}
+    return swRegistration || null;
+  }catch(e){ return null; }
+}
+
+/** Safe system notification — Android requires ServiceWorkerRegistration.showNotification */
+async function showLocalNotification(title, body, opts={}){
+  if(typeof Notification==='undefined') return;
   const prefOn = storage.getItem(NOTIF_PREF_KEY)==='1';
   const granted = Notification.permission==='granted';
   if(!granted) return;
   if(!prefOn){
-    // auto-enable if user already allowed in browser
     try{ storage.setItem(NOTIF_PREF_KEY,'1'); }catch(e){}
   }
   const icon = (function(){
@@ -10354,16 +10417,36 @@ function showLocalNotification(title, body, opts={}){
     requireInteraction: !!opts.requireInteraction,
     silent: false,
     badge: icon,
-    icon: opts.icon || icon
+    icon: opts.icon || icon,
+    data: opts.data || { url: './' }
   };
   try{
-    if(typeof swRegistration!=='undefined' && swRegistration) swRegistration.showNotification(title, options);
-    else new Notification(title, options);
+    const reg = await ensureSwRegistration();
+    if(reg && typeof reg.showNotification==='function'){
+      await reg.showNotification(title||'SLine', options);
+    } else if(navigator.serviceWorker && navigator.serviceWorker.controller){
+      navigator.serviceWorker.controller.postMessage({
+        type: 'sl-show-notification', title: title||'SLine', options
+      });
+    } else {
+      // Desktop Safari / some browsers still allow constructor; never throw to UI
+      try{
+        if(typeof Notification==='function'){
+          // Feature-detect illegal constructor (Android Chrome throws TypeError)
+          const n = new Notification(title||'SLine', options);
+          setTimeout(()=>{ try{ n.close(); }catch(e){} }, 8000);
+        }
+      }catch(ctorErr){
+        console.warn('[SL] Notification via constructor blocked — enable Service Worker / HTTPS', ctorErr);
+      }
+    }
   }catch(e){
-    try{ new Notification(title, options); }catch(e2){}
+    console.warn('[SL] showLocalNotification', e);
   }
   try{ vibratePhone(opts.vibrate||[200,100,200]); }catch(e){}
 }
+window.showLocalNotification = showLocalNotification;
+window.ensureSwRegistration = ensureSwRegistration;
 
 function notifyIncomingMessage(msg){
   if(!msg || !myProfile) return;
@@ -10455,6 +10538,10 @@ document.getElementById('settings-notifications').onclick=async()=>{
   ov.querySelector('#nt-enable').onclick=doEnable;
   ov.querySelector('#nt-test').onclick=async (e)=>{
     e.stopPropagation();
+    if(typeof Notification==='undefined'){
+      showToast(currentLang==='en'?'Not supported':'Браузер не поддерживает уведомления', true);
+      return;
+    }
     if(Notification.permission!=='granted'){
       const ok=await requestNotifPermission();
       if(!ok) return;
@@ -10463,12 +10550,26 @@ document.getElementById('settings-notifications').onclick=async()=>{
       storage.setItem(NOTIF_PREF_KEY,'1');
     }
     try{
-      if(swRegistration) await swRegistration.showNotification('SLine', {body: currentLang==='en'?'Test':'Тест', tag:'sl-test'});
-      else new Notification('SLine', {body: currentLang==='en'?'Test':'Тест'});
-      vibratePhone([200,100,200]);
+      // Android: must use SW — ensure it is ready before test
+      const reg = await ensureSwRegistration();
+      if(!reg){
+        showToast(currentLang==='en'
+          ? 'Install the app icon / open via HTTPS so notifications work in background'
+          : 'Откройте через HTTPS и добавьте ярлык на экран — так уведомления работают в фоне', true);
+      }
+      await showLocalNotification('SLine', currentLang==='en'?'Test notification':'Тестовое уведомление', {tag:'sl-test', vibrate:[200,100,200]});
+      try{ vibratePhone([200,100,200]); }catch(e){}
       showToast(currentLang==='en'?'Test sent':'Тест отправлен');
+      try{ await subscribeWebPush(); }catch(e){}
     }catch(err){
-      showToast(String(err.message||err).slice(0,80), true);
+      const m = String(err && err.message || err || '');
+      if(/Illegal constructor|ServiceWorkerRegistration/i.test(m)){
+        showToast(currentLang==='en'
+          ? 'Need Service Worker (HTTPS + sw.js next to the page)'
+          : 'Нужен Service Worker: HTTPS и файл sw.js рядом со страницей', true);
+      } else {
+        showToast(m.slice(0,90), true);
+      }
     }
     try{ await sendWebPushToUser(myProfile?.id, 'SLine', 'Test', {tag:'sl-test'}); }catch(e){}
   };
@@ -13483,11 +13584,8 @@ function scheduleBirthdayAfterAppReady(){
   window.notifyNewMessage = function(title, body){
     try{
       if(!('Notification' in window) || Notification.permission!=='granted') return;
-      // skip if muted
-      // skip if tab focused and in that chat
       if(!document.hidden && document.body.classList.contains('in-chat')) return;
-      const n=new Notification(title||'SLine', { body: body||'Новое сообщение', icon: undefined, tag:'sl-msg' });
-      setTimeout(()=>n.close(), 5000);
+      showLocalNotification(title||'SLine', body||'Новое сообщение', {tag:'sl-msg'});
     }catch(e){}
   };
 
