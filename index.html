@@ -10171,7 +10171,8 @@ async function subscribeWebPush(){
 
 /** Ask Edge Function to send Web Push to a user (works when their browser is closed / phone locked) */
 async function sendWebPushToUser(userId, title, body, opts={}){
-  if(!userId || userId===myProfile?.id) return;
+  if(!userId) return;
+  if(userId===myProfile?.id && !opts.allowSelf) return;
   try{
     const headers={'Content-Type':'application/json'};
     try{
@@ -10383,67 +10384,126 @@ async function requestNotifPermission(){
 
 async function ensureSwRegistration(){
   try{
-    if(swRegistration) return swRegistration;
     if(!('serviceWorker' in navigator)) return null;
+    // Prefer existing registration
     try{
-      swRegistration = await navigator.serviceWorker.ready;
-      if(swRegistration) return swRegistration;
+      const existing = await navigator.serviceWorker.getRegistration('./');
+      if(existing){
+        swRegistration = existing;
+        try{ await navigator.serviceWorker.ready; }catch(e){}
+        return existing;
+      }
     }catch(e){}
+    if(swRegistration){
+      try{ await navigator.serviceWorker.ready; }catch(e){}
+      return swRegistration;
+    }
+    // Register sw.js (must be same origin, HTTPS)
+    const candidates = ['./sw.js', 'sw.js', new URL('sw.js', location.href).href];
+    for(const src of candidates){
+      try{
+        const reg = await navigator.serviceWorker.register(src, { scope: './' });
+        swRegistration = reg;
+        await navigator.serviceWorker.ready;
+        // Wait briefly for controller on first install
+        if(!navigator.serviceWorker.controller){
+          await new Promise(r=>setTimeout(r, 400));
+        }
+        return reg;
+      }catch(e){ console.warn('[SL] SW register try failed', src, e); }
+    }
     try{ await initPushSystem(); }catch(e){}
     return swRegistration || null;
-  }catch(e){ return null; }
+  }catch(e){
+    console.warn('[SL] ensureSwRegistration', e);
+    return null;
+  }
+}
+
+function _slNotifIcon(){
+  try{
+    // Prefer absolute http(s) icons only — data: URLs break Android notifications
+    const links = document.querySelectorAll('link[rel="apple-touch-icon"], link[rel="icon"]');
+    for(const link of links){
+      const href = link.href || '';
+      if(/^https?:\/\//i.test(href) && !href.startsWith('data:')) return href;
+    }
+  }catch(e){}
+  // Fallback: simple PNG from same origin if present, else omit
+  try{
+    const abs = new URL('/icon-192.png', location.origin).href;
+    return abs;
+  }catch(e){}
+  return undefined;
 }
 
 /** Safe system notification — Android requires ServiceWorkerRegistration.showNotification */
 async function showLocalNotification(title, body, opts={}){
-  if(typeof Notification==='undefined') return;
-  const prefOn = storage.getItem(NOTIF_PREF_KEY)==='1';
-  const granted = Notification.permission==='granted';
-  if(!granted) return;
-  if(!prefOn){
-    try{ storage.setItem(NOTIF_PREF_KEY,'1'); }catch(e){}
-  }
-  const icon = (function(){
-    try{
-      const link = document.querySelector('link[rel="apple-touch-icon"], link[rel="icon"]');
-      return (link && link.href) || undefined;
-    }catch(e){ return undefined; }
-  })();
-  const options={
-    body: body||'',
-    tag: opts.tag||'sl-msg',
+  if(typeof Notification==='undefined') return { ok:false, reason:'no-api' };
+  if(Notification.permission!=='granted') return { ok:false, reason:'denied' };
+  try{ storage.setItem(NOTIF_PREF_KEY,'1'); }catch(e){}
+
+  const icon = opts.icon && /^https?:\/\//i.test(opts.icon) ? opts.icon : _slNotifIcon();
+  const options = {
+    body: String(body||''),
+    tag: opts.tag || ('sl-' + Date.now()),
     renotify: true,
-    vibrate: opts.vibrate||[200,100,200],
-    requireInteraction: !!opts.requireInteraction,
     silent: false,
-    badge: icon,
-    icon: opts.icon || icon,
-    data: opts.data || { url: './' }
+    requireInteraction: opts.requireInteraction !== false ? !!opts.requireInteraction : false,
+    data: opts.data || { url: location.href.split('#')[0] }
   };
+  // Only attach icon/badge if http(s) — critical for Android
+  if(icon && /^https?:\/\//i.test(icon)){
+    options.icon = icon;
+    options.badge = icon;
+  }
+  if(Array.isArray(opts.vibrate)) options.vibrate = opts.vibrate;
+
   try{
     const reg = await ensureSwRegistration();
-    if(reg && typeof reg.showNotification==='function'){
-      await reg.showNotification(title||'SLine', options);
-    } else if(navigator.serviceWorker && navigator.serviceWorker.controller){
-      navigator.serviceWorker.controller.postMessage({
-        type: 'sl-show-notification', title: title||'SLine', options
-      });
-    } else {
-      // Desktop Safari / some browsers still allow constructor; never throw to UI
+    if(reg && typeof reg.showNotification === 'function'){
+      await reg.showNotification(String(title||'SLine'), options);
+      // Verify it actually appeared (helps diagnose silent failures)
       try{
-        if(typeof Notification==='function'){
-          // Feature-detect illegal constructor (Android Chrome throws TypeError)
-          const n = new Notification(title||'SLine', options);
-          setTimeout(()=>{ try{ n.close(); }catch(e){} }, 8000);
+        const list = await reg.getNotifications({ tag: options.tag });
+        if(list && list.length){
+          try{ vibratePhone(opts.vibrate || [200,100,200]); }catch(e){}
+          return { ok:true, via:'sw', count:list.length };
         }
-      }catch(ctorErr){
-        console.warn('[SL] Notification via constructor blocked — enable Service Worker / HTTPS', ctorErr);
-      }
+      }catch(e){}
+      try{ vibratePhone(opts.vibrate || [200,100,200]); }catch(e){}
+      return { ok:true, via:'sw' };
+    }
+
+    // Message active SW controller
+    if(navigator.serviceWorker && navigator.serviceWorker.controller){
+      await new Promise((resolve) => {
+        const ch = new MessageChannel();
+        const t = setTimeout(() => resolve(), 1500);
+        ch.port1.onmessage = () => { clearTimeout(t); resolve(); };
+        try{
+          navigator.serviceWorker.controller.postMessage(
+            { type:'sl-show-notification', title: title||'SLine', options },
+            [ch.port2]
+          );
+        }catch(e){ clearTimeout(t); resolve(); }
+      });
+      try{ vibratePhone(opts.vibrate || [200,100,200]); }catch(e){}
+      return { ok:true, via:'postMessage' };
+    }
+
+    // Last resort (desktop only)
+    try{
+      const n = new Notification(String(title||'SLine'), options);
+      setTimeout(() => { try{ n.close(); }catch(e){} }, 8000);
+      return { ok:true, via:'constructor' };
+    }catch(ctorErr){
+      return { ok:false, reason:'no-sw', error:String(ctorErr && ctorErr.message || ctorErr) };
     }
   }catch(e){
     console.warn('[SL] showLocalNotification', e);
+    return { ok:false, reason:'error', error:String(e && e.message || e) };
   }
-  try{ vibratePhone(opts.vibrate||[200,100,200]); }catch(e){}
 }
 window.showLocalNotification = showLocalNotification;
 window.ensureSwRegistration = ensureSwRegistration;
@@ -10550,28 +10610,33 @@ document.getElementById('settings-notifications').onclick=async()=>{
       storage.setItem(NOTIF_PREF_KEY,'1');
     }
     try{
-      // Android: must use SW — ensure it is ready before test
       const reg = await ensureSwRegistration();
+      const ctrl = !!(navigator.serviceWorker && navigator.serviceWorker.controller);
       if(!reg){
         showToast(currentLang==='en'
-          ? 'Install the app icon / open via HTTPS so notifications work in background'
-          : 'Откройте через HTTPS и добавьте ярлык на экран — так уведомления работают в фоне', true);
+          ? 'Service Worker not found. Put sw.js next to index.html on Vercel'
+          : 'Service Worker не найден. Положите sw.js рядом с index.html на Vercel', true);
+        return;
       }
-      await showLocalNotification('SLine', currentLang==='en'?'Test notification':'Тестовое уведомление', {tag:'sl-test', vibrate:[200,100,200]});
-      try{ vibratePhone([200,100,200]); }catch(e){}
-      showToast(currentLang==='en'?'Test sent':'Тест отправлен');
+      // Unique tag so Android always shows a new notification
+      const tag = 'sl-test-' + Date.now();
+      const result = await showLocalNotification(
+        'SLine',
+        currentLang==='en'?'Test notification — if you see this, it works':'Тестовое уведомление — если видите, значит работает',
+        { tag, vibrate:[300,100,300], requireInteraction:true }
+      );
       try{ await subscribeWebPush(); }catch(e){}
-    }catch(err){
-      const m = String(err && err.message || err || '');
-      if(/Illegal constructor|ServiceWorkerRegistration/i.test(m)){
+      if(result && result.ok){
         showToast(currentLang==='en'
-          ? 'Need Service Worker (HTTPS + sw.js next to the page)'
-          : 'Нужен Service Worker: HTTPS и файл sw.js рядом со страницей', true);
+          ? ('OK via '+result.via+(ctrl?'':' (reload page once)'))
+          : ('OK через '+result.via+(ctrl?'':' (перезагрузите страницу)')));
       } else {
-        showToast(m.slice(0,90), true);
+        const why = (result && (result.reason||result.error)) || 'unknown';
+        showToast((currentLang==='en'?'Failed: ':'Не удалось: ')+String(why).slice(0,80), true);
       }
+    }catch(err){
+      showToast(String(err && err.message || err).slice(0,90), true);
     }
-    try{ await sendWebPushToUser(myProfile?.id, 'SLine', 'Test', {tag:'sl-test'}); }catch(e){}
   };
 };
 
