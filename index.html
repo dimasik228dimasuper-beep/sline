@@ -10433,20 +10433,27 @@ async function showLocalNotification(title, body, opts={}){
   try{ storage.setItem(NOTIF_PREF_KEY,'1'); }catch(e){}
 
   const icon = opts.icon && /^https?:\/\//i.test(opts.icon) ? opts.icon : _slNotifIcon();
+  const isAndroid = /Android/i.test(navigator.userAgent||'');
+  // Xiaomi/Android: requireInteraction keeps notification in shade; heads-up often blocked while Chrome is open
+  const requireIx = (opts.requireInteraction !== undefined)
+    ? !!opts.requireInteraction
+    : isAndroid;
   const options = {
     body: String(body||''),
     tag: opts.tag || ('sl-' + Date.now()),
     renotify: true,
     silent: false,
-    requireInteraction: opts.requireInteraction !== false ? !!opts.requireInteraction : false,
+    requireInteraction: requireIx,
+    timestamp: Date.now(),
     data: opts.data || { url: location.href.split('#')[0] }
   };
-  // Only attach icon/badge if http(s) — critical for Android
+  try{ options.actions = [{ action:'open', title: (currentLang==='en'?'Open':'Открыть') }]; }catch(e){}
+  // Only attach icon/badge if http(s) — critical for Android (data: icons break Xiaomi)
   if(icon && /^https?:\/\//i.test(icon)){
     options.icon = icon;
     options.badge = icon;
   }
-  if(Array.isArray(opts.vibrate)) options.vibrate = opts.vibrate;
+  options.vibrate = Array.isArray(opts.vibrate) ? opts.vibrate : (isAndroid ? [400,120,400,120,400] : [200,100,200]);
 
   try{
     const reg = await ensureSwRegistration();
@@ -10709,7 +10716,22 @@ function notifyIncomingCall(name){
 document.getElementById('settings-notifications').onclick=async()=>{
   const on = storage.getItem(NOTIF_PREF_KEY)==='1' && typeof Notification!=='undefined' && Notification.permission==='granted';
   const perm = (typeof Notification!=='undefined') ? Notification.permission : 'unsupported';
+  const isAndroid = /Android/i.test(navigator.userAgent||'');
+  const isXiaomi = /XiaoMi|Miui|Redmi|POCO|HyperOS/i.test(navigator.userAgent||'') || /XiaoMi|Miui/i.test(navigator.vendor||'');
   const ov=document.createElement('div'); ov.className='modal-overlay';
+  const xiaomiHint = isAndroid ? (
+    currentLang==='en'
+      ? `<p style="font-size:12px;color:var(--muted);line-height:1.45;margin:10px 0 0;padding:10px;border-radius:12px;background:rgba(255,180,0,.08);border:1px solid rgba(255,180,0,.25)">
+          <b style="color:var(--text)">Android / Xiaomi:</b> Chrome may hide banners while the site is open.
+          After Test — <b>press Home</b> and open the notification shade.
+          Also: Settings → Apps → Chrome → Battery → <b>No restrictions</b> + Autostart <b>On</b>.
+        </p>`
+      : `<p style="font-size:12px;color:var(--muted);line-height:1.45;margin:10px 0 0;padding:10px;border-radius:12px;background:rgba(255,180,0,.08);border:1px solid rgba(255,180,0,.25)">
+          <b style="color:var(--text)">Android / Xiaomi:</b> пока сайт открыт, баннер часто не всплывает.
+          После «Тест» нажмите <b>Домой</b> и откройте шторку уведомлений.
+          Ещё: Настройки → Приложения → Chrome → Питание → <b>Без ограничений</b> и Автозапуск <b>Вкл</b>.
+        </p>`
+  ) : '';
   ov.innerHTML=`<div class="modal" style="max-width:420px">
     <button class="close-x" id="nt-x">×</button>
     <h3>${currentLang==='en'?'Notifications & calls':'Уведомления и звонки'}</h3>
@@ -10720,6 +10742,7 @@ document.getElementById('settings-notifications').onclick=async()=>{
     </div>
     <button class="btn-primary" id="nt-enable" style="margin-top:10px">${on?(currentLang==='en'?'Enabled':'Включено'):(currentLang==='en'?'Allow notifications':'Разрешить уведомления')}</button>
     <button class="btn-secondary" id="nt-test" style="margin-top:8px">${currentLang==='en'?'Test notification':'Тест уведомления'}</button>
+    ${xiaomiHint}
   </div>`;
   document.body.appendChild(ov);
   ov.querySelector('#nt-x').onclick=()=>ov.remove();
@@ -10729,12 +10752,10 @@ document.getElementById('settings-notifications').onclick=async()=>{
     if(b) b.textContent = ok ? (currentLang==='en'?'Enabled':'Включено') : (currentLang==='en'?'Allow notifications':'Разрешить уведомления');
   };
   const doEnable = async (e)=>{
-    if(e) e.stopPropagation();
-    const cur = storage.getItem(NOTIF_PREF_KEY)==='1' && Notification.permission==='granted';
-    if(cur){
+    e?.stopPropagation?.();
+    if(storage.getItem(NOTIF_PREF_KEY)==='1' && Notification.permission==='granted'){
       storage.setItem(NOTIF_PREF_KEY,'0');
       applyOn(false);
-      try{ stopRingtone(); }catch(err){}
       showToast(currentLang==='en'?'Notifications off':'Уведомления выключены');
       return;
     }
@@ -10762,25 +10783,61 @@ document.getElementById('settings-notifications').onclick=async()=>{
       const ctrl = !!(navigator.serviceWorker && navigator.serviceWorker.controller);
       if(!reg){
         showToast(currentLang==='en'
-          ? 'Service Worker not found. Put sw.js next to index.html on Vercel'
-          : 'Service Worker не найден. Положите sw.js рядом с index.html на Vercel', true);
+          ? 'Service Worker not found (need HTTPS + sw.js)'
+          : 'Service Worker не найден (нужны HTTPS и sw.js)', true);
         return;
       }
-      // Unique tag so Android always shows a new notification
-      const tag = 'sl-test-' + Date.now();
-      const result = await showLocalNotification(
-        'SLine',
-        currentLang==='en'?'Test notification — if you see this, it works':'Тестовое уведомление — если видите, значит работает',
-        { tag, vibrate:[300,100,300], requireInteraction:true }
-      );
-      try{ await subscribeWebPush(); }catch(e){}
-      if(result && result.ok){
+      // Android/Xiaomi: fire when user backgrounds the app — otherwise heads-up is often suppressed
+      const fireTest = async (reason)=>{
+        const tag = 'sl-test-' + Date.now();
+        const result = await showLocalNotification(
+          'SLine',
+          currentLang==='en'
+            ? ('Test OK ('+reason+'). Pull down the notification shade.')
+            : ('Тест OK ('+reason+'). Откройте шторку уведомлений.'),
+          { tag, vibrate:[400,120,400,120,400], requireInteraction:true }
+        );
+        try{ await subscribeWebPush(); }catch(e){}
+        return result;
+      };
+
+      if(isAndroid && document.visibilityState==='visible'){
         showToast(currentLang==='en'
-          ? ('OK via '+result.via+(ctrl?'':' (reload page once)'))
-          : ('OK через '+result.via+(ctrl?'':' (перезагрузите страницу)')));
+          ? 'Press Home in 2 sec — then check the shade'
+          : 'Через 2 сек нажмите «Домой» — и откройте шторку');
+        let done=false;
+        const onHide = async ()=>{
+          if(document.visibilityState!=='hidden' || done) return;
+          done=true;
+          document.removeEventListener('visibilitychange', onHide);
+          const result = await fireTest('фон');
+          // Can't showToast reliably in background; notification itself is the signal
+          console.info('[SL] background test', result);
+        };
+        document.addEventListener('visibilitychange', onHide);
+        // Also fire once after 2.5s in case user doesn't leave (still lands in shade)
+        setTimeout(async ()=>{
+          if(done) return;
+          done=true;
+          document.removeEventListener('visibilitychange', onHide);
+          const result = await fireTest(document.visibilityState==='hidden'?'фон':'экран');
+          if(result && result.ok){
+            showToast(currentLang==='en'
+              ? ('Created via '+result.via+'. Open notification shade.')
+              : ('Создано через '+result.via+'. Откройте шторку уведомлений.'));
+          } else {
+            showToast((currentLang==='en'?'Failed: ':'Не удалось: ')+String(result&&(result.reason||result.error)||'?').slice(0,80), true);
+          }
+        }, 2500);
       } else {
-        const why = (result && (result.reason||result.error)) || 'unknown';
-        showToast((currentLang==='en'?'Failed: ':'Не удалось: ')+String(why).slice(0,80), true);
+        const result = await fireTest('сейчас');
+        if(result && result.ok){
+          showToast(currentLang==='en'
+            ? ('OK via '+result.via+(ctrl?'':' — reload once'))
+            : ('OK через '+result.via+(ctrl?'':' — перезагрузите страницу')));
+        } else {
+          showToast((currentLang==='en'?'Failed: ':'Не удалось: ')+String(result&&(result.reason||result.error)||'?').slice(0,80), true);
+        }
       }
     }catch(err){
       showToast(String(err && err.message || err).slice(0,90), true);
