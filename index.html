@@ -6943,6 +6943,46 @@ openGroup = async function(group){
       .subscribe();
   }catch(e){}
 };
+
+// ---- Missed notifications after offline / airplane / phone off ----
+(function(){
+  let _catchBusy=false;
+  async function runCatchUp(reason){
+    if(_catchBusy) return;
+    if(!myProfile) return;
+    _catchBusy=true;
+    try{
+      console.info('[SL] catch-up', reason||'');
+      await slCatchUpMissedNotifications();
+    }catch(e){}
+    _catchBusy=false;
+  }
+  window.addEventListener('online', ()=>{
+    setTimeout(()=>runCatchUp('online'), 800);
+  });
+  document.addEventListener('visibilitychange', ()=>{
+    if(document.visibilityState==='visible'){
+      setTimeout(()=>runCatchUp('visible'), 600);
+    } else {
+      try{ slTouchNotifCursorNow(); }catch(e){}
+    }
+  });
+  window.addEventListener('pagehide', ()=>{ try{ slTouchNotifCursorNow(); }catch(e){} });
+  window.addEventListener('focus', ()=>{
+    setTimeout(()=>runCatchUp('focus'), 1000);
+  });
+  // After login / SW ready
+  const _sr = typeof subscribeRealtime==='function' ? subscribeRealtime : null;
+  if(_sr && !window._slCatchUpHooked){
+    window._slCatchUpHooked=1;
+    subscribeRealtime = function(){
+      const r = _sr.apply(this, arguments);
+      setTimeout(()=>runCatchUp('realtime'), 1200);
+      return r;
+    };
+  }
+})();
+
 function handleIncomingMessage(msg){
   if(!msg || !myProfile) return;
   // already on screen
@@ -10457,12 +10497,60 @@ async function showLocalNotification(title, body, opts={}){
 window.showLocalNotification = showLocalNotification;
 window.ensureSwRegistration = ensureSwRegistration;
 
-function notifyIncomingMessage(msg){
+const SL_NOTIFIED_IDS_KEY='sl_notified_msg_ids';
+const SL_NOTIF_CURSOR_KEY='sl_notif_cursor';
+const SL_NOTIFIED_MAX=300;
+
+function slLoadNotifiedIds(){
+  try{
+    const a=JSON.parse(storage.getItem(SL_NOTIFIED_IDS_KEY)||'[]');
+    return new Set(Array.isArray(a)?a.map(String):[]);
+  }catch(e){ return new Set(); }
+}
+function slSaveNotifiedIds(set){
+  try{
+    const arr=[...set];
+    storage.setItem(SL_NOTIFIED_IDS_KEY, JSON.stringify(arr.slice(-SL_NOTIFIED_MAX)));
+  }catch(e){}
+}
+function slWasNotified(msgId){
+  if(!msgId) return false;
+  return slLoadNotifiedIds().has(String(msgId));
+}
+function slMarkNotified(msgId){
+  if(!msgId) return;
+  const s=slLoadNotifiedIds();
+  s.add(String(msgId));
+  slSaveNotifiedIds(s);
+}
+function slBumpNotifCursor(iso){
+  if(!iso) return;
+  try{
+    const prev=storage.getItem(SL_NOTIF_CURSOR_KEY)||'';
+    if(!prev || String(iso)>String(prev)) storage.setItem(SL_NOTIF_CURSOR_KEY, String(iso));
+  }catch(e){}
+}
+function slTouchNotifCursorNow(){
+  try{ storage.setItem(SL_NOTIF_CURSOR_KEY, new Date().toISOString()); }catch(e){}
+}
+
+function notifyIncomingMessage(msg, opts={}){
   if(!msg || !myProfile) return;
+  const mid=msg.id!=null?String(msg.id):'';
+  // Dedup: already notified (push while offline / previous catch-up)
+  if(mid && slWasNotified(mid) && !opts.force) return;
   // skip if currently viewing this exact chat
-  if(document.visibilityState==='visible'){
-    if(msg.group_id && activeGroup && String(activeGroup.id)===String(msg.group_id)) return;
-    if(!msg.group_id && activePartner && String(activePartner.id)===String(msg.sender_id)) return;
+  if(document.visibilityState==='visible' && !opts.forceCatchup){
+    if(msg.group_id && activeGroup && String(activeGroup.id)===String(msg.group_id)){
+      if(mid) slMarkNotified(mid);
+      if(msg.created_at) slBumpNotifCursor(msg.created_at);
+      return;
+    }
+    if(!msg.group_id && activePartner && String(activePartner.id)===String(msg.sender_id)){
+      if(mid) slMarkNotified(mid);
+      if(msg.created_at) slBumpNotifCursor(msg.created_at);
+      return;
+    }
   }
   try{ if(typeof window.slGetDnd==='function' && window.slGetDnd()) return; }catch(e){}
   let title, avatar;
@@ -10483,20 +10571,131 @@ function notifyIncomingMessage(msg){
   } else {
     body = ({image:'📷 Фото',photo:'📷 Фото',video:'🎬 Видео',voice:'🎤 Голосовое',circle:'⭕ Кружок',file:'📎 Файл',document:'📎 Файл',sticker:'Стикер',gift:'🎁 Подарок',poll:'📊 Опрос'}[msg.type]|| (currentLang==='en'?'Message':'Сообщение'));
   }
-  // In-app banner (MAX-style)
-  try{ if(typeof window.showInAppMessageNotification==='function') window.showInAppMessageNotification(msg); }catch(e){}
-  // System notification (browser / OS)
-  const tag = msg.group_id ? ('sl-g-'+msg.group_id) : ('sl-msg-'+msg.sender_id);
-  showLocalNotification(title, body, {tag, vibrate:[180,80,180], icon: avatar});
-  // Soft-prompt permission once if never asked
+  // In-app banner only when app is visible (avoid double with system notif after offline)
+  if(document.visibilityState==='visible' && !opts.catchup){
+    try{ if(typeof window.showInAppMessageNotification==='function') window.showInAppMessageNotification(msg); }catch(e){}
+  }
+  // Unique tag per message → no sticky duplicate for same chat when several msgs
+  const tag = mid ? ('sl-m-'+mid) : (msg.group_id ? ('sl-g-'+msg.group_id) : ('sl-msg-'+msg.sender_id));
+  if(mid) slMarkNotified(mid);
+  if(msg.created_at) slBumpNotifCursor(msg.created_at);
+  showLocalNotification(title, body, {tag, vibrate:[180,80,180], icon: avatar, data:{url:location.href.split('#')[0], mid}});
   try{
     if('Notification' in window && Notification.permission==='default' && !sessionStorage.getItem('sl_notif_asked')){
       sessionStorage.setItem('sl_notif_asked','1');
-      // non-blocking: user can allow from settings too
       setTimeout(()=>{ try{ requestNotifPermission(); }catch(e){} }, 600);
     }
   }catch(e){}
 }
+
+/** After phone was off / airplane mode: fetch missed DMs and notify once (no dupes) */
+async function slCatchUpMissedNotifications(){
+  try{
+    if(!myProfile || !myProfile.id) return;
+    if(typeof sb==='undefined' || !sb) return;
+    const prefOn = storage.getItem(NOTIF_PREF_KEY)==='1';
+    const granted = (typeof Notification!=='undefined' && Notification.permission==='granted');
+    if(!prefOn && !granted) { slTouchNotifCursorNow(); return; }
+
+    let since = storage.getItem(SL_NOTIF_CURSOR_KEY)||'';
+    // If never set — look back 24h max (first install shouldn't spam years of history)
+    if(!since){
+      since = new Date(Date.now()-24*60*60*1000).toISOString();
+    }
+    // Cap lookback at 7 days
+    const minSince = new Date(Date.now()-7*24*60*60*1000).toISOString();
+    if(String(since) < minSince) since = minSince;
+
+    const { data, error } = await sb.from('messages')
+      .select('id,sender_id,receiver_id,group_id,content,type,file_url,created_at')
+      .eq('receiver_id', myProfile.id)
+      .gt('created_at', since)
+      .order('created_at', { ascending: true })
+      .limit(80);
+    if(error){ console.warn('[SL] catch-up', error); return; }
+    const rows = (data||[]).filter(m=> m && m.sender_id && String(m.sender_id)!==String(myProfile.id));
+    if(!rows.length){
+      slTouchNotifCursorNow();
+      return;
+    }
+
+    // Group by sender — one notification per conversation (last message body)
+    const bySender = new Map();
+    for(const m of rows){
+      if(m.id && slWasNotified(m.id)){
+        if(m.created_at) slBumpNotifCursor(m.created_at);
+        continue;
+      }
+      const key = String(m.sender_id);
+      const prev = bySender.get(key)||{ count:0, last:null };
+      prev.count++;
+      prev.last = m;
+      bySender.set(key, prev);
+      if(m.id) slMarkNotified(m.id);
+      if(m.created_at) slBumpNotifCursor(m.created_at);
+    }
+
+    // Unread badges: set to at least missed count (don't double-count)
+    for(const [senderId, info] of bySender){
+      try{
+        const u=getUnread();
+        const cur=Number(u[senderId])||0;
+        if(info.count>cur && typeof setUnread==='function') setUnread(senderId, info.count);
+        else if(info.count>cur){ u[senderId]=info.count; storage.setItem(UNREAD_KEY, JSON.stringify(u)); }
+      }catch(e){}
+    }
+
+    // Don't notify for chat currently open
+    for(const [senderId, info] of bySender){
+      if(document.visibilityState==='visible' && activePartner && String(activePartner.id)===senderId){
+        try{ if(typeof clearUnread==='function') clearUnread(senderId); }catch(e){}
+        continue;
+      }
+      const msg = info.last;
+      if(!msg) continue;
+      let title='SLine', avatar;
+      try{
+        const sender = (typeof contacts!=='undefined' ? contacts : []).find(c=>String(c.id)===senderId);
+        title = sender ? (sender.first_name||sender.username||'SLine') : (currentLang==='en'?'New messages':'Новые сообщения');
+        avatar = sender?.avatar_url;
+      }catch(e){}
+      let body;
+      if(info.count>1){
+        body = (currentLang==='en'
+          ? (info.count+' new messages')
+          : (info.count+' новых сообщений'));
+        // append last preview
+        const t = String(msg.content||'').replace(/\s+/g,' ').trim().slice(0,40);
+        if(t) body += ': '+t;
+      } else {
+        if(msg.type==='text'||!msg.type){
+          const t=String(msg.content||'');
+          body = t.replace(/\s+/g,' ').trim().slice(0,80) || (currentLang==='en'?'Message':'Сообщение');
+        } else {
+          body = ({image:'📷',photo:'📷',video:'🎬',voice:'🎤',circle:'⭕',file:'📎'}[msg.type]||'Сообщение');
+        }
+      }
+      // Tag by conversation so catch-up replaces any stale tray notif for that chat
+      const tag = 'sl-missed-'+senderId;
+      await showLocalNotification(title, body, {
+        tag,
+        vibrate:[200,80,200],
+        icon: avatar,
+        requireInteraction: info.count>2,
+        data:{ url: location.href.split('#')[0], senderId }
+      });
+    }
+
+    try{ if(typeof loadChats==='function') loadChats(); }catch(e){}
+    try{ if(typeof renderContactsAndGroups==='function') renderContactsAndGroups(); }catch(e){}
+    slTouchNotifCursorNow();
+  }catch(e){
+    console.warn('[SL] slCatchUpMissedNotifications', e);
+  }
+}
+window.slCatchUpMissedNotifications = slCatchUpMissedNotifications;
+window.slMarkNotified = slMarkNotified;
+window.slWasNotified = slWasNotified;
 
 function notifyIncomingCall(name){
   startRingtone();
