@@ -2515,6 +2515,7 @@ body.theme-light .topbar {
   <button type="button" id="cc-hangup-fab" onclick="window.slHangup&&window.slHangup()" style="display:none;position:fixed;bottom:calc(36px + env(safe-area-inset-bottom,0px));left:50%;transform:translateX(-50%);z-index:100010;width:72px;height:72px;border-radius:50%;border:none;background:#e5484d;color:#fff;box-shadow:0 8px 28px rgba(0,0,0,.45);cursor:pointer;align-items:center;justify-content:center;font-size:28px;line-height:1;pointer-events:auto!important;-webkit-tap-highlight-color:transparent" aria-label="Hang up">✕</button>
   <div class="call-ring-pulse" id="call-pulse"></div>
   <video class="call-remote-video" id="call-remote-video" autoplay playsinline webkit-playsinline></video>
+  <audio id="call-remote-audio" autoplay playsinline style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none"></audio>
   <video class="call-local-video" id="call-local-video" autoplay playsinline muted></video>
   <div class="call-ui-center">
     <div class="call-avatar-big" id="call-avatar-big"></div>
@@ -10881,7 +10882,16 @@ function initCallSystem(){
     .on('broadcast',{event:'offer'}, ({payload})=>handleIncomingOffer(payload))
     .on('broadcast',{event:'answer'}, ({payload})=>handleAnswer(payload))
     .on('broadcast',{event:'ice'}, ({payload})=>handleRemoteIce(payload))
-    .on('broadcast',{event:'hangup'}, ()=>endCall(false))
+    .on('broadcast',{event:'hangup'}, ({payload})=>{
+      try{
+        if(payload && payload.from && currentCall && currentCall.peerId &&
+           String(payload.from)!==String(currentCall.peerId) &&
+           !(pendingOffer && String(payload.from)===String(pendingOffer.from))){
+          return; // ignore hangup from other peer
+        }
+      }catch(e){}
+      endCall(false);
+    })
     .subscribe();
   setupReactionsChannel();
 }
@@ -10958,8 +10968,24 @@ function attachRemoteTrack(track){
   tryPlay();
   setTimeout(tryPlay, 100);
   setTimeout(tryPlay, 500);
+  // Dedicated audio element (Xiaomi/iOS often silence hidden video)
+  try{
+    let ra=document.getElementById('call-remote-audio');
+    if(!ra){
+      ra=document.createElement('audio');
+      ra.id='call-remote-audio'; ra.autoplay=true; ra.setAttribute('playsinline','');
+      document.body.appendChild(ra);
+    }
+    const audioTracks=remoteMediaStream.getAudioTracks();
+    if(audioTracks.length){
+      ra.srcObject=new MediaStream(audioTracks);
+      ra.muted=false; ra.volume=1;
+      ra.play().catch(err=>console.warn('remote audio play', err));
+    }
+  }catch(e){}
   document.getElementById('call-status-text').textContent='Соединено';
   if(currentCall) currentCall.state='active';
+  try{ showCallUI(); renderCallActions(); }catch(e){}
 }
 function wirePeerConnection(peerId, withVideo){
   pc = new RTCPeerConnection(RTC_CONFIG);
@@ -11002,6 +11028,7 @@ function wirePeerConnection(peerId, withVideo){
       try{ pc.restartIce(); }catch(e){}
     }
   };
+  try{ window.pc = pc; }catch(e){}
   return pc;
 }
 async function startCall(partner, withVideo){
@@ -11088,25 +11115,55 @@ async function acceptCall(){
     }
     const answer=await pc.createAnswer();
     await pc.setLocalDescription(answer);
+    try{ window._slIgnoreHangupBriefly && window._slIgnoreHangupBriefly(2500); }catch(e){}
     sendSignal(pendingOffer.from,'answer',{from:myProfile.id, sdp: pc.localDescription});
     currentCall.state='active'; currentCall._dir='in';
     _callStartedAt=Date.now();
-  try{ stopRingtone(); }catch(e){}
+    try{ stopRingtone(); }catch(e){}
+    try{ document.getElementById('sl-incoming-call')?.remove(); }catch(e){}
+    try{ showCallUI(); }catch(e){}
     renderCallActions();
+    const st=document.getElementById('call-status-text');
+    if(st) st.textContent='Соединение...';
+    // Unlock remote audio element (user gesture from Accept button)
+    try{
+      let ra=document.getElementById('call-remote-audio');
+      if(!ra){
+        ra=document.createElement('audio');
+        ra.id='call-remote-audio'; ra.autoplay=true;
+        document.body.appendChild(ra);
+      }
+      ra.play().catch(()=>{});
+    }catch(e){}
   }catch(e){ console.error(e); showToast('Ошибка ответа на звонок'); endCall(false); }
 }
 let _pendingIceCandidates=[];
 async function handleAnswer(payload){
   if(!pc) return;
   try{
+    if(payload && payload.from && currentCall && currentCall.peerId &&
+       String(payload.from)!==String(currentCall.peerId)){
+      console.warn('[call] answer from other peer ignored');
+      return;
+    }
     const sdp = payload.sdp?.type ? payload.sdp : payload.sdp;
+    if(!sdp) throw new Error('empty answer sdp');
     await pc.setRemoteDescription(new RTCSessionDescription(sdp));
-    // flush ICE that arrived early
     const queued=[..._pendingIceCandidates]; _pendingIceCandidates=[];
     for(const c of queued){
       try{ await pc.addIceCandidate(new RTCIceCandidate(c)); }catch(e){}
     }
-  }catch(e){ console.error('handleAnswer', e); }
+    if(currentCall) currentCall.state='active';
+    try{ if(window._slNoAnswerTimer){ clearTimeout(window._slNoAnswerTimer); window._slNoAnswerTimer=null; } }catch(e){}
+    try{ window._slIgnoreHangupBriefly && window._slIgnoreHangupBriefly(2000); }catch(e){}
+    const st=document.getElementById('call-status-text');
+    if(st) st.textContent='Соединение...';
+    try{ showCallUI(); renderCallActions(); }catch(e){}
+    // Attach any tracks already received
+    try{
+      pc.getReceivers().forEach(r=>{ if(r.track) attachRemoteTrack(r.track); });
+    }catch(e){}
+  }catch(e){ console.error('handleAnswer', e); showToast('Ошибка соединения'); }
 }
 async function handleRemoteIce(payload){
   if(!pc || !payload?.candidate) return;
@@ -26498,5 +26555,6 @@ document.addEventListener('click', function(e){
   try{ window.slOpenThemePicker(); }catch(err){}
 }, true);
 </script>
+<script src="calls.js" defer></script>
 </body>
 </html>
