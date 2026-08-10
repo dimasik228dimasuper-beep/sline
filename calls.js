@@ -135,10 +135,6 @@
     // function declarations in previous inline script become properties of window
     const origHandleAnswer = w.handleAnswer;
     w.handleAnswer = async function (payload) {
-      try {
-        if (!w.pc && typeof pc !== 'undefined') w.pc = pc;
-      } catch (e) {}
-      // Use live global pc from page — re-read each time
       let conn = null;
       try { conn = (typeof pc !== 'undefined' && pc) ? pc : w.pc; } catch (e) { conn = w.pc; }
       if (!conn) {
@@ -148,12 +144,14 @@
       try {
         if (payload && payload.from && w.currentCall && w.currentCall.peerId &&
             String(payload.from) !== String(w.currentCall.peerId)) {
-          console.warn('[call] answer from wrong peer, ignore');
           return;
         }
-        const sdp = payload.sdp?.type ? payload.sdp : payload.sdp;
-        if (!sdp) throw new Error('empty sdp');
-        await conn.setRemoteDescription(new RTCSessionDescription(sdp));
+        if (conn.signalingState === 'stable' && conn.currentRemoteDescription) return;
+        let sdp = payload && payload.sdp;
+        if (typeof sdp === 'string') { try { sdp = JSON.parse(sdp); } catch (e) {} }
+        if (sdp && sdp.sdp && sdp.sdp.type) sdp = sdp.sdp;
+        if (!sdp || !sdp.type || !sdp.sdp) throw new Error('пустой SDP');
+        await conn.setRemoteDescription(new RTCSessionDescription({ type: sdp.type, sdp: sdp.sdp }));
         const queued = (typeof _pendingIceCandidates !== 'undefined' && _pendingIceCandidates)
           ? [..._pendingIceCandidates] : (w._pendingIceCandidates || []);
         try { if (typeof _pendingIceCandidates !== 'undefined') _pendingIceCandidates = []; } catch (e) {}
@@ -161,24 +159,16 @@
         for (const c of queued) {
           try { await conn.addIceCandidate(new RTCIceCandidate(c)); } catch (e) {}
         }
-        if (w.currentCall) {
-          w.currentCall.state = 'active';
-        }
-        try {
-          if (w._slNoAnswerTimer) { clearTimeout(w._slNoAnswerTimer); w._slNoAnswerTimer = null; }
-        } catch (e) {}
+        if (w.currentCall) w.currentCall.state = 'active';
+        try { if (w._slNoAnswerTimer) { clearTimeout(w._slNoAnswerTimer); w._slNoAnswerTimer = null; } } catch (e) {}
         setStatus('Соединение...');
         keepCallUIVisible();
-        // Try play any remote streams already present
         try {
-          const receivers = conn.getReceivers ? conn.getReceivers() : [];
-          receivers.forEach(r => {
-            if (r.track) attachRemoteTrackFixed(r.track);
-          });
+          (conn.getReceivers || (() => []))().forEach(r => { if (r.track) attachRemoteTrackFixed(r.track); });
         } catch (e) {}
       } catch (e) {
         console.error('[call] handleAnswer', e);
-        try { if (typeof showToast === 'function') showToast('Ошибка соединения'); } catch (e2) {}
+        try { if (typeof showToast === 'function') showToast('Ошибка соединения: ' + String(e.message || e).slice(0, 50)); } catch (e2) {}
       }
     };
 
