@@ -1,28 +1,28 @@
 /* SLine Service Worker */
-self.addEventListener('install', (e) => {
-  self.skipWaiting();
-});
-
+self.addEventListener('install', (e) => { self.skipWaiting(); });
 self.addEventListener('activate', (e) => {
-  e.waitUntil((async () => {
-    try { await self.clients.claim(); } catch (err) {}
-  })());
+  e.waitUntil((async () => { try { await self.clients.claim(); } catch (err) {} })());
 });
 
-function notifOpts(title, o) {
+function notifOpts(o) {
   o = o || {};
   const opts = {
     body: o.body || '',
-    tag: o.tag || 'sl',
+    tag: o.tag || ('sl-' + Date.now()),
     renotify: true,
     silent: false,
-    requireInteraction: !!o.requireInteraction,
+    // Android/Xiaomi: keep visible in shade until user taps
+    requireInteraction: o.requireInteraction !== false,
     data: o.data || { url: './' }
   };
-  // Android Chrome often fails silently with data: icons — only pass http(s)
   if (o.icon && /^https?:\/\//i.test(o.icon)) opts.icon = o.icon;
   if (o.badge && /^https?:\/\//i.test(o.badge)) opts.badge = o.badge;
   if (Array.isArray(o.vibrate)) opts.vibrate = o.vibrate;
+  else opts.vibrate = [300, 100, 300, 100, 300];
+  // Action button helps some OEMs surface the notification
+  try {
+    opts.actions = [{ action: 'open', title: 'Открыть' }];
+  } catch (e) {}
   return opts;
 }
 
@@ -52,18 +52,15 @@ self.addEventListener('push', (e) => {
   } catch (err) {
     try { data.body = e.data.text(); } catch (e2) {}
   }
-  const vibrate = data.urgent
-    ? [400, 150, 400, 150, 400, 150, 400]
-    : [200, 100, 200];
   e.waitUntil(
-    self.registration.showNotification(data.title || 'SLine', notifOpts(data.title, {
+    self.registration.showNotification(data.title || 'SLine', notifOpts({
       body: data.body || '',
       tag: data.tag || 'sl-push',
-      requireInteraction: !!data.urgent,
-      vibrate,
+      requireInteraction: true,
+      vibrate: data.urgent ? [400, 150, 400, 150, 400] : [300, 100, 300],
       icon: data.icon,
       badge: data.badge,
-      data: { url: data.url || './' }
+      data: { url: data.url || './', mid: data.mid }
     }))
   );
 });
@@ -73,13 +70,9 @@ self.addEventListener('message', (e) => {
   if (msg.type === 'sl-show-notification') {
     const o = msg.options || {};
     e.waitUntil(
-      self.registration.showNotification(msg.title || 'SLine', notifOpts(msg.title, o))
-        .then(() => {
-          if (e.ports && e.ports[0]) e.ports[0].postMessage({ ok: true });
-        })
-        .catch((err) => {
-          if (e.ports && e.ports[0]) e.ports[0].postMessage({ ok: false, error: String(err) });
-        })
+      self.registration.showNotification(msg.title || 'SLine', notifOpts(o))
+        .then(() => { if (e.ports && e.ports[0]) e.ports[0].postMessage({ ok: true }); })
+        .catch((err) => { if (e.ports && e.ports[0]) e.ports[0].postMessage({ ok: false, error: String(err) }); })
     );
   }
   if (msg.type === 'sl-ping') {
