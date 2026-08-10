@@ -10898,10 +10898,22 @@ function initCallSystem(){
     .on('broadcast',{event:'ice'}, ({payload})=>handleRemoteIce(payload))
     .on('broadcast',{event:'hangup'}, ({payload})=>{
       try{
-        if(payload && payload.from && currentCall && currentCall.peerId &&
-           String(payload.from)!==String(currentCall.peerId) &&
-           !(pendingOffer && String(payload.from)===String(pendingOffer.from))){
-          return; // ignore hangup from other peer
+        // CRITICAL: empty hangup {} used to always kill the caller UI
+        if(!currentCall && !pendingOffer) return;
+        const from = payload && payload.from;
+        if(!from){
+          console.warn('[call] ignore hangup without from');
+          return;
+        }
+        const peer = (currentCall && currentCall.peerId) || (pendingOffer && pendingOffer.from);
+        if(peer && String(from)!==String(peer)){
+          console.warn('[call] ignore hangup from other peer', from);
+          return;
+        }
+        // During first seconds after answer, ignore remote hangup (race)
+        if(window._slCallProtectUntil && Date.now() < window._slCallProtectUntil){
+          console.warn('[call] ignore hangup during protect window');
+          return;
         }
       }catch(e){}
       endCall(false);
@@ -11103,7 +11115,7 @@ async function startCall(partner, withVideo){
 }
 let pendingOffer=null;
 function handleIncomingOffer(payload){
-  if(currentCall){ sendSignal(payload.from,'hangup',{}); return; }
+  if(currentCall){ sendSignal(payload.from,'hangup',{from:myProfile.id}); return; }
   pendingOffer=payload;
   currentCall={peerId:payload.from, peerName:payload.name||'Пользователь', peerColor:payload.color||colorFor(payload.from), peerAvatar:payload.avatar, video:payload.video, state:'incoming', _dir:'in'};
   _callStartedAt=Date.now();
@@ -11147,6 +11159,7 @@ async function acceptCall(){
     try{ window._slIgnoreHangupBriefly && window._slIgnoreHangupBriefly(2500); }catch(e){}
     sendSignal(pendingOffer.from,'answer',{from:myProfile.id, sdp: slSdpPayload(pc.localDescription)});
     currentCall.state='active'; currentCall._dir='in';
+    window._slCallProtectUntil = Date.now() + 8000;
     _callStartedAt=Date.now();
     try{ stopRingtone(); }catch(e){}
     try{ document.getElementById('sl-incoming-call')?.remove(); }catch(e){}
@@ -11191,16 +11204,29 @@ async function handleAnswer(payload){
       try{ await pc.addIceCandidate(new RTCIceCandidate(c)); }catch(e){}
     }
     if(currentCall) currentCall.state='active';
+    // Protect caller UI from race hangups / cleanup for several seconds
+    window._slCallProtectUntil = Date.now() + 8000;
     try{ if(window._slNoAnswerTimer){ clearTimeout(window._slNoAnswerTimer); window._slNoAnswerTimer=null; } }catch(e){}
-    try{ window._slIgnoreHangupBriefly && window._slIgnoreHangupBriefly(3000); }catch(e){}
+    try{ window._slIgnoreHangupBriefly && window._slIgnoreHangupBriefly(8000); }catch(e){}
     const st=document.getElementById('call-status-text');
     if(st) st.textContent='Соединение...';
-    try{ showCallUI(); renderCallActions(); }catch(e){}
+    // Force overlay stay visible (caller side)
+    try{
+      const ov=document.getElementById('call-overlay');
+      if(ov){ ov.classList.add('show'); ov.style.display='flex'; ov.style.zIndex='100000'; ov.style.opacity='1'; ov.style.visibility='visible'; }
+      showCallUI(); renderCallActions();
+      const hang=document.getElementById('cc-hangup');
+      if(hang){ hang.style.display='flex'; }
+    }catch(e){}
     try{ pc.getReceivers().forEach(r=>{ if(r.track) attachRemoteTrack(r.track); }); }catch(e){}
   }catch(e){
     console.error('handleAnswer', e);
     showToast('Ошибка соединения: '+String(e.message||e).slice(0,60));
-    // Keep UI so user can hang up manually; do not auto-end (felt like "screen vanished")
+    // NEVER endCall here — caller must keep the screen
+    try{
+      const ov=document.getElementById('call-overlay');
+      if(ov){ ov.classList.add('show'); ov.style.display='flex'; }
+    }catch(e2){}
   }
 }
 async function handleRemoteIce(payload){
@@ -11213,7 +11239,7 @@ async function handleRemoteIce(payload){
     await pc.addIceCandidate(new RTCIceCandidate(payload.candidate));
   }catch(e){ console.warn('ice', e); }
 }
-function declineCall(){ if(pendingOffer) sendSignal(pendingOffer.from,'hangup',{}); endCall(false); }
+function declineCall(){ if(pendingOffer) sendSignal(pendingOffer.from,'hangup',{from:myProfile.id}); endCall(false); }
 function setupLocalVideo(){
   const lv=document.getElementById('call-local-video');
   if(!lv) return;
@@ -11293,11 +11319,13 @@ function wireCallButtonsOnce(){
   bind('cc-accept', ()=>{ if(typeof acceptCall==='function') acceptCall(); });
   bind('cc-decline', ()=>{ if(typeof declineCall==='function') declineCall(); });
   bind('cc-hangup', ()=>{
+    window._slUserHangup = true;
+    window._slCallProtectUntil = 0;
     try{
       const peer = currentCall?.peerId || pendingOffer?.from;
-      if(peer && typeof sendSignal==='function') sendSignal(peer,'hangup',{});
+      if(peer && typeof sendSignal==='function') sendSignal(peer,'hangup',{from:myProfile&&myProfile.id});
     }catch(e){}
-    try{ if(typeof endCall==='function') endCall(); }catch(e){ console.error(e); }
+    try{ if(typeof endCall==='function') endCall(true); }catch(e){ console.error(e); }
   });
   bind('cc-mute', ()=>{
     if(!localStream) return;
@@ -11315,8 +11343,10 @@ document.getElementById('call-overlay')?.addEventListener('click', (e)=>{
   if(!btn) return;
   e.preventDefault(); e.stopPropagation();
   if(btn.id==='cc-hangup'){
-    try{ const peer=currentCall?.peerId||pendingOffer?.from; if(peer) sendSignal(peer,'hangup',{}); }catch(err){}
-    try{ endCall(); }catch(err){}
+    window._slUserHangup = true;
+    window._slCallProtectUntil = 0;
+    try{ const peer=currentCall?.peerId||pendingOffer?.from; if(peer) sendSignal(peer,'hangup',{from:myProfile&&myProfile.id}); }catch(err){}
+    try{ endCall(true); }catch(err){}
   } else if(btn.id==='cc-decline'){
     try{ declineCall(); }catch(err){}
   }
@@ -11463,17 +11493,30 @@ let _callStartedAt=0;
 
 window.slHangup = function(){
   console.log('[SL] hangup pressed', typeof currentCall, currentCall);
+  window._slUserHangup = true;
+  window._slCallProtectUntil = 0;
   try{
     const peer = (typeof currentCall!=='undefined' && currentCall && currentCall.peerId) ? currentCall.peerId
       : (typeof pendingOffer!=='undefined' && pendingOffer && pendingOffer.from) ? pendingOffer.from : null;
-    if(peer && typeof sendSignal==='function') sendSignal(peer, 'hangup', {});
+    if(peer && typeof sendSignal==='function') sendSignal(peer, 'hangup', {from: myProfile && myProfile.id});
   }catch(e){ console.warn(e); }
-  try{ endCall(); }catch(e){ console.error(e); }
+  try{ endCall(true); }catch(e){ console.error(e); }
 };
 window.slDecline = function(){
   try{ if(typeof declineCall==='function') declineCall(); else window.slHangup(); }catch(e){}
 };
-function endCall(_arg){ try{ document.getElementById("sl-incoming-call")?.remove(); }catch(e){} return _slEndCallImpl(_arg); }
+function endCall(_arg){
+  try{ document.getElementById("sl-incoming-call")?.remove(); }catch(e){}
+  // Block accidental end while connecting (unless user pressed hangup)
+  try{
+    if(!window._slUserHangup && window._slCallProtectUntil && Date.now() < window._slCallProtectUntil){
+      console.warn('[call] endCall blocked by protect window');
+      return;
+    }
+  }catch(e){}
+  window._slUserHangup = false;
+  return _slEndCallImpl(_arg);
+}
 function _slEndCallImpl(){
   try{ if(window._slNoAnswerTimer){ clearTimeout(window._slNoAnswerTimer); window._slNoAnswerTimer=null; } }catch(e){}
   try{ document.getElementById('sl-no-answer-menu')?.remove(); }catch(e){}
@@ -13583,7 +13626,16 @@ initCallSystem = function(){
       .on('broadcast', {event:'call_offer'}, ({payload})=>{
         if(payload) handleIncomingOffer(payload);
       })
-      .on('broadcast', {event:'call_hangup'}, ()=>endCall(false))
+      .on('broadcast', {event:'call_hangup'}, ({payload})=>{
+      try{
+        const from = payload && payload.from;
+        if(!from){ console.warn('[call] ignore call_hangup without from'); return; }
+        const peer = (currentCall && currentCall.peerId) || (pendingOffer && pendingOffer.from);
+        if(peer && String(from)!==String(peer)) return;
+        if(window._slCallProtectUntil && Date.now() < window._slCallProtectUntil && !window._slUserHangup) return;
+      }catch(e){}
+      endCall(false);
+    })
       .subscribe();
   }catch(e){}
 };
