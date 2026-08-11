@@ -11220,12 +11220,18 @@ function slNormSdp(raw){
   if(!raw) return null;
   let s = raw;
   if(typeof s === 'string'){
+    // plain SDP body
+    if(s.indexOf('v=0') >= 0) return null; // need type separately
     try{ s = JSON.parse(s); }catch(e){ return null; }
   }
-  // RTCSessionDescription-like
+  // already RTCSessionDescription instance or dict
   if(s.type && s.sdp) return { type: String(s.type), sdp: String(s.sdp) };
-  // nested
-  if(s.sdp && s.sdp.type && s.sdp.sdp) return { type: String(s.sdp.type), sdp: String(s.sdp.sdp) };
+  // nested { sdp: { type, sdp } }
+  if(s.sdp && typeof s.sdp === 'object' && s.sdp.type && s.sdp.sdp)
+    return { type: String(s.sdp.type), sdp: String(s.sdp.sdp) };
+  // { sdp: "v=0..." } without type
+  if(s.sdp && typeof s.sdp === 'string' && s.sdp.indexOf('v=0') >= 0)
+    return { type: s.type ? String(s.type) : 'offer', sdp: String(s.sdp) };
   return null;
 }
 function slSdpPayload(desc){
@@ -11302,62 +11308,77 @@ function cleanupCallChannels(){
 
 let remoteMediaStream = null;
 function attachRemoteTrack(track){
-  const rv=document.getElementById('call-remote-video');
-  if(!rv) return;
+  if(!track) return;
   if(!remoteMediaStream) remoteMediaStream = new MediaStream();
   // replace same-kind track if already present
-  remoteMediaStream.getTracks().filter(t=>t.kind===track.kind).forEach(t=>{ remoteMediaStream.removeTrack(t); });
+  remoteMediaStream.getTracks().filter(t=>t.kind===track.kind).forEach(t=>{
+    try{ remoteMediaStream.removeTrack(t); }catch(e){}
+  });
   remoteMediaStream.addTrack(track);
-  rv.srcObject = remoteMediaStream;
-  rv.muted = false;
-  rv.volume = 1;
-  rv.autoplay = true;
-  rv.playsInline = true;
-  rv.setAttribute('playsinline','');
-  rv.setAttribute('webkit-playsinline','');
-  const hasVideo = remoteMediaStream.getVideoTracks().some(t=>t.enabled && t.readyState!=='ended');
-  const wantVideo = !!(currentCall && currentCall.video);
-  if(wantVideo || hasVideo){
-    rv.style.display='block';
-    rv.style.opacity='1';
-    rv.style.pointerEvents='auto';
-    rv.style.width=''; rv.style.height='';
-    rv.style.objectFit='cover';
-    // hide avatar when we have remote video
-    const av=document.getElementById('call-avatar-big');
-    if(av) av.style.display='none';
-    const pulse=document.getElementById('call-pulse');
-    if(pulse) pulse.style.display='none';
-  } else {
-    // voice only — keep element for audio
-    rv.style.display='block';
-    rv.style.opacity='0';
-    rv.style.pointerEvents='none';
-    rv.style.width='1px'; rv.style.height='1px';
+
+  const rv = document.getElementById('call-remote-video');
+  if(rv){
+    rv.srcObject = remoteMediaStream;
+    rv.muted = false;
+    rv.volume = 1;
+    rv.autoplay = true;
+    rv.playsInline = true;
+    rv.setAttribute('playsinline','');
+    rv.setAttribute('webkit-playsinline','');
+    const hasVideo = remoteMediaStream.getVideoTracks().some(t=>t.enabled && t.readyState!=='ended');
+    const wantVideo = !!(currentCall && currentCall.video);
+    if(wantVideo || hasVideo){
+      rv.style.display='block';
+      rv.style.opacity='1';
+      rv.style.pointerEvents='auto';
+      rv.style.width=''; rv.style.height='';
+      rv.style.objectFit='cover';
+      const av=document.getElementById('call-avatar-big');
+      if(av) av.style.display='none';
+      const pulse=document.getElementById('call-pulse');
+      if(pulse) pulse.style.display='none';
+    } else {
+      // voice only — keep tiny element for audio fallback
+      rv.style.display='block';
+      rv.style.opacity='0';
+      rv.style.pointerEvents='none';
+      rv.style.width='1px'; rv.style.height='1px';
+    }
+    const tryPlay=()=>rv.play().catch(err=>console.warn('remote play', err));
+    tryPlay();
+    setTimeout(tryPlay, 100);
+    setTimeout(tryPlay, 500);
   }
-  const tryPlay=()=>rv.play().catch(err=>console.warn('remote play', err));
-  tryPlay();
-  setTimeout(tryPlay, 100);
-  setTimeout(tryPlay, 500);
-  // Dedicated audio element (Xiaomi/iOS often silence hidden video)
+
+  // Dedicated audio element (critical for voice calls)
   try{
-    let ra=document.getElementById('call-remote-audio');
+    let ra = document.getElementById('call-remote-audio');
     if(!ra){
-      ra=document.createElement('audio');
-      ra.id='call-remote-audio'; ra.autoplay=true; ra.setAttribute('playsinline','');
+      ra = document.createElement('audio');
+      ra.id = 'call-remote-audio';
+      ra.autoplay = true;
+      ra.setAttribute('playsinline','');
+      ra.style.cssText = 'position:fixed;width:2px;height:2px;opacity:0.01;left:0;top:0;z-index:1';
       document.body.appendChild(ra);
     }
-    const audioTracks=remoteMediaStream.getAudioTracks();
+    const audioTracks = remoteMediaStream.getAudioTracks().filter(t=>t.readyState!=='ended');
     if(audioTracks.length){
-      ra.srcObject=new MediaStream(audioTracks);
-      ra.muted=false; ra.volume=1;
-      ra.play().catch(err=>console.warn('remote audio play', err));
+      ra.srcObject = new MediaStream(audioTracks);
+      ra.muted = false;
+      ra.volume = 1;
+      const playA = ()=>ra.play().catch(err=>console.warn('remote audio play', err));
+      playA();
+      setTimeout(playA, 200);
+      setTimeout(playA, 800);
     }
-  }catch(e){}
-  document.getElementById('call-status-text').textContent='Соединено';
-  if(currentCall) currentCall.state='active';
+  }catch(e){ console.warn('attach audio', e); }
+
+  const st = document.getElementById('call-status-text');
+  if(st) st.textContent = 'Соединено';
+  if(currentCall) currentCall.state = 'active';
   try{ showCallUI(); renderCallActions(); }catch(e){}
 }
+
 function wirePeerConnection(peerId, withVideo){
   pc = new RTCPeerConnection(RTC_CONFIG);
   remoteMediaStream = null;
@@ -11429,11 +11450,12 @@ async function startCall(partner, withVideo){
     });
   }catch(e){ showToast('Нет доступа к камере/микрофону'); endCall(false); return; }
   setupLocalVideo();
+  if(pc){ try{ pc.close(); }catch(e){} pc=null; }
   wirePeerConnection(partner.id, withVideo);
   try{
-    const offer=await pc.createOffer({offerToReceiveAudio:true, offerToReceiveVideo:!!withVideo});
+    const offer=await pc.createOffer();
     await pc.setLocalDescription(offer);
-    sendSignal(partner.id,'offer',{
+    await sendSignal(partner.id,'offer',{
       from:myProfile.id,
       name:myProfile.first_name||myProfile.username,
       color:myProfile.color||colorFor(myProfile.id),
@@ -11483,46 +11505,103 @@ function handleIncomingOffer(payload){
 async function acceptCall(){
   if(!pendingOffer) return;
   const withVideo=!!pendingOffer.video;
+  const peerId = pendingOffer.from;
+  const offerPayload = pendingOffer;
   try{
     localStream=await navigator.mediaDevices.getUserMedia({
       audio:{echoCancellation:true, noiseSuppression:true, autoGainControl:true},
       video: withVideo ? {width:{ideal:640}, height:{ideal:480}, facingMode:'user'} : false
     });
-  }catch(e){ showToast('Нет доступа к камере/микрофону'); declineCall(); return; }
-  setupLocalVideo();
-  wirePeerConnection(pendingOffer.from, withVideo);
+  }catch(e){
+    console.error('[call] getUserMedia', e);
+    showToast('Нет доступа к камере/микрофону');
+    declineCall();
+    return;
+  }
   try{
-    const offerSdp = slNormSdp(pendingOffer.sdp);
-    if(!offerSdp) throw new Error('пустой SDP входящего звонка');
-    await pc.setRemoteDescription(new RTCSessionDescription(offerSdp));
-    if(typeof _pendingIceCandidates!=='undefined'){
-      const queued=[..._pendingIceCandidates]; _pendingIceCandidates=[];
-      for(const c of queued){ try{ await pc.addIceCandidate(new RTCIceCandidate(c)); }catch(e){} }
+    setupLocalVideo();
+    // Close leftover PC from previous attempt
+    if(pc){ try{ pc.close(); }catch(e){} pc=null; }
+    wirePeerConnection(peerId, withVideo);
+
+    let offerSdp = slNormSdp(offerPayload.sdp);
+    if(!offerSdp){
+      const raw = offerPayload.sdp;
+      if(raw && typeof raw === 'object'){
+        if(raw.type && raw.sdp) offerSdp = { type: String(raw.type), sdp: String(raw.sdp) };
+        else if(raw.sdp && typeof raw.sdp === 'string') offerSdp = { type: 'offer', sdp: String(raw.sdp) };
+      } else if(typeof raw === 'string' && raw.indexOf('v=0') >= 0){
+        offerSdp = { type: 'offer', sdp: raw };
+      }
     }
-    const answer=await pc.createAnswer();
+    if(!offerSdp || !offerSdp.sdp) throw new Error('пустой SDP входящего звонка');
+    if(!offerSdp.type) offerSdp.type = 'offer';
+
+    // Modern browsers accept plain object; avoid double-wrap issues
+    await pc.setRemoteDescription(offerSdp);
+
+    if(typeof _pendingIceCandidates !== 'undefined'){
+      const queued = [..._pendingIceCandidates];
+      _pendingIceCandidates = [];
+      for(const c of queued){
+        try{ await pc.addIceCandidate(c); }catch(e){}
+      }
+    }
+
+    const answer = await pc.createAnswer();
     await pc.setLocalDescription(answer);
+
     try{ window._slIgnoreHangupBriefly && window._slIgnoreHangupBriefly(2500); }catch(e){}
-    sendSignal(pendingOffer.from,'answer',{from:myProfile.id, sdp: slSdpPayload(pc.localDescription)});
-    currentCall.state='active'; currentCall._dir='in';
-    window._slCallProtectUntil = Date.now() + 8000;
-    _callStartedAt=Date.now();
+
+    // Await signal so answer is actually sent before UI continues
+    try{
+      await sendSignal(peerId, 'answer', {
+        from: myProfile.id,
+        sdp: slSdpPayload(pc.localDescription)
+      });
+    }catch(sigErr){
+      console.warn('[call] answer signal', sigErr);
+      // still try fire-and-forget fallback
+      sendSignal(peerId, 'answer', {
+        from: myProfile.id,
+        sdp: slSdpPayload(pc.localDescription)
+      });
+    }
+
+    if(currentCall){
+      currentCall.state = 'active';
+      currentCall._dir = 'in';
+    }
+    window._slCallProtectUntil = Date.now() + 12000;
+    _callStartedAt = Date.now();
     try{ stopRingtone(); }catch(e){}
     try{ document.getElementById('sl-incoming-call')?.remove(); }catch(e){}
     try{ showCallUI(); }catch(e){}
-    renderCallActions();
-    const st=document.getElementById('call-status-text');
-    if(st) st.textContent='Соединение...';
-    // Unlock remote audio element (user gesture from Accept button)
+    try{ renderCallActions(); }catch(e){}
+    const st = document.getElementById('call-status-text');
+    if(st) st.textContent = 'Соединение...';
+
+    // Unlock remote audio (user gesture from Accept)
     try{
-      let ra=document.getElementById('call-remote-audio');
+      let ra = document.getElementById('call-remote-audio');
       if(!ra){
-        ra=document.createElement('audio');
-        ra.id='call-remote-audio'; ra.autoplay=true;
+        ra = document.createElement('audio');
+        ra.id = 'call-remote-audio';
+        ra.autoplay = true;
+        ra.setAttribute('playsinline', '');
+        ra.style.cssText = 'position:fixed;width:2px;height:2px;opacity:0.01;left:0;top:0;z-index:1';
         document.body.appendChild(ra);
       }
-      ra.play().catch(()=>{});
+      ra.muted = false;
+      ra.volume = 1;
+      ra.play().catch(function(){});
     }catch(e){}
-  }catch(e){ console.error(e); showToast('Ошибка ответа на звонок'); endCall(false); }
+  }catch(e){
+    console.error('[call] acceptCall', e);
+    const msg = (e && e.message) ? e.message : String(e);
+    showToast('Ошибка ответа на звонок: ' + msg);
+    try{ endCall(false); }catch(e2){}
+  }
 }
 let _pendingIceCandidates=[];
 async function handleAnswer(payload){
@@ -11541,16 +11620,24 @@ async function handleAnswer(payload){
       console.info('[call] answer ignored, already stable');
       return;
     }
-    const sdp = slNormSdp(payload && payload.sdp);
-    if(!sdp) throw new Error('пустой/битый SDP ответа');
-    await pc.setRemoteDescription(new RTCSessionDescription(sdp));
+    let sdp = slNormSdp(payload && payload.sdp);
+    if(!sdp){
+      const raw = payload && payload.sdp;
+      if(raw && typeof raw === 'object' && raw.type && raw.sdp)
+        sdp = { type: String(raw.type), sdp: String(raw.sdp) };
+      else if(raw && typeof raw === 'string' && raw.indexOf('v=0') >= 0)
+        sdp = { type: 'answer', sdp: raw };
+    }
+    if(!sdp || !sdp.sdp) throw new Error('пустой/битый SDP ответа');
+    if(!sdp.type) sdp.type = 'answer';
+    await pc.setRemoteDescription(sdp);
     const queued=[..._pendingIceCandidates]; _pendingIceCandidates=[];
     for(const c of queued){
-      try{ await pc.addIceCandidate(new RTCIceCandidate(c)); }catch(e){}
+      try{ await pc.addIceCandidate(c); }catch(e){}
     }
     if(currentCall) currentCall.state='active';
     // Protect caller UI from race hangups / cleanup for several seconds
-    window._slCallProtectUntil = Date.now() + 8000;
+    window._slCallProtectUntil = Date.now() + 12000;
     try{ if(window._slNoAnswerTimer){ clearTimeout(window._slNoAnswerTimer); window._slNoAnswerTimer=null; } }catch(e){}
     try{ window._slIgnoreHangupBriefly && window._slIgnoreHangupBriefly(8000); }catch(e){}
     const st=document.getElementById('call-status-text');
@@ -11577,11 +11664,13 @@ async function handleAnswer(payload){
 async function handleRemoteIce(payload){
   if(!pc || !payload?.candidate) return;
   try{
+    const cand = payload.candidate;
     if(!pc.remoteDescription){
-      _pendingIceCandidates.push(payload.candidate);
+      _pendingIceCandidates.push(cand);
       return;
     }
-    await pc.addIceCandidate(new RTCIceCandidate(payload.candidate));
+    // plain object is fine in modern browsers
+    await pc.addIceCandidate(cand);
   }catch(e){ console.warn('ice', e); }
 }
 function declineCall(){ if(pendingOffer) sendSignal(pendingOffer.from,'hangup',{from:myProfile.id}); endCall(false); }
