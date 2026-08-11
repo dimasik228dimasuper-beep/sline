@@ -5580,6 +5580,19 @@ async function beginRecording(){
       }catch(e){ recStream = circleStream; }
     }
   }
+  // Wait for camera frames so circle is not pure black
+  if(recordMode==='circle'){
+    try{
+      const vid=document.getElementById('clp');
+      if(vid){
+        await Promise.race([
+          new Promise(res=>{ if(vid.readyState>=2) res(); else vid.addEventListener('loadeddata', res, {once:true}); }),
+          new Promise(res=>setTimeout(res, 1000))
+        ]);
+        await new Promise(r=>setTimeout(r, 200));
+      }
+    }catch(e){}
+  }
   try{ mediaRecorder=new MediaRecorder(recStream,{mimeType:mime, videoBitsPerSecond:800000}); }
   catch(e){ mediaRecorder=new MediaRecorder(recStream); }
   mediaRecorder.ondataavailable=e=>{ if(e.data&&e.data.size>0) recordedChunks.push(e.data); };
@@ -5631,6 +5644,23 @@ async function toggleCircleTorch(){
       }
     }
     if(!caps.torch){
+      // Front camera: use screen as flash
+      if(circleFacing==='user'){
+        let flash=document.getElementById('sl-front-flash');
+        if(!flash){
+          flash=document.createElement('div');
+          flash.id='sl-front-flash';
+          flash.style.cssText='position:fixed;inset:0;z-index:3990;background:#fff;opacity:.9;pointer-events:none;display:none';
+          document.body.appendChild(flash);
+        }
+        const on = flash.style.display!=='block';
+        flash.style.display = on ? 'block' : 'none';
+        circleTorchOn = on;
+        const btn=document.getElementById('rflash');
+        if(btn) btn.classList.toggle('on', on);
+        showToast(on ? 'Подсветка экрана вкл' : 'Подсветка экрана выкл');
+        return;
+      }
       showToast(currentLang==='en'?'Flash not available on this device':'Вспышка недоступна на этом устройстве');
       return;
     }
@@ -26091,6 +26121,9 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
   function cancelRec(){
     clearInterval(recTimer);
     recording=false;
+    try{ if(typeof setScreenFlash==='function') setScreenFlash(false); }catch(e){}
+    try{ document.getElementById('tg-screen-flash')?.remove(); }catch(e){}
+    try{ document.getElementById('sl-front-flash')?.remove(); }catch(e){}
     try{ if(mediaRec && mediaRec.state!=='inactive') mediaRec.stop(); }catch(e){}
     stopTracks();
     chunks=[];
@@ -26100,12 +26133,33 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
     clearUI();
   }
 
+  let screenFlashEl = null;
+  function setScreenFlash(on){
+    try{
+      if(on){
+        if(!screenFlashEl){
+          screenFlashEl = document.createElement('div');
+          screenFlashEl.id = 'tg-screen-flash';
+          screenFlashEl.style.cssText = 'position:fixed;inset:0;z-index:3990;background:#fff;opacity:0.92;pointer-events:none;transition:opacity .15s';
+          document.body.appendChild(screenFlashEl);
+        }
+        screenFlashEl.style.display = 'block';
+        // bump screen brightness hint via white overlay (front "flash")
+        try{ document.documentElement.style.background = '#fff'; }catch(e){}
+      } else {
+        if(screenFlashEl){ screenFlashEl.style.display = 'none'; }
+        try{ document.documentElement.style.background = ''; }catch(e){}
+      }
+    }catch(e){}
+  }
+
   async function startCircle(){
     if(recording) return;
     clearUI();
+    setScreenFlash(false);
     try{
       mediaStream = await navigator.mediaDevices.getUserMedia({
-        video:{ facingMode: facing, width:{ideal:640}, height:{ideal:640} },
+        video:{ facingMode: { ideal: facing }, width:{ideal:720}, height:{ideal:720} },
         audio:true
       });
     }catch(e){
@@ -26117,14 +26171,6 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
     paused=false;
     recording=true;
     recStart=Date.now();
-
-    // canvas for circular crop optional - record full then CSS circle is enough for playback
-    let mime='video/webm;codecs=vp8,opus';
-    if(!MediaRecorder.isTypeSupported(mime)) mime='video/webm';
-    try{ mediaRec=new MediaRecorder(mediaStream,{mimeType:mime, videoBitsPerSecond:2500000}); }
-    catch(e){ mediaRec=new MediaRecorder(mediaStream); }
-    mediaRec.ondataavailable=e=>{ if(e.data&&e.data.size) chunks.push(e.data); };
-    mediaRec.start(100);
 
     const ov=document.createElement('div');
     ov.id='tg-circle-ov';
@@ -26146,17 +26192,41 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
     document.body.appendChild(ov);
     const v=document.getElementById('tg-cl-video');
     v.srcObject=mediaStream;
+    v.muted = true;
+    v.playsInline = true;
     v.classList.toggle('mirrored', facing==='user');
-    v.play().catch(()=>{});
+    try{ await v.play(); }catch(e){}
+
+    // Wait for real video frames before starting MediaRecorder (fixes black/dark circles)
+    await new Promise((resolve)=>{
+      let done=false;
+      const finish=()=>{ if(done) return; done=true; resolve(); };
+      if(v.readyState >= 2) finish();
+      v.addEventListener('loadeddata', finish, {once:true});
+      v.addEventListener('playing', finish, {once:true});
+      setTimeout(finish, 1200);
+    });
+    // Extra frames so first captured frame isn't black
+    await new Promise(r=>setTimeout(r, 250));
+
+    let mime='video/webm;codecs=vp8,opus';
+    if(!MediaRecorder.isTypeSupported(mime)) mime='video/webm';
+    if(!MediaRecorder.isTypeSupported(mime)) mime='video/mp4';
+    try{ mediaRec=new MediaRecorder(mediaStream,{mimeType:mime, videoBitsPerSecond:1800000}); }
+    catch(e){ try{ mediaRec=new MediaRecorder(mediaStream); }catch(e2){ toast('Запись недоступна'); cancelRec(); return; } }
+    mediaRec.ondataavailable=e=>{ if(e.data&&e.data.size) chunks.push(e.data); };
+    try{ mediaRec.start(200); }catch(e){ toast('Не удалось начать запись'); cancelRec(); return; }
 
     clearInterval(recTimer);
     recTimer=setInterval(()=>{
       const el=document.getElementById('tg-cl-time');
       if(el) el.textContent=fmt(Date.now()-recStart);
+      // auto-stop at 60s
+      if(Date.now()-recStart > 60000){ try{ finishCircle(); }catch(e){} }
     }, 50);
 
-    ov.querySelector('#tg-cl-cancel').onclick=()=>cancelRec();
-    ov.querySelector('#tg-cl-send').onclick=()=>finishCircle();
+    ov.querySelector('#tg-cl-cancel').onclick=(e)=>{ e.preventDefault(); e.stopPropagation(); setScreenFlash(false); cancelRec(); };
+    ov.querySelector('#tg-cl-send').onclick=(e)=>{ e.preventDefault(); e.stopPropagation(); finishCircle(); };
     ov.querySelector('#tg-cl-pause').onclick=()=>{
       if(!mediaRec) return;
       if(!paused){ try{ mediaRec.pause(); }catch(e){} paused=true; ov.querySelector('#tg-cl-pause').innerHTML=PLAY; }
@@ -26164,21 +26234,23 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
     };
     ov.querySelector('#tg-cl-flip').onclick=async()=>{
       facing = facing==='user'?'environment':'user';
+      setScreenFlash(false);
       try{
         const old=mediaStream;
         mediaStream = await navigator.mediaDevices.getUserMedia({
-          video:{ facingMode: facing, width:{ideal:640}, height:{ideal:640} },
+          video:{ facingMode: { ideal: facing }, width:{ideal:720}, height:{ideal:720} },
           audio:true
         });
         v.srcObject=mediaStream;
         v.classList.toggle('mirrored', facing==='user');
         await v.play().catch(()=>{});
-        // swap tracks on recorder if possible
+        await new Promise(r=>setTimeout(r, 200));
         try{
           if(mediaRec && mediaRec.stream){
-            mediaRec.stream.getVideoTracks().forEach(t=>{ try{ mediaRec.stream.removeTrack(t); t.stop(); }catch(e){} });
-            mediaRec.stream.getAudioTracks().forEach(t=>{ try{ mediaRec.stream.removeTrack(t); t.stop(); }catch(e){} });
-            mediaStream.getTracks().forEach(t=>{ try{ mediaRec.stream.addTrack(t); }catch(e){} });
+            const senders = mediaRec.stream;
+            senders.getVideoTracks().forEach(t=>{ try{ senders.removeTrack(t); t.stop(); }catch(e){} });
+            senders.getAudioTracks().forEach(t=>{ try{ senders.removeTrack(t); t.stop(); }catch(e){} });
+            mediaStream.getTracks().forEach(t=>{ try{ senders.addTrack(t); }catch(e){} });
           }
         }catch(e){}
         try{ old?.getTracks().forEach(t=>t.stop()); }catch(e){}
@@ -26189,9 +26261,23 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
         const track=mediaStream?.getVideoTracks()[0];
         const caps=track?.getCapabilities?.()||{};
         if(caps.torch){
-          const settings=track.getSettings();
-          await track.applyConstraints({ advanced:[{ torch: !settings.torch }] });
-        } else toast('Вспышка недоступна');
+          // rear hardware torch
+          const settings=track.getSettings?.()||{};
+          const next = !settings.torch;
+          await track.applyConstraints({ advanced:[{ torch: next }] });
+          ov.querySelector('#tg-cl-flash').classList.toggle('on', next);
+          setScreenFlash(false);
+          toast(next ? 'Вспышка вкл' : 'Вспышка выкл');
+        } else if(facing === 'user'){
+          // Front camera: screen flash (white overlay) — hardware torch almost never available
+          const el = document.getElementById('tg-screen-flash');
+          const next = !(el && el.style.display === 'block');
+          setScreenFlash(next);
+          ov.querySelector('#tg-cl-flash').classList.toggle('on', next);
+          toast(next ? 'Подсветка экрана вкл' : 'Подсветка экрана выкл');
+        } else {
+          toast('Вспышка недоступна на этой камере');
+        }
       }catch(e){ toast('Вспышка недоступна'); }
     };
   }
@@ -26199,12 +26285,15 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
   function finishCircle(){
     if(!recording) return;
     clearInterval(recTimer);
+    setScreenFlash(false);
+    const minMs = 600;
+    const elapsed = Date.now() - recStart;
     const done=()=>{
       recording=false;
       stopTracks();
       const blob=new Blob(chunks,{type:chunks[0]?.type||'video/webm'});
       clearUI();
-      if(blob.size<500){ toast('Слишком коротко'); chunks=[]; return; }
+      if(elapsed < minMs || blob.size<800){ toast('Слишком коротко — удерживайте дольше'); chunks=[]; return; }
       const reader=new FileReader();
       reader.onload=async ev=>{
         try{
@@ -26216,6 +26305,7 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
     };
     if(mediaRec && mediaRec.state!=='inactive'){
       mediaRec.onstop=done;
+      try{ mediaRec.requestData(); }catch(e){}
       try{ mediaRec.stop(); }catch(e){ done(); }
     } else done();
   }
@@ -26240,6 +26330,7 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
       if(e.button!=null && e.button!==0) return;
       e.preventDefault();
       e.stopPropagation();
+      if(typeof e.stopImmediatePropagation==='function') e.stopImmediatePropagation();
       held=false;
       ptrId=e.pointerId;
       try{ neo.setPointerCapture(e.pointerId); }catch(err){}
@@ -26249,7 +26340,7 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
         try{ navigator.vibrate?.(15); }catch(err){}
         if(mode==='voice') startVoice();
         else startCircle();
-      }, 280);
+      }, 350);
     });
     const end=(e)=>{
       if(ptrId!=null && e && e.pointerId!=null && e.pointerId!==ptrId) return;
@@ -26264,8 +26355,8 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
         // release after hold on voice → go to preview
         finishVoice(true);
       } else if(recording && mode==='circle'){
-        // for circle, release also finishes (Telegram holds while recording)
-        finishCircle();
+        // Keep recording until user taps Send or Cancel (fixes accidental instant send)
+        // Do not call finishCircle on finger release
       }
       held=false; ptrId=null;
     };
