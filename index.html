@@ -3577,6 +3577,11 @@ async function onAuthenticated(user){
 // ========== DEEP LINK ==========
 async function handleDeepLink(){
   const path = pendingDeepLink || location.hash || location.pathname || '';
+  // Hidden AI chat — works even before full profile in some cases
+  if(/#\/?ai-chat\b/i.test(path) || /\/ai-chat\b/i.test(path)){
+    try{ if(typeof window.slOpenAiChat==='function') window.slOpenAiChat(); }catch(e){}
+    return;
+  }
   if(!path || !myProfile) return;
   let m;
   if((m = path.match(/\/user\/@?([a-zA-Z0-9_]+)/i))){
@@ -27649,6 +27654,573 @@ document.addEventListener('click', function(e){
     if(typeof _prevGet==='function') return _prevGet(p);
     return '';
   };
+})();
+
+
+
+/* ===== SL: fullscreen image zoom, AI chat, alarm, SVG stickers ===== */
+(function(){
+  'use strict';
+  if(window._slPackMediaAiAlarm) return;
+  window._slPackMediaAiAlarm = 1;
+
+  function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+  /* ---------- 1) FULLSCREEN IMAGE + PINCH ZOOM ---------- */
+  function openImageFullscreen(src){
+    if(!src) return;
+    try{ document.getElementById('sl-img-fs')?.remove(); }catch(e){}
+    const ov = document.createElement('div');
+    ov.id = 'sl-img-fs';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:40000;background:#000;display:flex;align-items:center;justify-content:center;touch-action:none;overscroll-behavior:none';
+    ov.innerHTML = `
+      <img id="sl-img-fs-el" src="${esc(src)}" alt="" draggable="false"
+        style="max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;transform-origin:center center;will-change:transform;user-select:none;-webkit-user-drag:none">
+      <button type="button" id="sl-img-fs-x" aria-label="Close"
+        style="position:absolute;top:calc(10px + env(safe-area-inset-top));right:12px;width:40px;height:40px;border-radius:50%;border:none;background:rgba(255,255,255,.15);color:#fff;font-size:22px;cursor:pointer;z-index:2">×</button>
+      <div style="position:absolute;bottom:calc(16px + env(safe-area-inset-bottom));left:0;right:0;text-align:center;color:rgba(255,255,255,.55);font-size:12px;pointer-events:none">Щипок / колесо — масштаб · двойной тап</div>`;
+    document.body.appendChild(ov);
+    const img = ov.querySelector('#sl-img-fs-el');
+    let scale = 1, tx = 0, ty = 0;
+    let lastTap = 0;
+    const pointers = new Map();
+    let pinchStartDist = 0, pinchStartScale = 1;
+
+    function apply(){
+      img.style.transform = `translate(${tx}px,${ty}px) scale(${scale})`;
+    }
+    function clamp(){
+      scale = Math.min(8, Math.max(1, scale));
+      if(scale === 1){ tx = 0; ty = 0; }
+    }
+    function dist(a,b){
+      const dx=a.x-b.x, dy=a.y-b.y; return Math.hypot(dx,dy);
+    }
+
+    ov.addEventListener('wheel', (e)=>{
+      e.preventDefault();
+      const delta = e.deltaY > 0 ? 0.9 : 1.1;
+      scale *= delta;
+      clamp(); apply();
+    }, {passive:false});
+
+    ov.addEventListener('pointerdown', (e)=>{
+      if(e.target.closest('#sl-img-fs-x')) return;
+      ov.setPointerCapture?.(e.pointerId);
+      pointers.set(e.pointerId, {x:e.clientX, y:e.clientY});
+      if(pointers.size === 2){
+        const pts = [...pointers.values()];
+        pinchStartDist = dist(pts[0], pts[1]) || 1;
+        pinchStartScale = scale;
+      }
+    });
+    ov.addEventListener('pointermove', (e)=>{
+      if(!pointers.has(e.pointerId)) return;
+      const prev = pointers.get(e.pointerId);
+      const cur = {x:e.clientX, y:e.clientY};
+      pointers.set(e.pointerId, cur);
+      if(pointers.size === 2){
+        const pts = [...pointers.values()];
+        const d = dist(pts[0], pts[1]) || 1;
+        scale = pinchStartScale * (d / pinchStartDist);
+        clamp(); apply();
+      } else if(pointers.size === 1 && scale > 1){
+        tx += cur.x - prev.x;
+        ty += cur.y - prev.y;
+        apply();
+      }
+    });
+    const up = (e)=>{
+      pointers.delete(e.pointerId);
+      if(pointers.size < 2){ pinchStartDist = 0; }
+    };
+    ov.addEventListener('pointerup', up);
+    ov.addEventListener('pointercancel', up);
+
+    ov.addEventListener('click', (e)=>{
+      if(e.target.closest('#sl-img-fs-x')){ ov.remove(); return; }
+      const now = Date.now();
+      if(now - lastTap < 280){
+        if(scale > 1.05){ scale = 1; tx = 0; ty = 0; }
+        else { scale = 2.5; }
+        apply();
+        lastTap = 0;
+      } else lastTap = now;
+    });
+
+    ov.querySelector('#sl-img-fs-x').onclick = (e)=>{ e.stopPropagation(); ov.remove(); };
+    // close on Escape
+    const onKey = (e)=>{ if(e.key==='Escape'){ ov.remove(); window.removeEventListener('keydown', onKey); } };
+    window.addEventListener('keydown', onKey);
+  }
+  window.slOpenImageFullscreen = openImageFullscreen;
+
+  // Capture clicks on chat images (override weak lightbox)
+  document.addEventListener('click', (e)=>{
+    const img = e.target.closest?.('img.sl-media-img, .media-with-caption img, .bubble img:not(.sticker-animated):not(.avatar):not(.av)');
+    if(!img) return;
+    if(img.closest?.('#sl-img-fs')) return;
+    if(img.classList?.contains('sticker-animated')) return;
+    if(img.width < 40 && img.height < 40) return; // icons
+    const src = img.currentSrc || img.src;
+    if(!src || src.startsWith('data:image/svg')) return; // stickers often svg
+    // only media in messages / gallery
+    if(!img.closest?.('.bubble, .sl-media-card, .sl-media-grid, .messages-list, #messages-list')) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if(typeof e.stopImmediatePropagation==='function') e.stopImmediatePropagation();
+    openImageFullscreen(src);
+  }, true);
+
+  /* ---------- 2) AI CHAT via #/ai-chat ---------- */
+  const AI_KB = [
+    {keys:['привет','здравствуй','хай','hello','hi'], ans:'Привет! Я AI-помощник SLine. Спросите про функции приложения.'},
+    {keys:['как дела','как ты'], ans:'Отлично! Готов помочь с SLine 😊'},
+    {keys:['помощь','help','что умеешь','команды'], ans:'Я знаю слова про: чаты, звонки, кружки, стикеры, музыку, ботов, тему, уведомления, будильник, профиль. Напишите тему.'},
+    {keys:['чат','сообщен','написать'], ans:'Чтобы написать человеку: «+» → Начать общение → найдите по @username, email или номеру.'},
+    {keys:['звонок','позвон','видеозвон'], ans:'Звонки: откройте чат → иконка трубки (аудио) или камеры (видео). Нужен доступ к микрофону/камере.'},
+    {keys:['кружок','video note','видеосообщен'], ans:'Кружки: зажмите кнопку кружка у поля ввода, запишите, нажмите отправить. На iPhone лучше сохраняется как mp4.'},
+    {keys:['стикер'], ans:'Стикеры: кнопка ✨ / стикеры у поля ввода. Все стикеры — SVG-иконки.'},
+    {keys:['музык','песн','mp3'], ans:'Музыка: Настройки → Музыка. Можно загрузить свой MP3 и выбрать любимую песню для профиля.'},
+    {keys:['бот','создать бота'], ans:'Боты: «+» → Создать бота или Настройки → Боты. Задайте правила «слово → ответ».'},
+    {keys:['тем','оформлен','тёмн','светл'], ans:'Тема: Настройки → оформление / сменить тему. Есть светлая, тёмная и системная.'},
+    {keys:['уведомл','notification','пуш'], ans:'Уведомления: разрешите их в браузере и в настройках телефона. На Xiaomi включите автозапуск и снимите ограничения батареи.'},
+    {keys:['будил','alarm','напомина'], ans:'Будильник: Настройки → Будильник. Сработает даже когда сайт закрыт (нужны уведомления).'},
+    {keys:['профиль','username','ник'], ans:'Профиль: Настройки → Изменить профиль. Username нужен, чтобы вас находили.'},
+    {keys:['групп','канал'], ans:'Группа/канал: «+» → Создать группу или Создать канал.'},
+    {keys:['кто ты','что ты'], ans:'Я простой AI SLine: отвечаю по ключевым словам о возможностях мессенджера.'},
+    {keys:['спасибо','thanks'], ans:'Пожалуйста! Если что — пишите ещё.'},
+    {keys:['пока','bye','до свид'], ans:'До связи! 👋'},
+  ];
+
+  function aiReply(text){
+    const t = String(text||'').toLowerCase();
+    for(const row of AI_KB){
+      if(row.keys.some(k => t.includes(k))) return row.ans;
+    }
+    return 'Пока не знаю этот вопрос. Напишите «помощь» — список тем, которые я понимаю.';
+  }
+
+  window.slOpenAiChat = function(){
+    try{ document.getElementById('sl-ai-chat')?.remove(); }catch(e){}
+    const ov = document.createElement('div');
+    ov.id = 'sl-ai-chat';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:35000;background:var(--bg,#0b1120);display:flex;flex-direction:column;color:var(--text,#fff)';
+    ov.innerHTML = `
+      <div style="display:flex;align-items:center;gap:10px;padding:12px 14px;padding-top:calc(12px + env(safe-area-inset-top));border-bottom:1px solid var(--line,rgba(255,255,255,.1));background:var(--panel,#121826)">
+        <button type="button" id="ai-back" style="width:40px;height:40px;border:none;border-radius:12px;background:transparent;color:inherit;font-size:22px;cursor:pointer">‹</button>
+        <div style="flex:1">
+          <div style="font-weight:800;font-size:16px">SLine AI</div>
+          <div style="font-size:11px;color:var(--muted,#9aa)">скрытый чат · ключевые слова</div>
+        </div>
+      </div>
+      <div id="ai-msgs" style="flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px"></div>
+      <div style="display:flex;gap:8px;padding:10px 12px;padding-bottom:calc(10px + env(safe-area-inset-bottom));border-top:1px solid var(--line,rgba(255,255,255,.1));background:var(--panel,#121826)">
+        <input id="ai-input" placeholder="Напишите сообщение..." style="flex:1;padding:12px 14px;border-radius:14px;border:1px solid var(--line,rgba(255,255,255,.12));background:var(--input-bg,#0e1524);color:inherit;font-size:15px;outline:none">
+        <button type="button" id="ai-send" style="padding:12px 16px;border:none;border-radius:14px;background:linear-gradient(135deg,#4C7CF3,#6D5DF6);color:#fff;font-weight:700;cursor:pointer">→</button>
+      </div>`;
+    document.body.appendChild(ov);
+    const msgs = ov.querySelector('#ai-msgs');
+    function add(role, text){
+      const b = document.createElement('div');
+      b.style.cssText = role==='me'
+        ? 'align-self:flex-end;max-width:85%;padding:12px 14px;border-radius:16px 16px 4px 16px;background:linear-gradient(135deg,#4C7CF3,#6D5DF6);color:#fff;font-size:14px;line-height:1.45'
+        : 'align-self:flex-start;max-width:85%;padding:12px 14px;border-radius:16px 16px 16px 4px;background:var(--panel-hover,#1a2233);border:1px solid var(--line,rgba(255,255,255,.08));font-size:14px;line-height:1.45';
+      b.textContent = text;
+      msgs.appendChild(b);
+      msgs.scrollTop = msgs.scrollHeight;
+    }
+    add('bot', 'Привет! Я AI-помощник SLine. Напишите «помощь» или спросите про чаты, звонки, кружки, музыку…');
+    const send = ()=>{
+      const inp = ov.querySelector('#ai-input');
+      const t = (inp.value||'').trim();
+      if(!t) return;
+      inp.value = '';
+      add('me', t);
+      setTimeout(()=> add('bot', aiReply(t)), 350);
+    };
+    ov.querySelector('#ai-send').onclick = send;
+    ov.querySelector('#ai-input').onkeydown = e=>{ if(e.key==='Enter') send(); };
+    ov.querySelector('#ai-back').onclick = ()=>{
+      ov.remove();
+      try{ history.replaceState(null,'', location.pathname + location.search); }catch(e){}
+    };
+  };
+
+  // Hash listener (works without login too)
+  function checkAiHash(){
+    if(/#\\/?ai-chat\\b/i.test(location.hash)){
+      try{ window.slOpenAiChat(); }catch(e){}
+    }
+  }
+  window.addEventListener('hashchange', checkAiHash);
+  setTimeout(checkAiHash, 400);
+  setTimeout(checkAiHash, 1500);
+
+  /* ---------- 3) ALARM (notifications even when site closed) ---------- */
+  const ALARM_KEY = 'sl_alarms_v1';
+  function loadAlarms(){ try{ return JSON.parse(localStorage.getItem(ALARM_KEY)||'[]'); }catch(e){ return []; } }
+  function saveAlarms(a){ try{ localStorage.setItem(ALARM_KEY, JSON.stringify(a)); }catch(e){} }
+
+  async function ensureNotifPermission(){
+    if(!('Notification' in window)) return false;
+    if(Notification.permission === 'granted') return true;
+    if(Notification.permission === 'denied') return false;
+    try{ const p = await Notification.requestPermission(); return p==='granted'; }catch(e){ return false; }
+  }
+
+  async function scheduleAlarmNotification(alarm){
+    const when = alarm.nextAt || alarm.at;
+    const delay = when - Date.now();
+    if(delay < 0) return;
+    const title = alarm.label || 'Будильник SLine';
+    const body = alarm.timeStr || new Date(when).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+    // Prefer SW + TimestampTrigger (Chromium)
+    try{
+      const reg = await navigator.serviceWorker?.ready;
+      if(reg && 'showTrigger' in Notification.prototype){
+        await reg.showNotification(title, {
+          tag: 'sl-alarm-'+alarm.id,
+          body: body,
+          icon: '/icon-192.png',
+          badge: '/icon-192.png',
+          requireInteraction: true,
+          renotify: true,
+          vibrate: [400,200,400,200,400],
+          data: { type:'alarm', id: alarm.id },
+          showTrigger: new TimestampTrigger(when)
+        });
+        return true;
+      }
+    }catch(e){ console.warn('TimestampTrigger', e); }
+    // Fallback: timer while SW/page can run + store for catch-up
+    try{
+      const reg = await navigator.serviceWorker?.ready;
+      if(reg){
+        // message SW to set timeout (best-effort when app backgrounded on mobile)
+        reg.active?.postMessage({ type:'sl_schedule_alarm', id:alarm.id, when, title, body });
+      }
+    }catch(e){}
+    // Page-level backup
+    const wait = Math.min(delay, 2147483647);
+    setTimeout(()=> fireAlarm(alarm), wait);
+    return false;
+  }
+
+  async function fireAlarm(alarm){
+    const title = alarm.label || 'Будильник SLine';
+    const body = 'Сработало: ' + (alarm.timeStr || '');
+    try{
+      const reg = await navigator.serviceWorker?.ready;
+      if(reg){
+        await reg.showNotification(title, {
+          tag: 'sl-alarm-'+alarm.id,
+          body,
+          requireInteraction: true,
+          vibrate: [500,200,500,200,500],
+          data: { type:'alarm', id: alarm.id }
+        });
+      } else if(Notification.permission==='granted'){
+        new Notification(title, { body, requireInteraction: true });
+      }
+    }catch(e){
+      try{ showToast('⏰ ' + title + ' — ' + body); }catch(e2){}
+    }
+    try{ if(navigator.vibrate) navigator.vibrate([400,150,400,150,400]); }catch(e){}
+    // reschedule if repeat daily
+    if(alarm.repeat){
+      const next = alarm.nextAt + 24*60*60*1000;
+      const list = loadAlarms().map(a => a.id===alarm.id ? {...a, nextAt: next} : a);
+      saveAlarms(list);
+      const updated = list.find(a=>a.id===alarm.id);
+      if(updated) scheduleAlarmNotification(updated);
+    }
+  }
+
+  function computeNextAt(hh, mm){
+    const d = new Date();
+    d.setSeconds(0,0);
+    d.setHours(+hh, +mm, 0, 0);
+    if(d.getTime() <= Date.now()) d.setDate(d.getDate()+1);
+    return d.getTime();
+  }
+
+  window.slOpenAlarm = function(){
+    try{ document.getElementById('sl-alarm-page')?.remove(); }catch(e){}
+    const page = document.createElement('div');
+    page.className = 'sl-sheet';
+    page.id = 'sl-alarm-page';
+    page.style.zIndex = '20000';
+    function paint(){
+      const alarms = loadAlarms().sort((a,b)=> (a.nextAt||0)-(b.nextAt||0));
+      page.innerHTML = `
+        <div class="sl-sheet-hdr">
+          <button type="button" class="sl-sheet-back" id="al-back">‹</button>
+          <h2>Будильник</h2>
+          <span style="width:40px"></span>
+        </div>
+        <div class="sl-sheet-body" style="padding:16px">
+          <div style="font-size:13px;color:var(--muted);line-height:1.45;margin-bottom:14px">
+            Сработает через уведомление. Разрешите уведомления. На Android добавьте SLine на экран «Домой» и отключите ограничение батареи.
+          </div>
+          <div style="display:flex;gap:8px;margin-bottom:14px">
+            <input type="time" id="al-time" value="07:30" style="flex:1;padding:12px;border-radius:12px;border:1px solid var(--line);background:var(--input-bg);color:var(--text);font-size:16px">
+            <button type="button" id="al-add" style="padding:12px 16px;border:none;border-radius:12px;background:linear-gradient(135deg,#4C7CF3,#6D5DF6);color:#fff;font-weight:700;cursor:pointer">＋</button>
+          </div>
+          <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:16px;color:var(--muted)">
+            <input type="checkbox" id="al-repeat"> Повторять каждый день
+          </label>
+          <input id="al-label" placeholder="Подпись (необязательно)" style="width:100%;box-sizing:border-box;padding:12px;border-radius:12px;border:1px solid var(--line);background:var(--input-bg);color:var(--text);margin-bottom:16px">
+          <div id="al-list"></div>
+        </div>`;
+      page.querySelector('#al-back').onclick = ()=> page.remove();
+      const list = page.querySelector('#al-list');
+      if(!alarms.length){
+        list.innerHTML = '<div style="text-align:center;color:var(--muted);padding:24px">Нет будильников</div>';
+      } else {
+        list.innerHTML = alarms.map(a=>`
+          <div style="display:flex;align-items:center;gap:12px;padding:14px;border-radius:14px;border:1px solid var(--line);background:var(--panel);margin-bottom:8px">
+            <div style="flex:1">
+              <div style="font-size:28px;font-weight:800;letter-spacing:1px">${esc(a.timeStr)}</div>
+              <div style="font-size:12px;color:var(--muted)">${esc(a.label||'Будильник')}${a.repeat?' · каждый день':''}</div>
+            </div>
+            <button type="button" data-del="${esc(a.id)}" style="border:none;background:rgba(239,68,68,.15);color:#ef4444;padding:8px 12px;border-radius:10px;font-weight:700;cursor:pointer">Удалить</button>
+          </div>`).join('');
+        list.querySelectorAll('[data-del]').forEach(btn=>{
+          btn.onclick = ()=>{
+            saveAlarms(loadAlarms().filter(x=>x.id!==btn.dataset.del));
+            paint();
+          };
+        });
+      }
+      page.querySelector('#al-add').onclick = async ()=>{
+        const ok = await ensureNotifPermission();
+        if(!ok){ showToast('Нужно разрешение на уведомления'); }
+        const v = page.querySelector('#al-time').value || '07:30';
+        const [hh,mm] = v.split(':');
+        const nextAt = computeNextAt(hh, mm);
+        const alarm = {
+          id: 'al_'+Date.now(),
+          timeStr: v,
+          label: (page.querySelector('#al-label').value||'').trim() || 'Будильник',
+          repeat: !!page.querySelector('#al-repeat').checked,
+          nextAt
+        };
+        const arr = loadAlarms();
+        arr.push(alarm);
+        saveAlarms(arr);
+        await scheduleAlarmNotification(alarm);
+        showToast('Будильник на ' + v);
+        paint();
+      };
+    }
+    document.body.appendChild(page);
+    paint();
+  };
+
+  // Reschedule all on load
+  setTimeout(async ()=>{
+    try{
+      const list = loadAlarms();
+      for(const a of list){
+        if(!a.nextAt || a.nextAt < Date.now()){
+          if(a.repeat){
+            const [hh,mm] = (a.timeStr||'07:00').split(':');
+            a.nextAt = computeNextAt(hh,mm);
+          } else {
+            // one-shot missed → fire once
+            if(a.nextAt && a.nextAt < Date.now() && Date.now()-a.nextAt < 3600000) fireAlarm(a);
+            continue;
+          }
+        }
+        scheduleAlarmNotification(a);
+      }
+      saveAlarms(list.filter(a => a.repeat || (a.nextAt && a.nextAt > Date.now())));
+    }catch(e){}
+  }, 2000);
+
+  // Settings row
+  setTimeout(()=>{
+    if(document.getElementById('settings-alarm')) return;
+    const host = document.getElementById('settings-notifications')?.parentNode
+      || document.getElementById('settings-about')?.parentNode;
+    if(!host) return;
+    const row = document.createElement('div');
+    row.className = 'settings-item';
+    row.id = 'settings-alarm';
+    row.innerHTML = `<svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2M5 3L2 6M22 6l-3-3"/></svg><span class="item-text">Будильник</span>`;
+    const notif = document.getElementById('settings-notifications');
+    if(notif) host.insertBefore(row, notif.nextSibling);
+    else host.appendChild(row);
+    row.onclick = ()=> window.slOpenAlarm();
+  }, 1000);
+
+  // SW message handler registration helper
+  try{
+    navigator.serviceWorker?.addEventListener('message', (e)=>{
+      if(e.data?.type==='sl_alarm_fire'){
+        const a = loadAlarms().find(x=>x.id===e.data.id);
+        if(a) fireAlarm(a);
+      }
+    });
+  }catch(e){}
+
+  /* ---------- 4) ~100 SVG STICKERS ---------- */
+  function svgSticker(inner, bg){
+    const b = bg || 'transparent';
+    const raw = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">${b!=='transparent'?`<rect width="128" height="128" rx="28" fill="${b}"/>`:''}${inner}</svg>`;
+    return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(raw);
+  }
+
+  // Build a large set of distinct SVG icons
+  const SVG_STICKERS = [];
+  const colors = ['#4C7CF3','#6D5DF6','#F0708A','#22C55E','#F59E0B','#06B6D4','#EC4899','#8B5CF6','#EF4444','#14B8A6','#A3E635','#FB923C','#38BDF8','#E879F9','#F472B6'];
+  function add(inner, bg){ SVG_STICKERS.push(svgSticker(inner, bg)); }
+
+  // Faces / emotions
+  add(`<circle cx="64" cy="64" r="48" fill="#FBBF24"/><circle cx="48" cy="56" r="6" fill="#333"/><circle cx="80" cy="56" r="6" fill="#333"/><path d="M44 78c8 12 32 12 40 0" stroke="#333" stroke-width="5" fill="none" stroke-linecap="round"/>`);
+  add(`<circle cx="64" cy="64" r="48" fill="#FBBF24"/><circle cx="48" cy="56" r="6" fill="#333"/><circle cx="80" cy="56" r="6" fill="#333"/><path d="M44 86c8-10 32-10 40 0" stroke="#333" stroke-width="5" fill="none" stroke-linecap="round"/>`);
+  add(`<circle cx="64" cy="64" r="48" fill="#FBBF24"/><circle cx="48" cy="58" r="6" fill="#333"/><circle cx="80" cy="58" r="6" fill="#333"/><circle cx="64" cy="80" r="10" fill="#333"/>`);
+  add(`<circle cx="64" cy="64" r="48" fill="#FBBF24"/><path d="M40 58h16M72 58h16" stroke="#333" stroke-width="5" stroke-linecap="round"/><path d="M48 82h32" stroke="#333" stroke-width="5" stroke-linecap="round"/>`);
+  add(`<circle cx="64" cy="64" r="48" fill="#FBBF24"/><circle cx="48" cy="56" r="6" fill="#333"/><circle cx="80" cy="56" r="6" fill="#333"/><path d="M52 72h24" stroke="#333" stroke-width="5"/><path d="M58 72v16M70 72v16" stroke="#333" stroke-width="4"/>`);
+  add(`<circle cx="64" cy="64" r="48" fill="#F87171"/><circle cx="48" cy="56" r="6" fill="#333"/><circle cx="80" cy="56" r="6" fill="#333"/><path d="M50 84c6-8 22-8 28 0" stroke="#333" stroke-width="5" fill="none"/>`);
+  add(`<circle cx="64" cy="64" r="48" fill="#60A5FA"/><circle cx="48" cy="56" r="6" fill="#333"/><circle cx="80" cy="56" r="6" fill="#333"/><path d="M46 80c10 14 26 14 36 0" stroke="#333" stroke-width="5" fill="none"/><circle cx="40" cy="70" r="5" fill="#60A5FA" stroke="#38BDF8" stroke-width="2"/>`);
+  add(`<circle cx="64" cy="64" r="48" fill="#FBBF24"/><path d="M44 50c4-8 12-8 16 0M68 50c4-8 12-8 16 0" stroke="#333" stroke-width="4" fill="none"/><path d="M50 78c6 10 22 10 28 0" stroke="#333" stroke-width="5" fill="none"/>`);
+  add(`<circle cx="64" cy="64" r="48" fill="#C4B5FD"/><circle cx="48" cy="56" r="7" fill="#fff"/><circle cx="80" cy="56" r="7" fill="#fff"/><circle cx="50" cy="56" r="3" fill="#333"/><circle cx="82" cy="56" r="3" fill="#333"/><path d="M52 82c8 8 16 8 24 0" stroke="#333" stroke-width="4" fill="none"/>`);
+  add(`<circle cx="64" cy="64" r="48" fill="#FBBF24"/><circle cx="48" cy="56" r="6" fill="#333"/><path d="M74 52c6 0 10 6 10 10" stroke="#333" stroke-width="4" fill="none"/><path d="M48 80c10 8 24 8 32 0" stroke="#333" stroke-width="4" fill="none"/>`);
+
+  // Hearts / stars / shapes
+  add(`<path d="M64 110S20 80 20 50c0-16 12-28 28-28 10 0 16 6 16 6s6-6 16-6c16 0 28 12 28 28 0 30-44 60-44 60z" fill="#F43F5E"/>`);
+  add(`<path d="M64 110S20 80 20 50c0-16 12-28 28-28 10 0 16 6 16 6s6-6 16-6c16 0 28 12 28 28 0 30-44 60-44 60z" fill="#FB7185"/><path d="M64 96S36 74 36 54c0-10 8-18 18-18" fill="none" stroke="#fff" stroke-width="4" opacity=".5"/>`);
+  add(`<path d="M64 16l12 36h38L86 74l12 38-34-24-34 24 12-38L14 52h38z" fill="#FBBF24"/>`);
+  add(`<path d="M64 16l12 36h38L86 74l12 38-34-24-34 24 12-38L14 52h38z" fill="#A78BFA"/>`);
+  add(`<circle cx="64" cy="64" r="40" fill="#34D399"/>`);
+  add(`<rect x="28" y="28" width="72" height="72" rx="16" fill="#38BDF8"/>`);
+  add(`<polygon points="64,20 108,108 20,108" fill="#F472B6"/>`);
+  add(`<path d="M64 20l44 88H20z" fill="none" stroke="#FBBF24" stroke-width="8" stroke-linejoin="round"/>`);
+  add(`<circle cx="64" cy="64" r="36" fill="none" stroke="#4C7CF3" stroke-width="10"/>`);
+  add(`<rect x="32" y="32" width="64" height="64" rx="12" fill="none" stroke="#22C55E" stroke-width="10"/>`);
+
+  // Nature
+  add(`<circle cx="64" cy="52" r="28" fill="#FBBF24"/><path d="M20 108c20-28 68-28 88 0" fill="#4ADE80"/>`);
+  add(`<circle cx="64" cy="64" r="36" fill="#38BDF8" opacity=".35"/><circle cx="50" cy="56" r="18" fill="#fff"/><circle cx="78" cy="56" r="22" fill="#fff"/><circle cx="64" cy="72" r="20" fill="#fff"/>`);
+  add(`<path d="M64 20c24 28 24 60 0 88C40 80 40 48 64 20z" fill="#4ADE80"/><rect x="58" y="88" width="12" height="24" fill="#92400E"/>`);
+  add(`<path d="M64 30c-20 28-8 50 0 58 8-8 20-30 0-58z" fill="#F472B6"/><path d="M48 70c16 4 28 4 40 0" stroke="#DB2777" stroke-width="3" fill="none"/>`);
+  add(`<rect x="58" y="48" width="12" height="48" fill="#92400E"/><circle cx="48" cy="48" r="18" fill="#22C55E"/><circle cx="80" cy="48" r="18" fill="#22C55E"/><circle cx="64" cy="36" r="18" fill="#16A34A"/>`);
+  add(`<ellipse cx="64" cy="72" r="36" fill="#F97316"/><ellipse cx="64" cy="72" r="22" fill="#FB923C"/><ellipse cx="64" cy="72" r="10" fill="#FDBA74"/><path d="M64 20v24" stroke="#16A34A" stroke-width="6"/>`);
+  add(`<path d="M32 88c0-28 16-48 32-48s32 20 32 48" fill="#60A5FA"/><path d="M40 88h48v12H40z" fill="#1D4ED8"/>`);
+  add(`<circle cx="64" cy="64" r="40" fill="#0EA5E9"/><path d="M30 64h68M64 30v68M40 40l48 48M40 88l48-48" stroke="#fff" stroke-width="4" opacity=".4"/>`);
+  add(`<path d="M24 80c16-40 64-40 80 0" fill="#94A3B8"/><path d="M40 80c10-24 38-24 48 0" fill="#CBD5E1"/>`);
+  add(`<path d="M20 96h88L64 24z" fill="#78716C"/><path d="M40 96h48L64 48z" fill="#A8A29E"/>`);
+
+  // Objects
+  add(`<rect x="36" y="24" width="56" height="80" rx="8" fill="#1E293B"/><rect x="42" y="36" width="44" height="56" rx="4" fill="#38BDF8"/>`);
+  add(`<circle cx="64" cy="64" r="36" fill="#F8FAFC"/><circle cx="64" cy="64" r="28" fill="#E2E8F0"/><path d="M64 40v24l16 10" stroke="#334155" stroke-width="5" fill="none" stroke-linecap="round"/>`);
+  add(`<path d="M40 40h48v56H40z" fill="#F1F5F9"/><path d="M40 40l24 20 24-20" fill="#94A3B8"/><path d="M40 96l24-20 24 20" fill="#CBD5E1"/>`);
+  add(`<rect x="28" y="48" width="72" height="44" rx="8" fill="#4C7CF3"/><circle cx="64" cy="70" r="10" fill="#93C5FD"/>`);
+  add(`<path d="M32 72h64l-8 24H40z" fill="#FBBF24"/><path d="M40 72V48a24 24 0 0148 0v24" fill="none" stroke="#FBBF24" stroke-width="8"/>`);
+  add(`<rect x="44" y="28" width="40" height="72" rx="6" fill="#EF4444"/><rect x="50" y="36" width="28" height="8" fill="#FCA5A5"/>`);
+  add(`<path d="M34 96l20-64h20l20 64" fill="none" stroke="#E11D48" stroke-width="10" stroke-linejoin="round"/><path d="M44 72h40" stroke="#E11D48" stroke-width="8"/>`);
+  add(`<circle cx="64" cy="56" r="28" fill="#FDE68A"/><rect x="52" y="80" width="24" height="20" fill="#CA8A04"/><path d="M48 48c8 8 24 8 32 0" stroke="#B45309" stroke-width="3" fill="none"/>`);
+  add(`<path d="M24 80h80v16H24z" fill="#64748B"/><path d="M40 80V48h48v32" fill="#94A3B8"/><circle cx="56" cy="64" r="4" fill="#1E293B"/><circle cx="72" cy="64" r="4" fill="#1E293B"/>`);
+  add(`<rect x="30" y="40" width="68" height="52" rx="6" fill="#0F172A"/><rect x="38" y="48" width="52" height="28" fill="#22D3EE"/><rect x="48" y="92" width="32" height="8" fill="#334155"/>`);
+  add(`<path d="M32 64l32-36 32 36v36H32z" fill="#F97316"/><rect x="54" y="72" width="20" height="28" fill="#FED7AA"/>`);
+  add(`<circle cx="64" cy="64" r="40" fill="#1D4ED8"/><path d="M40 64h48M64 40v48" stroke="#fff" stroke-width="8" stroke-linecap="round"/>`);
+  add(`<circle cx="64" cy="64" r="40" fill="#DC2626"/><path d="M44 64h40" stroke="#fff" stroke-width="8" stroke-linecap="round"/>`);
+  add(`<path d="M36 70l28-36 28 36" fill="none" stroke="#22C55E" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/><path d="M64 40v56" stroke="#22C55E" stroke-width="10" stroke-linecap="round"/>`);
+  add(`<path d="M40 40l48 48M88 40L40 88" stroke="#EF4444" stroke-width="10" stroke-linecap="round"/>`);
+  add(`<path d="M36 68l20 20 36-44" fill="none" stroke="#22C55E" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>`);
+  add(`<path d="M44 40v48l40-24z" fill="#4C7CF3"/>`);
+  add(`<rect x="40" y="36" width="16" height="56" rx="4" fill="#4C7CF3"/><rect x="72" y="36" width="16" height="56" rx="4" fill="#4C7CF3"/>`);
+  add(`<path d="M32 64h48M64 40l24 24-24 24" fill="none" stroke="#4C7CF3" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>`);
+  add(`<path d="M96 64H48M64 40L40 64l24 24" fill="none" stroke="#4C7CF3" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>`);
+
+  // Animals simple
+  add(`<circle cx="64" cy="70" r="34" fill="#F9A8D4"/><circle cx="40" cy="40" r="14" fill="#F9A8D4"/><circle cx="88" cy="40" r="14" fill="#F9A8D4"/><circle cx="52" cy="66" r="5" fill="#333"/><circle cx="76" cy="66" r="5" fill="#333"/><ellipse cx="64" cy="80" rx="8" ry="5" fill="#EC4899"/>`);
+  add(`<ellipse cx="64" cy="72" r="36" fill="#FDba74"/><circle cx="40" cy="40" r="12" fill="#FDBa74"/><circle cx="88" cy="40" r="12" fill="#FDBA74"/><circle cx="52" cy="68" r="5" fill="#333"/><circle cx="76" cy="68" r="5" fill="#333"/><ellipse cx="64" cy="82" rx="10" ry="6" fill="#F97316"/>`);
+  add(`<ellipse cx="64" cy="76" r="30" fill="#86EFAC"/><ellipse cx="64" cy="48" r="22" fill="#86EFAC"/><circle cx="56" cy="46" r="4" fill="#333"/><circle cx="72" cy="46" r="4" fill="#333"/><ellipse cx="64" cy="56" rx="6" ry="4" fill="#166534"/>`);
+  add(`<circle cx="64" cy="64" r="36" fill="#FDE68A"/><path d="M40 40c-8-12 0-24 0-24M88 40c8-12 0-24 0-24" stroke="#F59E0B" stroke-width="6" fill="none"/><circle cx="52" cy="60" r="5" fill="#333"/><circle cx="76" cy="60" r="5" fill="#333"/><path d="M56 76h16" stroke="#333" stroke-width="4"/>`);
+  add(`<ellipse cx="64" cy="70" r="34" fill="#E2E8F0"/><circle cx="64" cy="48" r="20" fill="#E2E8F0"/><circle cx="56" cy="46" r="4" fill="#333"/><circle cx="72" cy="46" r="4" fill="#333"/><ellipse cx="64" cy="56" rx="5" ry="3" fill="#94A3B8"/><path d="M30 40c12 8 12 20 0 28M98 40c-12 8-12 20 0 28" stroke="#94A3B8" stroke-width="6" fill="none"/>`);
+
+  // Food
+  add(`<ellipse cx="64" cy="76" r="36" fill="#F87171"/><ellipse cx="64" cy="70" r="28" fill="#FECACA"/><path d="M40 60c8-16 40-16 48 0" fill="#FCA5A5"/>`);
+  add(`<circle cx="64" cy="64" r="40" fill="#FBBF24"/><path d="M64 24v80M34 44h60M34 84h60" stroke="#B45309" stroke-width="4"/>`);
+  add(`<path d="M36 88c0-32 12-52 28-52s28 20 28 52" fill="#F9A8D4"/><path d="M48 48c8-16 24-16 32 0" fill="#FB7185"/>`);
+  add(`<ellipse cx="64" cy="80" r="32" fill="#92400E"/><ellipse cx="64" cy="72" r="24" fill="#FBBF24"/><ellipse cx="64" cy="68" r="16" fill="#F59E0B"/>`);
+  add(`<rect x="28" y="56" width="72" height="28" rx="8" fill="#FBBF24"/><path d="M40 56c0-16 48-16 48 0" fill="#F59E0B"/>`);
+  add(`<circle cx="64" cy="68" r="32" fill="#22C55E"/><path d="M64 36v-12M50 44l-8-8M78 44l8-8" stroke="#16A34A" stroke-width="5" stroke-linecap="round"/>`);
+  add(`<ellipse cx="64" cy="70" r="34" fill="#FDE047"/><path d="M40 60h48M44 74h40M48 88h32" stroke="#CA8A04" stroke-width="3"/>`);
+  add(`<path d="M30 88h68l-8-48H38z" fill="#60A5FA"/><path d="M48 40c0-12 32-12 32 0" stroke="#1D4ED8" stroke-width="6" fill="none"/>`);
+
+  // Weather / space
+  add(`<circle cx="64" cy="64" r="28" fill="#FBBF24"/><g stroke="#FBBF24" stroke-width="6" stroke-linecap="round"><path d="M64 16v12M64 100v12M16 64h12M100 64h12M28 28l8 8M92 92l8 8M100 28l-8 8M28 100l8-8"/></g>`);
+  add(`<path d="M40 72c0-20 16-28 28-24 4-12 16-20 28-16 8 2 14 10 14 20 12 2 18 12 14 22H40z" fill="#E2E8F0"/>`);
+  add(`<path d="M36 40l8 24 24 8-24 8-8 24-8-24-24-8 24-8z" fill="#F8FAFC"/>`);
+  add(`<circle cx="64" cy="64" r="36" fill="#1E293B"/><circle cx="50" cy="56" r="4" fill="#fff"/><circle cx="78" cy="48" r="3" fill="#fff"/><circle cx="70" cy="78" r="5" fill="#fff"/>`);
+  add(`<path d="M64 20c24 0 40 20 40 44S88 108 64 108 24 88 24 64 40 20 64 20z" fill="#CBD5E1"/><path d="M64 20c-10 20-10 48 0 88 10-40 10-68 0-88z" fill="#94A3B8"/>`);
+  add(`<path d="M24 88c16-48 64-48 80 0" fill="#38BDF8"/><path d="M40 88c10-28 38-28 48 0" fill="#7DD3FC"/>`);
+
+  // Gestures / symbols
+  add(`<path d="M48 96V56c0-8 8-8 8 0v-8c0-8 8-8 8 0v8c0-8 8-8 8 0v8c0-8 8-8 8 0v40c0 12-8 20-20 20h-4c-12 0-20-8-20-20z" fill="#FDBA74"/><path d="M48 96c-12 0-16-16-8-24" stroke="#FDBA74" stroke-width="12" fill="none"/>`);
+  add(`<path d="M40 70l24 24 40-48" fill="none" stroke="#22C55E" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>`);
+  add(`<circle cx="64" cy="64" r="44" fill="#4C7CF3"/><path d="M40 64h48M64 40v48" stroke="#fff" stroke-width="8"/>`);
+  add(`<path d="M32 64c16-28 48-28 64 0-16 28-48 28-64 0z" fill="#F472B6"/><circle cx="64" cy="64" r="12" fill="#fff"/>`);
+  add(`<path d="M64 24l8 24h24l-20 16 8 24-20-14-20 14 8-24-20-16h24z" fill="#FBBF24"/>`);
+  add(`<rect x="24" y="40" width="80" height="56" rx="10" fill="#8B5CF6"/><path d="M24 56h80" stroke="#fff" stroke-width="4" opacity=".3"/><circle cx="48" cy="72" r="8" fill="#FDE68A"/>`);
+  add(`<path d="M40 88V48l24-16 24 16v40" fill="#F1F5F9" stroke="#94A3B8" stroke-width="4"/><path d="M56 88V64h16v24" fill="#CBD5E1"/>`);
+  add(`<circle cx="64" cy="56" r="24" fill="#FDBA74"/><path d="M40 96c8-20 40-20 48 0" fill="#3B82F6"/><path d="M48 40c-10-8-4-20 0-16M80 40c10-8 4-20 0-16" fill="#FDBA74"/>`);
+  add(`<path d="M32 80h64v12H32z" fill="#64748B"/><path d="M40 80V40h48v40" fill="#94A3B8"/><circle cx="64" cy="56" r="10" fill="#1E293B"/>`);
+  add(`<path d="M28 64h72" stroke="#94A3B8" stroke-width="8" stroke-linecap="round"/><circle cx="64" cy="64" r="14" fill="#4C7CF3"/>`);
+  add(`<path d="M64 20v88M20 64h88" stroke="#EF4444" stroke-width="10" stroke-linecap="round"/>`);
+  add(`<rect x="36" y="28" width="56" height="72" rx="8" fill="#EEF2FF"/><path d="M48 48h32M48 64h32M48 80h20" stroke="#4C7CF3" stroke-width="6" stroke-linecap="round"/>`);
+  add(`<path d="M44 36h40v56H44z" fill="#0EA5E9"/><path d="M52 48h24M52 64h24M52 80h16" stroke="#fff" stroke-width="5"/>`);
+  add(`<circle cx="64" cy="64" r="40" fill="#F472B6"/><path d="M44 64h40" stroke="#fff" stroke-width="8" stroke-linecap="round"/><path d="M64 44v40" stroke="#fff" stroke-width="8" stroke-linecap="round"/>`);
+
+  // More icons to reach ~100
+  for(let i=0;i<colors.length;i++){
+    const c = colors[i];
+    add(`<circle cx="64" cy="64" r="40" fill="${c}"/><text x="64" y="76" text-anchor="middle" font-size="36" font-family="system-ui" fill="#fff" font-weight="700">${i+1}</text>`);
+  }
+  // geometric patterns
+  add(`<rect x="20" y="20" width="40" height="40" fill="#4C7CF3"/><rect x="68" y="20" width="40" height="40" fill="#6D5DF6"/><rect x="20" y="68" width="40" height="40" fill="#F0708A"/><rect x="68" y="68" width="40" height="40" fill="#22C55E"/>`);
+  add(`<circle cx="44" cy="44" r="22" fill="#F59E0B"/><circle cx="84" cy="44" r="22" fill="#06B6D4"/><circle cx="64" cy="84" r="22" fill="#EC4899"/>`);
+  add(`<path d="M64 24l40 40-40 40-40-40z" fill="#8B5CF6"/>`);
+  add(`<path d="M24 64c0-22 18-40 40-40s40 18 40 40" fill="none" stroke="#22C55E" stroke-width="10"/><path d="M40 64h48" stroke="#22C55E" stroke-width="10"/>`);
+  add(`<path d="M32 96c16-48 48-48 64 0" fill="none" stroke="#38BDF8" stroke-width="10"/><circle cx="64" cy="48" r="12" fill="#38BDF8"/>`);
+  add(`<rect x="24" y="48" width="80" height="32" rx="16" fill="#1E293B"/><circle cx="48" cy="64" r="10" fill="#22C55E"/><circle cx="80" cy="64" r="10" fill="#EF4444"/>`);
+  add(`<path d="M40 88V48h48v40" fill="#FDE68A" stroke="#CA8A04" stroke-width="4"/><path d="M40 48l24-16 24 16" fill="#FBBF24"/>`);
+  add(`<circle cx="64" cy="64" r="44" fill="#0F172A"/><path d="M40 64c0-13 11-24 24-24s24 11 24 24" fill="none" stroke="#22D3EE" stroke-width="6"/><circle cx="64" cy="64" r="6" fill="#22D3EE"/>`);
+  add(`<path d="M32 80h64v16H32z" fill="#78716C"/><path d="M48 80V40l16-12 16 12v40" fill="#A8A29E"/>`);
+  add(`<ellipse cx="64" cy="64" r="40" fill="#F0ABFC"/><path d="M44 64h40M64 44v40" stroke="#A21CAF" stroke-width="6"/>`);
+
+  console.info('[SL] SVG stickers:', SVG_STICKERS.length);
+
+  function installSvgStickers(){
+    try{
+      if(typeof window.STICKER_PACKS === 'undefined') window.STICKER_PACKS = {};
+      // Replace packs with pure SVG pack(s)
+      const packs = {
+        svg1: { name: 'SVG 1', stickers: SVG_STICKERS.slice(0, 36) },
+        svg2: { name: 'SVG 2', stickers: SVG_STICKERS.slice(36, 72) },
+        svg3: { name: 'SVG 3', stickers: SVG_STICKERS.slice(72) }
+      };
+      // Clear non-svg packs
+      Object.keys(window.STICKER_PACKS).forEach(k=>{
+        if(!/^svg/i.test(k)) delete window.STICKER_PACKS[k];
+      });
+      Object.assign(window.STICKER_PACKS, packs);
+      try{ activeStickerPack = 'svg1'; }catch(e){}
+      try{ if(typeof renderStickerGrid==='function') renderStickerGrid(); }catch(e){}
+    }catch(e){ console.warn(e); }
+  }
+  installSvgStickers();
+  setTimeout(installSvgStickers, 800);
+  setTimeout(installSvgStickers, 2500);
+
+  // Fix sticker grid to use <img> with svg data urls (already does)
+  // Render sticker as img in messages - already type sticker
+
+  console.log('[SL] media zoom + AI + alarm + SVG stickers ready');
 })();
 
 </script>
