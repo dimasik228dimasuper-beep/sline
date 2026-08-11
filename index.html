@@ -307,7 +307,7 @@ body.beta-oled .sw-clip{background:var(--panel)!important}
 .bubble-time{font-size:10px;opacity:.65;margin-top:4px;display:flex;align-items:center;gap:4px}
 .bubble img,.bubble video{max-width:100%;border-radius:12px;margin-top:4px;display:block;cursor:pointer}
 .reply-quote{border-left:2px solid rgba(255,255,255,.5);padding-left:6px;font-size:12px;opacity:.8;margin-bottom:4px;white-space:pre-wrap}
-.bubble.bubble-circle{background:transparent!important;border:none!important;padding:0!important;box-shadow:none!important;max-width:none}
+.bubble.bubble-circle,.bubble.me.bubble-circle,.bubble.them.bubble-circle{background:transparent!important;background-image:none!important;border:none!important;padding:0!important;box-shadow:none!important;max-width:none!important;border-radius:0!important}
 .media-with-caption{display:flex;flex-direction:column;gap:6px;max-width:100%}
 .media-with-caption img,.media-with-caption video{border-radius:12px;max-width:100%;display:block}
 .media-caption{font-size:14px;line-height:1.35;padding:2px 4px;white-space:pre-wrap;word-break:break-word}
@@ -319,7 +319,36 @@ body.beta-oled .sw-clip{background:var(--panel)!important}
 
 .bubble.bubble-circle .bubble-time{margin-top:6px;padding:0 4px;opacity:.75}
 .bubble.bubble-circle .reaction-bar{margin-top:4px}
+
+/* Circle messages: NO bubble chrome */
+.bubble.bubble-circle,
+.bubble.me.bubble-circle,
+.bubble.them.bubble-circle,
+.msg-row .bubble.bubble-circle{
+  background:transparent !important;
+  background-image:none !important;
+  background-color:transparent !important;
+  border:none !important;
+  box-shadow:none !important;
+  padding:0 !important;
+  margin:6px 0 !important;
+  border-radius:0 !important;
+  max-width:none !important;
+  overflow:visible !important;
+}
+.bubble.bubble-circle .bubble-time{
+  display:inline-block !important;
+  margin-top:6px !important;
+  padding:2px 8px !important;
+  border-radius:10px !important;
+  background:rgba(0,0,0,.4) !important;
+  color:#fff !important;
+  font-size:11px !important;
+  opacity:1 !important;
+}
+.bubble.me.bubble-circle .bubble-time{ float:right; clear:both; }
 .circle-msg-wrap{position:relative;display:inline-block;flex-shrink:0}
+
 .circle-msg{width:200px;height:200px;border-radius:50%;overflow:hidden;position:relative;background:#111;border:3px solid rgba(255,255,255,.2);cursor:pointer;box-shadow:0 8px 28px rgba(0,0,0,.4);flex-shrink:0}
 .circle-transcribe-btn{
   position:absolute!important;top:8px;right:-4px;z-index:6;
@@ -4470,9 +4499,10 @@ window.broadcastNewsPost = broadcastNewsPost;
 // ========== RENDER MESSAGE ==========
 function buildMessageBody(msg, replyHtml, bodyText){
   if(msg.type==='circle'){
+    const src = escapeHtml(msg.file_url||'');
     return `<div class="circle-msg-wrap" data-mid="${msg.id}">
-      <div class="circle-msg" data-src="${msg.file_url}">
-        <video src="${msg.file_url}" playsinline loop muted></video>
+      <div class="circle-msg" data-src="${src}">
+        <video src="${src}" playsinline webkit-playsinline preload="auto" loop muted></video>
         <div class="circle-play-overlay"><svg viewBox="0 0 24 24" style="width:48px;height:48px;fill:#fff"><path d="M8 5v14l11-7z"/></svg></div>
         <div class="circle-mute"><svg viewBox="0 0 24 24"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M23 9l-6 6M17 9l6 6" stroke="#fff" stroke-width="2" fill="none"/></svg></div>
         <div class="circle-dur">0:00</div>
@@ -4563,22 +4593,52 @@ function renderMessage(msg, isGroup=false){
     const fmt=s=>{ s=Math.max(0,Math.floor(s||0)); return Math.floor(s/60)+':'+String(s%60).padStart(2,'0'); };
     v.addEventListener('loadedmetadata',()=>{ if(durEl) durEl.textContent=fmt(v.duration); });
     v.addEventListener('timeupdate',()=>{ if(durEl && !v.paused) durEl.textContent=fmt(v.currentTime); });
+    // Tap circle = play / pause
+    const syncUI = (playing)=>{
+      if(ov) ov.style.display = playing ? 'none' : 'flex';
+      if(muteEl) muteEl.innerHTML = playing
+        ? '<svg viewBox="0 0 24 24"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M19.07 4.93a10 10 0 010 14.14M15.54 8.46a5 5 0 010 7.07" stroke="#fff" stroke-width="2" fill="none"/></svg>'
+        : '<svg viewBox="0 0 24 24"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M23 9l-6 6M17 9l6 6" stroke="#fff" stroke-width="2" fill="none"/></svg>';
+    };
+    const playCircle = async ()=>{
+      document.querySelectorAll('.circle-msg video').forEach(x=>{
+        if(x===v) return;
+        try{ x.pause(); }catch(e){}
+        const p=x.closest('.circle-msg');
+        const o=p?.querySelector('.circle-play-overlay');
+        if(o) o.style.display='flex';
+      });
+      try{
+        v.muted = false;
+        v.volume = 1;
+        // iOS: must play after user gesture; reload if src stuck
+        if(v.readyState < 2 && v.src){ try{ v.load(); }catch(e){} }
+        await v.play();
+        syncUI(true);
+      }catch(err){
+        console.warn('circle play', err);
+        // Retry muted once (autoplay policies), then unmute
+        try{
+          v.muted = true;
+          await v.play();
+          v.muted = false;
+          syncUI(true);
+        }catch(e2){
+          showToast('Не удалось воспроизвести кружок');
+          syncUI(false);
+        }
+      }
+    };
     circle.onclick=e=>{
       e.preventDefault();
       e.stopPropagation();
       if(typeof e.stopImmediatePropagation==='function') e.stopImmediatePropagation();
-      if(v.paused){
-        // pause other circles
-        document.querySelectorAll('.circle-msg video').forEach(x=>{ if(x!==v){ x.pause(); const p=x.closest('.circle-msg'); const o=p?.querySelector('.circle-play-overlay'); if(o) o.style.display='flex'; }});
-        v.muted=false; v.volume=1; v.play().catch(()=>{});
-        if(ov) ov.style.display='none';
-        if(muteEl) muteEl.innerHTML='<svg viewBox="0 0 24 24"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M19.07 4.93a10 10 0 010 14.14M15.54 8.46a5 5 0 010 7.07" stroke="#fff" stroke-width="2" fill="none"/></svg>';
-        v.onended=()=>{ if(ov) ov.style.display='flex'; if(durEl) durEl.textContent=fmt(v.duration); };
-      } else {
-        v.pause(); if(ov) ov.style.display='flex';
-        if(muteEl) muteEl.innerHTML='<svg viewBox="0 0 24 24"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M23 9l-6 6M17 9l6 6" stroke="#fff" stroke-width="2" fill="none"/></svg>';
-      }
+      if(v.paused) playCircle();
+      else { try{ v.pause(); }catch(e){} syncUI(false); }
     };
+    v.addEventListener('ended', ()=>{ try{ v.currentTime=0; }catch(e){} syncUI(false); if(durEl) durEl.textContent=fmt(v.duration); });
+    v.addEventListener('pause', ()=>{ if(v.currentTime>0 && !v.ended) syncUI(false); });
+    v.addEventListener('play', ()=> syncUI(true));
     // Don't let bubble swipe/forward steal circle taps
     ['pointerdown','pointerup','touchstart','touchend'].forEach(evn=>{
       circle.addEventListener(evn, e=>{ e.stopPropagation(); }, {passive:true});
@@ -5566,8 +5626,16 @@ async function beginRecording(){
   renderRecActions();
   document.getElementById('rec-timer-text').textContent='0:00';
   ov.style.display='flex';
-  let mime = recordMode==='circle' ? 'video/webm;codecs=vp8,opus' : 'audio/webm';
-  if(!MediaRecorder.isTypeSupported(mime)) mime = recordMode==='circle' ? 'video/webm' : 'audio/webm';
+  let mime;
+  if(recordMode==='circle'){
+    mime = '';
+    for(const t of ['video/mp4','video/mp4;codecs=avc1.42E01E,mp4a.40.2','video/webm;codecs=vp8,opus','video/webm']){
+      try{ if(MediaRecorder.isTypeSupported(t)){ mime=t; break; } }catch(e){}
+    }
+    if(!mime) mime='video/webm';
+  } else {
+    mime = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/mp4';
+  }
   let recStream = circleStream;
   if(recordMode==='circle'){
     const vid=document.getElementById('clp');
@@ -5777,7 +5845,7 @@ function finishRecording(){
     circleStream=null;
     document.getElementById('circle-record-overlay').style.display='none';
     isRecording=false;
-    const blob=new Blob(recordedChunks||[],{type:recordMode==='circle'?'video/webm':'audio/webm'});
+    const blob=new Blob(recordedChunks||[],{type:(mediaRecorder&&mediaRecorder.mimeType)||(recordMode==='circle'?'video/mp4':'audio/webm')});
     // Allow short voice notes; only block completely empty
     if(!blob.size){
       // still try to send a tiny placeholder for voice so UX isn't blocked
@@ -26209,11 +26277,26 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
     // Extra frames so first captured frame isn't black
     await new Promise(r=>setTimeout(r, 250));
 
-    let mime='video/webm;codecs=vp8,opus';
-    if(!MediaRecorder.isTypeSupported(mime)) mime='video/webm';
-    if(!MediaRecorder.isTypeSupported(mime)) mime='video/mp4';
-    try{ mediaRec=new MediaRecorder(mediaStream,{mimeType:mime, videoBitsPerSecond:1800000}); }
-    catch(e){ try{ mediaRec=new MediaRecorder(mediaStream); }catch(e2){ toast('Запись недоступна'); cancelRec(); return; } }
+    // iOS Safari cannot play WebM — prefer mp4/quicktime first
+    let mime = '';
+    const candidates = [
+      'video/mp4',
+      'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
+      'video/quicktime',
+      'video/webm;codecs=vp8,opus',
+      'video/webm'
+    ];
+    for(const t of candidates){
+      try{ if(window.MediaRecorder && MediaRecorder.isTypeSupported(t)){ mime=t; break; } }catch(e){}
+    }
+    try{
+      mediaRec = mime
+        ? new MediaRecorder(mediaStream,{mimeType:mime, videoBitsPerSecond:1600000})
+        : new MediaRecorder(mediaStream);
+    }catch(e){
+      try{ mediaRec=new MediaRecorder(mediaStream); }catch(e2){ toast('Запись недоступна'); cancelRec(); return; }
+    }
+    console.info('[circle] mime', mediaRec.mimeType || mime);
     mediaRec.ondataavailable=e=>{ if(e.data&&e.data.size) chunks.push(e.data); };
     try{ mediaRec.start(200); }catch(e){ toast('Не удалось начать запись'); cancelRec(); return; }
 
@@ -26288,23 +26371,42 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
     setScreenFlash(false);
     const minMs = 600;
     const elapsed = Date.now() - recStart;
-    const done=()=>{
+    const done=async ()=>{
       recording=false;
       stopTracks();
-      const blob=new Blob(chunks,{type:chunks[0]?.type||'video/webm'});
+      const mime = (chunks[0] && chunks[0].type) || (mediaRec && mediaRec.mimeType) || 'video/mp4';
+      const blob=new Blob(chunks,{type:mime});
       clearUI();
       if(elapsed < minMs || blob.size<800){ toast('Слишком коротко — удерживайте дольше'); chunks=[]; return; }
-      const reader=new FileReader();
-      reader.onload=async ev=>{
+      try{
+        let url = null;
+        // Prefer Storage URL (works better than huge data: in DB + iOS)
         try{
-          if(typeof sendMessage==='function') await sendMessage('circle', ev.target.result, '');
-        }catch(e){ toast('Не отправилось'); }
-        chunks=[];
-      };
-      reader.readAsDataURL(blob);
+          const ext = /mp4|quicktime/i.test(mime) ? 'mp4' : (/webm/i.test(mime)?'webm':'mp4');
+          const file = new File([blob], 'circle_'+Date.now()+'.'+ext, { type: mime });
+          if(typeof uploadFileToStorage === 'function'){
+            const up = await uploadFileToStorage(file, 'circles');
+            if(up && up.ok && up.url) url = up.url;
+          }
+        }catch(e){ console.warn('circle upload', e); }
+        if(!url){
+          // fallback data URL
+          url = await new Promise((res,rej)=>{
+            const r=new FileReader();
+            r.onload=()=>res(r.result);
+            r.onerror=rej;
+            r.readAsDataURL(blob);
+          });
+        }
+        if(typeof sendMessage==='function') await sendMessage('circle', url, '');
+      }catch(e){
+        console.error(e);
+        toast('Не отправилось');
+      }
+      chunks=[];
     };
     if(mediaRec && mediaRec.state!=='inactive'){
-      mediaRec.onstop=done;
+      mediaRec.onstop=()=>{ done(); };
       try{ mediaRec.requestData(); }catch(e){}
       try{ mediaRec.stop(); }catch(e){ done(); }
     } else done();
