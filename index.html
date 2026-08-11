@@ -2499,6 +2499,7 @@ body.theme-light .topbar {
       </div>
       <div class="settings-section">
         <div class="settings-section-title">Эксперименты</div>
+        <div class="settings-item" id="settings-bots"><svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="3"/><path d="M8 11V8a4 4 0 018 0v3"/></svg><span class="item-text">Боты</span><span style="font-size:11px;color:var(--muted);margin-left:8px">создать</span></div>
         <div class="settings-item" id="settings-beta"><svg viewBox="0 0 24 24"><path d="M12 2v6M12 16v6M4.93 4.93l4.24 4.24M14.83 14.83l4.24 4.24M2 12h6M16 12h6M4.93 19.07l4.24-4.24M14.83 9.17l4.24-4.24"/><circle cx="12" cy="12" r="3"/></svg><span class="item-text">Бета-функции</span></div>
       </div>
       <div class="settings-section">
@@ -5311,7 +5312,7 @@ async function sendMessage(type='text', fileUrl=null, content=null){
     editingMsgId=null; input.value=''; input.placeholder='Сообщение...'; sendBtn.classList.remove('visible'); document.getElementById('composer')?.classList.remove('has-text'); return;
   }
   if(!myProfile?.id || (!activePartner && !activeGroup)) return;
-  if(activePartner?.isBot) return;
+  if(activePartner?.isBot && !activePartner?.userBot && !activePartner?.isUserBot) return;
   let text=content??input.value.trim();
   if((!text&&type==='text')&&!fileUrl) return;
   if(replyToMsg&&type==='text'){ text=`↪ ${(replyToMsg.content||'вложение').slice(0,40)}\n${text}`; replyToMsg=null; input.placeholder='Сообщение...'; }
@@ -9333,14 +9334,27 @@ window.openStartChatSheet = function(){
       <span style="width:40px"></span>
     </div>
     <div class="sl-sheet-body">
-      <input class="sl-sheet-search" id="sc-search" placeholder="Найти по имени" autocomplete="off">
+      <input class="sl-sheet-search" id="sc-search" placeholder="Имя, @username, email или @bot" autocomplete="off">
+      <div class="sl-hint-box" id="sc-hint" style="margin:0 0 12px;padding:12px 14px;border-radius:14px;background:rgba(76,124,243,.12);border:1px solid rgba(76,124,243,.25);font-size:13px;line-height:1.45;color:var(--text)">
+        <div style="font-weight:700;margin-bottom:6px">Как добавить человека</div>
+        <div style="color:var(--muted)">
+          • Введите <b>@username</b>, <b>email</b> или номер в поиске выше<br>
+          • Или: <b>Найти по номеру</b> / <b>Найти по email</b><br>
+          • <b>Пригласить по ссылке</b> — отправьте ссылку другу<br>
+          • Бот: <b>Создать бота</b> или найдите <b>@имя_bot</b>
+        </div>
+        <button type="button" id="sc-hint-hide" style="margin-top:8px;border:none;background:transparent;color:var(--accent-a,#4C7CF3);font-size:12px;font-weight:700;cursor:pointer;padding:0">Скрыть подсказку</button>
+      </div>
+      <div class="sl-action-row" data-act="contact"><span class="ico"><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg></span>Добавить контакт</div>
       <div class="sl-action-row" data-act="group"><span class="ico"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg></span>Создать группу</div>
       <div class="sl-action-row" data-act="gcall"><span class="ico"><svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.8 19.8 0 01-8.63-3.07 19.5 19.5 0 01-6-6A19.8 19.8 0 012.12 4.18 2 2 0 014.11 2h3a2 2 0 012 1.72c.13.96.36 1.9.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0122 16.92z"/></svg></span>Создать групповой звонок</div>
       <div class="sl-action-row" data-act="channel"><span class="ico"><svg viewBox="0 0 24 24"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg></span>Создать канал</div>
+      <div class="sl-action-row" data-act="bot"><span class="ico"><svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="3"/><path d="M8 11V8a4 4 0 018 0v3"/></svg></span>Создать бота</div>
+      <div class="sl-action-row" data-act="findbot"><span class="ico"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg></span>Найти бота по @username</div>
       <div class="sl-action-row" data-act="phone"><span class="ico"><svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.8 19.8 0 01-8.63-3.07 19.5 19.5 0 01-6-6A19.8 19.8 0 012.12 4.18 2 2 0 014.11 2h3a2 2 0 012 1.72c.13.96.36 1.9.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0122 16.92z"/></svg></span>Найти по номеру</div>
       <div class="sl-action-row" data-act="email"><span class="ico"><svg viewBox="0 0 24 24"><path d="M4 4h16v16H4z"/><path d="M22 6l-10 7L2 6"/></svg></span>Найти по email</div>
       <div class="sl-action-row" data-act="link"><span class="ico"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg></span>Пригласить по ссылке</div>
-      <div id="sc-list">${rows || '<div style="padding:24px;text-align:center;color:var(--muted)">Нет контактов</div>'}</div>
+      <div id="sc-list">${rows || '<div style="padding:24px;text-align:center;color:var(--muted)">Нет контактов<br><span style="font-size:12px">Добавьте человека по @username, email или номеру</span></div>'}</div>
     </div>`;
   document.body.appendChild(sheet);
 
@@ -9362,6 +9376,23 @@ window.openStartChatSheet = function(){
       if(act==='group') window.openCreateGroupFlow&&window.openCreateGroupFlow();
       else if(act==='channel') window.openCreateChannelFlow&&window.openCreateChannelFlow();
       else if(act==='gcall'){ showToast('Выберите участников в группе и нажмите звонок'); window.openCreateGroupFlow&&window.openCreateGroupFlow(); }
+      else if(act==='contact'){
+        slCloseSheet(sheet);
+        if(typeof window.openAddContactSheet==='function') window.openAddContactSheet();
+        else if(typeof window.openFindByEmail==='function') window.openFindByEmail();
+        else showToast('Введите @username или email в поиске');
+      }
+      else if(act==='bot'){
+        slCloseSheet(sheet);
+        if(typeof window.slOpenBots==='function') window.slOpenBots();
+        else showToast('Боты: Настройки → Боты');
+      }
+      else if(act==='findbot'){
+        slCloseSheet(sheet);
+        if(typeof window.openFindBotSheet==='function') window.openFindBotSheet();
+        else if(typeof window.slOpenBots==='function') window.slOpenBots();
+        else showToast('Настройки → Боты → Найти');
+      }
       else if(act==='phone'){
         if(typeof window.openFindByPhone==='function') window.openFindByPhone();
         else showToast('Поиск по номеру');
@@ -9376,11 +9407,18 @@ window.openStartChatSheet = function(){
             ? (slSiteOrigin()+'/#/u/'+myProfile.username)
             : (slSiteOrigin()+'/#/invite');
           if(navigator.clipboard) navigator.clipboard.writeText(link);
-          showToast('Ссылка скопирована');
+          showToast('Ссылка скопирована — отправьте другу');
         }catch(e){ showToast('Не удалось скопировать'); }
       }
     };
   });
+  // hint dismiss
+  try{
+    const hint=sheet.querySelector('#sc-hint');
+    const hide=sheet.querySelector('#sc-hint-hide');
+    if(localStorage.getItem('sl_hide_start_hint')==='1' && hint) hint.style.display='none';
+    if(hide) hide.onclick=()=>{ try{ localStorage.setItem('sl_hide_start_hint','1'); }catch(e){} if(hint) hint.style.display='none'; };
+  }catch(e){}
   sheet.querySelectorAll('.sl-contact-row').forEach(row=>{
     row.onclick=()=>{
       const id=row.dataset.id;
@@ -9522,6 +9560,143 @@ window.openFindByPhone = function(){
 
 
 // ---- Find by email ----
+
+window.openFindBotSheet = function(){
+  const sheet=document.createElement('div');
+  sheet.className='sl-sheet'; sheet.id='sl-find-bot';
+  sheet.innerHTML=`
+    <div class="sl-sheet-hdr">
+      <button type="button" class="sl-sheet-back" id="fb-back">‹</button>
+      <h2>Найти бота</h2>
+      <span style="width:40px"></span>
+    </div>
+    <div class="sl-sheet-body" style="padding:20px">
+      <div style="font-size:15px;color:var(--muted);line-height:1.45;margin-bottom:16px">
+        Введите username бота. Обычно он заканчивается на <b>_bot</b>, например <b>@helper_bot</b>.
+        Username можно попросить у создателя бота.
+      </div>
+      <input class="sl-sheet-search" id="fb-input" placeholder="@helper_bot" autocomplete="off" style="margin-bottom:12px">
+      <div id="fb-err" style="color:var(--danger,#e5484d);font-size:13px;min-height:18px;margin-bottom:8px"></div>
+      <button type="button" class="btn-primary" id="fb-go" style="width:100%;padding:14px;border-radius:14px;border:none;font-weight:700;cursor:pointer">Найти и открыть</button>
+    </div>`;
+  document.body.appendChild(sheet);
+  sheet.querySelector('#fb-back').onclick=()=>{ sheet.remove(); if(typeof window.openStartChatSheet==='function') window.openStartChatSheet(); };
+  const go=async()=>{
+    const q=(sheet.querySelector('#fb-input').value||'').trim();
+    const err=sheet.querySelector('#fb-err');
+    if(!q){ err.textContent='Введите username'; return; }
+    err.textContent='Ищем…';
+    let bot=null;
+    try{
+      if(typeof window.slFetchBot==='function') bot=await window.slFetchBot(q);
+    }catch(e){}
+    if(!bot){
+      err.textContent='Бот не найден. Проверьте @username (должен быть _bot)';
+      return;
+    }
+    try{
+      const c={
+        id:bot.id, username:bot.username, first_name:bot.name||bot.username,
+        color:bot.color||'#4C7CF3', isBot:true, isUserBot:true, userBot:true,
+        rules:bot.rules||[], welcome:bot.welcome||'', description:bot.description||''
+      };
+      if(typeof contacts!=='undefined' && Array.isArray(contacts) && !contacts.find(x=>x.id===c.id)){
+        contacts.unshift(c);
+        try{ renderContactsAndGroups?.(); }catch(e){}
+      }
+      sheet.remove();
+      if(typeof openChat==='function') openChat(c);
+      else if(typeof openPartner==='function') openPartner(c);
+      showToast('Бот «'+(bot.name||bot.username)+'» добавлен');
+    }catch(e){ err.textContent='Не удалось открыть'; }
+  };
+  sheet.querySelector('#fb-go').onclick=go;
+  sheet.querySelector('#fb-input').onkeydown=e=>{ if(e.key==='Enter') go(); };
+};
+
+window.openAddContactSheet = function(){
+  const sheet=document.createElement('div');
+  sheet.className='sl-sheet'; sheet.id='sl-add-contact';
+  sheet.innerHTML=`
+    <div class="sl-sheet-hdr">
+      <button type="button" class="sl-sheet-back" id="ac2-back">‹</button>
+      <h2>Добавить контакт</h2>
+      <span style="width:40px"></span>
+    </div>
+    <div class="sl-sheet-body" style="padding:20px">
+      <div style="font-size:14px;color:var(--muted);line-height:1.5;margin-bottom:16px;padding:12px 14px;border-radius:14px;background:rgba(76,124,243,.1);border:1px solid rgba(76,124,243,.2)">
+        <b>Как это работает</b><br>
+        1. Спросите у друга его <b>@username</b> или <b>email</b> в SLine<br>
+        2. Введите ниже и нажмите «Найти»<br>
+        3. Если аккаунт есть — откроется чат<br><br>
+        Нет аккаунта? Нажмите «Пригласить» и отправьте ссылку.
+      </div>
+      <label style="font-size:12px;color:var(--muted)">Email, @username или телефон</label>
+      <input class="sl-sheet-search" id="ac2-input" placeholder="name@mail.ru или @ivan" autocomplete="off" style="margin:6px 0 12px">
+      <div id="ac2-err" style="color:var(--danger,#e5484d);font-size:13px;min-height:18px;margin-bottom:8px"></div>
+      <button type="button" class="btn-primary" id="ac2-go" style="width:100%;padding:14px;border-radius:14px;border:none;font-weight:700;cursor:pointer;margin-bottom:10px">Найти</button>
+      <button type="button" id="ac2-invite" style="width:100%;padding:12px;border-radius:14px;border:1px solid var(--line);background:transparent;color:var(--text);font-weight:600;cursor:pointer">Пригласить по ссылке</button>
+    </div>`;
+  document.body.appendChild(sheet);
+  sheet.querySelector('#ac2-back').onclick=()=>{ sheet.remove(); if(typeof window.openStartChatSheet==='function') window.openStartChatSheet(); };
+  sheet.querySelector('#ac2-invite').onclick=()=>{
+    try{
+      const link = (typeof myProfile!=='undefined'&&myProfile?.username)
+        ? ((typeof slSiteOrigin==='function'?slSiteOrigin():location.origin)+'/#/u/'+myProfile.username)
+        : (location.origin+'/#/invite');
+      if(navigator.clipboard) navigator.clipboard.writeText(link);
+      showToast('Ссылка скопирована — отправьте другу');
+    }catch(e){ showToast('Не удалось скопировать'); }
+  };
+  const find=async()=>{
+    const q=(sheet.querySelector('#ac2-input').value||'').trim();
+    const err=sheet.querySelector('#ac2-err');
+    if(!q){ err.textContent='Введите email, @username или телефон'; return; }
+    err.textContent='Ищем…';
+    // bot shortcut
+    if(/bot/i.test(q) || q.replace(/^@/,'').endsWith('_bot')){
+      if(typeof window.slFetchBot==='function'){
+        const bot=await window.slFetchBot(q);
+        if(bot){
+          const c={id:bot.id,username:bot.username,first_name:bot.name||bot.username,color:bot.color||'#4C7CF3',isBot:true,isUserBot:true,userBot:true,rules:bot.rules||[],welcome:bot.welcome||''};
+          if(typeof contacts!=='undefined'&&!contacts.find(x=>x.id===c.id)) contacts.unshift(c);
+          sheet.remove();
+          if(typeof openChat==='function') openChat(c);
+          return;
+        }
+      }
+    }
+    try{
+      let user=null;
+      if(typeof searchProfilesSafe==='function'){
+        const {data}=await searchProfilesSafe(q, null, 5, ['username','email','phone']);
+        user=data&&data[0];
+      } else if(window.sb){
+        const clean=q.replace(/^@/,'');
+        let query=sb.from('profiles').select('*').limit(5);
+        if(clean.includes('@')&&clean.includes('.')) query=query.eq('email', clean.toLowerCase());
+        else query=query.or(`username.ilike.${clean},email.ilike.${clean}`);
+        const {data}=await query;
+        user=data&&data[0];
+      }
+      if(!user){ err.textContent='Пользователь не найден. Проверьте данные или пригласите по ссылке.'; return; }
+      if(typeof contacts!=='undefined'&&!contacts.find(x=>x.id===user.id)){
+        contacts.unshift(user);
+        try{ renderContactsAndGroups?.(); }catch(e){}
+      }
+      sheet.remove();
+      if(typeof openChat==='function') openChat(user);
+      else if(typeof openPartner==='function') openPartner(user);
+      showToast('Контакт добавлен');
+    }catch(e){
+      console.warn(e);
+      err.textContent='Ошибка поиска';
+    }
+  };
+  sheet.querySelector('#ac2-go').onclick=find;
+  sheet.querySelector('#ac2-input').onkeydown=e=>{ if(e.key==='Enter') find(); };
+};
+
 window.openFindByEmail = function(){
   const sheet=document.createElement('div');
   sheet.className='sl-sheet'; sheet.id='sl-find-email';
@@ -24543,7 +24718,7 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
       <div class="tg-stk-search-row">
         <div class="tg-stk-search-wrap">
           <svg class="tg-stk-search-ico" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
-          <input type="search" id="tg-stk-search" placeholder="Поиск" autocomplete="off">
+          <input type="search" id="tg-stk-search" placeholder="Поиск: имя, @user, email" autocomplete="off">
         </div>
         <div class="tg-stk-reacts">
           <button type="button" class="tg-react" data-e="❤️">❤️</button>
@@ -26873,6 +27048,530 @@ document.addEventListener('click', function(e){
   try{ window.slOpenThemePicker(); }catch(err){}
 }, true);
 </script>
-<script src="calls.js" defer></script>
+<script src="calls.js" defer>
+
+/* ========== USER BOTS: create / discover / auto-reply ========== */
+(function(){
+  const BOTS_KEY = 'sl_user_bots_v1';
+  const BOT_CATALOG_KEY = 'sl_bot_catalog_v1';
+  const BOT_COLORS = ['#4C7CF3','#6D5DF6','#F0708A','#22C55E','#F59E0B','#06B6D4','#EC4899','#8B5CF6'];
+
+  function loadMyBots(){
+    try{ return JSON.parse(localStorage.getItem(BOTS_KEY)||'[]'); }catch(e){ return []; }
+  }
+  function saveMyBots(arr){
+    try{ localStorage.setItem(BOTS_KEY, JSON.stringify(arr)); }catch(e){}
+  }
+  function loadCatalog(){
+    try{ return JSON.parse(localStorage.getItem(BOT_CATALOG_KEY)||'[]'); }catch(e){ return []; }
+  }
+  function saveCatalog(arr){
+    try{ localStorage.setItem(BOT_CATALOG_KEY, JSON.stringify(arr.slice(-200))); }catch(e){}
+  }
+  function upsertCatalog(bot){
+    const cat = loadCatalog().filter(b => b.id !== bot.id && b.username !== bot.username);
+    cat.unshift({
+      id: bot.id,
+      username: bot.username,
+      name: bot.name,
+      description: bot.description||'',
+      welcome: bot.welcome||'',
+      rules: bot.rules||[],
+      color: bot.color||BOT_COLORS[0],
+      owner_id: bot.owner_id,
+      owner_name: bot.owner_name||'',
+      updated_at: Date.now()
+    });
+    saveCatalog(cat);
+  }
+
+  function normalizeUsername(u){
+    u = String(u||'').trim().toLowerCase().replace(/^@/,'').replace(/[^a-z0-9_]/g,'');
+    if(u && !u.endsWith('bot')) u = u + (u.endsWith('_') ? 'bot' : '_bot');
+    return u.slice(0, 32);
+  }
+
+  function botToContact(bot){
+    return {
+      id: bot.id,
+      username: bot.username,
+      first_name: bot.name || bot.username,
+      last_name: '',
+      color: bot.color || BOT_COLORS[0],
+      isBot: true,
+      isUserBot: true,
+      userBot: true,
+      description: bot.description||'',
+      welcome: bot.welcome||'',
+      rules: bot.rules||[],
+      owner_id: bot.owner_id,
+      lastMessage: bot.description || 'Бот',
+      lastAt: new Date().toISOString()
+    };
+  }
+
+  function ensureMyBotsInContacts(){
+    if(typeof contacts === 'undefined' || !Array.isArray(contacts)) return;
+    const mine = loadMyBots().filter(b => b.owner_id === (myProfile && myProfile.id));
+    const catalog = loadCatalog();
+    [...mine, ...catalog].forEach(bot => {
+      if(!bot || !bot.id) return;
+      const existing = contacts.find(c => c.id === bot.id || (c.username && c.username === bot.username));
+      if(!existing){
+        contacts.unshift(botToContact(bot));
+      } else {
+        // refresh rules
+        existing.isBot = true;
+        existing.isUserBot = true;
+        existing.userBot = true;
+        existing.rules = bot.rules || existing.rules || [];
+        existing.welcome = bot.welcome || existing.welcome || '';
+        existing.description = bot.description || existing.description || '';
+        existing.first_name = bot.name || existing.first_name;
+      }
+    });
+  }
+
+  async function publishBotToSupabase(bot){
+    if(!window.sb) return false;
+    try{
+      // try dedicated table
+      const row = {
+        id: bot.id,
+        owner_id: bot.owner_id,
+        username: bot.username,
+        name: bot.name,
+        description: bot.description||'',
+        welcome: bot.welcome||'',
+        rules: bot.rules||[],
+        color: bot.color||BOT_COLORS[0],
+        updated_at: new Date().toISOString()
+      };
+      const { error } = await sb.from('bots').upsert(row, { onConflict: 'id' });
+      if(!error) return true;
+      // fallback: store in profiles-like via public channel broadcast only
+      console.warn('bots table:', error.message);
+    }catch(e){ console.warn(e); }
+    return false;
+  }
+
+  async function fetchBotByUsername(username){
+    username = normalizeUsername(username);
+    if(!username) return null;
+    // local catalog first
+    let bot = loadCatalog().find(b => b.username === username);
+    if(bot) return bot;
+    bot = loadMyBots().find(b => b.username === username);
+    if(bot) return bot;
+    // supabase
+    if(window.sb){
+      try{
+        const { data } = await sb.from('bots').select('*').eq('username', username).maybeSingle();
+        if(data){
+          upsertCatalog(data);
+          return data;
+        }
+      }catch(e){}
+    }
+    return null;
+  }
+
+  function matchRule(text, rules){
+    const t = String(text||'').trim().toLowerCase();
+    if(!t || !Array.isArray(rules)) return null;
+    // exact then includes
+    for(const r of rules){
+      const key = String(r.trigger||r.keyword||'').trim().toLowerCase();
+      if(!key) continue;
+      if(t === key || t.includes(key)) return r.reply || r.response || '';
+    }
+    // default rule: trigger "*" or empty
+    const def = rules.find(r => {
+      const key = String(r.trigger||r.keyword||'').trim();
+      return key === '*' || key === 'default' || key === '';
+    });
+    return def ? (def.reply || def.response || '') : null;
+  }
+
+  async function replyAsBot(partner, userText){
+    if(!partner || !(partner.isUserBot || partner.userBot)) return;
+    const rules = partner.rules || [];
+    let answer = matchRule(userText, rules);
+    if(!answer){
+      // fallback
+      answer = partner.welcome || 'Я бот. Напишите одну из команд: ' +
+        (rules.filter(r=>r.trigger && r.trigger!=='*').map(r=>'«'+r.trigger+'»').slice(0,5).join(', ') || '—');
+    }
+    // small delay like real bot
+    await new Promise(r => setTimeout(r, 400 + Math.random()*600));
+
+    const payload = {
+      sender_id: partner.id,
+      receiver_id: myProfile?.id,
+      group_id: null,
+      content: answer,
+      type: 'text',
+      file_url: null
+    };
+    // local render
+    try{
+      if(typeof renderMessage === 'function'){
+        renderMessage({
+          ...payload,
+          id: 'bot_'+Date.now(),
+          created_at: new Date().toISOString(),
+          _local: true
+        }, false);
+        if(typeof scrollToBottom === 'function') scrollToBottom();
+      }
+    }catch(e){}
+    // try persist so history stays (optional)
+    try{
+      if(window.sb){
+        // Bot ids are synthetic — insert may fail FK; ignore
+        await sb.from('messages').insert(payload);
+      }
+    }catch(e){}
+  }
+
+  // Hook sendMessage completion for bot auto-reply
+  const _origSend = window.sendMessage;
+  // wrap after sendMessage is defined - use interval/patch
+  function patchSendMessage(){
+    if(typeof sendMessage !== 'function') return false;
+    if(sendMessage._botPatched) return true;
+    const orig = sendMessage;
+    window.sendMessage = async function(type='text', fileUrl=null, content=null){
+      const partner = activePartner;
+      const text = content ?? (typeof input !== 'undefined' ? input.value.trim() : '');
+      const result = await orig.apply(this, arguments);
+      try{
+        if(partner && (partner.isUserBot || partner.userBot) && (type==='text' || !type) && text){
+          replyAsBot(partner, text);
+        }
+      }catch(e){ console.warn(e); }
+      return result;
+    };
+    window.sendMessage._botPatched = true;
+    return true;
+  }
+  // try now and later
+  if(!patchSendMessage()){
+    setTimeout(patchSendMessage, 500);
+    setTimeout(patchSendMessage, 2000);
+  }
+
+  // UI: modal
+  function ensureBotStyles(){
+    if(document.getElementById('sl-bots-css')) return;
+    const s = document.createElement('style');
+    s.id = 'sl-bots-css';
+    s.textContent = `
+      #sl-bots-modal{position:fixed;inset:0;z-index:12000;background:rgba(0,0,0,.55);display:none;align-items:flex-end;justify-content:center}
+      #sl-bots-modal.open{display:flex}
+      .sl-bots-sheet{width:100%;max-width:480px;max-height:92vh;overflow:auto;background:var(--panel);border-radius:18px 18px 0 0;padding:16px 16px calc(20px + env(safe-area-inset-bottom));color:var(--text)}
+      .sl-bots-sheet h2{margin:0 0 6px;font-size:18px}
+      .sl-bots-sheet .hint{font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.4}
+      .sl-bot-card{border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:10px;background:var(--bg)}
+      .sl-bot-card .title{font-weight:700;font-size:15px}
+      .sl-bot-card .sub{font-size:12px;color:var(--muted);margin-top:2px}
+      .sl-bot-card .actions{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+      .sl-bot-card button,.sl-bots-sheet .btn{border:none;border-radius:10px;padding:8px 12px;font-weight:600;cursor:pointer;background:var(--accent-a);color:#fff;font-size:13px}
+      .sl-bot-card button.ghost{background:transparent;border:1px solid var(--line);color:var(--text)}
+      .sl-bot-card button.danger{background:rgba(239,68,68,.15);color:#ef4444}
+      .sl-bots-form label{display:block;font-size:12px;color:var(--muted);margin:10px 0 4px}
+      .sl-bots-form input,.sl-bots-form textarea{width:100%;box-sizing:border-box;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:var(--input-bg);color:var(--text);font:inherit}
+      .sl-bots-form textarea{min-height:64px;resize:vertical}
+      .sl-rule-row{display:flex;gap:8px;margin-bottom:8px}
+      .sl-rule-row input{flex:1}
+      .sl-bots-close{float:right;background:transparent;border:none;color:var(--muted);font-size:22px;cursor:pointer;line-height:1}
+    `;
+    document.head.appendChild(s);
+  }
+
+  function openBotsModal(){
+    ensureBotStyles();
+    let modal = document.getElementById('sl-bots-modal');
+    if(!modal){
+      modal = document.createElement('div');
+      modal.id = 'sl-bots-modal';
+      modal.innerHTML = `<div class="sl-bots-sheet" id="sl-bots-sheet"></div>`;
+      document.body.appendChild(modal);
+      modal.addEventListener('click', e => { if(e.target === modal) modal.classList.remove('open'); });
+    }
+    renderBotsSheet();
+    modal.classList.add('open');
+  }
+
+  function renderBotsSheet(){
+    const sheet = document.getElementById('sl-bots-sheet');
+    if(!sheet) return;
+    const mine = loadMyBots().filter(b => !myProfile?.id || b.owner_id === myProfile.id);
+    sheet.innerHTML = `
+      <button type="button" class="sl-bots-close" id="sl-bots-x">×</button>
+      <h2>Мои боты</h2>
+      <div class="hint">
+        Создайте бота с автоответами. Другие найдут его по <b>@username</b> в поиске чатов
+        (username заканчивается на <b>_bot</b>). Правила: ключевое слово → ответ.
+      </div>
+      <div id="sl-bots-list"></div>
+      <button type="button" class="btn" id="sl-bots-new" style="width:100%;margin-top:8px;padding:12px">＋ Создать бота</button>
+      <div style="margin-top:16px;border-top:1px solid var(--line);padding-top:12px">
+        <div style="font-weight:700;margin-bottom:8px">Найти бота</div>
+        <div class="sl-rule-row">
+          <input id="sl-bots-find-input" placeholder="@helper_bot" />
+          <button type="button" class="btn" id="sl-bots-find-btn">Найти</button>
+        </div>
+      </div>
+    `;
+    sheet.querySelector('#sl-bots-x').onclick = () => document.getElementById('sl-bots-modal')?.classList.remove('open');
+    const list = sheet.querySelector('#sl-bots-list');
+    if(!mine.length){
+      list.innerHTML = `<div class="hint">Пока нет ботов — создайте первого.</div>`;
+    } else {
+      list.innerHTML = mine.map(b => `
+        <div class="sl-bot-card" data-id="${b.id}">
+          <div class="title">${escapeHtml(b.name)} <span style="color:var(--muted);font-weight:500">@${escapeHtml(b.username)}</span></div>
+          <div class="sub">${escapeHtml(b.description||'Без описания')} · ${ (b.rules||[]).length } правил</div>
+          <div class="actions">
+            <button type="button" data-edit="${b.id}">Изменить</button>
+            <button type="button" class="ghost" data-open="${b.id}">Открыть чат</button>
+            <button type="button" class="ghost" data-share="${b.id}">Скопировать @</button>
+            <button type="button" class="danger" data-del="${b.id}">Удалить</button>
+          </div>
+        </div>
+      `).join('');
+    }
+    sheet.querySelector('#sl-bots-new').onclick = () => renderBotEditor(null);
+    sheet.querySelector('#sl-bots-find-btn').onclick = async () => {
+      const q = sheet.querySelector('#sl-bots-find-input').value;
+      const bot = await fetchBotByUsername(q);
+      if(!bot){ showToast('Бот не найден'); return; }
+      upsertCatalog(bot);
+      ensureMyBotsInContacts();
+      const c = botToContact(bot);
+      if(!contacts.find(x => x.id === c.id)) contacts.unshift(c);
+      try{ renderContactsAndGroups?.(); }catch(e){}
+      document.getElementById('sl-bots-modal')?.classList.remove('open');
+      try{ openChat?.(c); }catch(e){}
+      showToast('Бот добавлен');
+    };
+    list.querySelectorAll('[data-edit]').forEach(btn => btn.onclick = () => {
+      const bot = mine.find(b => b.id === btn.dataset.edit);
+      renderBotEditor(bot);
+    });
+    list.querySelectorAll('[data-open]').forEach(btn => {
+      btn.onclick = () => {
+        const bot = mine.find(b => b.id === btn.dataset.open);
+        if(!bot) return;
+        ensureMyBotsInContacts();
+        const c = contacts.find(x => x.id === bot.id) || botToContact(bot);
+        document.getElementById('sl-bots-modal')?.classList.remove('open');
+        try{ openChat?.(c); }catch(e){}
+        // welcome once
+        setTimeout(() => {
+          if(bot.welcome && typeof renderMessage==='function'){
+            renderMessage({
+              id:'bot_hi_'+Date.now(), sender_id:bot.id, receiver_id:myProfile?.id,
+              content: bot.welcome, type:'text', created_at:new Date().toISOString(), _local:true
+            }, false);
+            scrollToBottom?.();
+          }
+        }, 300);
+      };
+    });
+    list.querySelectorAll('[data-share]').forEach(btn => {
+      btn.onclick = async () => {
+        const bot = mine.find(b => b.id === btn.dataset.share);
+        if(!bot) return;
+        const t = '@' + bot.username;
+        try{ await navigator.clipboard.writeText(t); showToast('Скопировано: '+t); }
+        catch(e){ prompt('Скопируйте username бота:', t); }
+      };
+    });
+    list.querySelectorAll('[data-del]').forEach(btn => {
+      btn.onclick = () => {
+        if(!confirm('Удалить бота?')) return;
+        const arr = loadMyBots().filter(b => b.id !== btn.dataset.del);
+        saveMyBots(arr);
+        renderBotsSheet();
+        showToast('Удалено');
+      };
+    });
+  }
+
+  function renderBotEditor(bot){
+    const sheet = document.getElementById('sl-bots-sheet');
+    if(!sheet) return;
+    const isNew = !bot;
+    bot = bot || {
+      id: 'bot_' + Date.now() + '_' + Math.random().toString(36).slice(2,7),
+      name: '',
+      username: '',
+      description: '',
+      welcome: 'Привет! Я бот 👋',
+      rules: [
+        { trigger: 'привет', reply: 'Привет! Чем помочь?' },
+        { trigger: 'помощь', reply: 'Напишите ключевое слово — я отвечу.' },
+        { trigger: '*', reply: 'Не понял. Напишите «помощь».' }
+      ],
+      color: BOT_COLORS[Math.floor(Math.random()*BOT_COLORS.length)],
+      owner_id: myProfile?.id,
+      owner_name: myProfile?.username || myProfile?.first_name || ''
+    };
+    const rules = (bot.rules && bot.rules.length) ? bot.rules : [{trigger:'',reply:''}];
+    sheet.innerHTML = `
+      <button type="button" class="sl-bots-close" id="sl-bots-x">×</button>
+      <h2>${isNew?'Новый бот':'Редактировать бота'}</h2>
+      <div class="hint">Username будет с суффиксом <b>_bot</b>. Другие люди ищут бота по этому имени.</div>
+      <div class="sl-bots-form">
+        <label>Имя</label>
+        <input id="bf-name" value="${escapeHtml(bot.name||'')}" placeholder="Помощник" />
+        <label>Username</label>
+        <input id="bf-user" value="${escapeHtml(bot.username||'')}" placeholder="helper_bot" />
+        <label>Описание</label>
+        <input id="bf-desc" value="${escapeHtml(bot.description||'')}" placeholder="Кратко о боте" />
+        <label>Приветствие (при первом открытии)</label>
+        <textarea id="bf-welcome">${escapeHtml(bot.welcome||'')}</textarea>
+        <label>Правила (слово → ответ). Триггер <b>*</b> = любой текст</label>
+        <div id="bf-rules">
+          ${rules.map((r,i)=>`
+            <div class="sl-rule-row" data-i="${i}">
+              <input class="bf-trig" placeholder="слово" value="${escapeHtml(r.trigger||r.keyword||'')}" />
+              <input class="bf-reply" placeholder="ответ" value="${escapeHtml(r.reply||r.response||'')}" />
+            </div>`).join('')}
+        </div>
+        <button type="button" class="btn ghost" id="bf-add-rule" style="background:transparent;border:1px solid var(--line);color:var(--text);margin-top:4px">＋ Правило</button>
+        <div style="display:flex;gap:8px;margin-top:16px">
+          <button type="button" class="btn ghost" id="bf-back" style="flex:1;background:transparent;border:1px solid var(--line);color:var(--text)">Назад</button>
+          <button type="button" class="btn" id="bf-save" style="flex:2">Сохранить</button>
+        </div>
+      </div>
+    `;
+    sheet.querySelector('#sl-bots-x').onclick = () => document.getElementById('sl-bots-modal')?.classList.remove('open');
+    sheet.querySelector('#bf-back').onclick = () => renderBotsSheet();
+    sheet.querySelector('#bf-add-rule').onclick = () => {
+      const wrap = sheet.querySelector('#bf-rules');
+      const row = document.createElement('div');
+      row.className = 'sl-rule-row';
+      row.innerHTML = `<input class="bf-trig" placeholder="слово" /><input class="bf-reply" placeholder="ответ" />`;
+      wrap.appendChild(row);
+    };
+    sheet.querySelector('#bf-save').onclick = async () => {
+      if(!myProfile?.id){ showToast('Войдите в аккаунт'); return; }
+      const name = sheet.querySelector('#bf-name').value.trim();
+      let username = normalizeUsername(sheet.querySelector('#bf-user').value);
+      const description = sheet.querySelector('#bf-desc').value.trim();
+      const welcome = sheet.querySelector('#bf-welcome').value.trim();
+      if(!name){ showToast('Укажите имя'); return; }
+      if(!username || username.length < 5){ showToast('Username слишком короткий'); return; }
+      // unique among mine
+      const others = loadMyBots().filter(b => b.id !== bot.id && b.username === username);
+      if(others.length){ showToast('Такой username уже есть'); return; }
+      const ruleRows = [...sheet.querySelectorAll('#bf-rules .sl-rule-row')];
+      const newRules = ruleRows.map(row => ({
+        trigger: row.querySelector('.bf-trig').value.trim(),
+        reply: row.querySelector('.bf-reply').value.trim()
+      })).filter(r => r.trigger || r.reply);
+
+      const saved = {
+        ...bot,
+        name,
+        username,
+        description,
+        welcome,
+        rules: newRules,
+        owner_id: myProfile.id,
+        owner_name: myProfile.username || myProfile.first_name || '',
+        updated_at: Date.now()
+      };
+      let arr = loadMyBots().filter(b => b.id !== saved.id);
+      arr.unshift(saved);
+      saveMyBots(arr);
+      upsertCatalog(saved);
+      ensureMyBotsInContacts();
+      try{ renderContactsAndGroups?.(); }catch(e){}
+      const ok = await publishBotToSupabase(saved);
+      // broadcast so peers can catalog
+      try{
+        if(window.sb){
+          const ch = sb.channel('bots-public');
+          ch.subscribe(st => {
+            if(st==='SUBSCRIBED'){
+              ch.send({ type:'broadcast', event:'bot_publish', payload: saved });
+              setTimeout(()=>sb.removeChannel(ch), 1500);
+            }
+          });
+        }
+      }catch(e){}
+      showToast(ok ? 'Бот сохранён' : 'Бот сохранён (локально + каталог)');
+      renderBotsSheet();
+    };
+  }
+
+  // Listen for published bots
+  function subscribeBotsChannel(){
+    if(!window.sb) return;
+    try{
+      const ch = sb.channel('bots-public');
+      ch.on('broadcast', { event: 'bot_publish' }, ({ payload }) => {
+        if(!payload || !payload.username) return;
+        if(payload.owner_id === myProfile?.id) return;
+        upsertCatalog(payload);
+      });
+      ch.subscribe();
+    }catch(e){}
+  }
+
+  // Hook search: if query looks like bot username, try resolve
+  function patchSearch(){
+    // enhance contact search input if present
+    const input = document.getElementById('search-input') || document.querySelector('#chats-search, input[placeholder*="оиск"], input[placeholder*="Search"]');
+    if(!input || input._botSearch) return;
+    input._botSearch = true;
+    let t = null;
+    input.addEventListener('input', () => {
+      clearTimeout(t);
+      t = setTimeout(async () => {
+        const q = input.value.trim();
+        if(!q || q.length < 3) return;
+        if(!/bot/i.test(q) && !q.startsWith('@')) return;
+        const bot = await fetchBotByUsername(q);
+        if(bot){
+          upsertCatalog(bot);
+          ensureMyBotsInContacts();
+          try{ renderContactsAndGroups?.(); }catch(e){}
+        }
+      }, 400);
+    });
+  }
+
+  // Settings click
+  function bindSettings(){
+    const el = document.getElementById('settings-bots');
+    if(!el || el._bound) return;
+    el._bound = true;
+    el.addEventListener('click', () => openBotsModal());
+  }
+
+  // Init
+  function init(){
+    bindSettings();
+    ensureMyBotsInContacts();
+    patchSendMessage();
+    patchSearch();
+    subscribeBotsChannel();
+    try{ renderContactsAndGroups?.(); }catch(e){}
+  }
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => setTimeout(init, 300));
+  else setTimeout(init, 300);
+  setTimeout(init, 1500);
+
+  // export
+  window.slOpenBots = openBotsModal;
+  window.slFetchBot = fetchBotByUsername;
+})();
+
+</script>
 </body>
 </html>
