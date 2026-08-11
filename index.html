@@ -16363,43 +16363,9 @@ window._slTranscribeImpl = window.transcribeVoiceMsg = async function(msg){
     'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-15.mp3',
     'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-16.mp3'
   ];
-  const ARTISTS_BUILTIN = [
-    {name:'Gazan', tracks:[
-      {title:'67 (Six Seven)', url:'Gazan-67.mp3'},
-      'Дурак','BABY','Победа','Нас нет','Юность','Заря','Небо','Брат'
-    ]},
-    {name:'Oliver Tree', tracks:['Life Goes On','Miss You','Alien Boy','Hurt','Miracle Man','Let Me Down','Cash Machine','Joke\'s On You!']},
-    {name:'Баста', tracks:['Сансара','Выпускной','Тёмный царёк','Моя игра','Без тебя','Урбан']},
-    {name:'Макс Корж', tracks:['Малый повзрослел','Небо поможет нам','2 типа людей','Жить в кайф','Оптимист','Горы по колено']},
-    {name:'Скриптонит', tracks:['Империя','Положение','Твоё имя','Цепи','Вечеринка','Дома']},
-    {name:'Miyagi & Andy Panda', tracks:['I Got Love','Minor','Kosandra','Fire Man','Utopia','Tamada']},
-    {name:'Jony', tracks:['Комета','Аллея','Ты беспощадна','Лали','Титры','Камин']},
-    {name:'Егор Крид', tracks:['Сердцеедка','Что они знают','Берегу','Самба','Холостяк','Pussy Boy']},
-    {name:'Morgenshtern', tracks:['Cadillac','Cristal & МОЁТ','Новый мерин','Ice','Селяви','Позолота']},
-    {name:'Face', tracks:['Юморист','Я Роналдо','Бумага','Галактика','Мне пох']},
-    {name:'Oxxxymiron', tracks:['Город под подошвой','Кенни','Гора','Девочка Пиздец','Кто убил Марка']},
-    {name:'Кино', tracks:['Группа крови','Кукушка','Пачка сигарет','Звезда по имеми Солнце','Перемен','Хочу перемен']},
-    {name:'Земфира', tracks:['Хочешь','Прогулка','Искала','СПИД','Рассветы']},
-    {name:'Би-2', tracks:['Полковнику никто не пишет','Серебро','Мой рок-н-ролл','Компромисс']},
-    {name:'Сплин', tracks:['Выхода нет','Моё сердце','Романс','Орбит без сахара']},
-    {name:'ДДТ', tracks:['Что такое осень','Родина','Метель','Это всё']},
-    {name:'Наутилус Помпилиус', tracks:['Крылья','Прогулки по воде','Скованные одной цепью','Я хочу быть с тобой']},
-    {name:'t.A.T.u.', tracks:['Нас не догонят','Я сошла с ума','All The Things She Said','Not Gonna Get Us']},
-    {name:'Zivert', tracks:['Life','Credo','Beverly Hills','Зелёные волны']},
-    {name:'NILETTO', tracks:['Любимка','Someone like you','Ты такая красивая']},
-    {name:'Тима Белорусских', tracks:['Мокрые кроссы','Витамин D','Океан','Незабудка']},
-    {name:'ANNA ASTI', tracks:['Царица','По барам','Кафель']},
-    {name:'Artik & Asti', tracks:['Грустный дэнс','Истеричка','Под гипнозом']},
-    {name:'HammAli & Navai', tracks:['Птичка','Девочка-война','Пустите меня на танцпол']},
-    {name:'INSTASAMKA', tracks:['За деньги да','Mommy','Lipsi ha']},
-    {name:'Монеточка', tracks:['Нет монет','90','Каждый раз']},
-    {name:'ЛСП', tracks:['Монетка','Маленький принц','Тело']},
-    {name:'PHARAOH', tracks:['Дико, например','5 минут назад','Smart']},
-    {name:'Ваня Дмитриенко', tracks:['Венера-Юпитер','31-я весна','Синие круги']},
-    {name:'Мари Краймбрери', tracks:['Мне так хочется','Океан','Пряталась в ванной']},
-    {name:'Дима Билан', tracks:['На берегу неба','Невозможное возможно','Never Let You Go']}
-  ];
-  // fix typo
+  const ARTISTS_BUILTIN = [];
+  /* OLD ARTISTS REMOVED */
+  void 0; if(false) 
   ARTISTS_BUILTIN.forEach(a=>{ a.tracks = a.tracks.map(tr=>{
     if(typeof tr==='string' && tr.includes('имеми')) return tr.replace('имеми','имени');
     return tr;
@@ -16651,315 +16617,16 @@ window._slTranscribeImpl = window.transcribeVoiceMsg = async function(msg){
   window.slPlayMusic = playUrl;
 
   window.openMusicSettings = function(optArtist){
-    const ov = document.createElement('div');
-    ov.className = 'modal-overlay';
-    ov.style.zIndex = '12500';
-    ov.innerHTML = `<div class="modal" style="max-width:440px;max-height:88vh;display:flex;flex-direction:column">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-        <button type="button" id="mu-back" style="display:none;width:36px;height:36px;border-radius:10px;border:1px solid var(--line);background:transparent;color:var(--text);cursor:pointer;align-items:center;justify-content:center">${ICO.back}</button>
-        <h3 id="mu-title" style="margin:0;flex:1">Музыка</h3>
-        <button type="button" class="close-x" id="mu-x" style="float:none;position:static">${ICO.close}</button>
-      </div>
-      <p id="mu-hint" style="font-size:12px;color:var(--muted);margin:0 0 10px">Исполнители и треки. Демо можно заменить своим MP3. Свои артисты видны в вашем профиле.</p>
-      <input id="mu-q" placeholder="Поиск..." style="width:100%;padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:var(--input-bg);color:var(--text);margin-bottom:10px;box-sizing:border-box">
-      <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
-        <button type="button" class="btn-secondary" id="mu-new-artist" style="flex:1;padding:10px;margin:0;display:flex;align-items:center;justify-content:center;gap:6px">${ICO.plus} Артист</button>
-        <button type="button" class="btn-secondary" id="mu-upload" style="flex:1;padding:10px;margin:0">+ MP3</button>
-        <input type="file" id="mu-file" accept="audio/mpeg,audio/mp3,audio/*,.mp3,.m4a,.ogg,.wav" class="hidden-input">
-        <input type="file" id="mu-replace-file" accept="audio/mpeg,audio/mp3,audio/*,.mp3" class="hidden-input">
-        <input type="file" id="mu-cover-file" accept="image/*" class="hidden-input">
-      </div>
-      <div id="mu-fav-now" style="font-size:12px;color:var(--muted);margin-bottom:8px"></div>
-      <div id="mu-list" style="flex:1;overflow-y:auto;min-height:200px;max-height:52vh"></div>
-    </div>`;
-    document.body.appendChild(ov);
-    const list = ov.querySelector('#mu-list');
-    const favBox = ov.querySelector('#mu-fav-now');
-    const titleEl = ov.querySelector('#mu-title');
-    const backBtn = ov.querySelector('#mu-back');
-    const hint = ov.querySelector('#mu-hint');
-    let currentArtist = optArtist || null;
-    let pendingReplaceId = null;
-    let pendingCoverId = null;
-
-    function refreshFavLabel(){
-      const f = getFav();
-      favBox.innerHTML = f
-        ? ('Любимая: <b style="color:var(--text)">'+escapeHtml((f.artist?f.artist+' — ':'')+(f.title||'трек'))+'</b>')
-        : 'Любимая не выбрана';
-    }
-    refreshFavLabel();
-
-    function coverHtml(t){
-      if(t.cover) return '<img src="'+t.cover+'" style="width:100%;height:100%;object-fit:cover">';
-      return ICO.music;
-    }
-
-    function renderArtists(q){
-      q = (q||'').trim().toLowerCase();
-      currentArtist = null;
-      backBtn.style.display = 'none';
-      titleEl.textContent = 'Музыка';
-      hint.textContent = 'Выберите исполнителя или создайте своего.';
-      let artists = allArtistsMerged();
-      if(q){
-        const cat = buildCatalog().filter(t =>
-          (t.title||'').toLowerCase().includes(q) || (t.artist||'').toLowerCase().includes(q)
-        );
-        if(cat.length){ renderTrackList(cat, 'Поиск'); backBtn.style.display='flex'; titleEl.textContent='Поиск'; return; }
-        artists = artists.filter(a => a.name.toLowerCase().includes(q));
-      }
-      if(!artists.length){ list.innerHTML='<div style="padding:20px;color:var(--muted);text-align:center">Пусто</div>'; return; }
-      list.innerHTML = artists.map(a => {
-        const av = a.cover
-          ? '<img src="'+a.cover+'" style="width:100%;height:100%;object-fit:cover;border-radius:12px">'
-          : ICO.artist;
-        return `<div class="settings-item" style="padding-left:0;gap:12px;cursor:pointer" data-artist="${escapeHtml(a.name)}">
-          <div style="width:44px;height:44px;border-radius:12px;background:linear-gradient(135deg,#4C7CF3,#6D5DF6);display:flex;align-items:center;justify-content:center;color:#fff;flex-shrink:0;overflow:hidden">${av}</div>
-          <div style="flex:1;min-width:0">
-            <div style="font-weight:700;font-size:15px">${escapeHtml(a.name)}${a._custom?' <span style="font-size:11px;color:var(--accent-a)">свой</span>':''}</div>
-            <div style="font-size:12px;color:var(--muted)">${a.count||0} песен</div>
-          </div>
-          <span style="color:var(--muted);display:flex"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg></span>
-        </div>`;
-      }).join('');
-      list.querySelectorAll('[data-artist]').forEach(row=>{
-        row.onclick = ()=> renderArtistTracks(row.dataset.artist);
-      });
-    }
-
-    function renderArtistTracks(artistName){
-      currentArtist = artistName;
-      backBtn.style.display = 'flex';
-      titleEl.textContent = artistName;
-      hint.textContent = 'У демо есть «Заменить». Можно добавить обложку.';
-      const tracks = buildCatalog().filter(t => t.artist === artistName);
-      // add track button for custom artists
-      const isCustom = getCustomArtists().some(a=>a.name===artistName);
-      renderTrackList(tracks, artistName, isCustom);
-    }
-
-    function renderTrackList(tracks, heading, canAdd){
-      let html = '';
-      if(canAdd){
-        html += `<button type="button" id="mu-add-track" class="btn-secondary" style="width:100%;margin-bottom:8px;padding:10px">+ Добавить песню к «${escapeHtml(heading)}»</button>`;
-      }
-      if(!tracks.length && !canAdd){ list.innerHTML='<div style="padding:20px;color:var(--muted);text-align:center">Нет треков</div>'; return; }
-      html += tracks.map(t=>{
-        const sub = t._demo ? 'Демо' : (t._user ? 'Ваш файл' : '');
-        return `<div class="settings-item" style="padding-left:0;gap:8px;align-items:flex-start" data-id="${escapeHtml(String(t.id))}">
-          <div style="width:48px;height:48px;border-radius:10px;background:linear-gradient(135deg,#4C7CF3,#6D5DF6);overflow:hidden;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:#fff">${coverHtml(t)}</div>
-          <div style="flex:1;min-width:0">
-            <div style="font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(t.title||'')}</div>
-            <div style="font-size:11px;color:var(--muted)">${sub}</div>
-            <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">
-              ${t._demo?`<button type="button" data-replace style="font-size:11px;padding:5px 8px;border-radius:8px;border:1px solid var(--line);background:var(--panel-hover);color:var(--text);cursor:pointer;display:inline-flex;align-items:center;gap:4px">${ICO.replace} Заменить на свой .mp3</button>`:''}
-              <button type="button" data-cover style="font-size:11px;padding:5px 8px;border-radius:8px;border:1px solid var(--line);background:var(--panel-hover);color:var(--text);cursor:pointer;display:inline-flex;align-items:center;gap:4px">${ICO.cover} Обложка</button>
-            </div>
-          </div>
-          <button type="button" data-play style="width:36px;height:36px;border-radius:10px;border:none;background:linear-gradient(135deg,#4C7CF3,#6D5DF6);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0">${ICO.play}</button>
-          <button type="button" data-setfav style="width:36px;height:36px;border-radius:10px;border:1px solid var(--line);background:transparent;color:var(--text);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0">${ICO.star}</button>
-        </div>`;
-      }).join('');
-      list.innerHTML = html;
-
-      const addBtn = list.querySelector('#mu-add-track');
-      if(addBtn){
-        addBtn.onclick = async ()=>{
-          const title = await (typeof customPrompt==='function'?customPrompt('Название песни',''):Promise.resolve(prompt('Название')));
-          if(!title || !String(title).trim()) return;
-          pendingReplaceId = null;
-          // create track entry then pick file
-          const artists = getCustomArtists();
-          const a = artists.find(x=>x.name===heading);
-          if(a){
-            a.tracks = a.tracks||[];
-            a.tracks.push(String(title).trim());
-            setCustomArtists(artists);
-          }
-          const id = 'c_'+heading+'_'+String(title).trim();
-          pendingReplaceId = id;
-          ov.querySelector('#mu-replace-file').click();
-        };
-      }
-
-      list.querySelectorAll('[data-play]').forEach(btn=>{
-        btn.onclick = (e)=>{
-          e.stopPropagation();
-          const id = btn.closest('[data-id]').dataset.id;
-          const tr = buildCatalog().find(x=>String(x.id)===String(id));
-          if(tr && tr.url) playUrl(tr.url, (tr.artist?tr.artist+' — ':'')+tr.title, tr);
-        };
-      });
-      list.querySelectorAll('[data-setfav]').forEach(btn=>{
-        btn.onclick = (e)=>{
-          e.stopPropagation();
-          const id = btn.closest('[data-id]').dataset.id;
-          const tr = buildCatalog().find(x=>String(x.id)===String(id));
-          if(!tr) return;
-          setFav({ id:tr.id, artist:tr.artist, title:tr.title, url:tr.url||null, cover:tr.cover||null });
-          refreshFavLabel();
-          showToast('Любимая обновлена');
-          try{
-            if(myProfile && sb){
-              sb.from('profiles').update({ favorite_music: (tr.artist?tr.artist+' — ':'')+tr.title }).eq('id', myProfile.id).then(()=>{});
-              myProfile.favorite_music = (tr.artist?tr.artist+' — ':'')+tr.title;
-            }
-          }catch(err){}
-          publishMusicMeta();
-        };
-      });
-      list.querySelectorAll('[data-replace]').forEach(btn=>{
-        btn.onclick = (e)=>{
-          e.stopPropagation();
-          pendingReplaceId = btn.closest('[data-id]').dataset.id;
-          ov.querySelector('#mu-replace-file').click();
-        };
-      });
-      list.querySelectorAll('[data-cover]').forEach(btn=>{
-        btn.onclick = (e)=>{
-          e.stopPropagation();
-          pendingCoverId = btn.closest('[data-id]').dataset.id;
-          ov.querySelector('#mu-cover-file').click();
-        };
-      });
-    }
-
-    backBtn.onclick = ()=> renderArtists(ov.querySelector('#mu-q').value);
-    ov.querySelector('#mu-q').oninput = (e)=>{
-      const q = e.target.value.trim();
-      if(!q){ renderArtists(''); return; }
-      renderArtists(q);
-    };
-    ov.querySelector('#mu-x').onclick = ()=> ov.remove();
-    ov.querySelector('#mu-upload').onclick = ()=> ov.querySelector('#mu-file').click();
-
-    ov.querySelector('#mu-new-artist').onclick = async ()=>{
-      const name = await (typeof customPrompt==='function'?customPrompt('Имя нового артиста',''):Promise.resolve(prompt('Имя артиста')));
-      if(!name || !String(name).trim()) return;
-      const n = String(name).trim();
-      const artists = getCustomArtists();
-      if(artists.some(a=>a.name===n) || ARTISTS_BUILTIN.some(a=>a.name===n)){
-        showToast('Такой артист уже есть');
-        renderArtistTracks(n);
+    // Old artist catalog UI disabled — always open Music v2
+    try{
+      if(typeof window.slOpenMusic === 'function'){
+        window.slOpenMusic();
         return;
       }
-      artists.unshift({name:n, tracks:[], cover:null});
-      setCustomArtists(artists);
-      publishMusicMeta();
-      showToast('Артист создан');
-      renderArtistTracks(n);
-    };
-
-    ov.querySelector('#mu-replace-file').onchange = async (e)=>{
-      const f = e.target.files && e.target.files[0];
-      e.target.value = '';
-      if(!f || !pendingReplaceId) return;
-      if(f.size > 15*1024*1024){ showToast('Файл больше 15 МБ'); return; }
-      const reader = new FileReader();
-      reader.onload = ()=>{
-        const id = pendingReplaceId;
-        pendingReplaceId = null;
-        const overrides = getOverrides();
-        const prev = overrides[id] || {};
-        const tr = buildCatalog().find(x=>String(x.id)===String(id));
-        overrides[id] = {
-          ...prev,
-          url: reader.result,
-          title: prev.title || tr?.title || f.name.replace(/\.(mp3|m4a|ogg|wav)$/i,''),
-          artist: prev.artist || tr?.artist || currentArtist || 'Мои файлы',
-          cover: prev.cover || null
-        };
-        setOverrides(overrides);
-        // if custom artist track was only a name, ensure it's listed
-        if(currentArtist){
-          const artists = getCustomArtists();
-          const a = artists.find(x=>x.name===currentArtist);
-          if(a){
-            const titles = (a.tracks||[]).map(x=> typeof x==='string'?x:x.title);
-            if(!titles.includes(overrides[id].title)){
-              a.tracks = a.tracks||[];
-              a.tracks.push(overrides[id].title);
-              setCustomArtists(artists);
-            }
-          }
-        }
-        publishMusicMeta();
-        showToast('MP3 заменён');
-        if(currentArtist) renderArtistTracks(currentArtist);
-        else renderArtists('');
-        playUrl(reader.result, (overrides[id].artist?overrides[id].artist+' — ':'')+overrides[id].title, {...overrides[id], id});
-      };
-      reader.readAsDataURL(f);
-    };
-
-    ov.querySelector('#mu-cover-file').onchange = async (e)=>{
-      const f = e.target.files && e.target.files[0];
-      e.target.value = '';
-      if(!f || !pendingCoverId) return;
-      try{
-        const dataUrl = await compressImageFile(f, 240, 0.7);
-        const id = pendingCoverId;
-        pendingCoverId = null;
-        const overrides = getOverrides();
-        const prev = overrides[id] || {};
-        const tr = buildCatalog().find(x=>String(x.id)===String(id));
-        overrides[id] = {
-          ...prev,
-          url: prev.url || tr?.url,
-          title: prev.title || tr?.title,
-          artist: prev.artist || tr?.artist,
-          cover: dataUrl
-        };
-        setOverrides(overrides);
-        // if cover for whole custom artist from first track — optional
-        publishMusicMeta();
-        showToast('Обложка сохранена');
-        if(currentArtist) renderArtistTracks(currentArtist);
-        else renderArtists('');
-      }catch(err){ showToast('Не удалось загрузить обложку'); }
-    };
-
-    ov.querySelector('#mu-file').onchange = async (e)=>{
-      const f = e.target.files && e.target.files[0];
-      e.target.value = '';
-      if(!f) return;
-      if(f.size > 15*1024*1024){ showToast('Файл больше 15 МБ'); return; }
-      let artistName = currentArtist;
-      if(!artistName){
-        artistName = await (typeof customPrompt==='function'?customPrompt('Артист (или новый)','Мои файлы'):Promise.resolve(prompt('Артист')||'Мои файлы'));
-        artistName = String(artistName||'Мои файлы').trim() || 'Мои файлы';
-      }
-      const titleDefault = f.name.replace(/\.(mp3|m4a|ogg|wav)$/i,'');
-      let title = await (typeof customPrompt==='function'?customPrompt('Название трека', titleDefault):Promise.resolve(prompt('Название', titleDefault)));
-      title = String(title||titleDefault).trim() || titleDefault;
-      const reader = new FileReader();
-      reader.onload = ()=>{
-        const id = 'u_'+Date.now();
-        const overrides = getOverrides();
-        overrides[id] = { url: reader.result, title, artist: artistName, cover: null };
-        setOverrides(overrides);
-        // ensure custom artist exists
-        if(!ARTISTS_BUILTIN.some(a=>a.name===artistName)){
-          const artists = getCustomArtists();
-          let a = artists.find(x=>x.name===artistName);
-          if(!a){ a={name:artistName, tracks:[], cover:null}; artists.unshift(a); }
-          if(!(a.tracks||[]).some(tr=>(typeof tr==='string'?tr:tr.title)===title)){
-            a.tracks = a.tracks||[]; a.tracks.push(title);
-          }
-          setCustomArtists(artists);
-        }
-        publishMusicMeta();
-        showToast('Трек добавлен');
-        renderArtistTracks(artistName);
-        playUrl(reader.result, artistName+' — '+title, overrides[id]);
-      };
-      reader.readAsDataURL(f);
-    };
-    ov.addEventListener('click', e=>{ if(e.target===ov) ov.remove(); });
-    if(optArtist) renderArtistTracks(optArtist);
-    else renderArtists('');
+    }catch(e){ console.warn(e); }
+    try{ showToast('Откройте Музыку заново (обновите страницу)'); }catch(e){}
   };
+
 
   function ensureMusicItem(){
     if(document.getElementById('settings-music')) return;
@@ -16973,7 +16640,7 @@ window._slTranscribeImpl = window.transcribeVoiceMsg = async function(msg){
     row.innerHTML = `<svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
       <span class="item-text">Музыка</span>`;
     host.appendChild(row);
-    row.onclick = ()=> openMusicSettings();
+    row.onclick = (e)=>{ e&&e.preventDefault(); e&&e.stopPropagation(); try{ (window.slOpenMusic||window.openMusicSettings)(); }catch(err){ console.error(err);} };
   }
   setTimeout(ensureMusicItem, 1200);
   setTimeout(ensureMusicItem, 3000);
@@ -27939,11 +27606,22 @@ document.addEventListener('click', function(e){
         <span class="item-text">Музыка</span>`;
       host.appendChild(row);
     }
+    // Always bind to v2 full-screen library
     row.onclick = (e)=>{ e.preventDefault(); e.stopPropagation(); openMusicSettings(); };
   }
-  setTimeout(ensureMusicItem, 600);
-  setTimeout(ensureMusicItem, 2000);
-  setTimeout(ensureMusicItem, 4000);
+  setTimeout(ensureMusicItem, 400);
+  setTimeout(ensureMusicItem, 1500);
+  setTimeout(ensureMusicItem, 3500);
+  setTimeout(ensureMusicItem, 6000);
+  // Capture-phase: steal clicks on settings-music even if other handlers exist
+  document.addEventListener('click', function(e){
+    const t = e.target && e.target.closest && e.target.closest('#settings-music');
+    if(!t) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if(typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
+    openMusicSettings();
+  }, true);
 
   // Listen for new songs
   try{
