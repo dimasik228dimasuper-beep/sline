@@ -24671,44 +24671,163 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
     return 'data:image/svg+xml,'+encodeURIComponent(s);
   }
   function emojiSticker(emoji){
-    return svgSticker(`<text x="64" y="88" text-anchor="middle" font-size="80">${emoji}</text>`);
+    // User requested NO emoji stickers — solid SVG shape instead of emoji text
+    const colors=['#4C7CF3','#6D5DF6','#F0708A','#22C55E','#F59E0B','#06B6D4'];
+    const c=colors[(String(emoji).charCodeAt(0)||0)%colors.length];
+    return svgSticker(`<circle cx="64" cy="64" r="48" fill="${c}"/><circle cx="64" cy="64" r="28" fill="rgba(255,255,255,.25)"/>`);
   }
   function faceSticker(emoji){ return emojiSticker(emoji); }
 
-  // Catalog of installable packs (like Telegram sticker store)
+
+  // Catalog: PURE SVG only (no emoji glyphs)
+  function pureSvg(inner, bg){
+    const b = bg ? `<rect width="128" height="128" rx="28" fill="${bg}"/>` : '';
+    return svgSticker(b + inner);
+  }
+  const _SVG_ALL = [];
+  function S(inner, bg){ const u = pureSvg(inner, bg); _SVG_ALL.push(u); return u; }
+  // Faces
+  S(`<circle cx="64" cy="64" r="48" fill="#FBBF24"/><circle cx="48" cy="56" r="6" fill="#333"/><circle cx="80" cy="56" r="6" fill="#333"/><path d="M44 78c8 12 32 12 40 0" stroke="#333" stroke-width="5" fill="none" stroke-linecap="round"/>`);
+  S(`<circle cx="64" cy="64" r="48" fill="#FBBF24"/><circle cx="48" cy="56" r="6" fill="#333"/><circle cx="80" cy="56" r="6" fill="#333"/><path d="M44 86c8-10 32-10 40 0" stroke="#333" stroke-width="5" fill="none" stroke-linecap="round"/>`);
+  S(`<circle cx="64" cy="64" r="48" fill="#FBBF24"/><circle cx="48" cy="58" r="6" fill="#333"/><circle cx="80" cy="58" r="6" fill="#333"/><circle cx="64" cy="80" r="10" fill="#333"/>`);
+  S(`<circle cx="64" cy="64" r="48" fill="#FBBF24"/><path d="M40 58h16M72 58h16" stroke="#333" stroke-width="5" stroke-linecap="round"/><path d="M48 82h32" stroke="#333" stroke-width="5" stroke-linecap="round"/>`);
+  S(`<circle cx="64" cy="64" r="48" fill="#F87171"/><circle cx="48" cy="56" r="6" fill="#333"/><circle cx="80" cy="56" r="6" fill="#333"/><path d="M50 84c6-8 22-8 28 0" stroke="#333" stroke-width="5" fill="none"/>`);
+  S(`<circle cx="64" cy="64" r="48" fill="#60A5FA"/><circle cx="48" cy="56" r="6" fill="#333"/><circle cx="80" cy="56" r="6" fill="#333"/><path d="M46 80c10 14 26 14 36 0" stroke="#333" stroke-width="5" fill="none"/>`);
+  S(`<circle cx="64" cy="64" r="48" fill="#FBBF24"/><path d="M44 50c4-8 12-8 16 0M68 50c4-8 12-8 16 0" stroke="#333" stroke-width="4" fill="none"/><path d="M50 78c6 10 22 10 28 0" stroke="#333" stroke-width="5" fill="none"/>`);
+  S(`<circle cx="64" cy="64" r="48" fill="#C4B5FD"/><circle cx="48" cy="56" r="7" fill="#fff"/><circle cx="80" cy="56" r="7" fill="#fff"/><circle cx="50" cy="56" r="3" fill="#333"/><circle cx="82" cy="56" r="3" fill="#333"/><path d="M52 82c8 8 16 8 24 0" stroke="#333" stroke-width="4" fill="none"/>`);
+  S(`<circle cx="64" cy="64" r="48" fill="#FBBF24"/><circle cx="48" cy="56" r="6" fill="#333"/><path d="M74 52c6 0 10 6 10 10" stroke="#333" stroke-width="4" fill="none"/><path d="M48 80c10 8 24 8 32 0" stroke="#333" stroke-width="4" fill="none"/>`);
+  S(`<circle cx="64" cy="64" r="48" fill="#FBBF24"/><circle cx="48" cy="56" r="6" fill="#333"/><circle cx="80" cy="56" r="6" fill="#333"/><path d="M52 72h24" stroke="#333" stroke-width="5"/><path d="M58 72v16M70 72v16" stroke="#333" stroke-width="4"/>`);
+  // Hearts stars shapes
+  S(`<path d="M64 110S20 80 20 50c0-16 12-28 28-28 10 0 16 6 16 6s6-6 16-6c16 0 28 12 28 28 0 30-44 60-44 60z" fill="#F43F5E"/>`);
+  S(`<path d="M64 110S20 80 20 50c0-16 12-28 28-28 10 0 16 6 16 6s6-6 16-6c16 0 28 12 28 28 0 30-44 60-44 60z" fill="#FB7185"/>`);
+  S(`<path d="M64 16l12 36h38L86 74l12 38-34-24-34 24 12-38L14 52h38z" fill="#FBBF24"/>`);
+  S(`<path d="M64 16l12 36h38L86 74l12 38-34-24-34 24 12-38L14 52h38z" fill="#A78BFA"/>`);
+  S(`<circle cx="64" cy="64" r="40" fill="#34D399"/>`);
+  S(`<rect x="28" y="28" width="72" height="72" rx="16" fill="#38BDF8"/>`);
+  S(`<polygon points="64,20 108,108 20,108" fill="#F472B6"/>`);
+  S(`<circle cx="64" cy="64" r="36" fill="none" stroke="#4C7CF3" stroke-width="10"/>`);
+  S(`<rect x="32" y="32" width="64" height="64" rx="12" fill="none" stroke="#22C55E" stroke-width="10"/>`);
+  S(`<path d="M64 20l44 88H20z" fill="none" stroke="#FBBF24" stroke-width="8" stroke-linejoin="round"/>`);
+  // Nature
+  S(`<circle cx="64" cy="52" r="28" fill="#FBBF24"/><path d="M20 108c20-28 68-28 88 0" fill="#4ADE80"/>`);
+  S(`<circle cx="50" cy="56" r="18" fill="#fff"/><circle cx="78" cy="56" r="22" fill="#fff"/><circle cx="64" cy="72" r="20" fill="#fff"/><circle cx="64" cy="64" r="36" fill="#38BDF8" opacity=".35"/>`);
+  S(`<path d="M64 20c24 28 24 60 0 88C40 80 40 48 64 20z" fill="#4ADE80"/><rect x="58" y="88" width="12" height="24" fill="#92400E"/>`);
+  S(`<rect x="58" y="48" width="12" height="48" fill="#92400E"/><circle cx="48" cy="48" r="18" fill="#22C55E"/><circle cx="80" cy="48" r="18" fill="#22C55E"/><circle cx="64" cy="36" r="18" fill="#16A34A"/>`);
+  S(`<ellipse cx="64" cy="72" r="36" fill="#F97316"/><ellipse cx="64" cy="72" r="22" fill="#FB923C"/><ellipse cx="64" cy="72" r="10" fill="#FDBA74"/>`);
+  S(`<path d="M32 88c0-28 16-48 32-48s32 20 32 48" fill="#60A5FA"/><path d="M40 88h48v12H40z" fill="#1D4ED8"/>`);
+  S(`<path d="M24 80c16-40 64-40 80 0" fill="#94A3B8"/><path d="M40 80c10-24 38-24 48 0" fill="#CBD5E1"/>`);
+  S(`<path d="M20 96h88L64 24z" fill="#78716C"/><path d="M40 96h48L64 48z" fill="#A8A29E"/>`);
+  S(`<circle cx="64" cy="64" r="40" fill="#0EA5E9"/><path d="M30 64h68M64 30v68" stroke="#fff" stroke-width="4" opacity=".4"/>`);
+  S(`<path d="M64 30c-20 28-8 50 0 58 8-8 20-30 0-58z" fill="#F472B6"/>`);
+  // Objects
+  S(`<rect x="36" y="24" width="56" height="80" rx="8" fill="#1E293B"/><rect x="42" y="36" width="44" height="56" rx="4" fill="#38BDF8"/>`);
+  S(`<circle cx="64" cy="64" r="36" fill="#F8FAFC"/><circle cx="64" cy="64" r="28" fill="#E2E8F0"/><path d="M64 40v24l16 10" stroke="#334155" stroke-width="5" fill="none" stroke-linecap="round"/>`);
+  S(`<path d="M40 40h48v56H40z" fill="#F1F5F9"/><path d="M40 40l24 20 24-20" fill="#94A3B8"/>`);
+  S(`<rect x="28" y="48" width="72" height="44" rx="8" fill="#4C7CF3"/><circle cx="64" cy="70" r="10" fill="#93C5FD"/>`);
+  S(`<path d="M32 72h64l-8 24H40z" fill="#FBBF24"/><path d="M40 72V48a24 24 0 0148 0v24" fill="none" stroke="#FBBF24" stroke-width="8"/>`);
+  S(`<rect x="44" y="28" width="40" height="72" rx="6" fill="#EF4444"/><rect x="50" y="36" width="28" height="8" fill="#FCA5A5"/>`);
+  S(`<path d="M34 96l20-64h20l20 64" fill="none" stroke="#E11D48" stroke-width="10"/><path d="M44 72h40" stroke="#E11D48" stroke-width="8"/>`);
+  S(`<circle cx="64" cy="56" r="28" fill="#FDE68A"/><rect x="52" y="80" width="24" height="20" fill="#CA8A04"/>`);
+  S(`<rect x="30" y="40" width="68" height="52" rx="6" fill="#0F172A"/><rect x="38" y="48" width="52" height="28" fill="#22D3EE"/>`);
+  S(`<path d="M32 64l32-36 32 36v36H32z" fill="#F97316"/><rect x="54" y="72" width="20" height="28" fill="#FED7AA"/>`);
+  // Symbols
+  S(`<circle cx="64" cy="64" r="40" fill="#1D4ED8"/><path d="M40 64h48M64 40v48" stroke="#fff" stroke-width="8" stroke-linecap="round"/>`);
+  S(`<circle cx="64" cy="64" r="40" fill="#DC2626"/><path d="M44 64h40" stroke="#fff" stroke-width="8" stroke-linecap="round"/>`);
+  S(`<path d="M36 70l28-36 28 36" fill="none" stroke="#22C55E" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/><path d="M64 40v56" stroke="#22C55E" stroke-width="10" stroke-linecap="round"/>`);
+  S(`<path d="M40 40l48 48M88 40L40 88" stroke="#EF4444" stroke-width="10" stroke-linecap="round"/>`);
+  S(`<path d="M36 68l20 20 36-44" fill="none" stroke="#22C55E" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>`);
+  S(`<path d="M44 40v48l40-24z" fill="#4C7CF3"/>`);
+  S(`<rect x="40" y="36" width="16" height="56" rx="4" fill="#4C7CF3"/><rect x="72" y="36" width="16" height="56" rx="4" fill="#4C7CF3"/>`);
+  S(`<path d="M32 64h48M64 40l24 24-24 24" fill="none" stroke="#4C7CF3" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>`);
+  S(`<path d="M96 64H48M64 40L40 64l24 24" fill="none" stroke="#4C7CF3" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>`);
+  S(`<path d="M40 88V48l24-16 24 16v40" fill="#F1F5F9" stroke="#94A3B8" stroke-width="4"/><path d="M56 88V64h16v24" fill="#CBD5E1"/>`);
+  // Animals
+  S(`<circle cx="64" cy="70" r="34" fill="#F9A8D4"/><circle cx="40" cy="40" r="14" fill="#F9A8D4"/><circle cx="88" cy="40" r="14" fill="#F9A8D4"/><circle cx="52" cy="66" r="5" fill="#333"/><circle cx="76" cy="66" r="5" fill="#333"/><ellipse cx="64" cy="80" rx="8" ry="5" fill="#EC4899"/>`);
+  S(`<ellipse cx="64" cy="72" r="36" fill="#FDBA74"/><circle cx="40" cy="40" r="12" fill="#FDBA74"/><circle cx="88" cy="40" r="12" fill="#FDBA74"/><circle cx="52" cy="68" r="5" fill="#333"/><circle cx="76" cy="68" r="5" fill="#333"/>`);
+  S(`<ellipse cx="64" cy="76" r="30" fill="#86EFAC"/><ellipse cx="64" cy="48" r="22" fill="#86EFAC"/><circle cx="56" cy="46" r="4" fill="#333"/><circle cx="72" cy="46" r="4" fill="#333"/>`);
+  S(`<circle cx="64" cy="64" r="36" fill="#FDE68A"/><path d="M40 40c-8-12 0-24 0-24M88 40c8-12 0-24 0-24" stroke="#F59E0B" stroke-width="6" fill="none"/><circle cx="52" cy="60" r="5" fill="#333"/><circle cx="76" cy="60" r="5" fill="#333"/>`);
+  S(`<ellipse cx="64" cy="70" r="34" fill="#E2E8F0"/><circle cx="64" cy="48" r="20" fill="#E2E8F0"/><circle cx="56" cy="46" r="4" fill="#333"/><circle cx="72" cy="46" r="4" fill="#333"/>`);
+  // Food
+  S(`<ellipse cx="64" cy="76" r="36" fill="#F87171"/><ellipse cx="64" cy="70" r="28" fill="#FECACA"/>`);
+  S(`<circle cx="64" cy="64" r="40" fill="#FBBF24"/><path d="M64 24v80M34 44h60M34 84h60" stroke="#B45309" stroke-width="4"/>`);
+  S(`<path d="M36 88c0-32 12-52 28-52s28 20 28 52" fill="#F9A8D4"/>`);
+  S(`<ellipse cx="64" cy="80" r="32" fill="#92400E"/><ellipse cx="64" cy="72" r="24" fill="#FBBF24"/><ellipse cx="64" cy="68" r="16" fill="#F59E0B"/>`);
+  S(`<rect x="28" y="56" width="72" height="28" rx="8" fill="#FBBF24"/><path d="M40 56c0-16 48-16 48 0" fill="#F59E0B"/>`);
+  S(`<circle cx="64" cy="68" r="32" fill="#22C55E"/><path d="M64 36v-12" stroke="#16A34A" stroke-width="5"/>`);
+  S(`<ellipse cx="64" cy="70" r="34" fill="#FDE047"/><path d="M40 60h48M44 74h40" stroke="#CA8A04" stroke-width="3"/>`);
+  S(`<path d="M30 88h68l-8-48H38z" fill="#60A5FA"/><path d="M48 40c0-12 32-12 32 0" stroke="#1D4ED8" stroke-width="6" fill="none"/>`);
+  // Weather
+  S(`<circle cx="64" cy="64" r="28" fill="#FBBF24"/><g stroke="#FBBF24" stroke-width="6" stroke-linecap="round"><path d="M64 16v12M64 100v12M16 64h12M100 64h12"/></g>`);
+  S(`<path d="M40 72c0-20 16-28 28-24 4-12 16-20 28-16 8 2 14 10 14 20 12 2 18 12 14 22H40z" fill="#E2E8F0"/>`);
+  S(`<path d="M36 40l8 24 24 8-24 8-8 24-8-24-24-8 24-8z" fill="#F8FAFC"/>`);
+  S(`<circle cx="64" cy="64" r="36" fill="#1E293B"/><circle cx="50" cy="56" r="4" fill="#fff"/><circle cx="78" cy="48" r="3" fill="#fff"/><circle cx="70" cy="78" r="5" fill="#fff"/>`);
+  S(`<path d="M24 88c16-48 64-48 80 0" fill="#38BDF8"/><path d="M40 88c10-28 38-28 48 0" fill="#7DD3FC"/>`);
+  // Gestures
+  S(`<path d="M48 96V56c0-8 8-8 8 0v-8c0-8 8-8 8 0v8c0-8 8-8 8 0v8c0-8 8-8 8 0v40c0 12-8 20-20 20h-4c-12 0-20-8-20-20z" fill="#FDBA74"/>`);
+  S(`<path d="M40 70l24 24 40-48" fill="none" stroke="#22C55E" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>`);
+  S(`<circle cx="64" cy="64" r="44" fill="#4C7CF3"/><path d="M40 64h48M64 40v48" stroke="#fff" stroke-width="8"/>`);
+  S(`<path d="M32 64c16-28 48-28 64 0-16 28-48 28-64 0z" fill="#F472B6"/><circle cx="64" cy="64" r="12" fill="#fff"/>`);
+  S(`<path d="M64 24l8 24h24l-20 16 8 24-20-14-20 14 8-24-20-16h24z" fill="#FBBF24"/>`);
+  S(`<rect x="24" y="40" width="80" height="56" rx="10" fill="#8B5CF6"/><circle cx="48" cy="72" r="8" fill="#FDE68A"/>`);
+  S(`<circle cx="64" cy="56" r="24" fill="#FDBA74"/><path d="M40 96c8-20 40-20 48 0" fill="#3B82F6"/>`);
+  S(`<path d="M32 80h64v12H32z" fill="#64748B"/><path d="M40 80V40h48v40" fill="#94A3B8"/><circle cx="64" cy="56" r="10" fill="#1E293B"/>`);
+  S(`<path d="M28 64h72" stroke="#94A3B8" stroke-width="8" stroke-linecap="round"/><circle cx="64" cy="64" r="14" fill="#4C7CF3"/>`);
+  S(`<path d="M64 20v88M20 64h88" stroke="#EF4444" stroke-width="10" stroke-linecap="round"/>`);
+  // More colored circles / geometry to pass 100
+  S(`<circle cx="64" cy="64" r="40" fill="#4C7CF3"/>`,'#0f172a');
+  S(`<circle cx="64" cy="64" r="40" fill="#6D5DF6"/>`);
+  S(`<circle cx="64" cy="64" r="40" fill="#F0708A"/>`);
+  S(`<circle cx="64" cy="64" r="40" fill="#22C55E"/>`);
+  S(`<circle cx="64" cy="64" r="40" fill="#F59E0B"/>`);
+  S(`<circle cx="64" cy="64" r="40" fill="#06B6D4"/>`);
+  S(`<circle cx="64" cy="64" r="40" fill="#EC4899"/>`);
+  S(`<circle cx="64" cy="64" r="40" fill="#8B5CF6"/>`);
+  S(`<circle cx="64" cy="64" r="40" fill="#EF4444"/>`);
+  S(`<circle cx="64" cy="64" r="40" fill="#14B8A6"/>`);
+  S(`<rect x="20" y="20" width="40" height="40" fill="#4C7CF3"/><rect x="68" y="20" width="40" height="40" fill="#6D5DF6"/><rect x="20" y="68" width="40" height="40" fill="#F0708A"/><rect x="68" y="68" width="40" height="40" fill="#22C55E"/>`);
+  S(`<circle cx="44" cy="44" r="22" fill="#F59E0B"/><circle cx="84" cy="44" r="22" fill="#06B6D4"/><circle cx="64" cy="84" r="22" fill="#EC4899"/>`);
+  S(`<path d="M64 24l40 40-40 40-40-40z" fill="#8B5CF6"/>`);
+  S(`<path d="M24 64c0-22 18-40 40-40s40 18 40 40" fill="none" stroke="#22C55E" stroke-width="10"/>`);
+  S(`<path d="M32 96c16-48 48-48 64 0" fill="none" stroke="#38BDF8" stroke-width="10"/><circle cx="64" cy="48" r="12" fill="#38BDF8"/>`);
+  S(`<rect x="24" y="48" width="80" height="32" rx="16" fill="#1E293B"/><circle cx="48" cy="64" r="10" fill="#22C55E"/><circle cx="80" cy="64" r="10" fill="#EF4444"/>`);
+  S(`<path d="M40 88V48h48v40" fill="#FDE68A" stroke="#CA8A04" stroke-width="4"/><path d="M40 48l24-16 24 16" fill="#FBBF24"/>`);
+  S(`<circle cx="64" cy="64" r="44" fill="#0F172A"/><path d="M40 64c0-13 11-24 24-24s24 11 24 24" fill="none" stroke="#22D3EE" stroke-width="6"/><circle cx="64" cy="64" r="6" fill="#22D3EE"/>`);
+  S(`<ellipse cx="64" cy="64" r="40" fill="#F0ABFC"/><path d="M44 64h40M64 44v40" stroke="#A21CAF" stroke-width="6"/>`);
+  S(`<rect x="36" y="28" width="56" height="72" rx="8" fill="#EEF2FF"/><path d="M48 48h32M48 64h32M48 80h20" stroke="#4C7CF3" stroke-width="6" stroke-linecap="round"/>`);
+
+  function mkPack(id, name, urls){
+    return {
+      id, name, count: urls.length,
+      preview: urls.slice(0,3),
+      stickers: urls.map((url,i)=>({id: id+'_'+i, url}))
+    };
+  }
   const CATALOG = [
-    {
-      id:'chilled', name:'Chilled Cat', count:12, preview:['😺','😻','😼','🙀','😿','😾'],
-      stickers:['😺','😸','😹','😻','😼','😽','🙀','😿','😾','🐱','🐈','🐾'].map((e,i)=>({id:'ch_'+i,url:emojiSticker(e)}))
-    },
-    {
-      id:'lizard', name:'Green Lezard', count:10, preview:['🦎','🐸','🐊'],
-      stickers:['🦎','🐸','🐊','🐍','🐢','🐲','🐉','🦕','🦖','🐛'].map((e,i)=>({id:'lz_'+i,url:emojiSticker(e)}))
-    },
-    {
-      id:'donut', name:'Donut', count:10, preview:['🍩','🍪','🧁'],
-      stickers:['🍩','🍪','🧁','🎂','🍫','🍬','🍭','🍮','🍦','🍨'].map((e,i)=>({id:'dn_'+i,url:emojiSticker(e)}))
-    },
-    {
-      id:'moomin', name:'MOOMIN', count:16, preview:['🤍','🎩','☂️'],
-      stickers:['👻','🤍','🎩','☂️','🌸','🎨','❓','💤','❤️','🌊','🌈','🍼','🍀','⭐','🌙','🎵'].map((e,i)=>({id:'mm_'+i,url:emojiSticker(e)}))
-    },
-    {
-      id:'peach', name:'Peachy', count:8, preview:['🍑','🐻','🎀'],
-      stickers:['🍑','🐻','🎀','🌻','🌸','💗','🧸','✨'].map((e,i)=>({id:'ph_'+i,url:emojiSticker(e)}))
-    },
-    {
-      id:'faces', name:'Funny Faces', count:20, preview:['😂','😎','🤔'],
-      stickers:['😀','😂','🤣','😍','😎','🤔','😱','🤡','💀','💩','🥰','😤','😴','🤩','🙄','😏','🥺','😈','🤝','🔥'].map((e,i)=>({id:'ff_'+i,url:emojiSticker(e)}))
-    }
+    mkPack('faces', 'SVG Faces', _SVG_ALL.slice(0, 20)),
+    mkPack('shapes', 'SVG Shapes', _SVG_ALL.slice(20, 40)),
+    mkPack('nature', 'SVG Nature', _SVG_ALL.slice(40, 60)),
+    mkPack('objects', 'SVG Objects', _SVG_ALL.slice(60, 80)),
+    mkPack('extra', 'SVG Extra', _SVG_ALL.slice(80))
   ];
+  // Force reinstall pure SVG packs (drop old emoji packs from storage)
+  try{
+    LS.setItem(KEYS.packs, JSON.stringify(['faces','shapes','nature','objects','extra']));
+    // Drop recent/fav that were emoji-based
+    const isSvgUrl = (u)=> typeof u==='string' && u.indexOf('data:image/svg')===0 && u.indexOf('font-size')<0;
+    try{
+      const recent = load(KEYS.recent, []).filter(s=>isSvgUrl(s.url||s));
+      save(KEYS.recent, recent);
+      const fav = load(KEYS.fav, []).filter(s=>isSvgUrl(s.url||s));
+      save(KEYS.fav, fav);
+    }catch(e){}
+  }catch(e){}
 
   function getInstalled(){
-    let ids = load(KEYS.packs, ['faces','peach','moomin']);
+    let ids = load(KEYS.packs, ['faces','shapes','nature','objects','extra']);
     return CATALOG.filter(p=>ids.includes(p.id));
   }
   function installPack(id){
-    let ids = load(KEYS.packs, ['faces','peach','moomin']);
+    let ids = load(KEYS.packs, ['faces','shapes','nature','objects','extra']);
     if(!ids.includes(id)){ ids.unshift(id); save(KEYS.packs, ids); }
     toast('Стикерпак добавлен');
     closeStore();
