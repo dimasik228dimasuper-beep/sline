@@ -3476,6 +3476,7 @@ async function onAuthenticated(user){
   currentUser=user;
   let profile;
   try{ const r=await sb.from('profiles').select('*').eq('id',user.id).maybeSingle(); profile=r.data; }catch(e){}
+  let _slIsNewProfile = false;
   if(!profile){
     const meta=user.user_metadata||{};
     try{
@@ -3486,10 +3487,48 @@ async function onAuthenticated(user){
         email:user.email, phone:meta.phone||null
       }).select().maybeSingle();
       profile=data;
+      if(data) _slIsNewProfile = true;
     }catch(e){}
-    if(!profile) profile={id:user.id, username:meta.username||'user', first_name:'', last_name:'', color:colorFor(user.id), email:user.email};
+    if(!profile){ profile={id:user.id, username:meta.username||'user', first_name:'', last_name:'', color:colorFor(user.id), email:user.email}; _slIsNewProfile = true; }
   }
   myProfile=profile;
+  // Milestone: round user numbers (40, 50, 60…)
+  if(_slIsNewProfile){
+    try{
+      setTimeout(async ()=>{
+        try{
+          let n = null;
+          try{
+            const { count, error } = await sb.from('profiles').select('id', { count: 'exact', head: true });
+            if(!error && count!=null) n = count;
+          }catch(e){}
+          if(n==null){
+            try{
+              const { data: rows } = await sb.from('profiles').select('id').limit(5000);
+              if(rows) n = rows.length;
+            }catch(e){}
+          }
+          if(!n || n < 10) return;
+          if(n % 10 !== 0) return; // 10,20,30,40,50…
+          const key = 'sl_milestone_seen_'+String(myProfile.id);
+          if(localStorage.getItem(key)==='1') return;
+          localStorage.setItem(key, '1');
+          const ov = document.createElement('div');
+          ov.id = 'sl-milestone-ov';
+          ov.style.cssText = 'position:fixed;inset:0;z-index:30000;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:24px';
+          ov.innerHTML = `<div style="background:var(--panel,#1a1f2e);color:var(--text,#fff);border-radius:20px;padding:28px 24px;max-width:340px;width:100%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.45)">
+            <div style="font-size:42px;margin-bottom:10px">🎉</div>
+            <div style="font-size:20px;font-weight:800;line-height:1.3;margin-bottom:10px">Поздравляем!<br>Вы ${n}-й пользователь!</div>
+            <div style="font-size:14px;color:var(--muted,#9aa);line-height:1.45;margin-bottom:20px">Спасибо, что зарегистрировались в SLine</div>
+            <button type="button" id="sl-ms-ok" style="width:100%;padding:14px;border:none;border-radius:14px;background:linear-gradient(135deg,#4C7CF3,#6D5DF6);color:#fff;font-weight:700;font-size:15px;cursor:pointer">Отлично</button>
+          </div>`;
+          document.body.appendChild(ov);
+          ov.querySelector('#sl-ms-ok').onclick = ()=> ov.remove();
+          ov.onclick = (e)=>{ if(e.target===ov) ov.remove(); };
+        }catch(e){ console.warn('milestone', e); }
+      }, 900);
+    }catch(e){}
+  }
   try{
     if(!myProfile.favorite_music){
       const lf = JSON.parse(storage.getItem('sl_fav_track')||'null');
@@ -9335,16 +9374,7 @@ window.openStartChatSheet = function(){
     </div>
     <div class="sl-sheet-body">
       <input class="sl-sheet-search" id="sc-search" placeholder="Имя, @username, email или @bot" autocomplete="off">
-      <div class="sl-hint-box" id="sc-hint" style="margin:0 0 12px;padding:12px 14px;border-radius:14px;background:rgba(76,124,243,.12);border:1px solid rgba(76,124,243,.25);font-size:13px;line-height:1.45;color:var(--text)">
-        <div style="font-weight:700;margin-bottom:6px">Как добавить человека</div>
-        <div style="color:var(--muted)">
-          • Введите <b>@username</b>, <b>email</b> или номер в поиске выше<br>
-          • Или: <b>Найти по номеру</b> / <b>Найти по email</b><br>
-          • <b>Пригласить по ссылке</b> — отправьте ссылку другу<br>
-          • Бот: <b>Создать бота</b> или найдите <b>@имя_bot</b>
-        </div>
-        <button type="button" id="sc-hint-hide" style="margin-top:8px;border:none;background:transparent;color:var(--accent-a,#4C7CF3);font-size:12px;font-weight:700;cursor:pointer;padding:0">Скрыть подсказку</button>
-      </div>
+      
       <div class="sl-action-row" data-act="contact"><span class="ico"><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg></span>Добавить контакт</div>
       <div class="sl-action-row" data-act="group"><span class="ico"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg></span>Создать группу</div>
       <div class="sl-action-row" data-act="gcall"><span class="ico"><svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.8 19.8 0 01-8.63-3.07 19.5 19.5 0 01-6-6A19.8 19.8 0 012.12 4.18 2 2 0 014.11 2h3a2 2 0 012 1.72c.13.96.36 1.9.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0122 16.92z"/></svg></span>Создать групповой звонок</div>
@@ -9376,22 +9406,31 @@ window.openStartChatSheet = function(){
       if(act==='group') window.openCreateGroupFlow&&window.openCreateGroupFlow();
       else if(act==='channel') window.openCreateChannelFlow&&window.openCreateChannelFlow();
       else if(act==='gcall'){ showToast('Выберите участников в группе и нажмите звонок'); window.openCreateGroupFlow&&window.openCreateGroupFlow(); }
-      else if(act==='contact'){
-        slCloseSheet(sheet);
-        if(typeof window.openAddContactSheet==='function') window.openAddContactSheet();
-        else if(typeof window.openFindByEmail==='function') window.openFindByEmail();
-        else showToast('Введите @username или email в поиске');
-      }
       else if(act==='bot'){
-        slCloseSheet(sheet);
-        if(typeof window.slOpenBots==='function') window.slOpenBots();
-        else showToast('Боты: Настройки → Боты');
+        setTimeout(()=>{
+          try{
+            if(typeof window.slOpenBots==='function') window.slOpenBots();
+            else if(typeof window.openBotsModal==='function') window.openBotsModal();
+            else showToast('Боты пока недоступны — обновите страницу');
+          }catch(e){ console.error(e); showToast('Ошибка открытия ботов'); }
+        }, 80);
       }
       else if(act==='findbot'){
-        slCloseSheet(sheet);
-        if(typeof window.openFindBotSheet==='function') window.openFindBotSheet();
-        else if(typeof window.slOpenBots==='function') window.slOpenBots();
-        else showToast('Настройки → Боты → Найти');
+        setTimeout(()=>{
+          try{
+            if(typeof window.openFindBotSheet==='function') window.openFindBotSheet();
+            else if(typeof window.slOpenBots==='function') window.slOpenBots();
+            else showToast('Настройки → Боты');
+          }catch(e){ console.error(e); showToast('Ошибка'); }
+        }, 80);
+      }
+      else if(act==='contact'){
+        setTimeout(()=>{
+          try{
+            if(typeof window.openAddContactSheet==='function') window.openAddContactSheet();
+            else if(typeof window.openFindByEmail==='function') window.openFindByEmail();
+          }catch(e){}
+        }, 80);
       }
       else if(act==='phone'){
         if(typeof window.openFindByPhone==='function') window.openFindByPhone();
@@ -9412,13 +9451,7 @@ window.openStartChatSheet = function(){
       }
     };
   });
-  // hint dismiss
-  try{
-    const hint=sheet.querySelector('#sc-hint');
-    const hide=sheet.querySelector('#sc-hint-hide');
-    if(localStorage.getItem('sl_hide_start_hint')==='1' && hint) hint.style.display='none';
-    if(hide) hide.onclick=()=>{ try{ localStorage.setItem('sl_hide_start_hint','1'); }catch(e){} if(hint) hint.style.display='none'; };
-  }catch(e){}
+
   sheet.querySelectorAll('.sl-contact-row').forEach(row=>{
     row.onclick=()=>{
       const id=row.dataset.id;
@@ -27289,55 +27322,67 @@ document.addEventListener('click', function(e){
     document.head.appendChild(s);
   }
 
-  function openBotsModal(){
-    ensureBotStyles();
-    let modal = document.getElementById('sl-bots-modal');
-    if(!modal){
-      modal = document.createElement('div');
-      modal.id = 'sl-bots-modal';
-      modal.innerHTML = `<div class="sl-bots-sheet" id="sl-bots-sheet"></div>`;
-      document.body.appendChild(modal);
-      modal.addEventListener('click', e => { if(e.target === modal) modal.classList.remove('open'); });
-    }
-    renderBotsSheet();
-    modal.classList.add('open');
+  function escBot(s){
+    return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
+  function openBotsModal(){
+    try{ ensureBotStyles(); }catch(e){}
+    // Remove stale
+    try{ document.getElementById('sl-bots-modal')?.remove(); }catch(e){}
+    try{ document.getElementById('sl-bots-sheet-page')?.remove(); }catch(e){}
 
+    // Prefer full-screen sheet (same as "Начать общение") — more reliable than overlay modal
+    const page = document.createElement('div');
+    page.className = 'sl-sheet';
+    page.id = 'sl-bots-sheet-page';
+    page.style.zIndex = '20000';
+    page.innerHTML = `
+      <div class="sl-sheet-hdr">
+        <button type="button" class="sl-sheet-back" id="sl-bots-back">‹</button>
+        <h2>Мои боты</h2>
+        <span style="width:40px"></span>
+      </div>
+      <div class="sl-sheet-body" id="sl-bots-sheet" style="padding:12px 16px 24px"></div>`;
+    document.body.appendChild(page);
+    page.querySelector('#sl-bots-back').onclick = () => { try{ page.remove(); }catch(e){} };
+    renderBotsSheet();
+  }
+  // alias
+  window.openBotsModal = openBotsModal;
+
+  function closeBotsUI(){
+    try{ document.getElementById('sl-bots-sheet-page')?.remove(); }catch(e){}
+    try{ document.getElementById('sl-bots-modal')?.remove(); }catch(e){}
+  }
   function renderBotsSheet(){
     const sheet = document.getElementById('sl-bots-sheet');
     if(!sheet) return;
     const mine = loadMyBots().filter(b => !myProfile?.id || b.owner_id === myProfile.id);
     sheet.innerHTML = `
-      <button type="button" class="sl-bots-close" id="sl-bots-x">×</button>
-      <h2>Мои боты</h2>
-      <div class="hint">
-        Создайте бота с автоответами. Другие найдут его по <b>@username</b> в поиске чатов
-        (username заканчивается на <b>_bot</b>). Правила: ключевое слово → ответ.
-      </div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:12px;line-height:1.4">Создайте бота с автоответами. Username заканчивается на <b>_bot</b>.</div>
       <div id="sl-bots-list"></div>
-      <button type="button" class="btn" id="sl-bots-new" style="width:100%;margin-top:8px;padding:12px">＋ Создать бота</button>
+      <button type="button" class="btn" id="sl-bots-new" style="width:100%;margin-top:8px;padding:14px;border:none;border-radius:12px;background:linear-gradient(135deg,var(--accent-a,#4C7CF3),var(--accent-b,#6D5DF6));color:#fff;font-weight:700;font-size:15px;cursor:pointer">＋ Создать бота</button>
       <div style="margin-top:16px;border-top:1px solid var(--line);padding-top:12px">
         <div style="font-weight:700;margin-bottom:8px">Найти бота</div>
-        <div class="sl-rule-row">
-          <input id="sl-bots-find-input" placeholder="@helper_bot" />
-          <button type="button" class="btn" id="sl-bots-find-btn">Найти</button>
+        <div class="sl-rule-row" style="display:flex;gap:8px">
+          <input id="sl-bots-find-input" placeholder="@helper_bot" style="flex:1;padding:12px;border-radius:12px;border:1px solid var(--line);background:var(--input-bg);color:var(--text)" />
+          <button type="button" class="btn" id="sl-bots-find-btn" style="padding:12px 16px;border:none;border-radius:12px;background:var(--accent-a,#4C7CF3);color:#fff;font-weight:700;cursor:pointer">Найти</button>
         </div>
       </div>
     `;
-    sheet.querySelector('#sl-bots-x').onclick = () => document.getElementById('sl-bots-modal')?.classList.remove('open');
     const list = sheet.querySelector('#sl-bots-list');
     if(!mine.length){
-      list.innerHTML = `<div class="hint">Пока нет ботов — создайте первого.</div>`;
+      list.innerHTML = `<div style="padding:16px;text-align:center;color:var(--muted);font-size:13px">Пока нет ботов — создайте первого</div>`;
     } else {
       list.innerHTML = mine.map(b => `
-        <div class="sl-bot-card" data-id="${b.id}">
-          <div class="title">${escapeHtml(b.name)} <span style="color:var(--muted);font-weight:500">@${escapeHtml(b.username)}</span></div>
-          <div class="sub">${escapeHtml(b.description||'Без описания')} · ${ (b.rules||[]).length } правил</div>
-          <div class="actions">
-            <button type="button" data-edit="${b.id}">Изменить</button>
-            <button type="button" class="ghost" data-open="${b.id}">Открыть чат</button>
-            <button type="button" class="ghost" data-share="${b.id}">Скопировать @</button>
-            <button type="button" class="danger" data-del="${b.id}">Удалить</button>
+        <div class="sl-bot-card" data-id="${b.id}" style="border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:10px;background:var(--bg)">
+          <div class="title" style="font-weight:700;font-size:15px">${escBot(b.name)} <span style="color:var(--muted);font-weight:500">@${escBot(b.username)}</span></div>
+          <div class="sub" style="font-size:12px;color:var(--muted);margin-top:2px">${escBot(b.description||'Без описания')} · ${ (b.rules||[]).length } правил</div>
+          <div class="actions" style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+            <button type="button" data-edit="${b.id}" style="border:none;border-radius:10px;padding:8px 12px;font-weight:600;cursor:pointer;background:var(--accent-a,#4C7CF3);color:#fff;font-size:13px">Изменить</button>
+            <button type="button" data-open="${b.id}" style="border:1px solid var(--line);border-radius:10px;padding:8px 12px;font-weight:600;cursor:pointer;background:transparent;color:var(--text);font-size:13px">Открыть чат</button>
+            <button type="button" data-share="${b.id}" style="border:1px solid var(--line);border-radius:10px;padding:8px 12px;font-weight:600;cursor:pointer;background:transparent;color:var(--text);font-size:13px">Скопировать @</button>
+            <button type="button" data-del="${b.id}" style="border:none;border-radius:10px;padding:8px 12px;font-weight:600;cursor:pointer;background:rgba(239,68,68,.15);color:#ef4444;font-size:13px">Удалить</button>
           </div>
         </div>
       `).join('');
@@ -27350,9 +27395,9 @@ document.addEventListener('click', function(e){
       upsertCatalog(bot);
       ensureMyBotsInContacts();
       const c = botToContact(bot);
-      if(!contacts.find(x => x.id === c.id)) contacts.unshift(c);
+      if(typeof contacts!=='undefined' && !contacts.find(x => x.id === c.id)) contacts.unshift(c);
       try{ renderContactsAndGroups?.(); }catch(e){}
-      document.getElementById('sl-bots-modal')?.classList.remove('open');
+      closeBotsUI();
       try{ openChat?.(c); }catch(e){}
       showToast('Бот добавлен');
     };
@@ -27365,8 +27410,8 @@ document.addEventListener('click', function(e){
         const bot = mine.find(b => b.id === btn.dataset.open);
         if(!bot) return;
         ensureMyBotsInContacts();
-        const c = contacts.find(x => x.id === bot.id) || botToContact(bot);
-        document.getElementById('sl-bots-modal')?.classList.remove('open');
+        const c = (typeof contacts!=='undefined' && contacts.find(x => x.id === bot.id)) || botToContact(bot);
+        closeBotsUI();
         try{ openChat?.(c); }catch(e){}
         // welcome once
         setTimeout(() => {
@@ -27426,19 +27471,19 @@ document.addEventListener('click', function(e){
       <div class="hint">Username будет с суффиксом <b>_bot</b>. Другие люди ищут бота по этому имени.</div>
       <div class="sl-bots-form">
         <label>Имя</label>
-        <input id="bf-name" value="${escapeHtml(bot.name||'')}" placeholder="Помощник" />
+        <input id="bf-name" value="${escBot(bot.name||'')}" placeholder="Помощник" />
         <label>Username</label>
-        <input id="bf-user" value="${escapeHtml(bot.username||'')}" placeholder="helper_bot" />
+        <input id="bf-user" value="${escBot(bot.username||'')}" placeholder="helper_bot" />
         <label>Описание</label>
-        <input id="bf-desc" value="${escapeHtml(bot.description||'')}" placeholder="Кратко о боте" />
+        <input id="bf-desc" value="${escBot(bot.description||'')}" placeholder="Кратко о боте" />
         <label>Приветствие (при первом открытии)</label>
-        <textarea id="bf-welcome">${escapeHtml(bot.welcome||'')}</textarea>
+        <textarea id="bf-welcome">${escBot(bot.welcome||'')}</textarea>
         <label>Правила (слово → ответ). Триггер <b>*</b> = любой текст</label>
         <div id="bf-rules">
           ${rules.map((r,i)=>`
             <div class="sl-rule-row" data-i="${i}">
-              <input class="bf-trig" placeholder="слово" value="${escapeHtml(r.trigger||r.keyword||'')}" />
-              <input class="bf-reply" placeholder="ответ" value="${escapeHtml(r.reply||r.response||'')}" />
+              <input class="bf-trig" placeholder="слово" value="${escBot(r.trigger||r.keyword||'')}" />
+              <input class="bf-reply" placeholder="ответ" value="${escBot(r.reply||r.response||'')}" />
             </div>`).join('')}
         </div>
         <button type="button" class="btn ghost" id="bf-add-rule" style="background:transparent;border:1px solid var(--line);color:var(--text);margin-top:4px">＋ Правило</button>
@@ -27448,7 +27493,7 @@ document.addEventListener('click', function(e){
         </div>
       </div>
     `;
-    sheet.querySelector('#sl-bots-x').onclick = () => document.getElementById('sl-bots-modal')?.classList.remove('open');
+    const xb=sheet.querySelector('#sl-bots-x'); if(xb) xb.onclick=()=>closeBotsUI();
     sheet.querySelector('#bf-back').onclick = () => renderBotsSheet();
     sheet.querySelector('#bf-add-rule').onclick = () => {
       const wrap = sheet.querySelector('#bf-rules');
@@ -27549,9 +27594,8 @@ document.addEventListener('click', function(e){
   // Settings click
   function bindSettings(){
     const el = document.getElementById('settings-bots');
-    if(!el || el._bound) return;
-    el._bound = true;
-    el.addEventListener('click', () => openBotsModal());
+    if(!el) return;
+    el.onclick = (e) => { e.preventDefault(); e.stopPropagation(); try{ openBotsModal(); }catch(err){ console.error(err); showToast('Ошибка ботов'); } };
   }
 
   // Init
@@ -27569,7 +27613,364 @@ document.addEventListener('click', function(e){
 
   // export
   window.slOpenBots = openBotsModal;
+  window.openBotsModal = openBotsModal;
   window.slFetchBot = fetchBotByUsername;
+})();
+
+
+
+/* ========== MUSIC v2: user uploads, global library, favorite ========== */
+(function(){
+  const LIB_KEY = 'sl_songs_v2';
+  const FAV_KEY = 'sl_fav_song_v2';
+  // wipe old demo/builtin music keys
+  try{
+    ['sl_music_lib_v1','sl_music_artists_v1','sl_music_overrides','sl_fav_track'].forEach(k=>localStorage.removeItem(k));
+  }catch(e){}
+
+  function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+  function loadSongs(){
+    try{ return JSON.parse(localStorage.getItem(LIB_KEY)||'[]'); }catch(e){ return []; }
+  }
+  function saveSongs(arr){
+    try{ localStorage.setItem(LIB_KEY, JSON.stringify(arr.slice(0, 500))); }catch(e){ showToast('Не хватает места в памяти'); }
+  }
+  function getFav(){
+    try{ return JSON.parse(localStorage.getItem(FAV_KEY)||'null'); }catch(e){ return null; }
+  }
+  function setFav(song){
+    try{
+      if(song) localStorage.setItem(FAV_KEY, JSON.stringify(song));
+      else localStorage.removeItem(FAV_KEY);
+    }catch(e){}
+  }
+  function favLabel(s){
+    if(!s) return '';
+    return (s.artist ? s.artist + ' — ' : '') + (s.title || 'Трек');
+  }
+
+  async function syncSongsFromServer(){
+    if(!window.sb) return loadSongs();
+    try{
+      const { data, error } = await sb.from('songs').select('*').order('created_at', { ascending: false }).limit(300);
+      if(error) throw error;
+      if(Array.isArray(data) && data.length){
+        const mapped = data.map(r => ({
+          id: r.id,
+          title: r.title || 'Без названия',
+          artist: r.artist || 'Неизвестный',
+          album: r.album || '',
+          url: r.url,
+          cover: r.cover || null,
+          uploader_id: r.uploader_id,
+          uploader_name: r.uploader_name || '',
+          created_at: r.created_at || Date.now()
+        })).filter(x => x.url);
+        saveSongs(mapped);
+        return mapped;
+      }
+    }catch(e){ console.warn('[music] songs table', e.message||e); }
+    return loadSongs();
+  }
+
+  async function publishSong(song){
+    if(!window.sb) return false;
+    try{
+      const row = {
+        id: song.id,
+        title: song.title,
+        artist: song.artist,
+        album: song.album || '',
+        url: song.url,
+        cover: song.cover || null,
+        uploader_id: song.uploader_id,
+        uploader_name: song.uploader_name || '',
+        created_at: new Date().toISOString()
+      };
+      const { error } = await sb.from('songs').upsert(row, { onConflict: 'id' });
+      if(error){ console.warn(error.message); return false; }
+      return true;
+    }catch(e){ return false; }
+  }
+
+  async function uploadAudioFile(file){
+    // Prefer Supabase storage
+    if(typeof uploadFileToStorage === 'function'){
+      try{
+        const up = await uploadFileToStorage(file, 'music');
+        if(up && up.ok && up.url) return up.url;
+      }catch(e){ console.warn(e); }
+    }
+    // Fallback: data URL (only small files)
+    if(file.size > 4*1024*1024){
+      showToast('Файл слишком большой без Storage (макс 4 МБ)');
+      return null;
+    }
+    return await new Promise((res, rej)=>{
+      const r = new FileReader();
+      r.onload = ()=> res(r.result);
+      r.onerror = rej;
+      r.readAsDataURL(file);
+    });
+  }
+
+  let _audio = null;
+  let _currentId = null;
+
+  function stopPlay(){
+    try{ if(_audio){ _audio.pause(); _audio.src=''; } }catch(e){}
+    _audio = null; _currentId = null;
+  }
+
+  function playSong(song){
+    if(!song || !song.url){ showToast('Нет файла'); return; }
+    if(_currentId === song.id && _audio && !_audio.paused){
+      _audio.pause();
+      renderList();
+      return;
+    }
+    stopPlay();
+    _audio = new Audio(song.url);
+    _audio.playsInline = true;
+    _currentId = song.id;
+    _audio.play().catch(e=>{ showToast('Не удалось воспроизвести'); console.warn(e); });
+    _audio.onended = ()=>{ _currentId = null; renderList(); };
+    renderList();
+  }
+
+  async function setAsFavorite(song){
+    if(!song) return;
+    setFav(song);
+    const label = favLabel(song);
+    try{
+      if(typeof myProfile !== 'undefined' && myProfile){
+        myProfile.favorite_music = label;
+        if(window.sb){
+          await sb.from('profiles').update({ favorite_music: label }).eq('id', myProfile.id);
+        }
+      }
+    }catch(e){ console.warn(e); }
+    try{ localStorage.setItem('sl_my_music', label); }catch(e){}
+    showToast('Любимая песня: ' + label);
+    renderList();
+    try{ if(typeof updateAllUIs==='function') updateAllUIs(); }catch(e){}
+  }
+
+  function renderList(){
+    const box = document.getElementById('sl-mu2-list');
+    if(!box) return;
+    const q = (document.getElementById('sl-mu2-q')?.value || '').trim().toLowerCase();
+    let songs = loadSongs();
+    if(q){
+      songs = songs.filter(s =>
+        (s.title||'').toLowerCase().includes(q) ||
+        (s.artist||'').toLowerCase().includes(q) ||
+        (s.album||'').toLowerCase().includes(q)
+      );
+    }
+    const fav = getFav();
+    if(!songs.length){
+      box.innerHTML = `<div style="padding:40px 20px;text-align:center;color:var(--muted);font-size:14px;line-height:1.5">
+        Пока нет песен.<br>Нажмите <b>«Загрузить MP3»</b> — трек увидят все.
+      </div>`;
+      return;
+    }
+    box.innerHTML = songs.map(s => {
+      const isFav = fav && fav.id === s.id;
+      const playing = _currentId === s.id && _audio && !_audio.paused;
+      return `<div class="sl-mu2-row" data-id="${esc(s.id)}" style="display:flex;align-items:center;gap:12px;padding:12px;border-radius:14px;margin-bottom:8px;background:var(--panel);border:1px solid var(--line)">
+        <button type="button" class="sl-mu2-play" data-play="${esc(s.id)}" style="width:44px;height:44px;border-radius:50%;border:none;background:linear-gradient(135deg,#4C7CF3,#9b59ff);color:#fff;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:16px">${playing?'❚❚':'▶'}</button>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(s.title)}</div>
+          <div style="font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(s.artist)}${s.album?' · '+esc(s.album):''}</div>
+        </div>
+        <button type="button" data-fav="${esc(s.id)}" title="В профиль" style="border:none;background:transparent;font-size:20px;cursor:pointer;padding:6px;line-height:1">${isFav?'❤️':'🤍'}</button>
+      </div>`;
+    }).join('');
+
+    box.querySelectorAll('[data-play]').forEach(btn=>{
+      btn.onclick = ()=>{
+        const song = loadSongs().find(x => String(x.id)===String(btn.dataset.play));
+        if(song) playSong(song);
+      };
+    });
+    box.querySelectorAll('[data-fav]').forEach(btn=>{
+      btn.onclick = ()=>{
+        const song = loadSongs().find(x => String(x.id)===String(btn.dataset.fav));
+        if(song) setAsFavorite(song);
+      };
+    });
+  }
+
+  function openUploadForm(){
+    const body = document.getElementById('sl-mu2-body');
+    if(!body) return;
+    body.innerHTML = `
+      <div style="padding:16px">
+        <div style="font-size:16px;font-weight:800;margin-bottom:12px">Загрузить MP3</div>
+        <label style="font-size:12px;color:var(--muted)">Файл (mp3, m4a, ogg…)</label>
+        <input type="file" id="mu2-file" accept="audio/*,.mp3,.m4a,.ogg,.wav" style="display:block;width:100%;margin:6px 0 14px;padding:10px;border-radius:12px;border:1px solid var(--line);background:var(--input-bg);color:var(--text)">
+        <label style="font-size:12px;color:var(--muted)">Название</label>
+        <input id="mu2-title" placeholder="Название песни" style="width:100%;box-sizing:border-box;margin:6px 0 12px;padding:12px;border-radius:12px;border:1px solid var(--line);background:var(--input-bg);color:var(--text);font:inherit">
+        <label style="font-size:12px;color:var(--muted)">Исполнитель</label>
+        <input id="mu2-artist" placeholder="Исполнитель" style="width:100%;box-sizing:border-box;margin:6px 0 12px;padding:12px;border-radius:12px;border:1px solid var(--line);background:var(--input-bg);color:var(--text);font:inherit">
+        <label style="font-size:12px;color:var(--muted)">Альбом (необязательно)</label>
+        <input id="mu2-album" placeholder="Альбом" style="width:100%;box-sizing:border-box;margin:6px 0 16px;padding:12px;border-radius:12px;border:1px solid var(--line);background:var(--input-bg);color:var(--text);font:inherit">
+        <div id="mu2-err" style="color:#e5484d;font-size:13px;min-height:18px;margin-bottom:8px"></div>
+        <button type="button" id="mu2-save" style="width:100%;padding:14px;border:none;border-radius:14px;background:linear-gradient(135deg,#4C7CF3,#6D5DF6);color:#fff;font-weight:700;font-size:15px;cursor:pointer">Опубликовать</button>
+        <button type="button" id="mu2-cancel" style="width:100%;margin-top:10px;padding:12px;border-radius:14px;border:1px solid var(--line);background:transparent;color:var(--text);font-weight:600;cursor:pointer">Отмена</button>
+      </div>`;
+    const fileInp = body.querySelector('#mu2-file');
+    fileInp.onchange = ()=>{
+      const f = fileInp.files && fileInp.files[0];
+      if(!f) return;
+      const base = f.name.replace(/\.(mp3|m4a|ogg|wav|aac)$/i,'');
+      const title = body.querySelector('#mu2-title');
+      if(title && !title.value) title.value = base;
+    };
+    body.querySelector('#mu2-cancel').onclick = ()=> openMusicHome();
+    body.querySelector('#mu2-save').onclick = async ()=>{
+      const f = fileInp.files && fileInp.files[0];
+      const err = body.querySelector('#mu2-err');
+      const title = body.querySelector('#mu2-title').value.trim();
+      const artist = body.querySelector('#mu2-artist').value.trim();
+      const album = body.querySelector('#mu2-album').value.trim();
+      if(!f){ err.textContent = 'Выберите файл'; return; }
+      if(!title){ err.textContent = 'Укажите название'; return; }
+      if(!artist){ err.textContent = 'Укажите исполнителя'; return; }
+      if(f.size > 20*1024*1024){ err.textContent = 'Максимум 20 МБ'; return; }
+      err.textContent = 'Загрузка…';
+      const btn = body.querySelector('#mu2-save');
+      btn.disabled = true;
+      try{
+        const url = await uploadAudioFile(f);
+        if(!url){ err.textContent = 'Не удалось загрузить файл'; btn.disabled=false; return; }
+        const song = {
+          id: 'song_'+Date.now()+'_'+Math.random().toString(36).slice(2,7),
+          title, artist, album, url,
+          uploader_id: (typeof myProfile!=='undefined' && myProfile?.id) || null,
+          uploader_name: (typeof myProfile!=='undefined' && (myProfile.username||myProfile.first_name)) || '',
+          created_at: Date.now()
+        };
+        const list = loadSongs();
+        list.unshift(song);
+        saveSongs(list);
+        const ok = await publishSong(song);
+        // broadcast
+        try{
+          if(window.sb){
+            const ch = sb.channel('music-public');
+            ch.subscribe(st=>{
+              if(st==='SUBSCRIBED'){
+                ch.send({type:'broadcast', event:'song_add', payload: song});
+                setTimeout(()=>sb.removeChannel(ch), 1200);
+              }
+            });
+          }
+        }catch(e){}
+        showToast(ok ? 'Песня опубликована' : 'Сохранено локально (нужна таблица songs)');
+        openMusicHome();
+      }catch(e){
+        console.error(e);
+        err.textContent = 'Ошибка загрузки';
+        btn.disabled = false;
+      }
+    };
+  }
+
+  function openMusicHome(){
+    const body = document.getElementById('sl-mu2-body');
+    if(!body) return;
+    body.innerHTML = `
+      <div style="padding:12px 16px 8px;display:flex;gap:8px;align-items:center">
+        <input id="sl-mu2-q" placeholder="Поиск по названию или исполнителю" style="flex:1;padding:12px 14px;border-radius:12px;border:1px solid var(--line);background:var(--input-bg);color:var(--text);font:inherit">
+      </div>
+      <div style="padding:0 16px 10px;display:flex;gap:8px">
+        <button type="button" id="sl-mu2-upload" style="flex:1;padding:12px;border:none;border-radius:12px;background:linear-gradient(135deg,#4C7CF3,#6D5DF6);color:#fff;font-weight:700;cursor:pointer">＋ Загрузить MP3</button>
+        <button type="button" id="sl-mu2-refresh" style="padding:12px 14px;border-radius:12px;border:1px solid var(--line);background:transparent;color:var(--text);font-weight:600;cursor:pointer">↻</button>
+      </div>
+      <div id="sl-mu2-list" style="padding:0 12px 24px;overflow-y:auto;flex:1"></div>`;
+    body.querySelector('#sl-mu2-upload').onclick = ()=> openUploadForm();
+    body.querySelector('#sl-mu2-refresh').onclick = async ()=>{
+      showToast('Обновление…');
+      await syncSongsFromServer();
+      renderList();
+    };
+    body.querySelector('#sl-mu2-q').oninput = ()=> renderList();
+    renderList();
+  }
+
+  function openMusicSettings(){
+    try{ document.getElementById('sl-mu2-page')?.remove(); }catch(e){}
+    stopPlay();
+    const page = document.createElement('div');
+    page.className = 'sl-sheet';
+    page.id = 'sl-mu2-page';
+    page.style.cssText = 'z-index:20000;display:flex;flex-direction:column;';
+    page.innerHTML = `
+      <div class="sl-sheet-hdr">
+        <button type="button" class="sl-sheet-back" id="sl-mu2-back">‹</button>
+        <h2>Музыка</h2>
+        <span style="width:40px"></span>
+      </div>
+      <div id="sl-mu2-body" style="flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden"></div>`;
+    document.body.appendChild(page);
+    page.querySelector('#sl-mu2-back').onclick = ()=>{ stopPlay(); page.remove(); };
+    openMusicHome();
+    syncSongsFromServer().then(()=> renderList());
+  }
+
+  // Override any old music openers
+  window.openMusicSettings = openMusicSettings;
+  window.slOpenMusic = openMusicSettings;
+
+  function ensureMusicItem(){
+    let row = document.getElementById('settings-music');
+    if(!row){
+      const host = document.getElementById('settings-wallpaper')?.parentNode
+        || document.getElementById('settings-posts')?.parentNode
+        || document.querySelector('#page-settings .settings-section');
+      if(!host) return;
+      row = document.createElement('div');
+      row.className = 'settings-item';
+      row.id = 'settings-music';
+      row.innerHTML = `<svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+        <span class="item-text">Музыка</span>`;
+      host.appendChild(row);
+    }
+    row.onclick = (e)=>{ e.preventDefault(); e.stopPropagation(); openMusicSettings(); };
+  }
+  setTimeout(ensureMusicItem, 600);
+  setTimeout(ensureMusicItem, 2000);
+  setTimeout(ensureMusicItem, 4000);
+
+  // Listen for new songs
+  try{
+    if(window.sb){
+      const ch = sb.channel('music-public');
+      ch.on('broadcast', { event: 'song_add' }, ({ payload })=>{
+        if(!payload || !payload.id || !payload.url) return;
+        const list = loadSongs();
+        if(list.some(x=>x.id===payload.id)) return;
+        list.unshift(payload);
+        saveSongs(list);
+      });
+      ch.subscribe();
+    }
+  }catch(e){}
+
+  // Keep slGetMusic working for profile
+  const _prevGet = window.slGetMusic;
+  window.slGetMusic = function(p){
+    if(p && p.favorite_music) return p.favorite_music;
+    if(p && typeof myProfile!=='undefined' && p.id===myProfile?.id){
+      const f = getFav();
+      if(f) return favLabel(f);
+    }
+    if(typeof _prevGet==='function') return _prevGet(p);
+    return '';
+  };
 })();
 
 </script>
