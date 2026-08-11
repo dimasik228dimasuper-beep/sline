@@ -11242,14 +11242,23 @@ let callChannel=null, myCallSignalChannel=null, pc=null, localStream=null;
 let currentCall=null; // {peerId, peerName, peerColor, video, state}
 function initCallSystem(){
   if(!myProfile) return;
-  if(myCallSignalChannel) sb.removeChannel(myCallSignalChannel);
-  myCallSignalChannel=sb.channel('call-'+myProfile.id)
-    .on('broadcast',{event:'offer'}, ({payload})=>handleIncomingOffer(payload))
-    .on('broadcast',{event:'answer'}, ({payload})=>handleAnswer(payload))
+  if(myCallSignalChannel){
+    try{ sb.removeChannel(myCallSignalChannel); }catch(e){}
+    myCallSignalChannel=null;
+  }
+  const topic = 'call-'+myProfile.id;
+  myCallSignalChannel=sb.channel(topic, { config: { broadcast: { ack: false, self: false } } })
+    .on('broadcast',{event:'offer'}, ({payload})=>{
+      console.info('[call] got offer from', payload && payload.from);
+      handleIncomingOffer(payload);
+    })
+    .on('broadcast',{event:'answer'}, ({payload})=>{
+      console.info('[call] got answer from', payload && payload.from);
+      handleAnswer(payload);
+    })
     .on('broadcast',{event:'ice'}, ({payload})=>handleRemoteIce(payload))
     .on('broadcast',{event:'hangup'}, ({payload})=>{
       try{
-        // CRITICAL: empty hangup {} used to always kill the caller UI
         if(!currentCall && !pendingOffer) return;
         const from = payload && payload.from;
         if(!from){
@@ -11261,7 +11270,6 @@ function initCallSystem(){
           console.warn('[call] ignore hangup from other peer', from);
           return;
         }
-        // During first seconds after answer, ignore remote hangup (race)
         if(window._slCallProtectUntil && Date.now() < window._slCallProtectUntil){
           console.warn('[call] ignore hangup during protect window');
           return;
@@ -11269,8 +11277,27 @@ function initCallSystem(){
       }catch(e){}
       endCall(false);
     })
-    .subscribe();
+    .subscribe((status)=>{
+      console.info('[call] signal channel', topic, status);
+      if(status==='CHANNEL_ERROR' || status==='TIMED_OUT' || status==='CLOSED'){
+        setTimeout(function(){ try{ initCallSystem(); }catch(e){} }, 2000);
+      }
+    });
   setupReactionsChannel();
+  // periodic soft re-init if channel died
+  if(!window._slCallChanWatch){
+    window._slCallChanWatch = setInterval(function(){
+      try{
+        if(!myProfile) return;
+        if(!myCallSignalChannel){ initCallSystem(); return; }
+        const st = myCallSignalChannel.state;
+        if(st && st !== 'joined' && st !== 'joining' && st !== 'subscribed'){
+          console.warn('[call] channel bad state', st, '— reinit');
+          initCallSystem();
+        }
+      }catch(e){}
+    }, 8000);
+  }
 }
 // Persistent outgoing signal channels during a call (ICE candidates need durable path)
 const _callOutChannels = new Map();
@@ -11284,21 +11311,45 @@ function getCallOutChannel(toId){
   return _callOutChannels.get(toId);
 }
 async function sendSignal(toId, event, payload){
+  const body = {type:'broadcast', event, payload};
+  let sent = false;
+  // primary: durable out channel
   try{
     const entry = getCallOutChannel(toId);
-    const ch = await entry.ready;
-    await ch.send({type:'broadcast', event, payload});
-  }catch(e){
-    // fallback one-shot
+    const ch = await Promise.race([
+      entry.ready,
+      new Promise((_,rej)=>setTimeout(()=>rej(new Error('signal timeout')), 4000))
+    ]);
+    await ch.send(body);
+    sent = true;
+  }catch(e){ console.warn('[call] signal primary', event, e); }
+  // always also one-shot fallback (helps when primary channel is stale)
+  try{
+    const ch=sb.channel('call-'+toId);
+    // if already subscribed via getCallOutChannel, send again
+    await ch.send(body);
+    sent = true;
+  }catch(e){}
+  if(!sent){
     try{
       const ch=sb.channel('call-'+toId+'-'+Date.now());
-      ch.subscribe(status=>{
-        if(status==='SUBSCRIBED'){
-          ch.send({type:'broadcast',event,payload});
-          setTimeout(()=>{ try{ sb.removeChannel(ch); }catch(e){} }, 3000);
-        }
+      await new Promise((resolve)=>{
+        ch.subscribe(status=>{
+          if(status==='SUBSCRIBED'){
+            ch.send(body).finally(()=>{
+              setTimeout(()=>{ try{ sb.removeChannel(ch); }catch(e){} }, 2500);
+              resolve();
+            });
+          }
+        });
+        setTimeout(resolve, 3500);
       });
-    }catch(err){ console.warn('signal fail', err); }
+    }catch(err){ console.warn('[call] signal fail', event, err); }
+  }
+  // answer: retransmit 2 times (caller often misses first broadcast)
+  if(event === 'answer' || event === 'offer'){
+    setTimeout(function(){ try{ getCallOutChannel(toId).ch.send(body); }catch(e){} }, 400);
+    setTimeout(function(){ try{ getCallOutChannel(toId).ch.send(body); }catch(e){} }, 1200);
   }
 }
 function cleanupCallChannels(){
@@ -11648,6 +11699,8 @@ async function handleAnswer(payload){
     try{ window._slIgnoreHangupBriefly && window._slIgnoreHangupBriefly(8000); }catch(e){}
     const st=document.getElementById('call-status-text');
     if(st) st.textContent='Соединение...';
+    try{ showCallUI(); renderCallActions(); }catch(e){}
+    console.info('[call] answer applied, signalingState=', pc && pc.signalingState);
     // Force overlay stay visible (caller side)
     try{
       const ov=document.getElementById('call-overlay');
@@ -11697,21 +11750,35 @@ function setupLocalVideo(){
 }
 function showCallUI(){
   const ov=document.getElementById('call-overlay');
-  if(ov){ ov.classList.add('show'); ov.style.display='flex'; ov.style.zIndex='100000'; }
+  if(ov){
+    ov.classList.add('show');
+    ov.style.display='flex';
+    ov.style.zIndex='100000';
+    ov.style.visibility='visible';
+    ov.style.opacity='1';
+  }
   try{ wireCallButtonsOnce(); }catch(e){}
-  // force hangup visible for non-incoming
   try{
     const hang=document.getElementById('cc-hangup');
     if(hang && currentCall && currentCall.state!=='incoming'){
       hang.style.display='flex';
-      hang.style.zIndex='100001';
-      hang.onclick=function(e){ e&&e.preventDefault(); window.slHangup(); };
+      hang.style.zIndex='100003';
+      hang.style.visibility='visible';
+      hang.style.pointerEvents='auto';
+      hang.onclick=function(e){ e&&e.preventDefault(); window._slUserHangup=true; window._slCallProtectUntil=0; window.slHangup&&window.slHangup(); };
     }
-    const fab=document.getElementById('cc-hangup-fab');
-    if(fab){
-      // Only FAB on tiny screens if main hangup missing; avoid double red X
-      fab.style.display = 'none';
-      fab.onclick=function(e){ e&&e.preventDefault(); e&&e.stopPropagation(); window.slHangup&&window.slHangup(); };
+    // Always show FAB during outgoing/active as safety net
+    let fab=document.getElementById('cc-hangup-fab');
+    if(!fab){
+      fab=document.createElement('button');
+      fab.type='button'; fab.id='cc-hangup-fab'; fab.textContent='✕';
+      document.body.appendChild(fab);
+    }
+    if(currentCall && currentCall.state!=='incoming'){
+      fab.style.cssText='display:flex!important;position:fixed!important;bottom:calc(36px + env(safe-area-inset-bottom,0px));left:50%;transform:translateX(-50%);z-index:100010!important;width:72px;height:72px;border-radius:50%;border:none;background:#e5484d;color:#fff;box-shadow:0 8px 28px rgba(0,0,0,.45);cursor:pointer;align-items:center;justify-content:center;font-size:28px;line-height:1;pointer-events:auto!important;visibility:visible!important;opacity:1!important;';
+      fab.onclick=function(e){ e&&e.preventDefault(); e&&e.stopPropagation(); window._slUserHangup=true; window._slCallProtectUntil=0; window.slHangup&&window.slHangup(); };
+    } else if(fab){
+      fab.style.display='none';
     }
   }catch(e){}
   const av=document.getElementById('call-avatar-big');
@@ -11806,40 +11873,52 @@ wireCallButtonsOnce();
 if(!window._slCallUiKeepAlive){
   window._slCallUiKeepAlive = setInterval(function(){
     try{
-      if(!currentCall) return;
+      if(!currentCall){
+        const fab0 = document.getElementById('cc-hangup-fab');
+        if(fab0) fab0.style.display = 'none';
+        return;
+      }
       const ov = document.getElementById('call-overlay');
       if(ov){
         ov.classList.add('show');
-        ov.style.display = 'flex';
-        ov.style.visibility = 'visible';
-        ov.style.opacity = '1';
-        ov.style.zIndex = '100000';
+        ov.style.cssText = (ov.style.cssText||'') + ';display:flex!important;visibility:visible!important;opacity:1!important;z-index:100000!important;pointer-events:auto!important';
       }
       if(currentCall.state !== 'incoming'){
-        const hang = document.getElementById('cc-hangup');
-        if(hang){
-          hang.style.display = 'flex';
-          hang.style.visibility = 'visible';
-          hang.style.opacity = '1';
-          hang.style.zIndex = '100003';
-          hang.style.pointerEvents = 'auto';
-        }
         const bar = document.getElementById('call-actions');
         if(bar){
-          bar.style.display = 'flex';
-          bar.style.visibility = 'visible';
-          bar.style.zIndex = '100002';
+          bar.style.cssText = 'display:flex!important;gap:22px;align-items:center;justify-content:center;z-index:100002!important;position:fixed!important;left:0;right:0;bottom:calc(28px + env(safe-area-inset-bottom,0px));pointer-events:auto!important;padding:0 16px;visibility:visible!important;opacity:1!important';
         }
-        const scr = document.getElementById('cc-screen');
-        if(scr){ scr.style.display = 'flex'; scr.style.zIndex = '100003'; }
-        // status safety
-        const st = document.getElementById('call-status-text');
-        if(st && currentCall.state === 'calling' && (!st.textContent || st.textContent === 'Соединение...')){
-          // only force if stuck on connecting too long without offer sent - leave Вызов alone
+        ['cc-hangup','cc-screen','cc-mute'].forEach(function(id){
+          const el = document.getElementById(id);
+          if(!el) return;
+          if(id === 'cc-mute' && currentCall.state !== 'active'){
+            el.style.display = 'none';
+            return;
+          }
+          el.style.display = 'flex';
+          el.style.visibility = 'visible';
+          el.style.opacity = '1';
+          el.style.zIndex = '100003';
+          el.style.pointerEvents = 'auto';
+        });
+        // ALWAYS show red FAB hangup as ultimate fallback
+        let fab = document.getElementById('cc-hangup-fab');
+        if(!fab){
+          fab = document.createElement('button');
+          fab.type = 'button';
+          fab.id = 'cc-hangup-fab';
+          fab.setAttribute('aria-label','Hang up');
+          fab.textContent = '✕';
+          fab.onclick = function(e){ e&&e.preventDefault(); e&&e.stopPropagation(); window._slUserHangup=true; window._slCallProtectUntil=0; try{window.slHangup&&window.slHangup();}catch(err){} };
+          document.body.appendChild(fab);
         }
+        fab.style.cssText = 'display:flex!important;position:fixed!important;bottom:calc(36px + env(safe-area-inset-bottom,0px));left:50%;transform:translateX(-50%);z-index:100010!important;width:72px;height:72px;border-radius:50%;border:none;background:#e5484d;color:#fff;box-shadow:0 8px 28px rgba(0,0,0,.45);cursor:pointer;align-items:center;justify-content:center;font-size:28px;line-height:1;pointer-events:auto!important;visibility:visible!important;opacity:1!important;';
+      } else {
+        const fab = document.getElementById('cc-hangup-fab');
+        if(fab) fab.style.display = 'none';
       }
     }catch(e){}
-  }, 800);
+  }, 500);
 }
 
 // Extra safety: hangup via event delegation on overlay
