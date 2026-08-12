@@ -4516,7 +4516,8 @@ function paintMessages(rows, isGroup){
 
 async function loadMessages(){
   // generation token — discard stale responses
-  const _gen = ++(window._slChatGen = (window._slChatGen||0));
+  window._slChatGen = (window._slChatGen||0) + 1;
+  const _gen = window._slChatGen;
   const partnerSnap = activePartner;
   const groupSnap = activeGroup;
   const cacheKey = chatCacheKey(partnerSnap, null);
@@ -4578,7 +4579,8 @@ async function loadMessages(){
   }catch(e){ console.warn('loadMessages', e); }
 }
 async function loadGroupMessages(){
-  const _gen = ++(window._slChatGen = (window._slChatGen||0));
+  window._slChatGen = (window._slChatGen||0) + 1;
+  const _gen = window._slChatGen;
   const groupSnap = activeGroup;
   const list=document.getElementById('messages-list');
   const isNews = groupSnap && typeof isNewsChannel==='function' && isNewsChannel(groupSnap);
@@ -5678,7 +5680,7 @@ sendBtn.onclick=(e)=>{
 input.addEventListener('keydown', e=>{ if(e.key==='Enter'&&!e.shiftKey){ if(typeof betaOn==='function'&&!betaOn('enterSend')) return; e.preventDefault(); sendMessage(); } });
 input.addEventListener('input', ()=>{ if(typeof saveDraft==='function') saveDraft(); });
 
-async async function flushOfflineQueue(){
+async function flushOfflineQueue(){
   const q=getOfflineQ(); if(!q.length||!navigator.onLine) return;
   const left=[];
   for(const p of q){
@@ -27510,7 +27512,7 @@ document.addEventListener('click', function(e){
   try{ window.slOpenThemePicker(); }catch(err){}
 }, true);
 </script>
-<script src="calls.js" defer>
+<script>
 
 /* ========== USER BOTS: create / discover / auto-reply ========== */
 (function(){
@@ -28606,7 +28608,7 @@ document.addEventListener('click', function(e){
 
   // Hash listener (works without login too)
   function checkAiHash(){
-    if(/#\\/?ai-chat\\b/i.test(location.hash)){
+    if(/#\/?ai-chat\b/i.test(location.hash)){
       try{ window.slOpenAiChat(); }catch(e){}
     }
   }
