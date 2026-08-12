@@ -439,13 +439,23 @@ body.beta-oled .sw-clip{background:var(--panel)!important}
 
 .sl-create-avatar .cam-ico{display:block;pointer-events:none}
 
-.sl-info-actions{display:flex;gap:10px;padding:12px 16px;justify-content:center}
-.sl-info-chip{flex:1;max-width:88px;min-height:64px;padding:10px 6px;border:none;border-radius:16px;background:rgba(255,255,255,.08);color:var(--text);font-size:12px;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px}
-.sl-info-chip span{line-height:1.1}
+.sl-info-actions{display:flex;gap:8px;padding:8px 16px 14px;justify-content:center;flex-wrap:nowrap}
+.sl-info-chip{flex:1;max-width:76px;min-height:70px;padding:12px 4px 10px;border:none;border-radius:18px;background:rgba(255,255,255,.08);color:var(--text);font-size:11px;font-weight:500;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px}
+.sl-info-chip svg{color:#5B9CFF;stroke:#5B9CFF}
+.sl-info-chip span{line-height:1.1;color:var(--text)}
 .sl-info-chip:active{transform:scale(.96);background:rgba(255,255,255,.12)}
-.sl-info-block{margin:10px 16px;padding:14px;border-radius:14px;background:var(--panel);border:1px solid var(--line)}
-.sl-info-label{font-size:12px;color:var(--muted);margin-bottom:4px}
+.sl-info-block{margin:8px 16px;padding:14px 16px;border-radius:16px;background:rgba(255,255,255,.06);border:none}
+.sl-info-label{font-size:13px;color:var(--muted);margin-bottom:4px;font-weight:400}
+.sl-info-value{font-size:16px;color:#5B9CFF;font-weight:400;word-break:break-all}
+.sl-info-divider{height:1px;background:rgba(255,255,255,.08);margin:12px 0}
 .sl-info-row{display:flex;align-items:center;gap:12px}
+.sl-info-qr{width:36px;height:36px;border-radius:10px;border:none;background:transparent;color:#5B9CFF;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;padding:0}
+.sl-info-tabs{display:flex;gap:0;padding:8px 16px 0;border-bottom:1px solid rgba(255,255,255,.08);margin:4px 0 0;overflow-x:auto;-webkit-overflow-scrolling:touch}
+.sl-info-tab{flex:0 0 auto;padding:10px 16px;border:none;background:transparent;color:var(--muted);font-size:15px;font-weight:600;cursor:pointer;position:relative;white-space:nowrap}
+.sl-info-tab.active{color:var(--text)}
+.sl-info-tab.active::after{content:'';position:absolute;left:12px;right:12px;bottom:0;height:2px;border-radius:2px 2px 0 0;background:#5B9CFF}
+.sl-media-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:2px;padding:2px 0 24px}
+.sl-media-grid img,.sl-media-grid video,.sl-media-cell{width:100%;aspect-ratio:1;object-fit:cover;background:rgba(255,255,255,.04);display:block}
 .sl-info-ico{display:flex;align-items:center;justify-content:center;opacity:.85}
 .sl-icon-btn{border:none;background:transparent;color:var(--text);cursor:pointer;padding:8px;display:inline-flex;align-items:center;justify-content:center}
 
@@ -8081,10 +8091,12 @@ window.openChannelProfile = async function(group){
   }
   const ico = {
     sound: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 00-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>',
-    search: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>',
+    chat: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a4 4 0 01-4 4H8l-5 3V7a4 4 0 014-4h10a4 4 0 014 4z"/></svg>',
+    leave: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>',
     more: '<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><circle cx="6" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="18" cy="12" r="1.6"/></svg>',
     attach: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>',
-    share: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v7a1 1 0 001 1h14a1 1 0 001-1v-7"/><path d="M12 3v12"/><path d="M7 8l5-5 5 5"/></svg>'
+    share: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v7a1 1 0 001 1h14a1 1 0 001-1v-7"/><path d="M12 3v12"/><path d="M7 8l5-5 5 5"/></svg>',
+    qr: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3z"/><path d="M14 14h4v4h-4zM20 14v4M14 20h4"/></svg>'
   };
   const prev=document.getElementById('sl-channel-profile'); if(prev) prev.remove();
   const sheet=document.createElement('div');
@@ -8108,30 +8120,26 @@ window.openChannelProfile = async function(group){
         <div style="color:var(--muted);font-size:14px;margin-top:4px">${group.type==='channel'?(memberCount?subLabel(memberCount):((group.is_public||group.username)?'публичный канал':'приватный канал')):(memberCount?(memberCount+' участник'+(memberCount===1?'':'ов')):'группа')}</div>
       </div>
       <div class="sl-info-actions">
-        <button type="button" class="sl-info-chip" id="cp-sound">${ico.sound}<span>Звук</span></button>
-        <button type="button" class="sl-info-chip" id="cp-search">${ico.search}<span>Найти</span></button>
-        <button type="button" class="sl-info-chip" id="cp-more">${ico.more}<span>Ещё</span></button>
+        <button type="button" class="sl-info-chip" id="cp-sound">${ico.sound}<span>звук</span></button>
+        <button type="button" class="sl-info-chip" id="cp-chat">${ico.chat}<span>чат</span></button>
+        ${isMember?`<button type="button" class="sl-info-chip" id="cp-leave">${ico.leave}<span>покинуть</span></button>`:`<button type="button" class="sl-info-chip" id="cp-sub-chip">${ico.chat}<span>вступить</span></button>`}
+        <button type="button" class="sl-info-chip" id="cp-more">${ico.more}<span>ещё</span></button>
       </div>
-      ${!isMember?`<div style="padding:8px 16px"><button type="button" id="cp-sub" class="btn-primary" style="width:100%;padding:14px;border-radius:14px;border:none;font-size:16px;font-weight:700;cursor:pointer">Подписаться</button></div>`:''}
+      ${!isMember?`<div style="padding:4px 16px 8px"><button type="button" id="cp-sub" class="btn-primary" style="width:100%;padding:14px;border-radius:14px;border:none;font-size:16px;font-weight:700;cursor:pointer">Подписаться</button></div>`:''}
       <div class="sl-info-block">
-        <div class="sl-info-label">Ссылка</div>
+        <div class="sl-info-label">ссылка</div>
         <div style="display:flex;align-items:center;gap:8px">
-          <div style="flex:1;color:var(--accent-a,#4C7CF3);font-size:14px;word-break:break-all" id="cp-link">${esc(link)}</div>
-          <button type="button" id="cp-share" class="sl-icon-btn" title="Поделиться">${ico.share}</button>
+          <div style="flex:1;min-width:0" class="sl-info-value" id="cp-link">${esc(link)}</div>
+          <button type="button" class="sl-info-qr" id="cp-share" title="QR / копировать">${ico.qr||ico.share}</button>
         </div>
+        ${group.description?`<div class="sl-info-divider"></div><div class="sl-info-label">описание</div><div style="font-size:15px;line-height:1.4;color:var(--text)">${esc(group.description)}</div>`:''}
       </div>
-      ${group.description?`<div class="sl-info-block">
-        <div class="sl-info-label">Описание</div>
-        <div style="font-size:14px;line-height:1.4">${esc(group.description)}</div>
-      </div>`:''}
-      <div class="sl-info-block sl-info-row" id="cp-media" style="cursor:pointer">
-        <span class="sl-info-ico">${ico.attach}</span>
-        <div style="flex:1">
-          <div style="font-weight:600;font-size:15px">Вложения</div>
-          <div style="font-size:12px;color:var(--muted)">Фото, видео, файлы и ссылки</div>
-        </div>
-        <span style="color:var(--muted);font-size:18px">›</span>
+      <div class="sl-info-tabs" id="cp-tabs">
+        <button type="button" class="sl-info-tab active" data-tab="media">Медиа</button>
+        <button type="button" class="sl-info-tab" data-tab="links">Ссылки</button>
       </div>
+      <div id="cp-tab-media"><div class="sl-media-grid" id="cp-media-grid"></div></div>
+      <div id="cp-tab-links" style="display:none;padding:12px 16px;color:var(--muted);font-size:14px"></div>
       ${isAdmin?`<div style="margin:16px;display:flex;flex-direction:column;gap:8px">
         <button type="button" id="cp-edit" class="btn-secondary" style="width:100%">Редактировать канал</button>
       </div>`:''}
@@ -8180,9 +8188,22 @@ window.openChannelProfile = async function(group){
     else { q.push(group.id); showToast('Канал без звука'); }
     localStorage.setItem(key, JSON.stringify(q));
   });
-  sheet.querySelector('#cp-search')?.addEventListener('click',()=>{
+  sheet.querySelector('#cp-chat')?.addEventListener('click',()=>{
     close();
-    try{ document.getElementById('chat-search-btn')?.click(); }catch(e){}
+    if(typeof openGroup==='function') openGroup(group);
+  });
+  sheet.querySelector('#cp-leave')?.addEventListener('click', async()=>{
+    if(!confirm('Покинуть канал?')) return;
+    try{
+      await sb.from('group_members').delete().eq('group_id',group.id).eq('user_id',myProfile.id);
+      showToast('Вы покинули канал');
+      close();
+      try{ if(typeof loadGroups==='function') loadGroups(); }catch(e){}
+      try{ if(typeof switchPage==='function') switchPage('chats'); }catch(e){}
+    }catch(e){ showToast('Не удалось выйти'); }
+  });
+  sheet.querySelector('#cp-sub-chip')?.addEventListener('click',()=>{
+    sheet.querySelector('#cp-sub')?.click();
   });
   sheet.querySelector('#cp-more')?.addEventListener('click',()=>{
     const ov=document.createElement('div'); ov.className='modal-overlay';
@@ -8194,12 +8215,72 @@ window.openChannelProfile = async function(group){
     document.body.appendChild(ov);
     ov.querySelector('#cm-cancel').onclick=()=>ov.remove();
     ov.querySelector('#cm-copy').onclick=async()=>{ try{await navigator.clipboard.writeText(link); showToast('Ссылка скопирована');}catch(e){} ov.remove(); };
-    ov.querySelector('#cm-admin')?.addEventListener('click',()=>{ ov.remove(); close(); /* open admin via group settings fallback */ showToast('Настройки админа'); });
+    ov.querySelector('#cm-admin')?.addEventListener('click',()=>{ ov.remove(); close(); showToast('Настройки админа'); });
   });
-  sheet.querySelector('#cp-media')?.addEventListener('click',()=>{
-    close();
-    try{ document.getElementById('media-btn')?.click(); }catch(e){}
+  // tabs + media grid
+  async function loadCpMedia(){
+    const grid = sheet.querySelector('#cp-media-grid');
+    if(!grid || grid.dataset.loaded) return;
+    grid.dataset.loaded='1';
+    grid.innerHTML='<div style="grid-column:1/-1;padding:16px;text-align:center;color:var(--muted);font-size:13px">Загрузка…</div>';
+    try{
+      const {data}=await sb.from('group_messages').select('id,content,type,file_url,created_at').eq('group_id',group.id).in('type',['image','photo','video']).order('created_at',{ascending:false}).limit(60);
+      let rows=(data||[]).filter(m=>m.file_url||(m.content&&String(m.content).startsWith('http')));
+      if(!rows.length){
+        // fallback: messages table
+        try{
+          const r2=await sb.from('messages').select('id,content,type,file_url,created_at').eq('group_id',group.id).in('type',['image','photo','video']).order('created_at',{ascending:false}).limit(60);
+          rows=(r2.data||[]).filter(m=>m.file_url||(m.content&&String(m.content).startsWith('http')));
+        }catch(e2){}
+      }
+      if(!rows.length){ grid.innerHTML='<div style="grid-column:1/-1;padding:24px;text-align:center;color:var(--muted);font-size:14px">Нет медиа</div>'; return; }
+      grid.innerHTML=rows.map(m=>{
+        const url=m.file_url||m.content;
+        const isVid=(m.type==='video')||/\.mp4|webm/i.test(url||'');
+        return isVid?`<video class="sl-media-cell" src="${String(url).replace(/"/g,'&quot;')}" muted playsinline></video>`:`<img class="sl-media-cell" src="${String(url).replace(/"/g,'&quot;')}" alt="" loading="lazy">`;
+      }).join('');
+    }catch(e){ grid.innerHTML='<div style="grid-column:1/-1;padding:16px;text-align:center;color:var(--muted)">Не удалось загрузить</div>'; }
+  }
+  async function loadCpLinks(){
+    const pane = sheet.querySelector('#cp-tab-links');
+    if(!pane || pane.dataset.loaded) return;
+    pane.dataset.loaded='1';
+    pane.innerHTML='<div style="text-align:center;color:var(--muted)">Загрузка…</div>';
+    try{
+      let rows=[];
+      try{
+        const {data}=await sb.from('group_messages').select('id,content,created_at').eq('group_id',group.id).order('created_at',{ascending:false}).limit(100);
+        rows=data||[];
+      }catch(e){
+        const r2=await sb.from('messages').select('id,content,created_at').eq('group_id',group.id).order('created_at',{ascending:false}).limit(100);
+        rows=r2.data||[];
+      }
+      const links=[];
+      const re=/https?:\/\/[^\s<]+/gi;
+      rows.forEach(m=>{
+        const t=String(m.content||'');
+        const found=t.match(re);
+        if(found) found.forEach(u=>links.push(u));
+      });
+      if(!links.length){ pane.innerHTML='<div style="text-align:center;color:var(--muted);padding:12px">Нет ссылок</div>'; return; }
+      const uniq=[...new Set(links)].slice(0,40);
+      pane.innerHTML=uniq.map(u=>`<a href="${u.replace(/"/g,'&quot;')}" target="_blank" rel="noopener" style="display:block;padding:10px 0;color:#5B9CFF;font-size:14px;word-break:break-all;border-bottom:1px solid rgba(255,255,255,.06)">${u.replace(/</g,'&lt;')}</a>`).join('');
+    }catch(e){ pane.innerHTML='<div style="text-align:center;color:var(--muted)">Не удалось загрузить</div>'; }
+  }
+  sheet.querySelectorAll('#cp-tabs .sl-info-tab').forEach(tab=>{
+    tab.onclick=()=>{
+      sheet.querySelectorAll('#cp-tabs .sl-info-tab').forEach(t=>t.classList.remove('active'));
+      tab.classList.add('active');
+      const id=tab.dataset.tab;
+      const media=sheet.querySelector('#cp-tab-media');
+      const links=sheet.querySelector('#cp-tab-links');
+      if(media) media.style.display = id==='media'?'':'none';
+      if(links) links.style.display = id==='links'?'':'none';
+      if(id==='media') loadCpMedia();
+      if(id==='links') loadCpLinks();
+    };
   });
+  loadCpMedia();
   sheet.querySelector('#cp-sub')?.addEventListener('click', async()=>{
     try{
       await sb.from('group_members').insert({group_id:group.id, user_id:myProfile.id, role:'member'});
@@ -13273,6 +13354,8 @@ async function openFullProfile(profileLike){
     video: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>',
     sound: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 00-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>',
     more: '<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><circle cx="6" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="18" cy="12" r="1.6"/></svg>',
+    search: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>',
+    qr: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3z"/><path d="M14 14h4v4h-4zM20 14v4M14 20h4"/></svg>',
     attach: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>',
     edit: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>'
   };
@@ -13301,23 +13384,38 @@ async function openFullProfile(profileLike){
       </div>
       <div style="padding:0 0 0">
       ${!isMe?`<div class="sl-info-actions">
-        <button type="button" class="sl-info-chip" data-a="call">${ico.call}<span>Звонок</span></button>
-        <button type="button" class="sl-info-chip" data-a="video">${ico.video}<span>Видео</span></button>
-        <button type="button" class="sl-info-chip" data-a="mute">${ico.sound}<span>Звук</span></button>
-        <button type="button" class="sl-info-chip" data-a="more">${ico.more}<span>Ещё</span></button>
+        <button type="button" class="sl-info-chip" data-a="call">${ico.call}<span>звонок</span></button>
+        <button type="button" class="sl-info-chip" data-a="video">${ico.video}<span>видео</span></button>
+        <button type="button" class="sl-info-chip" data-a="mute">${ico.sound}<span>звук</span></button>
+        <button type="button" class="sl-info-chip" data-a="search">${ico.search||ico.more}<span>поиск</span></button>
+        <button type="button" class="sl-info-chip" data-a="more">${ico.more}<span>ещё</span></button>
       </div>`:''}
       <div class="sl-info-block">
-        <div class="sl-info-label">О себе</div>
-        <div style="font-size:14px;line-height:1.4">${about?esc(about):'<span style="color:var(--muted)">Не указано</span>'}</div>
+        ${(p.phone||p.phone_number||p.mobile)?`
+        <div class="sl-info-label">мобильный</div>
+        <a class="sl-info-value" href="tel:${esc(p.phone||p.phone_number||p.mobile)}" style="text-decoration:none;display:block">${esc(p.phone||p.phone_number||p.mobile)}</a>
+        <div class="sl-info-divider"></div>`:''}
+        ${p.username?`
+        <div style="display:flex;align-items:center;gap:8px">
+          <div style="flex:1;min-width:0">
+            <div class="sl-info-label">имя пользователя</div>
+            <div class="sl-info-value">@${esc(p.username)}</div>
+          </div>
+          <button type="button" class="sl-info-qr" id="up-qr" title="QR">${ico.qr||'▦'}</button>
+        </div>`:''}
+        ${about?`
+        ${(p.phone||p.phone_number||p.mobile||p.username)?'<div class="sl-info-divider"></div>':''}
+        <div class="sl-info-label">о себе</div>
+        <div style="font-size:15px;line-height:1.4;color:var(--text)">${esc(about)}</div>`:((!p.phone&&!p.phone_number&&!p.mobile&&!p.username)?`<div class="sl-info-label">о себе</div><div style="color:var(--muted);font-size:14px">Не указано</div>`:'')}
       </div>
-      <div class="sl-info-block sl-info-row" id="up-media" style="cursor:pointer">
-        <span class="sl-info-ico">${ico.attach}</span>
-        <div style="flex:1">
-          <div style="font-weight:600;font-size:15px">Вложения</div>
-          <div style="font-size:12px;color:var(--muted)">Фото, видео, файлы и ссылки</div>
-        </div>
-        <span style="color:var(--muted);font-size:18px">›</span>
+      <div class="sl-info-tabs" id="up-tabs">
+        <button type="button" class="sl-info-tab active" data-tab="posts">Публикации</button>
+        <button type="button" class="sl-info-tab" data-tab="media">Медиа</button>
+        <button type="button" class="sl-info-tab" data-tab="files">Файлы</button>
       </div>
+      <div id="up-tab-posts" class="up-tab-pane" style="padding:12px 16px;color:var(--muted);font-size:14px;text-align:center">Нет публикаций</div>
+      <div id="up-tab-media" class="up-tab-pane" style="display:none"><div class="sl-media-grid" id="up-media-grid"></div></div>
+      <div id="up-tab-files" class="up-tab-pane" style="display:none;padding:12px 16px;color:var(--muted);font-size:14px;text-align:center">Нет файлов</div>
       </div>
     </div>`;
   document.body.appendChild(sheet);
@@ -13328,13 +13426,39 @@ async function openFullProfile(profileLike){
     sheet.remove();
     try{ document.getElementById('settings-edit-profile')?.click(); }catch(e){}
   });
-  sheet.querySelector('#up-media')?.addEventListener('click', async()=>{
-    sheet.remove();
-    if(typeof ensureInContacts==='function') ensureInContacts(p);
-    if(typeof switchPage==='function') switchPage('chats');
-    if(typeof openChat==='function') await openChat(p);
-    try{ document.getElementById('media-btn')?.click(); }catch(e){}
+  sheet.querySelector('#up-qr')?.addEventListener('click', async()=>{
+    const u = p.username ? ('@'+p.username) : (p.phone||'');
+    try{ await navigator.clipboard.writeText(u); showToast('Скопировано'); }catch(e){ showToast(u); }
   });
+  // tabs
+  sheet.querySelectorAll('#up-tabs .sl-info-tab').forEach(tab=>{
+    tab.onclick=()=>{
+      sheet.querySelectorAll('#up-tabs .sl-info-tab').forEach(t=>t.classList.remove('active'));
+      tab.classList.add('active');
+      const id = tab.dataset.tab;
+      ['posts','media','files'].forEach(k=>{
+        const pane = sheet.querySelector('#up-tab-'+k);
+        if(pane) pane.style.display = (k===id) ? '' : 'none';
+      });
+      if(id==='media') loadUpMedia();
+    };
+  });
+  async function loadUpMedia(){
+    const grid = sheet.querySelector('#up-media-grid');
+    if(!grid || grid.dataset.loaded) return;
+    grid.dataset.loaded='1';
+    grid.innerHTML='<div style="grid-column:1/-1;padding:16px;text-align:center;color:var(--muted);font-size:13px">Загрузка…</div>';
+    try{
+      const {data}=await sb.from('messages').select('id,content,type,file_url,created_at').or('sender_id.eq.'+p.id+',receiver_id.eq.'+p.id).in('type',['image','photo','video']).order('created_at',{ascending:false}).limit(60);
+      const rows=(data||[]).filter(m=>m.file_url||(m.content&&String(m.content).startsWith('http')));
+      if(!rows.length){ grid.innerHTML='<div style="grid-column:1/-1;padding:20px;text-align:center;color:var(--muted);font-size:14px">Нет медиа</div>'; return; }
+      grid.innerHTML=rows.map(m=>{
+        const url=m.file_url||m.content;
+        const isVid=(m.type==='video')||/\.mp4|webm/i.test(url||'');
+        return isVid?`<video class="sl-media-cell" src="${String(url).replace(/"/g,'&quot;')}" muted playsinline></video>`:`<img class="sl-media-cell" src="${String(url).replace(/"/g,'&quot;')}" alt="" loading="lazy">`;
+      }).join('');
+    }catch(e){ grid.innerHTML='<div style="grid-column:1/-1;padding:16px;text-align:center;color:var(--muted)">Не удалось загрузить</div>'; }
+  }
   sheet.querySelectorAll('[data-a]').forEach(btn=>{
     btn.onclick=async(e)=>{
       const a=btn.dataset.a;
@@ -13382,6 +13506,14 @@ async function openFullProfile(profileLike){
           ov.remove(); sheet.remove();
           try{ loadChats(); }catch(e){}
         };
+        return;
+      }
+      if(a==='search'){
+        sheet.remove();
+        if(typeof ensureInContacts==='function') ensureInContacts(p);
+        if(typeof switchPage==='function') switchPage('chats');
+        if(typeof openChat==='function') await openChat(p);
+        setTimeout(()=>{ try{ document.getElementById('search-in-chat')?.focus(); document.getElementById('chat-search-btn')?.click(); }catch(e){} }, 200);
         return;
       }
       sheet.remove();
