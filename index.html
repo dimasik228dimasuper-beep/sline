@@ -30145,14 +30145,15 @@ document.addEventListener('click', function(e){
       try{ await navigator.clipboard.writeText(item.url); showLocalToast('Ссылка скопирована'); }catch(e){}
     }
 
-    function persistAvatarList(){
-      const normalized = list.map(x=>{
-        if(typeof x==='string') return {url:x, at:Date.now()};
-        return {url:x.url||x, at:x.at||Date.now()};
+    function persistAvatarList(nextList){
+      const normalized = (nextList||[]).map(x=>{
+        if(typeof x==='string') return {url:String(x), at:Date.now()};
+        return {url:String(x.url||''), at:x.at||Date.now()};
       }).filter(x=>x.url);
       try{
         const store = (typeof storage!=='undefined' && storage && storage.setItem) ? storage : localStorage;
-        const all = JSON.parse(store.getItem('sl_avatar_history')||'{}');
+        let all={};
+        try{ all=JSON.parse(store.getItem('sl_avatar_history')||'{}')||{}; }catch(e){ all={}; }
         all[uid] = normalized;
         store.setItem('sl_avatar_history', JSON.stringify(all));
       }catch(e){ console.warn('persist sl_avatar_history', e); }
@@ -30160,28 +30161,59 @@ document.addEventListener('click', function(e){
         const LS = window.LS || localStorage;
         LS.setItem('sl_av_hist_'+uid, JSON.stringify(normalized.map(x=>x.url)));
       }catch(e){ console.warn('persist sl_av_hist_', e); }
-      list.length = 0;
-      normalized.forEach(x=>list.push(x));
+      return normalized;
     }
 
-    async function deleteCurrent(){
+    function hideDeleteConfirm(){
+      const box=ov.querySelector('#pmg-del-confirm');
+      if(box) box.style.display='none';
+    }
+
+    function showDeleteConfirm(){
+      let box=ov.querySelector('#pmg-del-confirm');
+      if(!box){
+        box=document.createElement('div');
+        box.id='pmg-del-confirm';
+        box.style.cssText='display:none;position:absolute;inset:0;z-index:20;background:rgba(0,0,0,.55);align-items:center;justify-content:center;padding:24px';
+        box.innerHTML=`<div style="width:min(320px,92vw);background:#2c2c2e;border-radius:16px;padding:20px 18px 14px;box-shadow:0 12px 40px rgba(0,0,0,.5)">
+          <div style="color:#fff;font-size:16px;font-weight:600;text-align:center;margin-bottom:16px;line-height:1.35">Удалить это фото из истории?</div>
+          <div style="display:flex;gap:10px">
+            <button type="button" id="pmg-del-cancel" style="flex:1;padding:12px;border:none;border-radius:12px;background:rgba(255,255,255,.12);color:#fff;font-weight:700;font-size:15px;cursor:pointer">Отмена</button>
+            <button type="button" id="pmg-del-ok" style="flex:1;padding:12px;border:none;border-radius:12px;background:linear-gradient(135deg,#ff453a,#ff6961);color:#fff;font-weight:700;font-size:15px;cursor:pointer">Удалить</button>
+          </div>
+        </div>`;
+        ov.appendChild(box);
+        box.addEventListener('click', (e)=>{ if(e.target===box) hideDeleteConfirm(); });
+        box.querySelector('#pmg-del-cancel').onclick=(e)=>{ e.stopPropagation(); hideDeleteConfirm(); };
+        box.querySelector('#pmg-del-ok').onclick=(e)=>{ e.stopPropagation(); hideDeleteConfirm(); performDeleteOne(); };
+      }
+      menu.style.display='none';
+      box.style.display='flex';
+    }
+
+    let _delBusy=false;
+    async function performDeleteOne(){
+      if(_delBusy) return;
+      _delBusy=true;
       try{
         if(!list.length){ showLocalToast('Нет фото'); return; }
-        // Always allow delete of items in this viewer for own profile;
-        // if isMe was false (id mismatch), still allow removing from local history lists
-        let ok = false;
-        try{ ok = window.confirm('Удалить это фото из истории?'); }catch(e){ ok = true; }
-        if(!ok) return;
-
-        const removed = list.splice(idx, 1)[0];
+        // Delete ONLY the photo currently on screen
+        const removeAt = Math.max(0, Math.min(idx, list.length-1));
+        const removed = list[removeAt];
         const removedUrl = (removed && removed.url) ? removed.url : removed;
-        persistAvatarList();
+        if(!removedUrl){ showLocalToast('Нет фото'); return; }
 
-        // If deleted the active profile avatar — switch to next or clear
+        // New list without this single index (not filter-all by URL — only this entry)
+        const next = list.filter((_,i)=>i!==removeAt);
+        const saved = persistAvatarList(next);
+        list.length=0;
+        saved.forEach(x=>list.push(x));
+
+        // If this was the active avatar — switch to another remaining photo (do not wipe all)
         try{
           if(typeof myProfile!=='undefined' && myProfile && String(myProfile.id)===String(uid)){
-            if(removedUrl && myProfile.avatar_url === removedUrl){
-              const nextUrl = list[0] ? (list[0].url||list[0]) : null;
+            if(myProfile.avatar_url === removedUrl){
+              const nextUrl = list[0] ? (list[0].url||null) : null;
               myProfile.avatar_url = nextUrl;
               try{
                 if(typeof sb!=='undefined' && sb) await sb.from('profiles').update({avatar_url: nextUrl}).eq('id', myProfile.id);
@@ -30195,32 +30227,36 @@ document.addEventListener('click', function(e){
 
         showLocalToast('Удалено');
         if(!list.length){
-          setTimeout(()=>{ try{ ov.remove(); }catch(e){} }, 350);
+          setTimeout(()=>{ try{ ov.remove(); }catch(e){} }, 400);
           return;
         }
-        if(idx >= list.length) idx = list.length - 1;
+        if(idx >= list.length) idx = list.length-1;
         render();
       }catch(err){
-        console.error('deleteCurrent', err);
+        console.error('performDeleteOne', err);
         try{ showLocalToast('Ошибка удаления'); }catch(e){}
+      }finally{
+        _delBusy=false;
       }
     }
 
-    ov.querySelector('#pmg-x').onclick = (e)=>{ e&&e.stopPropagation(); ov.remove(); };
-
-    function bindTrash(el){
-      if(!el) return;
-      const fire = (e)=>{
-        try{ e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation(); }catch(err){}
-        deleteCurrent();
-      };
-      el.addEventListener('click', fire, true);
-      el.addEventListener('touchend', fire, {capture:true, passive:false});
-      el.style.pointerEvents = 'auto';
-      el.style.zIndex = '10';
+    function requestDelete(){
+      if(_delBusy || !list.length) return;
+      showDeleteConfirm();
     }
-    bindTrash(ov.querySelector('#pmg-trash'));
-    // also bind menu delete when shown
+
+    ov.querySelector('#pmg-x').onclick = (e)=>{ e&&e.stopPropagation(); hideDeleteConfirm(); ov.remove(); };
+
+    const trashBtn = ov.querySelector('#pmg-trash');
+    if(trashBtn){
+      trashBtn.style.pointerEvents='auto';
+      trashBtn.style.zIndex='10';
+      trashBtn.onclick = (e)=>{
+        e.preventDefault();
+        e.stopPropagation();
+        requestDelete();
+      };
+    }
     ov.querySelector('#pmg-more').onclick = (e)=>{ e.stopPropagation(); menu.style.display = menu.style.display==='none'?'block':'none'; };
     menu.addEventListener('click', (e)=>{
       const b = e.target.closest('[data-a]');
@@ -30231,7 +30267,7 @@ document.addEventListener('click', function(e){
       if(b.dataset.a==='delete'){
         e.preventDefault();
         e.stopPropagation();
-        deleteCurrent();
+        requestDelete();
       }
     });
     ov.addEventListener('click', (e)=>{
