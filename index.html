@@ -1879,6 +1879,7 @@ body.light-theme .circle-record-overlay {
   }
 </style>
 
+<style id="sl-vo-toggle-hide">#sl-vo-toggle{display:none!important}</style>
 </head>
 <body>
 
@@ -14967,45 +14968,215 @@ function scheduleBirthdayAfterAppReady(){
     return r;
   };
 
-  // --- Forward picker ---
+  // --- Forward picker (media-safe: circle/photo/video/voice/sticker/file/album) ---
   window.openForwardPicker = async function(msg){
+    if(!msg){ try{ showToast('Нет сообщения'); }catch(e){} return; }
+    const esc = (s)=> String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+    const typeLabel = ({
+      text:'сообщение', image:'фото', video:'видео', circle:'кружок', voice:'голосовое',
+      sticker:'стикер', file:'файл', album:'альбом', gift:'подарок', poll:'опрос'
+    })[msg.type] || 'сообщение';
+
     const ov=document.createElement('div');
     ov.className='fwd-overlay';
-    ov.innerHTML=`<div class="fwd-sheet"><h3>Переслать</h3><div class="fwd-list" id="fwd-list"><div style="padding:20px;color:var(--muted);text-align:center">Загрузка...</div></div></div>`;
+    ov.innerHTML=`<div class="fwd-sheet">
+      <h3>Переслать · ${esc(typeLabel)}</h3>
+      <div style="padding:0 16px 8px">
+        <input type="search" id="fwd-search" placeholder="Поиск…" style="width:100%;box-sizing:border-box;padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:var(--input-bg,#111);color:var(--text);font-size:14px">
+      </div>
+      <div class="fwd-list" id="fwd-list"><div style="padding:20px;color:var(--muted);text-align:center">Загрузка...</div></div>
+      <div style="padding:8px 16px 14px">
+        <textarea id="fwd-comment" rows="2" placeholder="Комментарий (необязательно)" style="width:100%;box-sizing:border-box;border-radius:12px;border:1px solid var(--line);background:var(--input-bg,#111);color:var(--text);padding:10px;font-size:14px;resize:vertical"></textarea>
+      </div>
+    </div>`;
     document.body.appendChild(ov);
     ov.addEventListener('click', e=>{ if(e.target===ov) ov.remove(); });
-    let list=[];
+
+    // Build contact/group list from multiple sources
+    const byId = new Map();
+    function addPerson(p, kind){
+      if(!p || !p.id) return;
+      if(myProfile && String(p.id)===String(myProfile.id)) return;
+      const id=String(p.id);
+      if(byId.has(id)) return;
+      byId.set(id, {
+        id,
+        kind: kind||'user',
+        name: p.first_name ? `${p.first_name}${p.last_name?(' '+p.last_name):''}` : (p.username||p.title||p.name||'Чат'),
+        username: p.username||'',
+        avatar_url: p.avatar_url||'',
+        color: p.color || (typeof colorFor==='function'?colorFor(p.id):'#333'),
+        raw: p
+      });
+    }
+    // from in-memory
+    try{ (window.contacts||[]).forEach(p=>addPerson(p,'user')); }catch(e){}
+    try{ (window.allUsers||[]).forEach(p=>addPerson(p,'user')); }catch(e){}
+    try{ (window.profiles||[]).forEach(p=>addPerson(p,'user')); }catch(e){}
+    try{ (window.groups||[]).forEach(g=>addPerson({id:g.id, title:g.title||g.name, name:g.name, avatar_url:g.avatar_url, color:g.color}, 'group')); }catch(e){}
+    // from DOM chat list
     try{
-      // contacts from already loaded chats
-      const contacts=document.querySelectorAll('#contacts-list .contact[data-id], #contacts-list .sw-clip[data-id]');
-      // better: use profiles from last load
-      const {data}=await sb.from('profiles').select('id,username,first_name,last_name,avatar_url,color').neq('id', myProfile.id).limit(40);
-      list=data||[];
-    }catch(e){ list=[]; }
+      document.querySelectorAll('#contacts-list .sw-clip, #contacts-list .contact').forEach(el=>{
+        const id = el.dataset.cid || el.dataset.id || el.querySelector('.contact')?.dataset.cid;
+        const type = el.dataset.ctype || el.querySelector('.contact')?.dataset.ctype || 'user';
+        if(!id) return;
+        const nameEl = el.querySelector('.contact-name');
+        const name = (nameEl?.textContent||'').replace(/[●✓📌🔒]/g,'').trim();
+        addPerson({id, first_name:name||'Чат', avatar_url:''}, type==='group'||type==='channel'?'group':'user');
+      });
+    }catch(e){}
+    // from supabase
+    try{
+      if(typeof sb!=='undefined' && sb && myProfile){
+        const {data}=await sb.from('profiles').select('id,username,first_name,last_name,avatar_url,color').neq('id', myProfile.id).limit(80);
+        (data||[]).forEach(p=>addPerson(p,'user'));
+      }
+    }catch(e){}
+
+    let list=[...byId.values()];
+    list.sort((a,b)=> String(a.name).localeCompare(String(b.name),'ru'));
+
     const box=ov.querySelector('#fwd-list');
-    if(!list.length){ box.innerHTML='<div style="padding:20px;color:var(--muted);text-align:center">Нет контактов</div>'; return; }
-    box.innerHTML=list.map(p=>{
-      const name=escapeHtml(p.first_name?`${p.first_name} ${p.last_name||''}`:p.username||'');
-      return `<div class="fwd-item" data-id="${p.id}"><div class="avatar" style="background:${p.color||colorFor(p.id)};background-size:cover;background-position:center;${p.avatar_url&&!String(p.avatar_url).startsWith('data:video')?`background-image:url(${p.avatar_url})`:''}">${p.avatar_url?'':(p.username||'?')[0].toUpperCase()}</div><div style="font-weight:600;font-size:14px">${name}</div></div>`;
-    }).join('');
-    box.querySelectorAll('.fwd-item').forEach(el=>{
-      el.onclick=async()=>{
-        ov.remove();
-        const toId=el.dataset.id;
+    function renderList(filter){
+      const q=(filter||'').trim().toLowerCase();
+      const rows=list.filter(p=>!q || String(p.name).toLowerCase().includes(q) || String(p.username).toLowerCase().includes(q));
+      if(!rows.length){ box.innerHTML='<div style="padding:20px;color:var(--muted);text-align:center">Нет контактов</div>'; return; }
+      box.innerHTML=rows.map(p=>{
+        const av = p.avatar_url && !String(p.avatar_url).startsWith('data:video')
+          ? `background-image:url(${p.avatar_url});background-size:cover;background-position:center`
+          : '';
+        const letter = esc((p.name||'?')[0]||'?').toUpperCase();
+        const badge = p.kind==='group' ? ' · группа' : '';
+        return `<div class="fwd-item" data-id="${esc(p.id)}" data-kind="${p.kind}">
+          <div class="avatar" style="background:${esc(p.color)};${av}">${av?'':letter}</div>
+          <div style="min-width:0;flex:1">
+            <div style="font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p.name)}${badge}</div>
+            ${p.username?`<div style="font-size:12px;color:var(--muted)">@${esc(p.username)}</div>`:''}
+          </div>
+        </div>`;
+      }).join('');
+      box.querySelectorAll('.fwd-item').forEach(el=>{
+        el.onclick=async()=>{
+          const toId=el.dataset.id;
+          const kind=el.dataset.kind||'user';
+          const comment=(ov.querySelector('#fwd-comment')?.value||'').trim();
+          ov.remove();
+          await window.slForwardMessage(msg, toId, kind, comment);
+        };
+      });
+    }
+    renderList('');
+    ov.querySelector('#fwd-search')?.addEventListener('input', e=> renderList(e.target.value));
+  };
+
+  /** Reliable forward for any media type inside this messenger */
+  window.slForwardMessage = async function(msg, toId, kind, comment){
+    if(!msg || !toId || !myProfile?.id){ try{ showToast('Нечего пересылать'); }catch(e){} return; }
+    const t = msg.type || 'text';
+    let content = msg.content || '';
+    let fileUrl = msg.file_url || msg.media_url || null;
+
+    // Preserve media; only prefix text
+    if(t==='text'){
+      content = (content ? ('↪ '+content) : '↪');
+    } else if(t==='album'){
+      // keep JSON meta / file_url array as-is
+      if(!fileUrl && content){
+        try{ const j=JSON.parse(content); if(j && j.items) fileUrl=JSON.stringify(j.items); }catch(e){}
+      }
+    } else {
+      // image/video/circle/voice/sticker/file — keep content caption if any
+      if(!fileUrl){
+        try{ showToast('Нет файла для пересылки'); }catch(e){}
+        return;
+      }
+    }
+
+    const payload = {
+      sender_id: myProfile.id,
+      type: t,
+      content: content || '',
+      file_url: fileUrl,
+      created_at: new Date().toISOString()
+    };
+    if(kind==='group'){
+      payload.group_id = toId;
+      payload.receiver_id = null;
+    } else {
+      payload.receiver_id = toId;
+      payload.group_id = null;
+    }
+
+    async function doInsert(p){
+      const {data, error} = await sb.from('messages').insert(p).select().single();
+      if(error) throw error;
+      return data;
+    }
+
+    try{
+      // comment first (optional)
+      if(comment){
         try{
-          const payload={
+          const cPayload = {
             sender_id: myProfile.id,
-            receiver_id: toId,
-            type: msg.type||'text',
-            content: msg.type==='text' ? ('↪ '+ (msg.content||'')) : (msg.content||'Переслано'),
-            file_url: msg.file_url||null,
-            created_at: new Date().toISOString()
+            type: 'text',
+            content: comment,
+            file_url: null,
+            created_at: new Date().toISOString(),
+            receiver_id: kind==='group'?null:toId,
+            group_id: kind==='group'?toId:null
           };
-          await sb.from('messages').insert(payload);
-          showToast('Переслано');
-        }catch(e){ showToast('Ошибка пересылки'); }
-      };
-    });
+          const cdata = await doInsert(cPayload);
+          // paint if target chat open
+          const open = (kind==='group' && activeGroup && String(activeGroup.id)===String(toId))
+            || (kind!=='group' && activePartner && String(activePartner.id)===String(toId));
+          if(open && typeof renderMessage==='function') renderMessage(cdata, kind==='group');
+        }catch(e){ console.warn('fwd comment', e); }
+      }
+
+      let data;
+      try{
+        data = await doInsert(payload);
+      }catch(err){
+        // fallback: open chat + sendMessage (handles offline/size helpers)
+        console.warn('fwd insert failed, fallback sendMessage', err);
+        try{
+          if(kind==='group'){
+            const g=(window.groups||[]).find(x=>String(x.id)===String(toId));
+            if(g && typeof openGroupChat==='function') await openGroupChat(g);
+            else if(g && typeof openChat==='function') await openChat(g);
+          } else {
+            const u=(window.contacts||window.allUsers||[]).find(x=>String(x.id)===String(toId))
+              || {id:toId, username:'user', first_name:'Чат'};
+            if(typeof openChat==='function') await openChat(u);
+          }
+          await new Promise(r=>setTimeout(r,150));
+          if(typeof sendMessage==='function'){
+            await sendMessage(t, fileUrl, content||'');
+            try{ showToast('Переслано'); }catch(e){}
+            return;
+          }
+        }catch(e2){ console.warn(e2); }
+        try{ showToast('Ошибка пересылки'); }catch(e){}
+        return;
+      }
+
+      // paint if currently in target chat
+      const open = (kind==='group' && activeGroup && String(activeGroup.id)===String(toId))
+        || (kind!=='group' && activePartner && String(activePartner.id)===String(toId));
+      if(open && data && typeof renderMessage==='function'){
+        renderMessage(data, kind==='group');
+        try{ if(typeof scrollToBottom==='function') scrollToBottom(); }catch(e){}
+      }
+      // bump unread for target if not open
+      if(!open && kind!=='group' && typeof incUnread==='function'){
+        /* don't mark own forward as unread for self */
+      }
+      try{ showToast('Переслано'); }catch(e){}
+    }catch(e){
+      console.warn('slForwardMessage', e);
+      try{ showToast('Ошибка пересылки'); }catch(err){}
+    }
   };
 
   // --- Unread badge ---
@@ -30945,27 +31116,10 @@ document.addEventListener('click', function(e){
   function isVOSeen(mid){ return !!seenVO()[String(mid)]; }
 
   function wrapViewOnceInSend(){
-    // Add toggle near composer once
-    if(document.getElementById('sl-vo-toggle')) return;
-    const composer=document.getElementById('composer');
-    if(!composer) return;
-    const btn=document.createElement('button');
-    btn.type='button'; btn.id='sl-vo-toggle'; btn.title='Одноразовое фото';
-    btn.style.cssText='display:none;border:none;background:transparent;color:var(--muted);font-size:16px;padding:4px 6px;cursor:pointer';
-    btn.textContent='1️⃣';
-    btn.dataset.on='0';
-    btn.onclick=()=>{
-      btn.dataset.on = btn.dataset.on==='1'?'0':'1';
-      btn.style.color = btn.dataset.on==='1' ? 'var(--accent-a)' : 'var(--muted)';
-      toast(btn.dataset.on==='1' ? 'След. фото — одноразовое' : 'Обычная отправка');
-    };
-    window.slViewOnceNext = ()=> btn.dataset.on==='1';
-    window.slViewOnceClear = ()=>{ btn.dataset.on='0'; btn.style.color='var(--muted)'; };
-    // show near attach if possible
-    const attach=document.getElementById('attach-btn')||document.getElementById('plus-btn');
-    if(attach && attach.parentNode) attach.parentNode.insertBefore(btn, attach.nextSibling);
-    else composer.appendChild(btn);
-    btn.style.display='inline-flex';
+    /* кнопка «1» убрана из композера по запросу */
+    try{ document.getElementById('sl-vo-toggle')?.remove(); }catch(e){}
+    window.slViewOnceNext = ()=> false;
+    window.slViewOnceClear = ()=>{};
   }
 
   // Patch sendMessage to mark view-once images
