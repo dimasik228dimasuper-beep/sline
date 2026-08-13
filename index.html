@@ -16234,7 +16234,7 @@ function scheduleBirthdayAfterAppReady(){
   }
   window.getAvatarHistory = getAvatarHistory;
   window.pushAvatarHistory = pushAvatarHistory;
-  window.openAvatarHistory = function(profile, startIndex){
+  window._slOpenAvatarHistoryFull = window.openAvatarHistory = function(profile, startIndex){
     const uid = profile?.id || myProfile?.id;
     if(!uid){ try{showToast('Нет профиля');}catch(e){} return; }
     let list = [];
@@ -16339,6 +16339,11 @@ function scheduleBirthdayAfterAppReady(){
           const all = JSON.parse(storage.getItem('sl_avatar_history')||'{}');
           all[uid] = list;
           storage.setItem('sl_avatar_history', JSON.stringify(all));
+        }catch(e){}
+        try{
+          const LS = window.LS || localStorage;
+          const k = 'sl_av_hist_'+uid;
+          LS.setItem(k, JSON.stringify(list.map(x=>x.url||x)));
         }catch(e){}
         // if deleted current profile avatar, clear or set next
         if(isMe && myProfile && removed && removed.url === myProfile.avatar_url){
@@ -20393,46 +20398,116 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
   setInterval(bindHeaderInstant, 30000);
 
   // ---------- 4) Avatar history gallery (Telegram-like) ----------
-  window.openAvatarHistory = function(profile){
+  window.openAvatarHistory = function(profile, startIndex){
+    // Prefer full viewer with delete if available from earlier pack
+    if(window._slOpenAvatarHistoryFull && window._slOpenAvatarHistoryFull !== window.openAvatarHistory){
+      try{ return window._slOpenAvatarHistoryFull(profile, startIndex); }catch(e){}
+    }
+    const uid = profile?.id || (typeof myProfile!=='undefined' && myProfile?.id) || '';
+    const isMe = !!(uid && typeof myProfile!=='undefined' && myProfile && String(uid)===String(myProfile.id));
     const urls=[];
     const add=(u)=>{ if(u && !urls.includes(u)) urls.push(u); };
     add(profile?.avatar_url);
     try{
-      const hist=JSON.parse(LS.getItem('sl_av_hist_'+(profile?.id||''))||'[]');
-      hist.forEach(add);
+      const hist=JSON.parse((window.LS||localStorage).getItem('sl_av_hist_'+uid)||'[]');
+      hist.forEach(u=>add(typeof u==='string'?u:u?.url));
     }catch(e){}
-    // also cover if present
-    try{ if(profile?.cover_url) add(profile.cover_url); }catch(e){}
-    if(!urls.length){ toast('Нет фото'); return; }
-    let i=0;
+    try{
+      const all=JSON.parse((window.storage?.getItem?.('sl_avatar_history'))||localStorage.getItem('sl_avatar_history')||'{}');
+      (all[uid]||[]).forEach(x=>add(x?.url||x));
+    }catch(e){}
+    if(!urls.length){ try{(typeof toast==='function'?toast:showToast)('Нет фото');}catch(e){} return; }
+    let i = Math.max(0, Math.min(urls.length-1, startIndex|0));
+    const esc = (s)=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
     const ov=document.createElement('div');
     ov.className='sl-av-hist-ov';
+    ov.id='sl-av-viewer';
     ov.innerHTML=`<div class="sl-av-hist-top">
       <button type="button" style="background:none;border:none;color:#fff;font-size:22px;cursor:pointer" id="ah-back">‹</button>
-      <div style="flex:1;font-weight:700;font-size:15px">${esc(profile?.first_name||profile?.username||profile?.name||'')}</div>
-      <span style="font-size:12px;opacity:.7" id="ah-cnt">1 / ${urls.length}</span>
+      <div style="flex:1;font-weight:700;font-size:15px">${esc(profile?.first_name||profile?.username||profile?.name||'Фото профиля')}</div>
+      <span style="font-size:12px;opacity:.7;margin-right:8px" id="ah-cnt">1 / ${urls.length}</span>
+      ${isMe?`<button type="button" id="ah-del" style="padding:8px 12px;border-radius:10px;border:none;background:rgba(240,112,138,.95);color:#fff;font-weight:700;font-size:13px;cursor:pointer">Удалить</button>`:''}
     </div>
-    <div class="sl-av-hist-stage"><img id="ah-img" src="${esc(urls[0])}" alt=""></div>
-    <div class="sl-av-hist-thumbs" id="ah-thumbs">${urls.map((u,idx)=>`<img src="${esc(u)}" data-i="${idx}" class="${idx===0?'on':''}">`).join('')}</div>`;
+    <div class="sl-av-hist-stage"><img id="ah-img" src="${esc(urls[i])}" alt=""></div>
+    <div class="sl-av-hist-thumbs" id="ah-thumbs">${urls.map((u,idx)=>`<img src="${esc(u)}" data-i="${idx}" class="${idx===i?'on':''}">`).join('')}</div>`;
     document.body.appendChild(ov);
     const img=ov.querySelector('#ah-img');
     const cnt=ov.querySelector('#ah-cnt');
+    function refreshThumbs(){
+      const th=ov.querySelector('#ah-thumbs');
+      if(!th) return;
+      th.innerHTML=urls.map((u,idx)=>`<img src="${esc(u)}" data-i="${idx}" class="${idx===i?'on':''}">`).join('');
+      th.querySelectorAll('img').forEach(t=>t.onclick=()=>go(+t.dataset.i));
+    }
     function go(n){
-      i=(n+urls.length)%urls.length;
+      if(!urls.length){
+        img.removeAttribute('src');
+        if(cnt) cnt.textContent='0 / 0';
+        refreshThumbs();
+        return;
+      }
+      i=((n%urls.length)+urls.length)%urls.length;
       img.src=urls[i];
-      cnt.textContent=(i+1)+' / '+urls.length;
+      if(cnt) cnt.textContent=(i+1)+' / '+urls.length;
       ov.querySelectorAll('#ah-thumbs img').forEach((t,idx)=>t.classList.toggle('on',idx===i));
+    }
+    function persistRemove(removedUrl){
+      try{
+        const LS=window.LS||localStorage;
+        const k='sl_av_hist_'+uid;
+        let h=JSON.parse(LS.getItem(k)||'[]');
+        h=h.filter(u=>(typeof u==='string'?u:u?.url)!==removedUrl);
+        LS.setItem(k, JSON.stringify(h));
+      }catch(e){}
+      try{
+        const store=window.storage||localStorage;
+        const all=JSON.parse(store.getItem('sl_avatar_history')||'{}');
+        all[uid]=(all[uid]||[]).filter(x=>(x?.url||x)!==removedUrl);
+        store.setItem('sl_avatar_history', JSON.stringify(all));
+      }catch(e){}
     }
     ov.querySelector('#ah-back').onclick=()=>ov.remove();
     ov.querySelectorAll('#ah-thumbs img').forEach(t=>t.onclick=()=>go(+t.dataset.i));
+    const delBtn=ov.querySelector('#ah-del');
+    if(delBtn){
+      delBtn.onclick=async ()=>{
+        if(!urls.length) return;
+        const ok = await (typeof customConfirm==='function'
+          ? customConfirm('Удалить это фото из истории?')
+          : Promise.resolve(confirm('Удалить это фото из истории?')));
+        if(!ok) return;
+        const removed=urls.splice(i,1)[0];
+        persistRemove(removed);
+        // if current profile avatar deleted — switch to next or clear
+        if(isMe && typeof myProfile!=='undefined' && myProfile && removed===myProfile.avatar_url){
+          const nextUrl=urls[0]||null;
+          try{
+            myProfile.avatar_url=nextUrl;
+            if(typeof sb!=='undefined' && sb) await sb.from('profiles').update({avatar_url:nextUrl}).eq('id', myProfile.id);
+            try{ if(typeof renderMe==='function') renderMe(); }catch(e){}
+            try{ if(typeof applyMyAvatarEverywhere==='function') applyMyAvatarEverywhere(); }catch(e){}
+            try{ if(typeof updateAllUIs==='function') updateAllUIs(); }catch(e){}
+          }catch(e){ console.warn(e); }
+        }
+        if(!urls.length){
+          try{(typeof showToast==='function'?showToast:toast)('Удалено');}catch(e){}
+          ov.remove();
+          return;
+        }
+        if(i>=urls.length) i=urls.length-1;
+        refreshThumbs();
+        go(i);
+        try{(typeof showToast==='function'?showToast:toast)('Удалено');}catch(e){}
+      };
+    }
     let sx=0;
     ov.querySelector('.sl-av-hist-stage').addEventListener('touchstart', e=>{ sx=e.touches[0].clientX; }, {passive:true});
     ov.querySelector('.sl-av-hist-stage').addEventListener('touchend', e=>{
       const dx=e.changedTouches[0].clientX-sx;
       if(Math.abs(dx)>40) go(i+(dx<0?1:-1));
     }, {passive:true});
-    // click main image to cycle
     img.onclick=()=>go(i+1);
+    go(i);
   };
 
   // Save avatar to history when profile updates
