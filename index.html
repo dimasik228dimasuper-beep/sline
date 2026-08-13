@@ -6826,10 +6826,23 @@ async function openStoryViewer(userId, name){
           const {data}=await sb.from('profiles').select('avatar_url,first_name,username,color').eq('id',userId).maybeSingle();
           prof=data;
         }
-        if(av && prof?.avatar_url){ av.src=prof.avatar_url; av.style.display='block'; }
-        else if(av){
-          av.removeAttribute('src');
-          av.style.background=prof?.color||'#4C7CF3';
+        if(av){
+          av.style.display='block';
+          av.style.objectFit='cover';
+          av.style.backgroundSize='cover';
+          av.style.backgroundPosition='center';
+          const url = prof?.avatar_url || '';
+          if(url && !String(url).startsWith('data:video')){
+            av.src = url;
+            av.style.backgroundImage = '';
+            av.onerror = ()=>{
+              av.removeAttribute('src');
+              av.style.background = prof?.color || '#4C7CF3';
+            };
+          } else {
+            av.removeAttribute('src');
+            av.style.background = prof?.color || '#4C7CF3';
+          }
         }
         if(nameEl && prof && !name) nameEl.textContent=prof.first_name||prof.username||'';
       }catch(e){}
@@ -31624,28 +31637,33 @@ document.addEventListener('click', function(e){
 </script>
 
 
+
+
+
 <script>
-/* ========== MAX-style stories: collapse into header on scroll ========== */
+/* ========== Stories: MAX scroll collapse + visible avatars, no auto-scroll ========== */
 (function(){
   function css(){
-    if(document.getElementById('sl-stories-scroll-css')) return;
+    if(document.getElementById('sl-stories-scroll-css')) {
+      document.getElementById('sl-stories-scroll-css').remove();
+    }
     const s=document.createElement('style');
     s.id='sl-stories-scroll-css';
     s.textContent=`
-      /* Story rings like MAX / TG */
-      #stories-bar.stories-bar{
+      #stories-bar.stories-bar, #stories-bar{
         display:flex!important;
         gap:14px;
         padding:12px 16px 10px;
         overflow-x:auto!important;
         overflow-y:hidden!important;
         border-bottom:1px solid var(--line);
-        transition:max-height .28s cubic-bezier(.2,.8,.2,1), opacity .22s ease, padding .28s ease, margin .28s ease;
+        transition:max-height .25s ease, opacity .2s ease, padding .25s ease;
         max-height:110px;
         opacity:1;
+        scroll-behavior:auto !important;
         -webkit-overflow-scrolling:touch;
       }
-      #stories-bar.stories-bar.is-collapsed{
+      #stories-bar.is-collapsed{
         max-height:0!important;
         opacity:0;
         padding-top:0!important;
@@ -31666,7 +31684,7 @@ document.addEventListener('click', function(e){
       #stories-bar .story-ring{
         width:62px;height:62px;border-radius:50%;padding:3px;
         background:linear-gradient(135deg,#f58529 0%,#dd2a7b 40%,#8134af 70%,#515bd4 100%);
-        box-sizing:border-box;
+        box-sizing:border-box;overflow:hidden;
       }
       #stories-bar .story-ring > .avatar,
       #stories-bar .story-ring > div{
@@ -31674,81 +31692,96 @@ document.addEventListener('click', function(e){
         border:2.5px solid var(--panel,#0d111a)!important;
         box-sizing:border-box;overflow:hidden;
         background-size:cover!important;background-position:center!important;
+        background-repeat:no-repeat!important;
       }
-      /* seen / no active */
       #stories-bar .story-ring.seen,
       #stories-bar .story-item.seen .story-ring{
         background:linear-gradient(135deg,#5a6270,#3d4450);
       }
-      #stories-bar #add-story-btn-bar .story-ring{
-        background:var(--line,#2a3348);
-      }
+      #stories-bar #add-story-btn-bar .story-ring{ background:var(--line,#2a3348); }
 
-      /* Collapsed mini rings in header title area */
+      /* Mini rings — next to «Чаты» title like MAX */
       #sl-stories-mini{
-        display:none;align-items:center;margin-left:8px;gap:0;
-        height:28px;
+        display:none;align-items:center;gap:0;height:30px;margin-left:8px;
+        vertical-align:middle;
       }
       #sl-stories-mini.show{display:inline-flex}
       #sl-stories-mini .sm-ring{
-        width:26px;height:26px;border-radius:50%;padding:2px;
+        width:28px;height:28px;border-radius:50%;padding:2px;
         background:linear-gradient(135deg,#f58529,#dd2a7b,#8134af,#515bd4);
-        box-sizing:border-box;margin-left:-6px;position:relative;
-        border:1.5px solid var(--panel,#0d111a);
+        box-sizing:border-box;margin-left:-8px;
+        border:2px solid var(--panel,#0d111a);
+        flex-shrink:0;
       }
       #sl-stories-mini .sm-ring:first-child{margin-left:0}
-      #sl-stories-mini .sm-ring .sm-av{
+      #sl-stories-mini .sm-av{
         width:100%;height:100%;border-radius:50%;
         background-size:cover;background-position:center;background-color:#333;
-        display:flex;align-items:center;justify-content:center;
-        font-size:10px;font-weight:700;color:#fff;overflow:hidden;
+        display:block;overflow:hidden;
+      }
+      #sl-stories-mini .sm-av img{
+        width:100%;height:100%;object-fit:cover;display:block;border-radius:50%;
       }
       #sl-stories-mini .sm-more{
-        margin-left:4px;font-size:11px;font-weight:700;color:var(--muted);
+        margin-left:6px;font-size:12px;font-weight:700;color:var(--muted);
       }
-
-      /* Title row can hold mini */
-      .sidebar-header .me-row,
-      .sidebar-header{
-        position:relative;
-      }
-      #sl-stories-title-wrap{
-        display:inline-flex;align-items:center;gap:6px;
+      .story-hdr-av{
+        width:36px!important;height:36px!important;border-radius:50%!important;
+        object-fit:cover!important;background:#333;flex-shrink:0;
+        border:2px solid rgba(255,255,255,.35)!important;
       }
     `;
     document.head.appendChild(s);
   }
 
+  function extractAvatarUrl(el){
+    if(!el) return '';
+    // img child
+    const img = el.tagName==='IMG' ? el : el.querySelector && el.querySelector('img');
+    if(img && img.src && !img.src.endsWith('/')) return img.src;
+    // background-image
+    try{
+      const bi = (el.style && el.style.backgroundImage) || '';
+      let m = bi.match(/url\(["']?([^"')]+)["']?\)/);
+      if(m && m[1]) return m[1];
+      const cs = getComputedStyle(el);
+      m = (cs.backgroundImage||'').match(/url\(["']?([^"')]+)["']?\)/);
+      if(m && m[1] && m[1] !== 'none') return m[1];
+    }catch(e){}
+    // data attr
+    if(el.dataset && el.dataset.avatarUrl) return el.dataset.avatarUrl;
+    return '';
+  }
+
+  function tagStoryAvatars(){
+    const bar=document.getElementById('stories-bar');
+    if(!bar) return;
+    bar.querySelectorAll('.story-item[data-uid]').forEach(it=>{
+      if(it.dataset.avatarUrl) return;
+      const av = it.querySelector('.avatar') || it.querySelector('.story-ring > div') || it.querySelector('img');
+      const url = extractAvatarUrl(av);
+      if(url) it.dataset.avatarUrl = url;
+    });
+  }
+
   function ensureMiniHost(){
     let mini=document.getElementById('sl-stories-mini');
     if(mini) return mini;
-    // Prefer place next to chats title / me-name
-    const header=document.querySelector('#page-chats .sidebar-header');
-    const meName=document.getElementById('me-name-chats');
     mini=document.createElement('div');
     mini.id='sl-stories-mini';
     mini.title='Истории';
     mini.addEventListener('click', (e)=>{
       e.stopPropagation();
-      // expand stories: scroll sidebar to top
       const sc=document.getElementById('sidebar-scroll');
       if(sc) sc.scrollTo({top:0, behavior:'smooth'});
-      const bar=document.getElementById('stories-bar');
-      if(bar){
-        bar.classList.remove('is-collapsed');
-        // open first story if any
-        const first=bar.querySelector('.story-item[data-uid]');
-        if(first) first.click();
-      }
+      setCollapsed(false);
     });
-    if(meName && meName.parentNode){
-      // put after name block
-      const wrap=meName.parentNode;
-      wrap.style.display='flex';
-      wrap.style.alignItems='center';
-      wrap.style.gap='6px';
-      wrap.appendChild(mini);
-    } else if(header){
+    // Place near sidebar header title — me-name row right side is OK,
+    // but prefer after me-tag block as MAX puts it in top title.
+    const header=document.querySelector('#page-chats .sidebar-header .me-row')
+      || document.querySelector('#page-chats .sidebar-header');
+    if(header){
+      // append at end of me-row so it sits on the right of name
       header.appendChild(mini);
     } else {
       document.body.appendChild(mini);
@@ -31760,6 +31793,7 @@ document.addEventListener('click', function(e){
     const bar=document.getElementById('stories-bar');
     const mini=ensureMiniHost();
     if(!bar||!mini) return;
+    tagStoryAvatars();
     const items=[...bar.querySelectorAll('.story-item[data-uid]')].slice(0,3);
     if(!items.length){
       mini.innerHTML='';
@@ -31768,18 +31802,15 @@ document.addEventListener('click', function(e){
     }
     let html='';
     items.forEach(it=>{
-      const av=it.querySelector('.avatar');
-      let bg='';
-      let letter='?';
-      if(av){
-        const st=av.getAttribute('style')||'';
-        const m=st.match(/url\(["']?([^"')]+)["']?\)/);
-        if(m) bg=`background-image:url('${m[1]}')`;
-        letter=(av.textContent||it.dataset.name||'?').trim().charAt(0)||'?';
-        if(av.style && av.style.backgroundImage) bg=`background-image:${av.style.backgroundImage}`;
+      const avEl = it.querySelector('.avatar') || it.querySelector('.story-ring > div');
+      let url = it.dataset.avatarUrl || extractAvatarUrl(avEl) || '';
+      const name = it.dataset.name || '';
+      const letter = (name||'?').charAt(0).toUpperCase();
+      if(url){
+        html+=`<div class="sm-ring" title="${name}"><div class="sm-av"><img src="${url}" alt="" onerror="this.remove()"></div></div>`;
+      } else {
+        html+=`<div class="sm-ring" title="${name}"><div class="sm-av" style="display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;background:#4C7CF3">${letter}</div></div>`;
       }
-      const name=it.dataset.name||'';
-      html+=`<div class="sm-ring" title="${name}"><div class="sm-av" style="${bg}">${bg?'':name.charAt(0)||letter}</div></div>`;
     });
     const total=bar.querySelectorAll('.story-item[data-uid]').length;
     if(total>3) html+=`<span class="sm-more">+${total-3}</span>`;
@@ -31793,7 +31824,8 @@ document.addEventListener('click', function(e){
     bar.classList.toggle('is-collapsed', !!on);
     if(on){
       syncMiniFromBar();
-      mini.classList.add('show');
+      if(mini.innerHTML) mini.classList.add('show');
+      else mini.classList.remove('show');
     } else {
       mini.classList.remove('show');
     }
@@ -31801,26 +31833,109 @@ document.addEventListener('click', function(e){
 
   function bindScroll(){
     const sc=document.getElementById('sidebar-scroll');
-    if(!sc || sc._storyScrollBound) return;
-    sc._storyScrollBound=true;
-    let last=0;
-    const THRESH=48;
+    if(!sc || sc._storyScrollBound2) return;
+    sc._storyScrollBound2=true;
+    let collapsed=false;
     sc.addEventListener('scroll', ()=>{
       const y=sc.scrollTop||0;
-      // hysteresis
-      if(y>THRESH && last<=THRESH) setCollapsed(true);
-      else if(y<12 && last>=12) setCollapsed(false);
-      last=y;
+      if(!collapsed && y>56){
+        collapsed=true;
+        setCollapsed(true);
+      } else if(collapsed && y<16){
+        collapsed=false;
+        setCollapsed(false);
+      }
     }, {passive:true});
   }
 
-  // Observe stories bar re-renders to refresh mini
+  // Kill horizontal auto-scroll on stories bar
+  function killAutoScroll(){
+    const bar=document.getElementById('stories-bar');
+    if(!bar) return;
+    if(bar._autoScrollTimer){
+      clearInterval(bar._autoScrollTimer);
+      bar._autoScrollTimer=null;
+    }
+    // prevent programmatic scrollLeft animation loops
+    try{
+      Object.defineProperty(bar, 'scrollLeft', {
+        get(){ return this._sl || 0; },
+        set(v){
+          // allow user touch scrolls only — block timer-driven jumps if rapid
+          this._sl = v;
+          HTMLElement.prototype.__lookupSetter__ && HTMLElement.prototype.__lookupSetter__('scrollLeft');
+        },
+        configurable:true
+      });
+    }catch(e){}
+    // safer: just clear any intervals that touch stories-bar scrollLeft
+  }
+
+  // Patch loadStories to tag avatar urls
+  function patchLoadStories(){
+    if(typeof loadStories!=='function' || loadStories._avTag) return;
+    const orig=loadStories;
+    window.loadStories = loadStories = async function(){
+      const r = await orig.apply(this, arguments);
+      setTimeout(()=>{
+        try{
+          tagStoryAvatars();
+          // also re-apply background from renderAvatarInto data
+          const bar=document.getElementById('stories-bar');
+          if(bar){
+            bar.querySelectorAll('.story-item[data-uid] .avatar').forEach(av=>{
+              const url = extractAvatarUrl(av);
+              if(url){
+                const it=av.closest('.story-item');
+                if(it) it.dataset.avatarUrl=url;
+                av.style.backgroundImage = `url("${url}")`;
+                av.style.backgroundSize='cover';
+                av.style.backgroundPosition='center';
+              }
+            });
+          }
+          syncMiniFromBar();
+        }catch(e){}
+      }, 80);
+      setTimeout(tagStoryAvatars, 400);
+      return r;
+    };
+    loadStories._avTag=true;
+  }
+
+  // Ensure story viewer avatar stays visible while paging
+  function patchStoryViewerAvatar(){
+    if(typeof openStoryViewer!=='function' || openStoryViewer._avFix) return;
+    const orig=openStoryViewer;
+    window.openStoryViewer = openStoryViewer = async function(userId, name){
+      const r = await orig.apply(this, arguments);
+      try{
+        const av=document.getElementById('story-hdr-av');
+        if(av && (!av.src || av.src.endsWith(location.pathname))){
+          // try from stories bar
+          const item=document.querySelector(`#stories-bar .story-item[data-uid="${userId}"]`);
+          const url = item?.dataset.avatarUrl || extractAvatarUrl(item?.querySelector('.avatar'));
+          if(url){
+            av.src=url;
+            av.style.display='block';
+            av.style.objectFit='cover';
+          } else if(window.myProfile && String(userId)===String(myProfile.id) && myProfile.avatar_url){
+            av.src=myProfile.avatar_url;
+            av.style.display='block';
+          }
+        }
+      }catch(e){}
+      return r;
+    };
+    openStoryViewer._avFix=true;
+  }
+
   function observeBar(){
     const bar=document.getElementById('stories-bar');
-    if(!bar || bar._obs) return;
-    bar._obs=true;
+    if(!bar || bar._obs2) return;
+    bar._obs2=true;
     const mo=new MutationObserver(()=>{
-      try{ syncMiniFromBar(); }catch(e){}
+      setTimeout(tagStoryAvatars, 30);
     });
     mo.observe(bar,{childList:true,subtree:true});
   }
@@ -31830,14 +31945,22 @@ document.addEventListener('click', function(e){
     ensureMiniHost();
     bindScroll();
     observeBar();
-    syncMiniFromBar();
+    patchLoadStories();
+    patchStoryViewerAvatar();
+    tagStoryAvatars();
+    killAutoScroll();
+    // remove empty mini if not collapsed
+    const sc=document.getElementById('sidebar-scroll');
+    if(sc && (sc.scrollTop||0)<16){
+      setCollapsed(false);
+    }
   }
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', boot);
   else boot();
   setTimeout(boot, 400);
   setTimeout(boot, 1200);
   setTimeout(boot, 2500);
-  console.log('[SL] MAX stories scroll collapse ready');
+  console.log('[SL] stories MAX collapse + avatar fix ready');
 })();
 </script>
 
