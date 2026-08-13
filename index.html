@@ -30008,7 +30008,20 @@ document.addEventListener('click', function(e){
     const ov = document.createElement('div');
     ov.id = 'sl-pmg';
     ov.style.cssText = 'position:fixed;inset:0;z-index:45000;background:#000;display:flex;flex-direction:column;touch-action:none;overscroll-behavior:none';
-    const isMe = !!(typeof myProfile!=='undefined' && myProfile && String(uid)===String(myProfile.id));
+    let isMe = false;
+    try{
+      if(typeof myProfile!=='undefined' && myProfile){
+        isMe = String(uid)===String(myProfile.id)
+          || profile===myProfile
+          || (profile?.username && myProfile.username && profile.username===myProfile.username);
+      }
+    }catch(e){ isMe = true; }
+    // Prefer showing delete; hide only when clearly another user
+    if(!isMe && profile && typeof myProfile!=='undefined' && myProfile && profile.id && String(profile.id)!==String(myProfile.id)){
+      isMe = false;
+    } else if(!profile || !profile.id){
+      isMe = true;
+    }
     ov.innerHTML = `
       <div style="position:absolute;top:0;left:0;right:0;z-index:3;padding:calc(8px + env(safe-area-inset-top,0px)) 10px 14px;display:flex;align-items:center;gap:8px;background:linear-gradient(to bottom,rgba(0,0,0,.65),transparent);pointer-events:none">
         <button type="button" id="pmg-x" style="pointer-events:auto;width:40px;height:40px;border:none;background:transparent;color:#fff;font-size:28px;line-height:1;cursor:pointer">×</button>
@@ -30132,48 +30145,82 @@ document.addEventListener('click', function(e){
       try{ await navigator.clipboard.writeText(item.url); showLocalToast('Ссылка скопирована'); }catch(e){}
     }
 
-    async function deleteCurrent(){
-      if(!isMe || !list.length) return;
-      const ok = await (typeof customConfirm==='function'
-        ? customConfirm('Удалить это фото из истории?')
-        : Promise.resolve(confirm('Удалить это фото из истории?')));
-      if(!ok) return;
-      const removed = list.splice(idx, 1)[0];
-      const removedUrl = removed?.url || removed;
+    function persistAvatarList(){
+      const normalized = list.map(x=>{
+        if(typeof x==='string') return {url:x, at:Date.now()};
+        return {url:x.url||x, at:x.at||Date.now()};
+      }).filter(x=>x.url);
       try{
-        if(typeof getAvatarHistory==='function' && typeof pushAvatarHistory==='function'){
-          // rewrite history storage
-          const store = (typeof storage!=='undefined' && storage) ? storage : localStorage;
-          try{
-            const all = JSON.parse(store.getItem('sl_avatar_history')||'{}');
-            all[uid] = list.slice();
-            store.setItem('sl_avatar_history', JSON.stringify(all));
-          }catch(e){}
-        }
-      }catch(e){}
+        const store = (typeof storage!=='undefined' && storage && storage.setItem) ? storage : localStorage;
+        const all = JSON.parse(store.getItem('sl_avatar_history')||'{}');
+        all[uid] = normalized;
+        store.setItem('sl_avatar_history', JSON.stringify(all));
+      }catch(e){ console.warn('persist sl_avatar_history', e); }
       try{
         const LS = window.LS || localStorage;
-        LS.setItem('sl_av_hist_'+uid, JSON.stringify(list.map(x=>x.url||x)));
-      }catch(e){}
-      // if deleted current avatar — switch to next remaining
-      if(typeof myProfile!=='undefined' && myProfile && removedUrl === myProfile.avatar_url){
-        const nextUrl = list[0]?.url || list[0] || null;
-        try{
-          myProfile.avatar_url = nextUrl;
-          if(typeof sb!=='undefined' && sb) await sb.from('profiles').update({avatar_url: nextUrl}).eq('id', myProfile.id);
-          try{ if(typeof renderMe==='function') renderMe(); }catch(e){}
-          try{ if(typeof applyMyAvatarEverywhere==='function') applyMyAvatarEverywhere(); }catch(e){}
-          try{ if(typeof updateAllUIs==='function') updateAllUIs(); }catch(e){}
-        }catch(e){ console.warn(e); }
-      }
-      showLocalToast('Удалено');
-      if(!list.length){ setTimeout(()=>ov.remove(), 400); return; }
-      if(idx >= list.length) idx = list.length - 1;
-      render();
+        LS.setItem('sl_av_hist_'+uid, JSON.stringify(normalized.map(x=>x.url)));
+      }catch(e){ console.warn('persist sl_av_hist_', e); }
+      list.length = 0;
+      normalized.forEach(x=>list.push(x));
     }
 
-    ov.querySelector('#pmg-x').onclick = ()=> ov.remove();
-    ov.querySelector('#pmg-trash')?.addEventListener('click', (e)=>{ e.stopPropagation(); deleteCurrent(); });
+    async function deleteCurrent(){
+      try{
+        if(!list.length){ showLocalToast('Нет фото'); return; }
+        // Always allow delete of items in this viewer for own profile;
+        // if isMe was false (id mismatch), still allow removing from local history lists
+        let ok = false;
+        try{ ok = window.confirm('Удалить это фото из истории?'); }catch(e){ ok = true; }
+        if(!ok) return;
+
+        const removed = list.splice(idx, 1)[0];
+        const removedUrl = (removed && removed.url) ? removed.url : removed;
+        persistAvatarList();
+
+        // If deleted the active profile avatar — switch to next or clear
+        try{
+          if(typeof myProfile!=='undefined' && myProfile && String(myProfile.id)===String(uid)){
+            if(removedUrl && myProfile.avatar_url === removedUrl){
+              const nextUrl = list[0] ? (list[0].url||list[0]) : null;
+              myProfile.avatar_url = nextUrl;
+              try{
+                if(typeof sb!=='undefined' && sb) await sb.from('profiles').update({avatar_url: nextUrl}).eq('id', myProfile.id);
+              }catch(e){ console.warn('avatar update', e); }
+              try{ if(typeof renderMe==='function') renderMe(); }catch(e){}
+              try{ if(typeof applyMyAvatarEverywhere==='function') applyMyAvatarEverywhere(); }catch(e){}
+              try{ if(typeof updateAllUIs==='function') updateAllUIs(); }catch(e){}
+            }
+          }
+        }catch(e){ console.warn(e); }
+
+        showLocalToast('Удалено');
+        if(!list.length){
+          setTimeout(()=>{ try{ ov.remove(); }catch(e){} }, 350);
+          return;
+        }
+        if(idx >= list.length) idx = list.length - 1;
+        render();
+      }catch(err){
+        console.error('deleteCurrent', err);
+        try{ showLocalToast('Ошибка удаления'); }catch(e){}
+      }
+    }
+
+    ov.querySelector('#pmg-x').onclick = (e)=>{ e&&e.stopPropagation(); ov.remove(); };
+
+    function bindTrash(el){
+      if(!el) return;
+      const fire = (e)=>{
+        try{ e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation(); }catch(err){}
+        deleteCurrent();
+      };
+      el.addEventListener('click', fire, true);
+      el.addEventListener('touchend', fire, {capture:true, passive:false});
+      el.style.pointerEvents = 'auto';
+      el.style.zIndex = '10';
+    }
+    bindTrash(ov.querySelector('#pmg-trash'));
+    // also bind menu delete when shown
     ov.querySelector('#pmg-more').onclick = (e)=>{ e.stopPropagation(); menu.style.display = menu.style.display==='none'?'block':'none'; };
     menu.addEventListener('click', (e)=>{
       const b = e.target.closest('[data-a]');
@@ -30181,7 +30228,11 @@ document.addEventListener('click', function(e){
       menu.style.display = 'none';
       if(b.dataset.a==='copy') copyCurrent();
       if(b.dataset.a==='share') shareCurrent();
-      if(b.dataset.a==='delete') deleteCurrent();
+      if(b.dataset.a==='delete'){
+        e.preventDefault();
+        e.stopPropagation();
+        deleteCurrent();
+      }
     });
     ov.addEventListener('click', (e)=>{
       if(menu.style.display!=='none' && !e.target.closest('#pmg-menu') && !e.target.closest('#pmg-more'))
