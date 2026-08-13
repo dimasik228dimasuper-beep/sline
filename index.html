@@ -4567,37 +4567,84 @@ function getCachedMessages(key){
 }
 function setCachedMessages(key, rows){
   if(!key || !rows) return;
-  const slim = rows.slice(-120).map(m=>({
+  const slim = rows.slice(-150).map(m=>({
     id:m.id, sender_id:m.sender_id, receiver_id:m.receiver_id, group_id:m.group_id,
-    content:m.content, type:m.type, file_url:m.file_url, created_at:m.created_at,
+    content: typeof m.content==='string' && m.content.length>2000 ? m.content.slice(0,2000) : m.content,
+    type:m.type,
+    file_url:m.file_url,
+    created_at:m.created_at,
     profiles:m.profiles||undefined
   }));
+  // Full rows in memory (fast)
   _msgCache.set(key, {rows:slim, ts:Date.now()});
-  try{ sessionStorage.setItem('sl_mc_'+key, JSON.stringify(slim)); }catch(e){}
+  // sessionStorage: strip heavy data: URLs so parse is instant next open
+  try{
+    const light = slim.map(m=>{
+      const fu = m.file_url;
+      if(typeof fu==='string' && fu.length>4000 && (fu.startsWith('data:')||fu.startsWith('['))){
+        return {...m, file_url: (m.type==='album'?'[]':null), _heavy:1, content: m.type==='text'?m.content:(m.content||m.type||'')};
+      }
+      return m;
+    });
+    sessionStorage.setItem('sl_mc_'+key, JSON.stringify(light));
+  }catch(e){
+    try{ sessionStorage.removeItem('sl_mc_'+key); }catch(e2){}
+  }
 }
 function paintMessages(rows, isGroup){
   const list=document.getElementById('messages-list');
   if(!list) return;
+  rows = rows||[];
+  // Skip full re-paint if same chat already shows same last message
+  try{
+    const last = rows.length ? rows[rows.length-1] : null;
+    const sig = (last && last.id ? String(last.id) : 'empty') + ':' + rows.length + ':' + (isGroup?'g':'d');
+    if(list.dataset.paintSig === sig && list.childElementCount > 0){
+      scrollToBottom(true);
+      return;
+    }
+    list.dataset.paintSig = sig;
+  }catch(e){}
+  // Fast path: clear once, render into fragment via existing renderMessage (it appends to list)
   list.innerHTML='';
-  (rows||[]).forEach(m=>renderMessage(m, !!isGroup));
+  const prev = list.style.display;
+  // temporarily hide to avoid layout thrash
+  list.style.visibility='hidden';
+  try{
+    for(let i=0;i<rows.length;i++) renderMessage(rows[i], !!isGroup);
+  }finally{
+    list.style.visibility='';
+  }
   scrollToBottom(true);
 }
 
 async function loadMessages(){
-  // generation token — discard stale responses
-  window._slChatGen = (window._slChatGen||0) + 1;
-  const _gen = window._slChatGen;
   const partnerSnap = activePartner;
   const groupSnap = activeGroup;
   const cacheKey = chatCacheKey(partnerSnap, null);
+  const listEl = document.getElementById('messages-list');
 
-  // Instant paint from cache
+  // If cache already painted for this chat, keep gen stable (avoid flicker/clear)
+  let hadCache = false;
   if(cacheKey){
     const cached = getCachedMessages(cacheKey);
     if(cached && cached.length){
-      if(_gen===window._slChatGen) paintMessages(cached, false);
+      hadCache = true;
+      if(listEl && listEl.dataset.ck !== cacheKey){
+        paintMessages(cached, false);
+      } else if(listEl && !listEl.childElementCount){
+        paintMessages(cached, false);
+      }
+      if(listEl) listEl.dataset.ck = cacheKey;
     }
   }
+
+  // generation token — discard stale responses (only bump if switching chat)
+  if(!hadCache || !listEl || listEl.dataset.ck !== cacheKey){
+    window._slChatGen = (window._slChatGen||0) + 1;
+  }
+  const _gen = window._slChatGen;
+  if(listEl) listEl.dataset.ck = cacheKey||'';
 
   // Local news channel messages
   if(groupSnap && typeof isNewsChannel==='function' && isNewsChannel(groupSnap)){
@@ -31443,6 +31490,354 @@ document.addEventListener('click', function(e){
   window.slEditNote = editNote;
   window.slOpenWallPicker = openWallPicker;
   console.log('[SL] TG/MAX feature pack ready');
+})();
+</script>
+
+
+<script>
+/* ========== Instant chat history ========== */
+(function(){
+  // Prefetch on press/hover of chat row
+  function prefetchForId(id, isGroup){
+    try{
+      if(!id || typeof sb==='undefined' || !sb) return;
+      const key = isGroup ? ('g:'+id) : ('dm:'+(window.myProfile&&myProfile.id)+':'+id);
+      if(typeof getCachedMessages==='function' && getCachedMessages(key)?.length) return;
+      // fire and forget
+      const q = isGroup
+        ? sb.from('messages').select('id,sender_id,receiver_id,group_id,content,type,file_url,created_at').eq('group_id', id).order('created_at',{ascending:false}).limit(60)
+        : sb.from('messages').select('id,sender_id,receiver_id,group_id,content,type,file_url,created_at').is('group_id',null).order('created_at',{ascending:false}).limit(60);
+      // for DM need filter both directions — approximate with limit and client filter after
+      Promise.resolve(q).then(async (res)=>{
+        let rows = (res && res.data) || [];
+        if(!isGroup && window.myProfile){
+          rows = rows.filter(m =>
+            (String(m.sender_id)===String(myProfile.id) && String(m.receiver_id)===String(id)) ||
+            (String(m.receiver_id)===String(myProfile.id) && String(m.sender_id)===String(id))
+          );
+        }
+        rows = rows.slice().reverse();
+        if(rows.length && typeof setCachedMessages==='function') setCachedMessages(key, rows);
+      }).catch(()=>{});
+    }catch(e){}
+  }
+
+  function bindPrefetch(){
+    const list=document.getElementById('contacts-list');
+    if(!list || list._pfBound) return;
+    list._pfBound=true;
+    list.addEventListener('pointerdown', (e)=>{
+      const row = e.target.closest('.sw-clip, .contact');
+      if(!row) return;
+      const id = row.dataset.cid || row.dataset.id || row.querySelector('.contact')?.dataset.cid;
+      const type = row.dataset.ctype || row.querySelector('.contact')?.dataset.ctype || 'user';
+      if(id) prefetchForId(id, type==='group'||type==='channel');
+    }, {passive:true});
+  }
+
+  // openChat: paint cache BEFORE any await/network
+  function patchOpen(){
+    if(typeof openChat==='function' && !openChat._instantPatched){
+      const orig=openChat;
+      window.openChat = openChat = function(partner){
+        try{
+          if(partner && partner.id && typeof getCachedMessages==='function'){
+            const ck = typeof chatCacheKey==='function' ? chatCacheKey(partner,null) : ('dm:'+(myProfile&&myProfile.id)+':'+partner.id);
+            const cached = getCachedMessages(ck);
+            const list=document.getElementById('messages-list');
+            if(cached && cached.length && list){
+              // show chat shell ASAP
+              try{
+                document.body.classList.add('in-chat');
+                document.getElementById('no-chat-state').style.display='none';
+                document.getElementById('chat-active').style.display='flex';
+              }catch(e){}
+              if(list.dataset.ck !== ck || !list.childElementCount){
+                if(typeof paintMessages==='function') paintMessages(cached, false);
+                list.dataset.ck = ck;
+              }
+            }
+          }
+        }catch(e){}
+        return orig.apply(this, arguments);
+      };
+      openChat._instantPatched=true;
+    }
+    if(typeof openGroup==='function' && !openGroup._instantPatched){
+      const orig=openGroup;
+      window.openGroup = openGroup = function(group){
+        try{
+          if(group && group.id && typeof getCachedMessages==='function'){
+            const ck = 'g:'+group.id;
+            const cached = getCachedMessages(ck);
+            const list=document.getElementById('messages-list');
+            if(cached && cached.length && list){
+              try{
+                document.body.classList.add('in-chat');
+                document.getElementById('no-chat-state').style.display='none';
+                document.getElementById('chat-active').style.display='flex';
+              }catch(e){}
+              if(list.dataset.ck !== ck || !list.childElementCount){
+                if(typeof paintMessages==='function') paintMessages(cached, true);
+                list.dataset.ck = ck;
+              }
+            }
+          }
+        }catch(e){}
+        return orig.apply(this, arguments);
+      };
+      openGroup._instantPatched=true;
+    }
+  }
+
+  // loadMessages: after network, only repaint if changed
+  function patchLoad(){
+    if(typeof loadMessages==='function' && !loadMessages._diffPatched){
+      const orig=loadMessages;
+      window.loadMessages = loadMessages = async function(){
+        const list=document.getElementById('messages-list');
+        const beforeSig = list && list.dataset.paintSig;
+        const ck = list && list.dataset.ck;
+        await orig.apply(this, arguments);
+        // if paintSig unchanged after load, good; if network painted same, paintMessages skips
+      };
+      loadMessages._diffPatched=true;
+    }
+  }
+
+  // Reduce limit on slow networks? keep 80 for speed
+  function patchQueryLimit(){
+    // no-op: left as documentation
+  }
+
+  function boot(){
+    bindPrefetch();
+    patchOpen();
+    patchLoad();
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', boot);
+  else boot();
+  setTimeout(boot, 300);
+  setTimeout(boot, 1000);
+  console.log('[SL] instant history pack ready');
+})();
+</script>
+
+
+<script>
+/* ========== MAX-style stories: collapse into header on scroll ========== */
+(function(){
+  function css(){
+    if(document.getElementById('sl-stories-scroll-css')) return;
+    const s=document.createElement('style');
+    s.id='sl-stories-scroll-css';
+    s.textContent=`
+      /* Story rings like MAX / TG */
+      #stories-bar.stories-bar{
+        display:flex!important;
+        gap:14px;
+        padding:12px 16px 10px;
+        overflow-x:auto!important;
+        overflow-y:hidden!important;
+        border-bottom:1px solid var(--line);
+        transition:max-height .28s cubic-bezier(.2,.8,.2,1), opacity .22s ease, padding .28s ease, margin .28s ease;
+        max-height:110px;
+        opacity:1;
+        -webkit-overflow-scrolling:touch;
+      }
+      #stories-bar.stories-bar.is-collapsed{
+        max-height:0!important;
+        opacity:0;
+        padding-top:0!important;
+        padding-bottom:0!important;
+        margin:0!important;
+        border-bottom-width:0!important;
+        pointer-events:none;
+        overflow:hidden!important;
+      }
+      #stories-bar .story-item{
+        display:flex;flex-direction:column;align-items:center;gap:5px;
+        flex-shrink:0;cursor:pointer;width:68px;
+      }
+      #stories-bar .story-item span{
+        font-size:11px;color:var(--text);max-width:68px;
+        white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center;
+      }
+      #stories-bar .story-ring{
+        width:62px;height:62px;border-radius:50%;padding:3px;
+        background:linear-gradient(135deg,#f58529 0%,#dd2a7b 40%,#8134af 70%,#515bd4 100%);
+        box-sizing:border-box;
+      }
+      #stories-bar .story-ring > .avatar,
+      #stories-bar .story-ring > div{
+        width:100%!important;height:100%!important;border-radius:50%!important;
+        border:2.5px solid var(--panel,#0d111a)!important;
+        box-sizing:border-box;overflow:hidden;
+        background-size:cover!important;background-position:center!important;
+      }
+      /* seen / no active */
+      #stories-bar .story-ring.seen,
+      #stories-bar .story-item.seen .story-ring{
+        background:linear-gradient(135deg,#5a6270,#3d4450);
+      }
+      #stories-bar #add-story-btn-bar .story-ring{
+        background:var(--line,#2a3348);
+      }
+
+      /* Collapsed mini rings in header title area */
+      #sl-stories-mini{
+        display:none;align-items:center;margin-left:8px;gap:0;
+        height:28px;
+      }
+      #sl-stories-mini.show{display:inline-flex}
+      #sl-stories-mini .sm-ring{
+        width:26px;height:26px;border-radius:50%;padding:2px;
+        background:linear-gradient(135deg,#f58529,#dd2a7b,#8134af,#515bd4);
+        box-sizing:border-box;margin-left:-6px;position:relative;
+        border:1.5px solid var(--panel,#0d111a);
+      }
+      #sl-stories-mini .sm-ring:first-child{margin-left:0}
+      #sl-stories-mini .sm-ring .sm-av{
+        width:100%;height:100%;border-radius:50%;
+        background-size:cover;background-position:center;background-color:#333;
+        display:flex;align-items:center;justify-content:center;
+        font-size:10px;font-weight:700;color:#fff;overflow:hidden;
+      }
+      #sl-stories-mini .sm-more{
+        margin-left:4px;font-size:11px;font-weight:700;color:var(--muted);
+      }
+
+      /* Title row can hold mini */
+      .sidebar-header .me-row,
+      .sidebar-header{
+        position:relative;
+      }
+      #sl-stories-title-wrap{
+        display:inline-flex;align-items:center;gap:6px;
+      }
+    `;
+    document.head.appendChild(s);
+  }
+
+  function ensureMiniHost(){
+    let mini=document.getElementById('sl-stories-mini');
+    if(mini) return mini;
+    // Prefer place next to chats title / me-name
+    const header=document.querySelector('#page-chats .sidebar-header');
+    const meName=document.getElementById('me-name-chats');
+    mini=document.createElement('div');
+    mini.id='sl-stories-mini';
+    mini.title='Истории';
+    mini.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      // expand stories: scroll sidebar to top
+      const sc=document.getElementById('sidebar-scroll');
+      if(sc) sc.scrollTo({top:0, behavior:'smooth'});
+      const bar=document.getElementById('stories-bar');
+      if(bar){
+        bar.classList.remove('is-collapsed');
+        // open first story if any
+        const first=bar.querySelector('.story-item[data-uid]');
+        if(first) first.click();
+      }
+    });
+    if(meName && meName.parentNode){
+      // put after name block
+      const wrap=meName.parentNode;
+      wrap.style.display='flex';
+      wrap.style.alignItems='center';
+      wrap.style.gap='6px';
+      wrap.appendChild(mini);
+    } else if(header){
+      header.appendChild(mini);
+    } else {
+      document.body.appendChild(mini);
+    }
+    return mini;
+  }
+
+  function syncMiniFromBar(){
+    const bar=document.getElementById('stories-bar');
+    const mini=ensureMiniHost();
+    if(!bar||!mini) return;
+    const items=[...bar.querySelectorAll('.story-item[data-uid]')].slice(0,3);
+    if(!items.length){
+      mini.innerHTML='';
+      mini.classList.remove('show');
+      return;
+    }
+    let html='';
+    items.forEach(it=>{
+      const av=it.querySelector('.avatar');
+      let bg='';
+      let letter='?';
+      if(av){
+        const st=av.getAttribute('style')||'';
+        const m=st.match(/url\(["']?([^"')]+)["']?\)/);
+        if(m) bg=`background-image:url('${m[1]}')`;
+        letter=(av.textContent||it.dataset.name||'?').trim().charAt(0)||'?';
+        if(av.style && av.style.backgroundImage) bg=`background-image:${av.style.backgroundImage}`;
+      }
+      const name=it.dataset.name||'';
+      html+=`<div class="sm-ring" title="${name}"><div class="sm-av" style="${bg}">${bg?'':name.charAt(0)||letter}</div></div>`;
+    });
+    const total=bar.querySelectorAll('.story-item[data-uid]').length;
+    if(total>3) html+=`<span class="sm-more">+${total-3}</span>`;
+    mini.innerHTML=html;
+  }
+
+  function setCollapsed(on){
+    const bar=document.getElementById('stories-bar');
+    const mini=ensureMiniHost();
+    if(!bar) return;
+    bar.classList.toggle('is-collapsed', !!on);
+    if(on){
+      syncMiniFromBar();
+      mini.classList.add('show');
+    } else {
+      mini.classList.remove('show');
+    }
+  }
+
+  function bindScroll(){
+    const sc=document.getElementById('sidebar-scroll');
+    if(!sc || sc._storyScrollBound) return;
+    sc._storyScrollBound=true;
+    let last=0;
+    const THRESH=48;
+    sc.addEventListener('scroll', ()=>{
+      const y=sc.scrollTop||0;
+      // hysteresis
+      if(y>THRESH && last<=THRESH) setCollapsed(true);
+      else if(y<12 && last>=12) setCollapsed(false);
+      last=y;
+    }, {passive:true});
+  }
+
+  // Observe stories bar re-renders to refresh mini
+  function observeBar(){
+    const bar=document.getElementById('stories-bar');
+    if(!bar || bar._obs) return;
+    bar._obs=true;
+    const mo=new MutationObserver(()=>{
+      try{ syncMiniFromBar(); }catch(e){}
+    });
+    mo.observe(bar,{childList:true,subtree:true});
+  }
+
+  function boot(){
+    css();
+    ensureMiniHost();
+    bindScroll();
+    observeBar();
+    syncMiniFromBar();
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', boot);
+  else boot();
+  setTimeout(boot, 400);
+  setTimeout(boot, 1200);
+  setTimeout(boot, 2500);
+  console.log('[SL] MAX stories scroll collapse ready');
 })();
 </script>
 
