@@ -1971,6 +1971,33 @@ window.addEventListener('unhandledrejection', function(ev){
       document.documentElement.classList.add('sl-booting');
     }
   }catch(e){}
+  // Watchdog: never stay on black boot screen forever
+  setTimeout(function(){
+    try{
+      var html = document.documentElement;
+      if(!html.classList.contains('sl-booting')) return;
+      // still booting after 2.5s → force ready + show something
+      html.classList.remove('sl-booting');
+      html.classList.add('sl-ready');
+      var app = document.getElementById('app-screen');
+      var auth = document.getElementById('auth-screen');
+      var hasUser = false;
+      try{ hasUser = !!(window.myProfile && window.myProfile.id); }catch(e){}
+      if(hasUser){
+        if(app){ app.style.display='flex'; app.style.pointerEvents='auto'; }
+        if(auth) auth.style.display='none';
+      } else {
+        if(auth){
+          auth.style.display='flex';
+          auth.style.pointerEvents='auto';
+          auth.style.zIndex='50000';
+          auth.style.visibility='visible';
+        }
+        if(app){ app.style.display='none'; }
+        try{ localStorage.removeItem('sl_logged_in'); }catch(e){}
+      }
+    }catch(e){}
+  }, 2500);
 })();
 </script>
 <style>
@@ -1979,10 +2006,12 @@ html.sl-booting #app-screen{display:flex!important}
 html.sl-booting::before{
   content:'';position:fixed;inset:0;z-index:99999;background:#0B1120;
   /* subtle loading without text */
+  pointer-events:none;
 }
-body.sl-ready html.sl-booting::before,
-html.sl-ready.sl-booting::before{display:none}
-html.sl-ready.sl-booting::before{display:none!important}
+html.sl-ready #auth-screen{pointer-events:auto}
+html.sl-ready.sl-booting::before,
+html.sl-ready::before{display:none!important}
+body.sl-ready html.sl-booting::before{display:none!important}
 
 
 /* ===== SL Modern UI 2026 — light feel, fluid animations ===== */
@@ -2361,8 +2390,10 @@ body.theme-light .topbar {
     <div class="auth-sub" id="auth-sub-text">Современный мессенджер</div>
 
     <div id="auth-choice">
-      <button type="button" class="btn-primary" id="auth-go-login" style="margin-top:8px">Вход</button>
-      <button type="button" class="btn-secondary" id="auth-go-register">Регистрация</button>
+      <button type="button" class="btn-primary" id="auth-go-login" style="margin-top:8px;position:relative;z-index:5;pointer-events:auto"
+        onclick="try{event.preventDefault();if(typeof showAuthPanel==='function')showAuthPanel('login-form');else{var a=document.getElementById('auth-choice'),b=document.getElementById('login-form'),c=document.getElementById('register-form');if(a)a.style.display='none';if(c)c.style.display='none';if(b)b.style.display='block';} }catch(e){console.warn(e);} return false;">Вход</button>
+      <button type="button" class="btn-secondary" id="auth-go-register" style="position:relative;z-index:5;pointer-events:auto"
+        onclick="try{event.preventDefault();window._regStep=1;if(typeof setRegStep==='function')setRegStep(1);if(typeof showAuthPanel==='function')showAuthPanel('register-form');else{var a=document.getElementById('auth-choice'),b=document.getElementById('login-form'),c=document.getElementById('register-form');if(a)a.style.display='none';if(b)b.style.display='none';if(c)c.style.display='block';} }catch(e){console.warn(e);} return false;">Регистрация</button>
     </div>
 
     <div id="login-form" style="display:none">
@@ -15157,20 +15188,38 @@ function scheduleBirthdayAfterAppReady(){
   function showAppShell(){
     const a=document.getElementById('auth-screen');
     const app=document.getElementById('app-screen');
-    if(a) a.style.display='none';
-    if(app) app.style.display='flex';
+    if(a){ a.style.display='none'; a.style.pointerEvents='none'; }
+    if(app){ app.style.display='flex'; app.style.pointerEvents='auto'; app.style.visibility='visible'; }
   }
   if(!sb){ showAuth(); return; }
   try{
-    // Prefer stored session immediately
-    const {data, error} = await sb.auth.getSession();
+    // Prefer stored session immediately — with timeout so we never hang on black screen
+    const sessionPromise = sb.auth.getSession();
+    const timed = await Promise.race([
+      sessionPromise,
+      new Promise((_, rej)=> setTimeout(()=>rej(new Error('getSession timeout')), 4000))
+    ]);
+    const data = timed && timed.data;
     if(data?.session?.user){
       showAppShell();
-      await onAuthenticated(data.session.user);
+      try{
+        await Promise.race([
+          onAuthenticated(data.session.user),
+          new Promise((_, rej)=> setTimeout(()=>rej(new Error('onAuthenticated timeout')), 8000))
+        ]);
+      }catch(authErr){
+        console.warn('onAuthenticated', authErr);
+        // if profile load hung, still leave boot state so UI is usable
+      }
       document.documentElement.classList.remove('sl-booting');
       document.documentElement.classList.add('sl-ready');
-      hideLoader(true);
+      try{ hideLoader(true); }catch(e){}
       try{ scheduleBirthdayAfterAppReady(); }catch(e){}
+      // if still no profile after all that — show auth
+      if(!myProfile){
+        try{ await sb.auth.signOut(); }catch(e){}
+        showAuth();
+      }
     } else {
       showAuth();
     }
