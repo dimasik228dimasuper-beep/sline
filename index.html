@@ -70,9 +70,9 @@ body{
   max-width:100vw;
 }
 input,textarea{user-select:text!important;-webkit-user-select:text!important}
-#auth-screen{flex:1;min-height:0;width:100%;display:flex;align-items:center;justify-content:center;padding:20px;padding-top:calc(20px + env(safe-area-inset-top,0px));box-sizing:border-box;background:var(--bg)}
+#auth-screen{flex:1;min-height:0;width:100%;display:flex;align-items:center;justify-content:center;padding:20px;padding-top:calc(20px + env(safe-area-inset-top,0px));box-sizing:border-box;background:var(--bg);position:relative;z-index:50000}
 .auth-card{width:100%;max-width:420px;background:var(--panel);border:1px solid var(--line);border-radius:24px;padding:32px 28px;position:relative;overflow:hidden}
-.auth-card::before{content:"";position:absolute;top:-40%;right:-30%;width:220px;height:220px;border-radius:50%;background:conic-gradient(from 180deg,var(--accent-a),var(--mint),var(--accent-b),var(--accent-a));filter:blur(50px);opacity:.35}
+.auth-card::before{content:"";position:absolute;top:-40%;right:-30%;width:220px;height:220px;border-radius:50%;background:conic-gradient(from 180deg,var(--accent-a),var(--mint),var(--accent-b),var(--accent-a));filter:blur(50px);opacity:.35;pointer-events:none!important}
 .brand{display:flex;align-items:center;gap:12px;margin-bottom:8px;position:relative}
 .brand-mark{width:40px;height:40px;border-radius:12px;background:linear-gradient(135deg,#4C7CF3,#6D5DF6);display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;background-image:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%20192%20192%22%3E%3Cdefs%3E%3ClinearGradient%20id%3D%22slg%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%221%22%3E%3Cstop%20offset%3D%220%22%20stop-color%3D%22%234C7CF3%22/%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%236D5DF6%22/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect%20width%3D%22192%22%20height%3D%22192%22%20rx%3D%2240%22%20fill%3D%22url%28%23slg%29%22/%3E%3Cpath%20d%3D%22M96%2042c-30%200-54%2020-54%2046%200%2016%208%2030%2022%2038l-7%2024%2026-15c4%201%208%202%2013%202%2030%200%2054-21%2054-49S126%2042%2096%2042z%22%20fill%3D%22none%22%20stroke%3D%22%23ffffff%22%20stroke-width%3D%2210%22%20stroke-linejoin%3D%22round%22%20stroke-linecap%3D%22round%22/%3E%3C/svg%3E");background-size:cover;background-position:center;font-size:0;color:transparent}
 .brand-mark::after{display:none!important;content:none!important}
@@ -141,8 +141,8 @@ body.in-chat .app-pages{
 .search-icon{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--muted);pointer-events:none}
 .sidebar-actions{display:flex;gap:6px}
 .plus-menu{position:relative;flex:0!important;z-index:50}
-.plus-dropdown{display:none!important}
-.plus-dropdown.show{display:none!important}
+.plus-dropdown{display:none;position:absolute;top:calc(100% + 8px);right:0;min-width:200px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:6px;box-shadow:0 12px 40px rgba(0,0,0,.35);z-index:80}
+.plus-dropdown.show{display:block}
 .plus-item{padding:10px 14px;border-radius:10px;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:10px;color:var(--text)}
 .plus-item:hover{background:var(--panel-hover)}
 /* stories-bar base above */
@@ -634,6 +634,52 @@ body.beta-oled .sw-clip{background:var(--panel)!important}
 .folder-tabs{display:flex;gap:6px;padding:8px 12px;overflow-x:auto;border-bottom:1px solid var(--line);flex-shrink:0}
 .folder-tab{padding:6px 14px;border-radius:999px;font-size:12px;font-weight:600;white-space:nowrap;cursor:pointer;background:var(--input-bg);border:1px solid var(--line);color:var(--muted)}
 .folder-tab.active{background:var(--accent-a);border-color:var(--accent-a);color:#fff}
+
+/* ===== MAX-style chats header ===== */
+.max-chats-hdr{padding:8px 12px 6px!important;border-bottom:none!important;background:var(--bg)}
+.max-chats-title-row{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:44px}
+.max-chats-title{font-size:28px;font-weight:800;letter-spacing:-.02em;color:var(--text);line-height:1.1}
+.max-chats-actions{display:flex;align-items:center;gap:8px}
+.max-hdr-btn{width:40px;height:40px;border-radius:50%;border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;transition:transform .12s ease,background .15s}
+.max-hdr-btn:active{transform:scale(.94)}
+.max-hdr-more{background:rgba(120,120,128,.24);color:var(--text)}
+.max-hdr-plus{background:#2F6BFF;color:#fff;box-shadow:0 4px 14px rgba(47,107,255,.35)}
+.max-hdr-done{border:none;background:transparent;color:#4C8DFF;font-size:16px;font-weight:600;padding:8px 6px;cursor:pointer}
+.max-search-box{margin:6px 14px 4px!important}
+.max-search-box input{border-radius:14px!important;padding:11px 14px 11px 38px!important;font-size:15px!important;background:rgba(120,120,128,.16)!important;border:none!important}
+.max-folder-tabs{display:flex;gap:0;padding:4px 8px 0!important;border-bottom:1px solid rgba(120,120,128,.18)!important;overflow-x:auto;scrollbar-width:none}
+.max-folder-tabs::-webkit-scrollbar{display:none}
+.max-folder-tabs .folder-tab{
+  background:transparent!important;border:none!important;border-radius:0!important;
+  padding:10px 14px 12px!important;font-size:15px!important;font-weight:600!important;
+  color:rgba(235,235,245,.55)!important;position:relative;box-shadow:none!important
+}
+.max-folder-tabs .folder-tab.active{color:var(--text)!important;background:transparent!important}
+.max-folder-tabs .folder-tab.active::after{
+  content:'';position:absolute;left:12px;right:12px;bottom:0;height:3px;border-radius:3px 3px 0 0;background:#2F6BFF
+}
+.max-folder-tabs .folder-tab .ft-badge{
+  display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 5px;
+  margin-left:6px;border-radius:999px;background:#2F6BFF;color:#fff;font-size:11px;font-weight:700;vertical-align:middle
+}
+.max-folder-tabs .folder-tab .ft-x{
+  display:none;margin-left:6px;width:16px;height:16px;border-radius:50%;align-items:center;justify-content:center;
+  font-size:12px;line-height:1;color:rgba(235,235,245,.7);background:rgba(120,120,128,.28);border:none;cursor:pointer;padding:0
+}
+body.chats-selecting .max-folder-tabs .folder-tab[data-can-del="1"] .ft-x{display:inline-flex}
+body.chats-selecting .max-chats-actions .max-hdr-btn{display:none!important}
+body.chats-selecting .max-chats-actions .plus-menu{display:none!important}
+body.chats-selecting #chats-done-btn{display:inline-block!important}
+body.chats-selecting .max-chats-title{font-size:22px}
+/* selection bottom bar MAX style */
+#chat-select-bar{position:fixed;left:0;right:0;bottom:0;z-index:90;display:none;align-items:center;justify-content:space-between;
+  padding:12px 18px calc(12px + env(safe-area-inset-bottom,0px));background:rgba(28,28,30,.96);backdrop-filter:blur(12px);
+  border-top:1px solid rgba(255,255,255,.08)}
+#chat-select-bar.show{display:flex}
+#chat-select-bar .sel-read{background:none;border:none;color:#4C8DFF;font-size:16px;font-weight:600;cursor:pointer;padding:8px}
+#chat-select-bar .sel-del{background:none;border:none;color:#ff453a;font-size:16px;font-weight:600;cursor:pointer;padding:8px;opacity:.45}
+#chat-select-bar.has-sel .sel-del{opacity:1}
+body.chats-selecting #bottom-nav,body.chats-selecting .bottom-nav,body.chats-selecting .tab-bar{display:none!important}
 #pip-circle{position:fixed;top:60px;right:16px;width:120px;height:120px;border-radius:50%;overflow:hidden;z-index:9000;box-shadow:0 8px 32px rgba(0,0,0,.5);border:3px solid var(--accent-a);cursor:grab;display:none;background:#000;touch-action:none}
 #pip-circle video{width:100%;height:100%;object-fit:cover}
 #pip-trash{position:fixed;bottom:100px;left:50%;transform:translateX(-50%) scale(.6);opacity:0;width:64px;height:64px;border-radius:50%;background:var(--danger);color:#fff;display:flex;align-items:center;justify-content:center;z-index:9001;pointer-events:none;transition:all .2s}
@@ -2458,31 +2504,34 @@ body.theme-light .topbar {
     <div class="app-page active" id="page-chats">
       <div class="chats-layout">
         <div class="sidebar" id="sidebar">
-          <div class="sidebar-header">
-            <div class="me-row">
-              <div class="avatar" id="me-avatar-chats"><span id="me-initial-chats"></span></div>
-              <div style="min-width:0"><div class="me-name" id="me-name-chats"></div><div class="me-tag" id="me-status-chats">в сети</div></div>
-            </div>
-            <div class="sidebar-actions">
-              <button class="icon-btn" id="chats-select-btn" title="Выбрать"><svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg></button>
-              <div class="plus-menu" id="plus-menu">
-                <button class="icon-btn" id="plus-btn"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
-                <div class="plus-dropdown" id="plus-dropdown">
-                  <div class="plus-item" data-action="contact">Новый контакт</div>
-                  <div class="plus-item" data-action="group">Новая группа</div>
-                  <div class="plus-item" data-action="channel">Новый канал</div>
+          <div class="sidebar-header max-chats-hdr">
+            <div class="max-chats-title-row" id="chats-title-row">
+              <div class="max-chats-title" id="chats-page-title">Чаты</div>
+              <div class="sidebar-actions max-chats-actions" id="chats-hdr-actions">
+                <button type="button" class="max-hdr-btn max-hdr-more" id="chats-select-btn" title="Ещё" aria-label="Ещё">
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
+                </button>
+                <div class="plus-menu" id="plus-menu">
+                  <button type="button" class="max-hdr-btn max-hdr-plus" id="plus-btn" title="Создать" aria-label="Создать">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+                  </button>
+                  <div class="plus-dropdown" id="plus-dropdown">
+                    <div class="plus-item" data-action="contact">Новый контакт</div>
+                    <div class="plus-item" data-action="group">Новая группа</div>
+                    <div class="plus-item" data-action="channel">Новый канал</div>
+                  </div>
                 </div>
+                <button type="button" class="max-hdr-done" id="chats-done-btn" style="display:none">Готово</button>
               </div>
-              <button class="icon-btn" id="add-story-btn-side" title="История"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v8M8 12h8"/></svg></button>
             </div>
           </div>
           <div class="sidebar-scroll" id="sidebar-scroll">
             <div class="stories-bar" id="stories-bar"></div>
-            <div class="search-box" style="margin:10px 16px 8px">
+            <div class="search-box max-search-box">
               <span class="search-icon"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg></span>
-              <input type="text" id="search-input" placeholder="Поиск..." data-i18n-placeholder="ph_search">
+              <input type="text" id="search-input" placeholder="Люди, чаты и сообщения" data-i18n-placeholder="ph_search">
             </div>
-            <div class="folder-tabs" id="folder-tabs"></div>
+            <div class="folder-tabs max-folder-tabs" id="folder-tabs"></div>
             <div class="contacts" id="contacts-list"><div class="sl-loader-inline" data-i18n="loading"><div class="sl-spinner"></div></div></div>
           </div>
         </div>
@@ -3334,13 +3383,22 @@ async function enterMessengerAfterReg(){
 }
 
 function wireAuthUI(){
-  document.getElementById('auth-go-login')?.addEventListener('click', ()=> showAuthPanel('login-form'));
-  document.getElementById('auth-go-register')?.addEventListener('click', ()=>{
-    _regStep = 1;
-    try{ if(typeof setRegMode==='function') setRegMode('phone'); else window._regMode='phone'; }catch(e){}
-    setRegStep(1);
-    showAuthPanel('register-form');
-  });
+  if(window._slAuthWired) return;
+  window._slAuthWired = true;
+  function goLogin(e){ try{ e&&e.preventDefault(); }catch(_){} try{ showAuthPanel('login-form'); }catch(err){ console.warn(err); } }
+  function goRegister(e){
+    try{ e&&e.preventDefault(); }catch(_){}
+    try{
+      _regStep = 1;
+      try{ if(typeof setRegMode==='function') setRegMode('phone'); else window._regMode='phone'; }catch(e){}
+      if(typeof setRegStep==='function') setRegStep(1);
+      showAuthPanel('register-form');
+    }catch(err){ console.warn(err); }
+  }
+  const loginBtn=document.getElementById('auth-go-login');
+  const regBtn=document.getElementById('auth-go-register');
+  if(loginBtn){ loginBtn.onclick=goLogin; loginBtn.addEventListener('click', goLogin); }
+  if(regBtn){ regBtn.onclick=goRegister; regBtn.addEventListener('click', goRegister); }
   document.getElementById('login-back-choice')?.addEventListener('click', ()=> showAuthPanel('auth-choice'));
   document.getElementById('reg-back-choice')?.addEventListener('click', ()=> showAuthPanel('auth-choice'));
 
@@ -4007,9 +4065,15 @@ function renderContactsAndGroups(){
     return n.includes(q);
   }):srcContacts.filter(p=>!(p.isBildBot||p.id==='bild_bot'))).forEach(p=>items.push({type:'user',data:p,unread:p.isBot?0:(unread[p.id]||0)}));
   if(!showArchive && activeFolder && activeFolder!=='Все' && activeFolder!=='Архив'){
-    const folders=JSON.parse(storage.getItem('sl_folders')||'{}');
-    const ids=new Set(folders[activeFolder]||[]);
-    items=items.filter(it=>ids.has(it.data.id));
+    if(activeFolder==='Новые'){
+      items=items.filter(it=>(it.unread|0)>0);
+    } else if(activeFolder==='Каналы'){
+      items=items.filter(it=>it.type==='group' && it.data && (it.data.type==='channel' || it.data._news || it.data.username==='signal_line_news'));
+    } else {
+      const folders=JSON.parse(storage.getItem('sl_folders')||'{}');
+      const ids=new Set(folders[activeFolder]||[]);
+      items=items.filter(it=>ids.has(it.data.id));
+    }
   }
   items.sort((a,b)=> (b.unread?1:0)-(a.unread?1:0) || new Date(b.data.lastAt||0)-new Date(a.data.lastAt||0));
   if(!items.length){ list.innerHTML=`<div class="empty-state">${showArchive?t('empty_archive'):t('no_chats')}</div>`; return; }
@@ -4311,9 +4375,54 @@ function showChatCtx(e, type, data){
 function renderFolderTabs(){
   const bar=document.getElementById('folder-tabs'); if(!bar) return;
   const folders=JSON.parse(storage.getItem('sl_folders')||'{}');
-  const names=['Все','Архив',...Object.keys(folders)];
-  bar.innerHTML=names.map(n=>`<div class="folder-tab ${n===activeFolder?'active':''}" data-f="${escapeHtml(n)}">${escapeHtml(n)}</div>`).join('');
-  bar.querySelectorAll('.folder-tab').forEach(el=>el.onclick=()=>{ activeFolder=el.dataset.f; renderFolderTabs(); renderContactsAndGroups(); });
+  // MAX-style system tabs + user folders
+  let hiddenTabs=[];
+  try{ hiddenTabs=JSON.parse(storage.getItem('sl_hidden_tabs')||'[]'); }catch(e){}
+  const sys=['Все','Новые','Каналы','Архив'].filter(n=>n==='Все'||n==='Архив'||!hiddenTabs.includes(n));
+  const names=[...sys,...Object.keys(folders).filter(k=>!['Все','Новые','Каналы','Архив'].includes(k))];
+  let newCount=0;
+  try{
+    (contacts||[]).forEach(c=>{ if((c.unread|0)>0) newCount++; });
+    (groups||[]).forEach(g=>{ if((g.unread|0)>0) newCount++; });
+  }catch(e){}
+  bar.innerHTML=names.map(n=>{
+    const canDel = !['Все','Новые','Каналы','Архив'].includes(n) ? '1' : (['Новые','Каналы'].includes(n)?'1':'0');
+    const badge = (n==='Новые' && newCount>0) ? `<span class="ft-badge">${newCount>99?'99+':newCount}</span>` : '';
+    const xbtn = `<button type="button" class="ft-x" data-del-f="${escapeHtml(n)}" aria-label="Удалить">×</button>`;
+    return `<div class="folder-tab ${n===activeFolder?'active':''}" data-f="${escapeHtml(n)}" data-can-del="${canDel}">${escapeHtml(n)}${badge}${xbtn}</div>`;
+  }).join('');
+  bar.querySelectorAll('.folder-tab').forEach(el=>{
+    el.onclick=(e)=>{
+      if(e.target.closest('.ft-x')) return;
+      activeFolder=el.dataset.f;
+      renderFolderTabs();
+      renderContactsAndGroups();
+    };
+  });
+  bar.querySelectorAll('.ft-x').forEach(btn=>{
+    btn.onclick=(e)=>{
+      e.preventDefault(); e.stopPropagation();
+      const name=btn.dataset.delF;
+      if(!name || name==='Все' || name==='Архив') return;
+      const ok = confirm('Удалить папку «'+name+'»?\nЧаты из неё останутся в папке «Все»');
+      if(!ok) return;
+      try{
+        const f=JSON.parse(storage.getItem('sl_folders')||'{}');
+        delete f[name];
+        storage.setItem('sl_folders', JSON.stringify(f));
+      }catch(err){}
+      // built-in virtual tabs Новые/Каналы — hide via local flag
+      try{
+        const hidden=JSON.parse(storage.getItem('sl_hidden_tabs')||'[]');
+        if(['Новые','Каналы'].includes(name) && !hidden.includes(name)){
+          hidden.push(name); storage.setItem('sl_hidden_tabs', JSON.stringify(hidden));
+        }
+      }catch(err){}
+      if(activeFolder===name) activeFolder='Все';
+      renderFolderTabs();
+      renderContactsAndGroups();
+    };
+  });
 }
 
 // ========== OPEN CHAT ==========
@@ -7621,16 +7730,22 @@ function setupTyping(){
 
 // ========== PLUS / CONTACTS ==========
 // Plus opens MAX-style "Начать общение" full screen (not tiny dropdown)
-document.getElementById('plus-btn').onclick=(e)=>{
-  e.preventDefault(); e.stopPropagation();
-  try{ document.getElementById('plus-dropdown')?.classList.remove('show'); }catch(_){}
-  if(typeof window.openStartChatSheet==='function') window.openStartChatSheet();
-};
+try{
+  const _plusBtn=document.getElementById('plus-btn');
+  if(_plusBtn) _plusBtn.onclick=(e)=>{
+    e.preventDefault(); e.stopPropagation();
+    try{ document.getElementById('plus-dropdown')?.classList.remove('show'); }catch(_){}
+    if(typeof window.openStartChatSheet==='function') window.openStartChatSheet();
+  };
+}catch(e){ console.warn('plus-btn bind', e); }
 document.addEventListener('click',e=>{ if(!e.target.closest('#plus-menu')) try{ document.getElementById('plus-dropdown')?.classList.remove('show'); }catch(_){} });
 function debounce(fn,ms){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),ms); }; }
 
 // ========== SEARCH ==========
-document.getElementById('search-input').oninput=debounce(()=>{ renderContactsAndGroups(); },200);
+try{
+  const _si=document.getElementById('search-input');
+  if(_si) _si.oninput=debounce(()=>{ renderContactsAndGroups(); },200);
+}catch(e){ console.warn('search bind', e); }
 
 // ========== SCROLL ==========
 function scrollToBottom(i=false){ const l=document.getElementById('messages-list'); setTimeout(()=>{ if(i) l.scrollTop=l.scrollHeight; else l.scrollTo({top:l.scrollHeight,behavior:'smooth'}); },60); }
@@ -7638,6 +7753,45 @@ function scrollToBottom(i=false){ const l=document.getElementById('messages-list
 // ========== TABS ==========
 document.querySelectorAll('.bottom-tab').forEach(t=>t.onclick=function(){ switchPage(this.dataset.tab); });
 try{ wireAuthUI(); }catch(e){ console.warn('wireAuthUI', e); }
+
+// ========== AUTH BUTTONS HARD FALLBACK ==========
+(function(){
+  function safeShow(panel){
+    try{
+      if(typeof showAuthPanel==='function') showAuthPanel(panel);
+      else {
+        ['auth-choice','login-form','register-form','forgot-form'].forEach(id=>{
+          const el=document.getElementById(id);
+          if(el) el.style.display = (id===panel) ? 'block' : 'none';
+        });
+      }
+    }catch(e){ console.warn('safeShow', e); }
+  }
+  document.addEventListener('click', function(e){
+    const t = e.target && e.target.closest && e.target.closest('#auth-go-login, #auth-go-register, #login-back-choice, #reg-back-choice, #login-btn, #login-forgot-btn');
+    if(!t) return;
+    const id = t.id;
+    if(id==='auth-go-login'){ e.preventDefault(); e.stopPropagation(); safeShow('login-form'); }
+    else if(id==='auth-go-register'){
+      e.preventDefault(); e.stopPropagation();
+      try{ window._regStep=1; if(typeof setRegStep==='function') setRegStep(1); }catch(err){}
+      safeShow('register-form');
+    }
+    else if(id==='login-back-choice' || id==='reg-back-choice'){ e.preventDefault(); safeShow('auth-choice'); }
+    else if(id==='login-btn'){ e.preventDefault(); try{ if(typeof doLogin==='function') doLogin(); }catch(err){ console.warn(err); } }
+    else if(id==='login-forgot-btn'){ e.preventDefault(); safeShow('forgot-form'); }
+  }, true);
+  // Ensure auth is interactive
+  try{
+    const a=document.getElementById('auth-screen');
+    if(a){ a.style.pointerEvents='auto'; a.style.zIndex='50000'; }
+    document.querySelectorAll('#auth-go-login,#auth-go-register,#login-btn').forEach(b=>{
+      b.style.pointerEvents='auto'; b.style.position='relative'; b.style.zIndex='2';
+    });
+  }catch(e){}
+  try{ if(typeof wireAuthUI==='function'){ window._slAuthWired=false; wireAuthUI(); } }catch(e){ console.warn('rewire auth', e); }
+})();
+
 
 
 // ============================================================
@@ -14985,8 +15139,20 @@ function scheduleBirthdayAfterAppReady(){
     document.documentElement.classList.add('sl-ready');
     const a=document.getElementById('auth-screen');
     const app=document.getElementById('app-screen');
-    if(a) a.style.display='flex';
-    if(app) app.style.display='none';
+    if(a){
+      a.style.display='flex';
+      a.style.pointerEvents='auto';
+      a.style.zIndex='50000';
+      a.style.visibility='visible';
+    }
+    if(app){ app.style.display='none'; app.style.pointerEvents='none'; }
+    // kill any leftover full-screen blockers
+    try{
+      document.querySelectorAll('.sl-loader-overlay,.cd-overlay,#sl-milestone-ov').forEach(el=>{
+        if(el && el.id!=='auth-screen') el.style.pointerEvents='none';
+      });
+    }catch(e){}
+    try{ if(typeof wireAuthUI==='function'){ window._slAuthWired=false; wireAuthUI(); } }catch(e){}
   }
   function showAppShell(){
     const a=document.getElementById('auth-screen');
@@ -15417,19 +15583,25 @@ function scheduleBirthdayAfterAppReady(){
     bar=document.createElement('div');
     bar.id='chat-select-bar';
     bar.className='chat-select-bar';
-    bar.innerHTML=`<span id="chat-sel-count" style="flex:1;font-weight:700;font-size:13px">0 выбрано</span>
-      <button type="button" data-a="archive">В архив</button>
-      <button type="button" data-a="pin">PIN</button>
-      <button type="button" class="danger" data-a="del">Удалить</button>
-      <button type="button" data-a="cancel">✕</button>`;
-    const side=document.querySelector('.sidebar')||document.getElementById('page-chats');
-    const header=document.querySelector('.sidebar-header');
-    if(header&&header.parentNode) header.parentNode.insertBefore(bar, header.nextSibling);
-    else document.body.appendChild(bar);
+    bar.innerHTML=`<button type="button" class="sel-read" data-a="readall">Прочитать всё</button>
+      <span id="chat-sel-count" style="display:none">0</span>
+      <button type="button" class="sel-del" data-a="del">Удалить</button>`;
+    document.body.appendChild(bar);
     bar.querySelectorAll('button').forEach(b=>{
       b.onclick=async()=>{
         const a=b.dataset.a;
         if(a==='cancel'){ exitChatSelect(); return; }
+        if(a==='readall'){
+          try{
+            const ids = selectedChats.size ? [...selectedChats] : [...document.querySelectorAll('#contacts-list .sw-clip')].map(c=>c.dataset.cid).filter(Boolean);
+            ids.forEach(id=>{ try{ if(typeof clearUnread==='function') clearUnread(id); }catch(e){} });
+            showToast('Прочитано');
+            renderContactsAndGroups();
+            try{ if(typeof updateUnreadBadge==='function') updateUnreadBadge(); }catch(e){}
+            try{ if(typeof renderFolderTabs==='function') renderFolderTabs(); }catch(e){}
+          }catch(e){}
+          return;
+        }
         const ids=[...selectedChats];
         if(!ids.length){ showToast('Ничего не выбрано'); return; }
         if(a==='archive'){
@@ -15471,15 +15643,22 @@ function scheduleBirthdayAfterAppReady(){
     });
     return bar;
   }
+  function syncChatSelUI(){
+    const cnt=document.getElementById('chat-sel-count');
+    if(cnt) cnt.textContent=String(selectedChats.size);
+    const bar=document.getElementById('chat-select-bar');
+    if(bar) bar.classList.toggle('has-sel', selectedChats.size>0);
+  }
   function enterChatSelect(){
     chatSelectMode=true; selectedChats.clear(); window._selectedChats=selectedChats;
     document.body.classList.add('chats-selecting');
     ensureChatSelectBar().classList.add('show');
-    document.getElementById('chat-sel-count').textContent='0 выбрано';
+    syncChatSelUI();
+    try{ if(typeof renderFolderTabs==='function') renderFolderTabs(); }catch(e){}
     document.querySelectorAll('#contacts-list .sw-clip').forEach(c=>{
       let ch=c.querySelector('.sel-check');
       if(!ch){
-        ch=document.createElement('div'); ch.className='sel-check'; ch.textContent='✓';
+        ch=document.createElement('div'); ch.className='sel-check'; ch.textContent='';
         const front=c.querySelector('.sw-front');
         if(front) front.insertBefore(ch, front.firstChild);
       }
@@ -15490,7 +15669,7 @@ function scheduleBirthdayAfterAppReady(){
         if(!id) return;
         if(selectedChats.has(id)){ selectedChats.delete(id); c.classList.remove('selected'); }
         else { selectedChats.add(id); c.classList.add('selected'); }
-        document.getElementById('chat-sel-count').textContent=selectedChats.size+' выбрано';
+        syncChatSelUI();
       };
     });
   }
@@ -15498,10 +15677,15 @@ function scheduleBirthdayAfterAppReady(){
     chatSelectMode=false; selectedChats.clear(); window._selectedChats=selectedChats;
     document.body.classList.remove('chats-selecting');
     document.getElementById('chat-select-bar')?.classList.remove('show');
+    document.getElementById('chat-select-bar')?.classList.remove('has-sel');
     document.querySelectorAll('#contacts-list .sw-clip.selected').forEach(c=>c.classList.remove('selected'));
+    try{ if(typeof renderFolderTabs==='function') renderFolderTabs(); }catch(e){}
   }
   document.getElementById('chats-select-btn')?.addEventListener('click', ()=>{
     if(chatSelectMode) exitChatSelect(); else enterChatSelect();
+  });
+  document.getElementById('chats-done-btn')?.addEventListener('click', ()=>{
+    exitChatSelect();
   });
 
   // --- Message multi-select ---
