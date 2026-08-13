@@ -1865,6 +1865,20 @@ body.light-theme .circle-record-overlay {
 }
 </style>
 
+
+<style id="sl-header-clean">
+  #chat-search-btn,
+  #media-btn,
+  #sl-wall-btn,
+  .chat-actions #chat-search-btn,
+  .chat-actions #media-btn{
+    display:none !important;
+  }
+  .chat-actions .icon-btn:not(#call-btn):not(#video-call-btn):not(#invite-btn):not(#group-settings-btn){
+    /* keep only call + video (+ group controls when shown) */
+  }
+</style>
+
 </head>
 <body>
 
@@ -2478,8 +2492,8 @@ body.theme-light .topbar {
               <div class="avatar" id="partner-avatar" style="width:38px;height:38px;font-size:14px"></div>
               <div style="min-width:0;flex:1"><div class="chat-title" id="chat-partner-name"></div><div id="chat-partner-status" class="chat-status">в сети</div></div>
               <div class="chat-actions">
-                <button class="icon-btn" id="chat-search-btn" title="Поиск" data-i18n-title="tt_search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg></button>
-                <button class="icon-btn" id="media-btn" title="Медиа" data-i18n-title="tt_media"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg></button>
+                <button class="icon-btn" id="chat-search-btn" title="Поиск" data-i18n-title="tt_search" style="display:none!important"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg></button>
+                <button class="icon-btn" id="media-btn" title="Медиа" data-i18n-title="tt_media" style="display:none!important"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg></button>
                 <button class="icon-btn" id="invite-btn" style="display:none" title="Пригласить" data-i18n-title="tt_invite"><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4-4v2"/><circle cx="8.5" cy="7" r="4"/><path d="M20 8v6M23 11h-6"/></svg></button>
                 <button class="icon-btn" id="group-settings-btn" style="display:none" title="Настройки" data-i18n-title="tt_settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2"/></svg></button>
                 <button class="icon-btn" id="video-call-btn" title="Видеозвонок" data-i18n-title="tt_videocall"><svg viewBox="0 0 24 24"><rect x="2" y="6" width="14" height="12" rx="2"/><path d="M16 10l6-4v12l-6-4"/></svg></button>
@@ -29878,277 +29892,289 @@ document.addEventListener('click', function(e){
 </script>
 
 
+
 <script>
-/* ========== News Emoji mini-stickers (inline in messages) ========== */
+/* ========== News Stickers (real image stickers, not emoji) ========== */
 (function(){
-  // ~100 news / trading / alert style emoji matching News Emoji packs
-  const NEWS_EMOJI = [
-    "💬","😊","⚡","🔥","💯","🚫","⛔","❗",
-    "‼️","❓","❤️","⚠️","🔺","🌐","💭","☁️",
-    "❔","📊","🎄","🔻","📈","📉","✅","✔️",
-    "❌","🤡","🔔","👀","🤪","🔞","📌","💲",
-    "€","₽","¥","£","₿","🔄","🔴","🟢",
-    "➡️","💥","🎤","📢","📣","🔐","🟢","🔵",
-    "💙","▶️","⏸️","💯","🆙","🔝","🆕","⏰",
-    "📍","➕","💎","⭐","✨","👑","🗑️","🔖",
-    "✉️","🔒","👻","⚙️","🔊","🔇","🔄","⬇️",
-    "☀️","☁️","🌙","❄️","🌈","💧","📅","💡",
-    "🥇","🥈","🥉","🎵","✏️","🚨","🎉","🏠",
-    "🚩","🎊","🎁","💰","💵","🚀","📱","💻",
-    "🎯","🏆","🔑","🛡️","⚡","🌟","💥","🔥",
-    "📰","📡","🛰️","⏱️","🟢","🔴","🟡","⚪"
+  // Labels inspired by News Emoji / trading stickers from the video
+  const LABELS = [
+    {t:'FAKE', c1:'#e11d48', c2:'#9f1239'},
+    {t:'LIVE', c1:'#dc2626', c2:'#991b1b'},
+    {t:'SALE', c1:'#ea580c', c2:'#c2410c'},
+    {t:'HOT', c1:'#f97316', c2:'#ea580c'},
+    {t:'NEW', c1:'#2563eb', c2:'#1d4ed8'},
+    {t:'TOP', c1:'#7c3aed', c2:'#5b21b6'},
+    {t:'UPD', c1:'#0891b2', c2:'#0e7490'},
+    {t:'18+', c1:'#b91c1c', c2:'#7f1d1d'},
+    {t:'SOS', c1:'#ef4444', c2:'#b91c1c'},
+    {t:'VIP', c1:'#ca8a04', c2:'#a16207'},
+    {t:'BTC', c1:'#f59e0b', c2:'#d97706'},
+    {t:'ETH', c1:'#6366f1', c2:'#4f46e5'},
+    {t:'USD', c1:'#16a34a', c2:'#15803d'},
+    {t:'EUR', c1:'#2563eb', c2:'#1e40af'},
+    {t:'RUB', c1:'#0ea5e9', c2:'#0369a1'},
+    {t:'%', c1:'#22c55e', c2:'#15803d'},
+    {t:'+%', c1:'#10b981', c2:'#047857'},
+    {t:'-%', c1:'#ef4444', c2:'#b91c1c'},
+    {t:'!!!', c1:'#f43f5e', c2:'#be123c'},
+    {t:'???', c1:'#8b5cf6', c2:'#6d28d9'},
+    {t:'OK', c1:'#22c55e', c2:'#166534'},
+    {t:'NO', c1:'#64748b', c2:'#334155'},
+    {t:'YES', c1:'#14b8a6', c2:'#0f766e'},
+    {t:'GO', c1:'#84cc16', c2:'#4d7c0f'},
+    {t:'BUY', c1:'#22c55e', c2:'#15803d'},
+    {t:'SELL', c1:'#ef4444', c2:'#b91c1c'},
+    {t:'HOLD', c1:'#eab308', c2:'#a16207'},
+    {t:'PUMP', c1:'#22c55e', c2:'#14532d'},
+    {t:'DUMP', c1:'#f43f5e', c2:'#9f1239'},
+    {t:'ATH', c1:'#fbbf24', c2:'#b45309'},
+    {t:'ATL', c1:'#94a3b8', c2:'#475569'},
+    {t:'FOMO', c1:'#f97316', c2:'#c2410c'},
+    {t:'FUD', c1:'#6b7280', c2:'#374151'},
+    {t:'MOON', c1:'#a78bfa', c2:'#6d28d9'},
+    {t:'GEM', c1:'#34d399', c2:'#059669'},
+    {t:'WIN', c1:'#facc15', c2:'#ca8a04'},
+    {t:'LOSE', c1:'#f87171', c2:'#b91c1c'},
+    {t:'ALERT', c1:'#fb7185', c2:'#e11d48'},
+    {t:'NEWS', c1:'#38bdf8', c2:'#0284c7'},
+    {t:'BREAK', c1:'#f43f5e', c2:'#be123c'},
+    {t:'LEAK', c1:'#a3e635', c2:'#65a30d'},
+    {t:'SCOOP', c1:'#2dd4bf', c2:'#0f766e'},
+    {t:'RUMOR', c1:'#c084fc', c2:'#7e22ce'},
+    {t:'FACT', c1:'#60a5fa', c2:'#1d4ed8'},
+    {t:'MYTH', c1:'#94a3b8', c2:'#475569'},
+    {t:'LIES', c1:'#f87171', c2:'#dc2626'},
+    {t:'TRUE', c1:'#4ade80', c2:'#16a34a'},
+    {t:'FALSE', c1:'#fb7185', c2:'#e11d48'},
+    {t:'BAN', c1:'#ef4444', c2:'#7f1d1d'},
+    {t:'MUTE', c1:'#64748b', c2:'#1e293b'},
+    {t:'LOUD', c1:'#f59e0b', c2:'#b45309'},
+    {t:'FAST', c1:'#22d3ee', c2:'#0891b2'},
+    {t:'SLOW', c1:'#94a3b8', c2:'#475569'},
+    {t:'NOW', c1:'#f43f5e', c2:'#be123c'},
+    {t:'SOON', c1:'#a78bfa', c2:'#6d28d9'},
+    {t:'LATER', c1:'#94a3b8', c2:'#334155'},
+    {t:'TODAY', c1:'#38bdf8', c2:'#0369a1'},
+    {t:'WEEK', c1:'#818cf8', c2:'#4338ca'},
+    {t:'YEAR', c1:'#c084fc', c2:'#6b21a8'},
+    {t:'#1', c1:'#fbbf24', c2:'#b45309'},
+    {t:'#2', c1:'#94a3b8', c2:'#475569'},
+    {t:'#3', c1:'#d97706', c2:'#92400e'},
+    {t:'x2', c1:'#34d399', c2:'#047857'},
+    {t:'x5', c1:'#2dd4bf', c2:'#0f766e'},
+    {t:'x10', c1:'#22c55e', c2:'#14532d'},
+    {t:'0%', c1:'#64748b', c2:'#334155'},
+    {t:'50%', c1:'#eab308', c2:'#a16207'},
+    {t:'100%', c1:'#22c55e', c2:'#166534'},
+    {t:'∞', c1:'#818cf8', c2:'#4338ca'},
+    {t:'↑', c1:'#22c55e', c2:'#15803d'},
+    {t:'↓', c1:'#ef4444', c2:'#b91c1c'},
+    {t:'→', c1:'#38bdf8', c2:'#0284c7'},
+    {t:'★', c1:'#fbbf24', c2:'#b45309'},
+    {t:'♥', c1:'#f43f5e', c2:'#be123c'},
+    {t:'⚡', c1:'#facc15', c2:'#ca8a04'},
+    {t:'🔥', c1:'#f97316', c2:'#c2410c'},
+    {t:'💎', c1:'#22d3ee', c2:'#0891b2'},
+    {t:'🚀', c1:'#a78bfa', c2:'#6d28d9'},
+    {t:'👑', c1:'#fbbf24', c2:'#a16207'},
+    {t:'🔔', c1:'#fb7185', c2:'#e11d48'},
+    {t:'📌', c1:'#f87171', c2:'#b91c1c'},
+    {t:'🎯', c1:'#34d399', c2:'#059669'},
+    {t:'💰', c1:'#facc15', c2:'#ca8a04'},
+    {t:'🚨', c1:'#ef4444', c2:'#991b1b'},
+    {t:'📢', c1:'#38bdf8', c2:'#0284c7'},
+    {t:'🔐', c1:'#94a3b8', c2:'#334155'},
+    {t:'✅', c1:'#22c55e', c2:'#166534'},
+    {t:'❌', c1:'#ef4444', c2:'#991b1b'},
+    {t:'⚠️', c1:'#eab308', c2:'#a16207'},
+    {t:'🔞', c1:'#f43f5e', c2:'#9f1239'},
+    {t:'💡', c1:'#fde047', c2:'#ca8a04'},
+    {t:'📡', c1:'#2dd4bf', c2:'#0f766e'},
+    {t:'📰', c1:'#60a5fa', c2:'#1d4ed8'},
+    {t:'🏆', c1:'#fbbf24', c2:'#b45309'},
+    {t:'🎁', c1:'#f472b6', c2:'#db2777'},
+    {t:'🧊', c1:'#67e8f9', c2:'#0891b2'},
+    {t:'🌙', c1:'#a5b4fc', c2:'#4f46e5'},
+    {t:'☀️', c1:'#fde68a', c2:'#d97706'},
+    {t:'💥', c1:'#fb7185', c2:'#e11d48'},
+    {t:'✨', c1:'#f0abfc', c2:'#a21caf'},
+    {t:'🧭', c1:'#5eead4', c2:'#0f766e'},
+    {t:'⏱️', c1:'#fdba74', c2:'#c2410c'}
   ];
 
-  // Ensure unique-ish list of ~100
-  const seen = new Set();
-  const EMOJIS = [];
-  NEWS_EMOJI.forEach(e=>{ if(!seen.has(e)){ seen.add(e); EMOJIS.push(e); }});
-  // pad with more news-ish if needed
-  const EXTRA = "🔎📎🔗✏️📝🗂️📁🏷️💬🗣️👁️🗨️📣📯🪙💳🏦🏧💎💍👑🎩🎭🎬📺📻🔋🔌💡🔦🕯️💵💴💶💷💸💹🧾📜📋📌📍📎🖇️📏📐✂️🗃️🗄️🗑️🔒🔓🔑🗝️🔨⚒️🛠️🗡️⚔️🔫🛡️🔧🔩⚙️🧬🔬🔭📡💉💊🩺🌡️🧱🧲🧪🧴🧺🧵🧬🪐🌍🌎🌏🌐🗺️🧭⏱️⏳⌛闹钟".split('');
-  for(const e of EXTRA){
-    if(EMOJIS.length>=100) break;
-    if(e && !seen.has(e)){ seen.add(e); EMOJIS.push(e); }
+  function svgSticker(label, c1, c2){
+    const t = String(label).slice(0, 6);
+    const fs = t.length <= 2 ? 42 : t.length <= 3 ? 34 : t.length <= 4 ? 28 : 22;
+    const svg =
+      `<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">`+
+      `<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="${c1}"/><stop offset="1" stop-color="${c2}"/></linearGradient>`+
+      `<filter id="s"><feDropShadow dx="0" dy="3" stdDeviation="3" flood-opacity=".35"/></filter></defs>`+
+      `<rect x="8" y="8" width="112" height="112" rx="28" fill="url(#g)" filter="url(#s)"/>`+
+      `<rect x="14" y="14" width="100" height="100" rx="24" fill="none" stroke="rgba(255,255,255,.25)" stroke-width="2"/>`+
+      `<text x="64" y="72" text-anchor="middle" font-family="system-ui,Segoe UI,Arial,sans-serif" font-size="${fs}" font-weight="800" fill="#fff" style="paint-order:stroke;stroke:rgba(0,0,0,.25);stroke-width:2px">${t.replace(/&/g,'&amp;').replace(/</g,'&lt;')}</text>`+
+      `</svg>`;
+    return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
   }
+
+  const STICKERS = LABELS.map(l => ({
+    name: l.t,
+    url: svgSticker(l.t, l.c1, l.c2)
+  }));
 
   function toast(m){ try{ if(typeof showToast==='function') showToast(m); }catch(e){} }
 
-  function insertAtCursor(input, text){
-    if(!input) return;
-    const start = input.selectionStart ?? input.value.length;
-    const end = input.selectionEnd ?? input.value.length;
-    const v = input.value || '';
-    input.value = v.slice(0, start) + text + v.slice(end);
-    const pos = start + text.length;
-    try{ input.setSelectionRange(pos, pos); }catch(e){}
-    input.focus();
-    input.dispatchEvent(new Event('input', { bubbles:true }));
-    try{
-      const sendBtn = document.getElementById('send-btn');
-      const composer = document.getElementById('composer');
-      if(input.value.trim()){
-        sendBtn?.classList.add('visible');
-        composer?.classList.add('has-text');
-      }
-    }catch(e){}
-  }
-
   function ensureStyles(){
-    if(document.getElementById('sl-news-emoji-css')) return;
-    const s = document.createElement('style');
-    s.id = 'sl-news-emoji-css';
-    s.textContent = `
-      #sl-news-emoji{
-        position:fixed;inset:0;z-index:42000;background:rgba(0,0,0,.55);
-        display:flex;align-items:flex-end;justify-content:center;
-      }
-      #sl-news-emoji .ne-sheet{
-        width:100%;max-width:480px;max-height:78vh;
-        background:#1c1c1e;border-radius:18px 18px 0 0;
-        display:flex;flex-direction:column;
-        padding-bottom:max(12px,env(safe-area-inset-bottom));
-        animation:neUp .22s ease;
-      }
-      @keyframes neUp{from{transform:translateY(40px);opacity:.5}to{transform:none;opacity:1}}
-      #sl-news-emoji .ne-hdr{
-        display:flex;align-items:center;gap:8px;padding:12px 14px 8px;
-        border-bottom:1px solid rgba(255,255,255,.08);flex-shrink:0;
-      }
-      #sl-news-emoji .ne-hdr h3{margin:0;flex:1;text-align:center;font-size:16px;font-weight:700;color:#fff}
-      #sl-news-emoji .ne-hdr button{
-        width:36px;height:36px;border:none;background:transparent;color:#fff;
-        font-size:22px;cursor:pointer;border-radius:10px;
-      }
-      #sl-news-emoji .ne-grid{
-        display:grid;grid-template-columns:repeat(8,1fr);gap:4px;
-        padding:10px 10px 8px;overflow-y:auto;flex:1;-webkit-overflow-scrolling:touch;
-      }
-      #sl-news-emoji .ne-cell{
-        aspect-ratio:1;display:flex;align-items:center;justify-content:center;
-        font-size:26px;border-radius:12px;cursor:pointer;user-select:none;
-        background:transparent;border:none;line-height:1;
-        transition:transform .12s, background .12s;
-      }
-      #sl-news-emoji .ne-cell:active{transform:scale(.88);background:rgba(255,255,255,.08)}
-      #sl-news-emoji .ne-foot{padding:8px 14px 4px;flex-shrink:0}
-      #sl-news-emoji .ne-add{
-        width:100%;padding:14px;border:none;border-radius:14px;
-        background:#3b82f6;color:#fff;font-size:16px;font-weight:700;cursor:pointer;
-      }
-      #sl-news-emoji .ne-add:active{opacity:.85}
-      /* Inline news emoji slightly larger in bubbles */
-      .msg-body, .message-text, .msg-text{font-size:15.5px}
-      .msg-body img.ne-inline, .message-text img.ne-inline{
-        width:1.35em;height:1.35em;vertical-align:-0.25em;display:inline;
-      }
+    if(document.getElementById('sl-news-sticker-css')) return;
+    const s=document.createElement('style');
+    s.id='sl-news-sticker-css';
+    s.textContent=`
+      #sl-news-stickers{position:fixed;inset:0;z-index:42000;background:rgba(0,0,0,.55);display:flex;align-items:flex-end;justify-content:center}
+      #sl-news-stickers .ns-sheet{width:100%;max-width:480px;max-height:78vh;background:var(--panel,#1a1f2e);border-radius:18px 18px 0 0;display:flex;flex-direction:column;overflow:hidden;border:1px solid var(--line)}
+      #sl-news-stickers .ns-head{display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid var(--line)}
+      #sl-news-stickers .ns-head h3{margin:0;flex:1;font-size:16px}
+      #sl-news-stickers .ns-head button{border:none;background:transparent;color:var(--muted);font-size:22px;cursor:pointer;width:36px;height:36px}
+      #sl-news-stickers .ns-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;padding:12px;overflow-y:auto;flex:1;-webkit-overflow-scrolling:touch}
+      #sl-news-stickers .ns-cell{border:none;background:transparent;padding:0;border-radius:14px;cursor:pointer;aspect-ratio:1;overflow:hidden}
+      #sl-news-stickers .ns-cell img{width:100%;height:100%;object-fit:contain;display:block;border-radius:14px}
+      #sl-news-stickers .ns-cell:active{transform:scale(.92)}
+      #sl-news-stickers .ns-foot{padding:10px 14px calc(12px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--line)}
+      #sl-news-stickers .ns-add{width:100%;border:none;border-radius:14px;padding:12px;font-weight:700;font-size:15px;cursor:pointer;background:linear-gradient(135deg,var(--accent-a,#4C7CF3),var(--accent-b,#6D5DF6));color:#fff}
+      img.sticker-animated, .bubble img[src^="data:image/svg"]{max-width:120px;max-height:120px}
     `;
     document.head.appendChild(s);
   }
 
-  window.slOpenNewsEmoji = function(){
-    ensureStyles();
-    try{ document.getElementById('sl-news-emoji')?.remove(); }catch(e){}
-    const ov = document.createElement('div');
-    ov.id = 'sl-news-emoji';
-    ov.innerHTML = `
-      <div class="ne-sheet">
-        <div class="ne-hdr">
-          <button type="button" id="ne-x" aria-label="Close">×</button>
-          <h3>News Emoji</h3>
-          <button type="button" id="ne-more" aria-label="More">⋯</button>
-        </div>
-        <div class="ne-grid" id="ne-grid"></div>
-        <div class="ne-foot">
-          <button type="button" class="ne-add" id="ne-add">Добавить ${EMOJIS.length} эмодзи</button>
-        </div>
-      </div>
-    `;
-    document.body.appendChild(ov);
-
-    const grid = ov.querySelector('#ne-grid');
-    grid.innerHTML = EMOJIS.map((e,i)=>`<button type="button" class="ne-cell" data-i="${i}" title="${e}">${e}</button>`).join('');
-
-    const input = document.getElementById('message-input');
-
-    grid.querySelectorAll('.ne-cell').forEach(btn=>{
-      btn.onclick = ()=>{
-        const em = EMOJIS[+btn.dataset.i];
-        if(!em) return;
-        // Prefer insert into composer (inline in message) — as on the video
-        if(input){
-          insertAtCursor(input, em);
-        } else if(typeof sendMessage==='function'){
-          sendMessage('text', null, em);
-        }
-      };
-      // Long press → send as single sticker-like message
-      let holdT=null;
-      btn.addEventListener('pointerdown', ()=>{
-        holdT = setTimeout(()=>{
-          holdT=null;
-          const em = EMOJIS[+btn.dataset.i];
-          if(em && typeof sendMessage==='function'){
-            sendMessage('text', null, em);
-            toast('Отправлено');
-          }
-        }, 450);
-      });
-      btn.addEventListener('pointerup', ()=>{ if(holdT) clearTimeout(holdT); });
-      btn.addEventListener('pointerleave', ()=>{ if(holdT) clearTimeout(holdT); });
-    });
-
-    ov.querySelector('#ne-x').onclick = ()=> ov.remove();
-    ov.addEventListener('click', (e)=>{ if(e.target===ov) ov.remove(); });
-
-    // "Add 100 emoji" — save pack to favorites / stickers and toast
-    ov.querySelector('#ne-add').onclick = ()=>{
-      try{
-        localStorage.setItem('sl_news_emoji_owned','1');
-        // register as sticker-like pack of text emoji
-        if(typeof STICKER_PACKS!=='undefined'){
-          // Store as data-url text markers is hard for stickers; keep as owned flag for picker
-        }
-        // Also stash for quick insert
-        localStorage.setItem('sl_news_emoji_pack', JSON.stringify(EMOJIS));
-        toast('Набор News Emoji добавлен');
-        ov.querySelector('#ne-add').textContent = 'Добавлено ✓';
-        ov.querySelector('#ne-add').style.background = '#22c55e';
-      }catch(e){ toast('Сохранено'); }
-    };
-
-    ov.querySelector('#ne-more').onclick = ()=>{
-      toast('Тап — в сообщение · удержание — отправить');
-    };
-  };
-
-  // Register pack into STICKER_PACKS as virtual text-emoji pack (for tab)
   function registerPack(){
     try{
-      if(typeof window.STICKER_PACKS==='undefined' || !window.STICKER_PACKS) window.STICKER_PACKS = {};
-      // Don't overwrite image packs; add news entry as special
-      window.STICKER_PACKS.newsEmoji = window.STICKER_PACKS.newsEmoji || {
+      if(typeof STICKER_PACKS==='undefined') window.STICKER_PACKS = {};
+      window.STICKER_PACKS = window.STICKER_PACKS || STICKER_PACKS || {};
+      STICKER_PACKS.newsStickers = {
         name: 'News',
-        stickers: [], // empty image list; handled specially
-        emojis: EMOJIS
+        stickers: STICKERS.map(s => s.url)
       };
+      // also keep alias
+      STICKER_PACKS.newsEmoji = STICKER_PACKS.newsStickers;
     }catch(e){}
   }
 
-  // Hook sticker button: add News Emoji entry / long-press opens panel
+  function openNewsStickers(){
+    ensureStyles();
+    registerPack();
+    try{ document.getElementById('sl-news-stickers')?.remove(); }catch(e){}
+    const ov=document.createElement('div');
+    ov.id='sl-news-stickers';
+    ov.innerHTML=`<div class="ns-sheet">
+      <div class="ns-head">
+        <h3>News Stickers</h3>
+        <button type="button" id="ns-x">×</button>
+      </div>
+      <div class="ns-grid" id="ns-grid"></div>
+      <div class="ns-foot">
+        <button type="button" class="ns-add" id="ns-add">Добавить ${STICKERS.length} стикеров</button>
+      </div>
+    </div>`;
+    document.body.appendChild(ov);
+    const grid=ov.querySelector('#ns-grid');
+    grid.innerHTML = STICKERS.map((s,i)=>
+      `<button type="button" class="ns-cell" data-i="${i}" title="${s.name}"><img src="${s.url}" alt="${s.name}"></button>`
+    ).join('');
+
+    grid.querySelectorAll('.ns-cell').forEach(btn=>{
+      btn.onclick = ()=>{
+        const s = STICKERS[+btn.dataset.i];
+        if(!s) return;
+        if(typeof sendMessage==='function'){
+          sendMessage('sticker', s.url, '');
+          toast('Стикер отправлен');
+        }
+        ov.remove();
+      };
+    });
+
+    ov.querySelector('#ns-x').onclick=()=>ov.remove();
+    ov.addEventListener('click',e=>{ if(e.target===ov) ov.remove(); });
+    ov.querySelector('#ns-add').onclick=()=>{
+      try{
+        localStorage.setItem('sl_news_stickers_owned','1');
+        registerPack();
+        // refresh sticker panel tabs if open
+        try{
+          const packsEl=document.getElementById('sticker-packs');
+          if(packsEl && typeof STICKER_PACKS!=='undefined'){
+            packsEl.innerHTML=Object.keys(STICKER_PACKS).map(k=>
+              `<div class="sticker-pack-tab" data-pack="${k}">${STICKER_PACKS[k].name}</div>`
+            ).join('');
+          }
+        }catch(e){}
+        ov.querySelector('#ns-add').textContent='Добавлено ✓';
+        ov.querySelector('#ns-add').style.background='#22c55e';
+        toast('Набор News Stickers добавлен');
+      }catch(e){ toast('Сохранено'); }
+    };
+  }
+
+  window.openNewsStickers = openNewsStickers;
+  window.openNewsEmoji = openNewsStickers; // compat
+
   function hookStickerBtn(){
-    const btn = document.getElementById('sticker-btn');
-    if(!btn || btn.dataset.newsHooked) return;
-    btn.dataset.newsHooked = '1';
-    // Double-tap or alt: open news emoji. Also add to panel tabs when opening.
-    btn.addEventListener('click', ()=>{
-      setTimeout(()=>{
-        const packsEl = document.getElementById('sticker-packs');
-        if(!packsEl) return;
-        if(packsEl.querySelector('[data-pack="newsEmoji"]')) return;
-        const tab = document.createElement('div');
-        tab.className = 'sticker-pack-tab';
-        tab.dataset.pack = 'newsEmoji';
-        tab.textContent = 'News';
-        packsEl.appendChild(tab);
-        tab.onclick = ()=>{
-          packsEl.querySelectorAll('.sticker-pack-tab').forEach(x=>x.classList.remove('active'));
-          tab.classList.add('active');
-          // Show news emoji in grid as text cells
-          const grid = document.getElementById('sticker-grid');
-          if(!grid) { window.slOpenNewsEmoji(); return; }
-          grid.innerHTML = EMOJIS.map((e,i)=>
-            `<button type="button" data-i="${i}" style="font-size:28px;background:var(--input-bg);border:none;border-radius:12px;aspect-ratio:1;cursor:pointer;line-height:1">${e}</button>`
+    // Add News tab into sticker panel when shown
+    const smile = document.getElementById('sticker-btn') || document.getElementById('emoji-btn') || document.querySelector('[data-action="stickers"]');
+    if(smile && !smile._newsHooked){
+      smile._newsHooked=true;
+      let hold=null;
+      smile.addEventListener('pointerdown', ()=>{
+        hold=setTimeout(()=>{ hold=null; openNewsStickers(); }, 500);
+      });
+      smile.addEventListener('pointerup', ()=>{ if(hold) clearTimeout(hold); });
+      smile.addEventListener('pointerleave', ()=>{ if(hold) clearTimeout(hold); });
+    }
+    // Inject tab
+    const packsEl=document.getElementById('sticker-packs');
+    if(packsEl && !packsEl.querySelector('[data-pack="newsStickers"]')){
+      registerPack();
+      const tab=document.createElement('div');
+      tab.className='sticker-pack-tab';
+      tab.dataset.pack='newsStickers';
+      tab.textContent='News';
+      tab.onclick=()=>{
+        try{ window.activeStickerPack='newsStickers'; }catch(e){}
+        // render stickers into panel grid
+        const grid=document.getElementById('sticker-grid')||document.querySelector('.sticker-grid');
+        if(grid){
+          grid.innerHTML = STICKERS.map(s=>
+            `<img class="sticker-item" src="${s.url}" data-url="${s.url}" style="width:64px;height:64px;object-fit:contain;cursor:pointer;border-radius:12px">`
           ).join('');
-          grid.querySelectorAll('button').forEach(b=>{
-            b.onclick=()=>{
-              const em = EMOJIS[+b.dataset.i];
-              const input = document.getElementById('message-input');
-              if(input) insertAtCursor(input, em);
-              else if(typeof sendMessage==='function') sendMessage('text', null, em);
+          grid.querySelectorAll('img').forEach(img=>{
+            img.onclick=()=>{
+              if(typeof sendMessage==='function') sendMessage('sticker', img.dataset.url, '');
+              document.getElementById('sticker-panel')?.classList.remove('show');
             };
           });
-        };
-      }, 30);
-    });
+        } else {
+          openNewsStickers();
+        }
+      };
+      packsEl.appendChild(tab);
+    }
   }
-
-  // Add dedicated entry in attach menu if present
-  function hookAttachMenu(){
-    document.addEventListener('click', (e)=>{
-      const t = e.target.closest && e.target.closest('[data-a="news-emoji"], #attach-news-emoji');
-      if(t){ e.preventDefault(); window.slOpenNewsEmoji(); }
-    }, true);
-  }
-
-  // Floating quick access: long-press smile/sticker opens News Emoji
-  function hookLongPress(){
-    const btn = document.getElementById('sticker-btn');
-    if(!btn || btn.dataset.newsLP) return;
-    btn.dataset.newsLP = '1';
-    let t=null;
-    btn.addEventListener('pointerdown', ()=>{
-      t=setTimeout(()=>{ t=null; window.slOpenNewsEmoji(); }, 500);
-    });
-    btn.addEventListener('pointerup', ()=>{ if(t) clearTimeout(t); });
-    btn.addEventListener('pointerleave', ()=>{ if(t) clearTimeout(t); });
-  }
-
-  // Public API
-  window.SL_NEWS_EMOJI = EMOJIS;
 
   function boot(){
+    ensureStyles();
     registerPack();
+    if(localStorage.getItem('sl_news_stickers_owned')==='1' || localStorage.getItem('sl_news_emoji_owned')==='1'){
+      registerPack();
+    }
     hookStickerBtn();
-    hookAttachMenu();
-    hookLongPress();
   }
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', boot);
   else boot();
-  setTimeout(boot, 700);
-  setTimeout(boot, 2000);
-
-  console.log('[SL] News Emoji pack ready:', EMOJIS.length);
+  setTimeout(boot, 500);
+  setTimeout(boot, 1500);
+  setTimeout(hookStickerBtn, 2000);
+  console.log('[SL] News Stickers (images) ready:', STICKERS.length);
 })();
 </script>
+
 
 
 <script>
@@ -31234,15 +31260,8 @@ document.addEventListener('click', function(e){
 
   /* ---------- Header button: wallpaper shortcut ---------- */
   function ensureHeaderTools(){
-    const header=document.querySelector('.chat-header, #chat-header');
-    if(!header || header.querySelector('#sl-wall-btn')) return;
-    const btn=document.createElement('button');
-    btn.type='button'; btn.id='sl-wall-btn'; btn.className='icon-btn';
-    btn.title='Обои чата';
-    btn.innerHTML='🖼️';
-    btn.style.cssText='border:none;background:transparent;font-size:16px;cursor:pointer;padding:6px';
-    btn.onclick=(e)=>{ e.stopPropagation(); openWallPicker(); };
-    header.appendChild(btn);
+    /* wallpaper only from chat context menu — no header button */
+    try{ document.getElementById('sl-wall-btn')?.remove(); }catch(e){}
   }
 
   function boot(){
