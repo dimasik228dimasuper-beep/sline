@@ -1971,21 +1971,23 @@ window.addEventListener('unhandledrejection', function(ev){
       document.documentElement.classList.add('sl-booting');
     }
   }catch(e){}
-  // Watchdog: never stay on black boot screen forever
+  // Watchdog: never stay on black boot screen forever (do NOT wipe session)
   setTimeout(function(){
     try{
       var html = document.documentElement;
       if(!html.classList.contains('sl-booting')) return;
-      // still booting after 2.5s → force ready + show something
       html.classList.remove('sl-booting');
       html.classList.add('sl-ready');
       var app = document.getElementById('app-screen');
       var auth = document.getElementById('auth-screen');
       var hasUser = false;
       try{ hasUser = !!(window.myProfile && window.myProfile.id); }catch(e){}
-      if(hasUser){
-        if(app){ app.style.display='flex'; app.style.pointerEvents='auto'; }
-        if(auth) auth.style.display='none';
+      // also treat stored session flag as "likely logged in" — don't kick to login
+      var flag = false;
+      try{ flag = localStorage.getItem('sl_logged_in')==='1'; }catch(e){}
+      if(hasUser || flag){
+        if(app){ app.style.display='flex'; app.style.pointerEvents='auto'; app.style.visibility='visible'; }
+        if(auth){ auth.style.display='none'; }
       } else {
         if(auth){
           auth.style.display='flex';
@@ -1994,10 +1996,9 @@ window.addEventListener('unhandledrejection', function(ev){
           auth.style.visibility='visible';
         }
         if(app){ app.style.display='none'; }
-        try{ localStorage.removeItem('sl_logged_in'); }catch(e){}
       }
     }catch(e){}
-  }, 2500);
+  }, 4000);
 })();
 </script>
 <style>
@@ -2399,7 +2400,8 @@ body.theme-light .topbar {
     <div id="login-form" style="display:none">
       <div class="field"><label>Email или телефон</label><input type="text" id="login-email" placeholder="you@example.com или +79001234567" autocomplete="username" inputmode="email"></div>
       <div class="field"><label>Пароль</label><input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password"></div>
-      <button type="button" class="btn-primary" id="login-btn">Войти</button>
+      <button type="button" class="btn-primary" id="login-btn" style="position:relative;z-index:5;pointer-events:auto"
+        onclick="try{event.preventDefault();event.stopPropagation();if(typeof doLogin==='function'){doLogin();}else{var m=document.getElementById('auth-msg');if(m)m.textContent='Скрипт входа ещё не загружен — обновите страницу';} }catch(e){console.warn(e);var m=document.getElementById('auth-msg');if(m)m.textContent='Ошибка: '+e;} return false;">Войти</button>
       <button type="button" class="btn-secondary" id="login-forgot-btn" style="margin-top:10px">Забыли пароль?</button>
       <button type="button" class="btn-secondary" id="login-back-choice" style="margin-top:8px;border:none;color:var(--muted)">← Назад</button>
     </div>
@@ -3153,11 +3155,12 @@ function setAuthMethod(m){ authMethod = m || 'email'; }
 async function doLogin(){
   authMsg('');
   const btn = document.getElementById('login-btn');
+  try{ if(btn){ btn.disabled=false; btn.classList.remove('btn-loading'); } }catch(e){}
   const contact = normalizeContact(document.getElementById('login-email')?.value);
   const password = document.getElementById('login-password')?.value || '';
   if(!contact){ authMsg('Введите email или номер телефона'); return; }
   if(!password){ authMsg('Введите пароль'); return; }
-  if(!sb){ authMsg('Сервис входа недоступен'); return; }
+  if(!sb){ authMsg('Сервис входа недоступен. Проверьте интернет и обновите страницу.'); return; }
   setBtnLoading(btn, true);
   try{
     // Build candidate emails: normalized variants + profile lookup by phone
@@ -3205,8 +3208,20 @@ async function doLogin(){
       setBtnLoading(btn, false);
       return;
     }
-    if(data?.user) onAuthenticated(data.user);
-    else setBtnLoading(btn, false);
+    try{ storage.setItem('sl_logged_in','1'); }catch(e){}
+    try{ localStorage.setItem('sl_logged_in','1'); }catch(e){}
+    try{
+      await onAuthenticated(data.user);
+      document.documentElement.classList.remove('sl-booting');
+      document.documentElement.classList.add('sl-ready');
+      try{ window.myProfile = myProfile; }catch(e){}
+    }catch(authErr){
+      console.warn('onAuthenticated after login', authErr);
+      authMsg('Вход выполнен, но профиль не загрузился. Обновите страницу.');
+      setBtnLoading(btn, false);
+      return;
+    }
+    setBtnLoading(btn, false);
   }catch(e){
     console.warn('login', e);
     authMsg('Ошибка сети');
@@ -3664,6 +3679,7 @@ async function onAuthenticated(user){
     if(!profile){ profile={id:user.id, username:meta.username||'user', first_name:'', last_name:'', color:colorFor(user.id), email:user.email}; _slIsNewProfile = true; }
   }
   myProfile=profile;
+  try{ window.myProfile = profile; }catch(e){}
   // Milestone: round user numbers (40, 50, 60…)
   if(_slIsNewProfile){
     try{
@@ -15215,11 +15231,8 @@ function scheduleBirthdayAfterAppReady(){
       document.documentElement.classList.add('sl-ready');
       try{ hideLoader(true); }catch(e){}
       try{ scheduleBirthdayAfterAppReady(); }catch(e){}
-      // if still no profile after all that — show auth
-      if(!myProfile){
-        try{ await sb.auth.signOut(); }catch(e){}
-        showAuth();
-      }
+      // keep session; if profile missing, shell still shows — realtime may fill later
+      if(myProfile){ try{ window.myProfile = myProfile; }catch(e){} }
     } else {
       showAuth();
     }
@@ -32414,4 +32427,5 @@ document.addEventListener('click', function(e){
 </script>
 
 </body>
-</html>
+</html>со
+  
