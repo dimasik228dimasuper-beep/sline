@@ -1560,6 +1560,11 @@ body.in-chat .bottom-tabs{
 .av-crop-actions button{flex:1;padding:14px;border:none;border-radius:14px;font-weight:700;font-size:15px;cursor:pointer}
 .av-crop-actions .cancel{background:rgba(255,255,255,.12);color:#fff}
 .av-crop-actions .ok{background:linear-gradient(135deg,var(--accent-a),var(--accent-b));color:#fff}
+.av-crop-zoom-row{display:flex;align-items:center;gap:10px;width:min(92vw,360px);margin:4px 0 10px;padding:0 4px}
+.av-crop-zoom-row input[type=range]{flex:1;accent-color:var(--accent-a,#4C7CF3);height:28px}
+.av-zoom-btn{width:36px;height:36px;border-radius:10px;border:none;background:rgba(255,255,255,.12);color:#fff;font-size:20px;font-weight:700;cursor:pointer;line-height:1}
+.av-crop-stage{touch-action:none;-webkit-user-select:none;user-select:none}
+.av-crop-stage img{pointer-events:none;-webkit-user-drag:none}
 .profile-av-stretch,.settings-av-stretch{
   background-size:cover!important;
   background-position:center!important;
@@ -3457,33 +3462,19 @@ function wireAuthUI(){
   document.getElementById('reg-avatar-file')?.addEventListener('change', (e)=>{
     const f = e.target.files && e.target.files[0];
     if(!f) return;
+    e.target.value='';
     const r = new FileReader();
     r.onload = ()=>{
       const raw = r.result;
-      // Compress to ~512px JPEG so Supabase/profile can store it
       (async ()=>{
         let dataUrl = raw;
         try{
-          if(typeof compressImageDataUrl==='function'){
+          if(typeof openAvatarCrop==='function'){
+            const cropped = await openAvatarCrop(raw);
+            if(!cropped) return;
+            dataUrl = cropped;
+          } else if(typeof compressImageDataUrl==='function'){
             dataUrl = await compressImageDataUrl(raw, 512, 0.82);
-          } else {
-            dataUrl = await new Promise((resolve)=>{
-              const img = new Image();
-              img.onload = ()=>{
-                const max = 512;
-                let w = img.width, h = img.height;
-                if(w > max || h > max){
-                  if(w > h){ h = Math.round(h * max / w); w = max; }
-                  else { w = Math.round(w * max / h); h = max; }
-                }
-                const c = document.createElement('canvas');
-                c.width = w; c.height = h;
-                c.getContext('2d').drawImage(img, 0, 0, w, h);
-                resolve(c.toDataURL('image/jpeg', 0.82));
-              };
-              img.onerror = ()=> resolve(raw);
-              img.src = raw;
-            });
           }
         }catch(err){ dataUrl = raw; }
         window._regAvatarDataUrl = dataUrl;
@@ -7080,8 +7071,13 @@ function openAvatarCrop(dataUrl){
   return new Promise((resolve)=>{
     const ov=document.createElement('div');
     ov.className='av-crop-overlay';
-    ov.innerHTML=`<div class="av-crop-hint">Перетащите фото — выберите область для иконки</div>
-      <div class="av-crop-stage" id="av-stage"><img id="av-img" alt=""><div class="av-crop-mask"></div></div>
+    ov.innerHTML=`<div class="av-crop-hint">Щипок — масштаб · перетащите — область</div>
+      <div class="av-crop-stage" id="av-stage"><img id="av-img" alt="" draggable="false"><div class="av-crop-mask"></div></div>
+      <div class="av-crop-zoom-row">
+        <button type="button" class="av-zoom-btn" id="av-zoom-out" aria-label="-">−</button>
+        <input type="range" id="av-zoom-range" min="100" max="400" value="100" step="1">
+        <button type="button" class="av-zoom-btn" id="av-zoom-in" aria-label="+">+</button>
+      </div>
       <div class="av-crop-actions">
         <button type="button" class="cancel" id="av-cancel">Отмена</button>
         <button type="button" class="ok" id="av-ok">Готово</button>
@@ -7089,70 +7085,153 @@ function openAvatarCrop(dataUrl){
     document.body.appendChild(ov);
     const stage=ov.querySelector('#av-stage');
     const img=ov.querySelector('#av-img');
-    let scale=1, tx=0, ty=0, baseW=0, baseH=0;
-    let dragging=false, lx=0, ly=0;
-    img.onload=()=>{
-      const sw=stage.clientWidth, sh=stage.clientHeight;
-      const fit=Math.max(sw/img.naturalWidth, sh/img.naturalHeight);
-      scale=fit;
-      baseW=img.naturalWidth; baseH=img.naturalHeight;
-      tx=(sw - baseW*scale)/2;
-      ty=(sh - baseH*scale)/2;
-      apply();
-    };
-    img.src=dataUrl;
+    const range=ov.querySelector('#av-zoom-range');
+    let scale=1, tx=0, ty=0, baseW=0, baseH=0, minScale=1;
+    // touch / mouse state
+    let mode='none'; // 'pan' | 'pinch'
+    let lx=0, ly=0;
+    let pinchStartDist=0, pinchStartScale=1, pinchMidX=0, pinchMidY=0;
+
     function apply(){
       img.style.width=baseW+'px';
       img.style.height=baseH+'px';
       img.style.transform=`translate(${tx}px,${ty}px) scale(${scale})`;
       img.style.transformOrigin='0 0';
+      if(range){
+        const pct = Math.round((scale/minScale)*100);
+        range.value = String(Math.max(100, Math.min(400, pct)));
+      }
     }
-    function onDown(x,y){ dragging=true; lx=x; ly=y; }
-    function onMove(x,y){
-      if(!dragging) return;
-      tx+=x-lx; ty+=y-ly; lx=x; ly=y; apply();
+    function clampScale(s){
+      return Math.min(minScale*4, Math.max(minScale*0.85, s));
     }
-    function onUp(){ dragging=false; }
-    stage.addEventListener('mousedown', e=>{ onDown(e.clientX,e.clientY); e.preventDefault(); });
-    window.addEventListener('mousemove', e=>{ if(dragging) onMove(e.clientX,e.clientY); });
-    window.addEventListener('mouseup', onUp);
-    stage.addEventListener('touchstart', e=>{ const t=e.touches[0]; onDown(t.clientX,t.clientY); }, {passive:true});
-    stage.addEventListener('touchmove', e=>{ const t=e.touches[0]; onMove(t.clientX,t.clientY); e.preventDefault(); }, {passive:false});
-    stage.addEventListener('touchend', onUp);
-    // pinch zoom simple via wheel
-    stage.addEventListener('wheel', e=>{
-      e.preventDefault();
-      const delta=e.deltaY>0?0.95:1.05;
-      const sw=stage.clientWidth, sh=stage.clientHeight;
-      const cx=sw/2, cy=sh/2;
-      const newScale=Math.min(8, Math.max(0.2, scale*delta));
-      // zoom toward center
+    function zoomAt(cx, cy, newScale){
+      newScale = clampScale(newScale);
       tx = cx - (cx - tx)*(newScale/scale);
       ty = cy - (cy - ty)*(newScale/scale);
-      scale=newScale; apply();
+      scale = newScale;
+      apply();
+    }
+    function dist(a,b){
+      const dx=a.clientX-b.clientX, dy=a.clientY-b.clientY;
+      return Math.hypot(dx,dy)||1;
+    }
+
+    img.onload=()=>{
+      const sw=stage.clientWidth, sh=stage.clientHeight;
+      baseW=img.naturalWidth; baseH=img.naturalHeight;
+      // cover the circular stage
+      minScale=Math.max(sw/baseW, sh/baseH);
+      scale=minScale;
+      tx=(sw - baseW*scale)/2;
+      ty=(sh - baseH*scale)/2;
+      apply();
+    };
+    img.src=dataUrl;
+
+    // Mouse pan
+    stage.addEventListener('mousedown', e=>{
+      if(e.button!==0) return;
+      mode='pan'; lx=e.clientX; ly=e.clientY; e.preventDefault();
+    });
+    window.addEventListener('mousemove', e=>{
+      if(mode!=='pan') return;
+      tx+=e.clientX-lx; ty+=e.clientY-ly; lx=e.clientX; ly=e.clientY; apply();
+    });
+    window.addEventListener('mouseup', ()=>{ mode='none'; });
+
+    // Touch: 1 finger pan, 2 finger pinch
+    stage.addEventListener('touchstart', e=>{
+      if(e.touches.length===1){
+        mode='pan';
+        lx=e.touches[0].clientX; ly=e.touches[0].clientY;
+      } else if(e.touches.length>=2){
+        mode='pinch';
+        pinchStartDist=dist(e.touches[0], e.touches[1]);
+        pinchStartScale=scale;
+        const r=stage.getBoundingClientRect();
+        pinchMidX=((e.touches[0].clientX+e.touches[1].clientX)/2)-r.left;
+        pinchMidY=((e.touches[0].clientY+e.touches[1].clientY)/2)-r.top;
+      }
+    }, {passive:true});
+    stage.addEventListener('touchmove', e=>{
+      if(e.touches.length>=2 && mode==='pinch'){
+        e.preventDefault();
+        const d=dist(e.touches[0], e.touches[1]);
+        const r=stage.getBoundingClientRect();
+        const mx=((e.touches[0].clientX+e.touches[1].clientX)/2)-r.left;
+        const my=((e.touches[0].clientY+e.touches[1].clientY)/2)-r.top;
+        // pan while pinching (midpoint move)
+        tx += mx - pinchMidX;
+        ty += my - pinchMidY;
+        pinchMidX=mx; pinchMidY=my;
+        const ns = pinchStartScale * (d / pinchStartDist);
+        zoomAt(mx, my, ns);
+        // keep pinchStartScale consistent after zoomAt changed scale via ratio
+        // reset baseline so continuous pinch is smooth
+        pinchStartDist=d;
+        pinchStartScale=scale;
+      } else if(e.touches.length===1 && mode==='pan'){
+        e.preventDefault();
+        const t=e.touches[0];
+        tx+=t.clientX-lx; ty+=t.clientY-ly; lx=t.clientX; ly=t.clientY; apply();
+      }
     }, {passive:false});
+    stage.addEventListener('touchend', e=>{
+      if(e.touches.length===0) mode='none';
+      else if(e.touches.length===1){
+        mode='pan';
+        lx=e.touches[0].clientX; ly=e.touches[0].clientY;
+      }
+    });
+    stage.addEventListener('touchcancel', ()=>{ mode='none'; });
+
+    // Wheel zoom (desktop)
+    stage.addEventListener('wheel', e=>{
+      e.preventDefault();
+      const r=stage.getBoundingClientRect();
+      const cx=e.clientX-r.left, cy=e.clientY-r.top;
+      const delta=e.deltaY>0?0.94:1.06;
+      zoomAt(cx, cy, scale*delta);
+    }, {passive:false});
+
+    // Range + buttons
+    range && range.addEventListener('input', ()=>{
+      const pct=Number(range.value)||100;
+      const sw=stage.clientWidth, sh=stage.clientHeight;
+      zoomAt(sw/2, sh/2, minScale*(pct/100));
+    });
+    ov.querySelector('#av-zoom-out')?.addEventListener('click', ()=>{
+      const sw=stage.clientWidth, sh=stage.clientHeight;
+      zoomAt(sw/2, sh/2, scale*0.9);
+    });
+    ov.querySelector('#av-zoom-in')?.addEventListener('click', ()=>{
+      const sw=stage.clientWidth, sh=stage.clientHeight;
+      zoomAt(sw/2, sh/2, scale*1.1);
+    });
+
     ov.querySelector('#av-cancel').onclick=()=>{ ov.remove(); resolve(null); };
     ov.querySelector('#av-ok').onclick=()=>{
       try{
-        const size=512;
+        // Export EXACTLY what is visible in the circular stage (1:1 with preview)
+        const sw=stage.clientWidth, sh=stage.clientHeight;
+        const size=Math.max(256, Math.min(1024, Math.round(Math.min(sw,sh)*2)));
         const canvas=document.createElement('canvas');
         canvas.width=size; canvas.height=size;
         const ctx=canvas.getContext('2d');
-        // map stage coords to image
-        // image drawn at tx,ty with scale
-        // stage cell 0..sw maps to output
-        const sw=stage.clientWidth, sh=stage.clientHeight;
-        // For each output pixel, sample from image
-        // Image pixel = (stageX - tx)/scale
+        // Map: stage pixel (x,y) -> image pixel ((x-tx)/scale, (y-ty)/scale)
+        // Draw full image with the same transform scaled to output size
+        const scaleOut=size/sw;
         ctx.fillStyle='#111';
         ctx.fillRect(0,0,size,size);
+        ctx.imageSmoothingEnabled=true;
+        ctx.imageSmoothingQuality='high';
         ctx.save();
-        // clip circle optional - for square avatar storage use square; circle via CSS
-        const scaleOut=size/sw;
         ctx.setTransform(scale*scaleOut, 0, 0, scale*scaleOut, tx*scaleOut, ty*scaleOut);
-        ctx.drawImage(img, 0, 0);
+        ctx.drawImage(img, 0, 0, baseW, baseH);
         ctx.restore();
-        const out=canvas.toDataURL('image/jpeg', 0.88);
+        // High quality JPEG — no extra compress that would change framing
+        const out=canvas.toDataURL('image/jpeg', 0.92);
         ov.remove();
         resolve(out);
       }catch(err){
@@ -7172,8 +7251,8 @@ document.getElementById('avatar-upload').onchange=async function(e){
     const cropped = await openAvatarCrop(raw);
     if(!cropped) return;
     showLoader();
+    // Keep exact crop framing from editor (no second recompress that shifts scale)
     let dataUrl = cropped;
-    if(typeof compressImageDataUrl==='function') dataUrl = await compressImageDataUrl(cropped, 512, 0.85);
     myProfile.avatar_url = dataUrl;
     updateAllUIs();
     // refresh open profile sheet stretch if any
