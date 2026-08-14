@@ -5589,56 +5589,248 @@ async function uploadFileToStorage(file, folder){
   return { ok:false, error: msg || (currentLang==='en'?'Upload failed':'Не удалось загрузить файл') };
 }
 
-async function prepareMediaForUpload(file, kind){
+async function prepareMediaForUpload(file, kind, quality){
   // kind: 'story' | 'chat' | 'post'
-  // Images: compress to keep DB/message light
+  // quality: 'original' | 'compress' | undefined (default compress for images)
+  const mode = quality || 'compress';
+
+  // Images
   if(file.type.startsWith('image/')){
+    if(mode === 'original'){
+      // Send full quality — prefer Storage to avoid huge base64
+      try{
+        const up = await uploadFileToStorage(file, kind==='story'?'stories':(kind==='post'?'posts':'chat'));
+        if(up.ok && up.url) return { ok:true, type:'image', dataUrl: up.url, bytes: file.size, via:'storage', quality:'original' };
+      }catch(e){ console.warn('original image storage', e); }
+      // fallback data URL (may be large)
+      const dataUrl = await readFileAsDataURL(file);
+      return { ok:true, type:'image', dataUrl, bytes:dataUrlBytes(dataUrl), via:'data', quality:'original' };
+    }
     const maxBytes = kind==='story' ? 1.8*1024*1024 : 3*1024*1024;
     const dataUrl = await readFileAsDataURL(file);
     let out = await compressImageDataUrl(dataUrl, kind==='story'?1080:1600, kind==='story'?0.7:0.78);
     if(dataUrlBytes(out) > maxBytes) out = await compressImageDataUrl(out, 900, 0.6);
     if(dataUrlBytes(out) > maxBytes) out = await compressImageDataUrl(out, 640, 0.5);
-    // Stories/posts: prefer Storage URL so others can see the media
-    if(kind==='story' || kind==='post'){
+    if(kind==='story' || kind==='post' || kind==='chat'){
       try{
         const f = dataUrlToFile(out, 'image.jpg');
         if(f){
-          const up = await uploadFileToStorage(f, kind==='story'?'stories':'posts');
-          if(up.ok && up.url) return { ok:true, type:'image', dataUrl: up.url, bytes: f.size, via:'storage' };
+          const up = await uploadFileToStorage(f, kind==='story'?'stories':(kind==='post'?'posts':'chat'));
+          if(up.ok && up.url) return { ok:true, type:'image', dataUrl: up.url, bytes: f.size, via:'storage', quality:'compress' };
         }
       }catch(e){ console.warn('image storage', e); }
     }
-    return { ok:true, type:'image', dataUrl:out, bytes:dataUrlBytes(out) };
+    return { ok:true, type:'image', dataUrl:out, bytes:dataUrlBytes(out), quality:'compress' };
   }
-  // Video: NO client size cap — upload File/Blob to Storage (not base64)
+
+  // Video
   if(file.type.startsWith('video/') || /\.(mp4|mov|webm|mkv|m4v)$/i.test(file.name||'')){
     const mb = Math.round((file.size||0)/1024/1024);
     if(mb > 50) showToast((currentLang==='en'?'Uploading video… ':'Загрузка видео… ')+mb+' МБ');
-    // Prefer Storage for anything over ~1.5 MB (base64 would bloat / hit DB limits)
-    if(file.size > 1.5*1024*1024 || kind==='chat' || kind==='post' || kind==='story'){
-      const up = await uploadFileToStorage(file, kind==='story'?'stories':(kind==='post'?'posts':'chat'));
-      if(up.ok) return { ok:true, type:'video', dataUrl: up.url, bytes: file.size, via:'storage' };
-      // tiny fallback to data-url only for small files
-      if(file.size <= 3*1024*1024){
-        try{
-          const dataUrl = await readFileAsDataURL(file);
-          return { ok:true, type:'video', dataUrl, bytes:dataUrlBytes(dataUrl), via:'data' };
-        }catch(e){}
-      }
-      return { ok:false, error: up.error||'Video upload failed' };
+    // Client-side video recompress is heavy; "compress" still uploads original file but we flag it.
+    // For true compress we'd need ffmpeg.wasm — for now both paths upload to storage; original keeps name/type.
+    const up = await uploadFileToStorage(file, kind==='story'?'stories':(kind==='post'?'posts':'chat'));
+    if(up.ok) return { ok:true, type:'video', dataUrl: up.url, bytes: file.size, via:'storage', quality: mode };
+    if(file.size <= 3*1024*1024){
+      try{
+        const dataUrl = await readFileAsDataURL(file);
+        return { ok:true, type:'video', dataUrl, bytes:dataUrlBytes(dataUrl), via:'data', quality: mode };
+      }catch(e){}
     }
-    const dataUrl = await readFileAsDataURL(file);
-    return { ok:true, type:'video', dataUrl, bytes:dataUrlBytes(dataUrl), via:'data' };
+    return { ok:false, error: up.error||'Video upload failed' };
   }
-  // generic files → storage
+
+  // generic files → always original via storage
   const up = await uploadFileToStorage(file, 'files');
-  if(up.ok) return { ok:true, type:'file', dataUrl: up.url, bytes: file.size, via:'storage' };
+  if(up.ok) return { ok:true, type:'file', dataUrl: up.url, bytes: file.size, via:'storage', quality:'original' };
   if(file.size <= 2*1024*1024){
     const dataUrl = await readFileAsDataURL(file);
-    return { ok:true, type:'file', dataUrl, bytes:dataUrlBytes(dataUrl) };
+    return { ok:true, type:'file', dataUrl, bytes:dataUrlBytes(dataUrl), quality:'original' };
   }
   return { ok:false, error: up.error||'Unsupported file' };
 }
+
+/** Dialog: Send as-is / Send compressed (Telegram-style) */
+function openSendQualityDialog(file){
+  return new Promise((resolve)=>{
+    const isImg = file && file.type && file.type.startsWith('image/');
+    const isVid = file && (file.type||'').startsWith('video/');
+    const size = file && file.size ? file.size : 0;
+    const sizeStr = size > 1024*1024
+      ? ((size/1024/1024).toFixed(1) + ' МБ')
+      : (size > 1024 ? (Math.round(size/1024) + ' КБ') : (size + ' Б'));
+    const name = (file && file.name) || (isImg ? 'Фото' : isVid ? 'Видео' : 'Файл');
+    const previewUrl = (isImg || isVid) ? URL.createObjectURL(file) : '';
+
+    document.getElementById('sl-send-quality-ov')?.remove();
+    const ov = document.createElement('div');
+    ov.id = 'sl-send-quality-ov';
+    ov.className = 'sl-send-q-ov';
+    ov.innerHTML = `
+      <div class="sl-send-q-card" role="dialog" aria-modal="true">
+        <div class="sl-send-q-preview">
+          ${isImg ? `<img src="${previewUrl}" alt="">` : ''}
+          ${isVid ? `<video src="${previewUrl}" muted playsinline></video>` : ''}
+          ${!isImg && !isVid ? `<div class="sl-send-q-fileico">📄</div>` : ''}
+        </div>
+        <div class="sl-send-q-meta">
+          <div class="sl-send-q-name">${String(name).replace(/[<>&]/g,s=>({ '<':'&lt;','>':'&gt;','&':'&amp;' }[s]))}</div>
+          <div class="sl-send-q-size">${sizeStr}</div>
+        </div>
+        <div class="sl-send-q-actions">
+          <button type="button" class="sl-send-q-btn primary" data-q="original">
+            <span class="sl-send-q-title">Отправить так</span>
+            <span class="sl-send-q-sub">Без сжатия · оригинал ${sizeStr}</span>
+          </button>
+          <button type="button" class="sl-send-q-btn" data-q="compress" ${(!isImg && !isVid) ? 'disabled style="opacity:.45"' : ''}>
+            <span class="sl-send-q-title">Отправить с сжатием</span>
+            <span class="sl-send-q-sub">${isImg ? 'Меньше вес · быстрее' : isVid ? 'Оптимизация для чата' : 'Только для фото/видео'}</span>
+          </button>
+          <button type="button" class="sl-send-q-cancel" data-q="cancel">Отмена</button>
+        </div>
+      </div>`;
+    if(!document.getElementById('sl-send-q-css')){
+      const st = document.createElement('style');
+      st.id = 'sl-send-q-css';
+      st.textContent = `
+        .sl-send-q-ov{
+          position:fixed; inset:0; z-index:12050;
+          background:rgba(0,0,0,.55);
+          backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px);
+          display:flex; align-items:center; justify-content:center;
+          padding:20px; animation:slQFade .18s ease;
+        }
+        @keyframes slQFade{ from{opacity:0} to{opacity:1} }
+        .sl-send-q-card{
+          width:min(400px, 100%);
+          background:var(--panel, #1a1f2e);
+          border-radius:18px;
+          border:1px solid rgba(120,120,128,.18);
+          box-shadow:0 20px 60px rgba(0,0,0,.45);
+          overflow:hidden;
+          animation:slQUp .22s cubic-bezier(.2,.8,.2,1);
+        }
+        @keyframes slQUp{ from{ transform:translateY(16px) scale(.96); opacity:0 } to{ transform:none; opacity:1 } }
+        .sl-send-q-preview{
+          height:180px; background:#0b0e14;
+          display:flex; align-items:center; justify-content:center; overflow:hidden;
+        }
+        .sl-send-q-preview img, .sl-send-q-preview video{
+          max-width:100%; max-height:100%; object-fit:contain;
+        }
+        .sl-send-q-fileico{ font-size:56px; opacity:.85; }
+        .sl-send-q-meta{ padding:14px 18px 6px; }
+        .sl-send-q-name{
+          font-size:15px; font-weight:600; color:var(--text);
+          white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+        }
+        .sl-send-q-size{ font-size:13px; color:var(--muted); margin-top:2px; }
+        .sl-send-q-actions{ padding:10px 14px 16px; display:flex; flex-direction:column; gap:8px; }
+        .sl-send-q-btn{
+          display:flex; flex-direction:column; align-items:flex-start; gap:2px;
+          width:100%; text-align:left; border:none; cursor:pointer;
+          padding:12px 14px; border-radius:12px;
+          background:rgba(120,120,128,.12); color:var(--text);
+          transition:background .15s, transform .1s;
+        }
+        .sl-send-q-btn:hover{ background:rgba(120,120,128,.2); }
+        .sl-send-q-btn:active{ transform:scale(.98); }
+        .sl-send-q-btn.primary{
+          background:linear-gradient(135deg,#4C7CF3,#6B8CFF);
+          color:#fff;
+        }
+        .sl-send-q-btn.primary .sl-send-q-sub{ color:rgba(255,255,255,.85); }
+        .sl-send-q-title{ font-size:15px; font-weight:650; }
+        .sl-send-q-sub{ font-size:12px; color:var(--muted); }
+        .sl-send-q-cancel{
+          margin-top:2px; border:none; background:transparent; cursor:pointer;
+          color:var(--muted); font-size:14px; padding:10px; border-radius:10px;
+        }
+        .sl-send-q-cancel:hover{ color:var(--text); background:rgba(120,120,128,.1); }
+        body.theme-light .sl-send-q-card, body.light-theme .sl-send-q-card{
+          background:#fff;
+        }
+        /* Drag overlay */
+        .sl-drag-ov{
+          position:fixed; inset:0; z-index:12040;
+          background:rgba(40,80,200,.22);
+          border:3px dashed #5B8CFF;
+          display:none; align-items:center; justify-content:center;
+          pointer-events:none;
+        }
+        .sl-drag-ov.show{ display:flex; }
+        .sl-drag-ov span{
+          background:rgba(20,24,36,.9); color:#fff;
+          padding:14px 22px; border-radius:14px; font-weight:600; font-size:16px;
+          box-shadow:0 8px 30px rgba(0,0,0,.35);
+        }
+      `;
+      document.head.appendChild(st);
+    }
+    document.body.appendChild(ov);
+    const done = (q)=>{
+      try{ if(previewUrl) URL.revokeObjectURL(previewUrl); }catch(e){}
+      ov.remove();
+      resolve(q);
+    };
+    ov.addEventListener('click', (e)=>{ if(e.target===ov) done(null); });
+    ov.querySelectorAll('[data-q]').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        const q = btn.getAttribute('data-q');
+        if(q==='cancel') done(null);
+        else done(q);
+      });
+    });
+  });
+}
+
+/** Unified entry: pick quality → prepare → caption → send */
+async function sendChatFiles(fileList){
+  const files = Array.from(fileList||[]).filter(Boolean);
+  if(!files.length) return;
+  if(!activePartner && !activeGroup){
+    showToast(currentLang==='en'?'Open a chat first':'Сначала откройте чат');
+    return;
+  }
+  for(const f of files){
+    try{
+      const isMedia = (f.type||'').startsWith('image/') || (f.type||'').startsWith('video/');
+      let quality = 'original';
+      if(isMedia){
+        quality = await openSendQualityDialog(f);
+        if(!quality) continue; // cancelled
+      } else {
+        // documents: quick confirm with only "send as is"
+        quality = await openSendQualityDialog(f);
+        if(!quality) continue;
+      }
+      showLoader();
+      const prep = await prepareMediaForUpload(f, 'chat', quality);
+      hideLoader();
+      if(!prep || !prep.ok){
+        showToast((prep && prep.error) || 'Ошибка');
+        continue;
+      }
+      const mType = prep.type==='video' ? 'video' : (prep.type==='image' ? 'image' : 'file');
+      if(mType==='image' || mType==='video'){
+        let caption = '';
+        if(typeof openMediaCaptionComposer==='function'){
+          caption = await openMediaCaptionComposer(prep.dataUrl, mType, f.name);
+          if(caption===null) continue;
+        }
+        await sendMessage(mType, prep.dataUrl, caption||'');
+      } else {
+        await sendMessage('file', prep.dataUrl, f.name||'file');
+      }
+    }catch(err){
+      hideLoader();
+      showToast(typeof friendlyError==='function' ? friendlyError(err) : String(err));
+    }
+  }
+}
+window.sendChatFiles = sendChatFiles;
+window.openSendQualityDialog = openSendQualityDialog;
+
 
 // Local stories fallback (always visible for me)
 const LOCAL_STORIES_KEY='sl_local_stories';
@@ -7860,6 +8052,12 @@ document.getElementById('settings-cover-edit')?.addEventListener('click', pickCo
   page.style.overflowY = 'auto';
   page.style.webkitOverflowScrolling = 'touch';
 
+  // Remove old floating clones (they caused ghost doubles)
+  ['sl-set-fly-av','sl-set-fly-name'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el) el.remove();
+  });
+
   let mini = document.getElementById('sl-settings-mini');
   if(!mini){
     mini = document.createElement('div');
@@ -7867,187 +8065,97 @@ document.getElementById('settings-cover-edit')?.addEventListener('click', pickCo
     mini.innerHTML = `<span class="sl-set-mini-av" id="sl-set-mini-av"></span><span class="sl-set-mini-name" id="sl-set-mini-name"></span>`;
     page.insertBefore(mini, page.firstChild);
   }
-  let flyAv = document.getElementById('sl-set-fly-av');
-  let flyName = document.getElementById('sl-set-fly-name');
-  if(!flyAv){
-    flyAv = document.createElement('div');
-    flyAv.id = 'sl-set-fly-av';
-    document.body.appendChild(flyAv);
-  }
-  if(!flyName){
-    flyName = document.createElement('div');
-    flyName.id = 'sl-set-fly-name';
-    document.body.appendChild(flyName);
-  }
 
-  if(!document.getElementById('sl-settings-collapse-css')){
-    const st = document.createElement('style');
-    st.id = 'sl-settings-collapse-css';
-    st.textContent = `
-      #sl-settings-mini{
-        position:sticky; top:0; z-index:30;
-        display:flex; align-items:center; justify-content:center; gap:10px;
-        height:0; opacity:0; pointer-events:none;
-        background:rgba(10,12,18,.9);
-        backdrop-filter:blur(20px) saturate(1.25);
-        -webkit-backdrop-filter:blur(20px) saturate(1.25);
-        border-bottom:1px solid transparent;
-        padding-top:env(safe-area-inset-top,0px);
-        box-sizing:content-box; overflow:hidden;
-        transform:translateZ(0);
-      }
-      #sl-settings-mini.show{ pointer-events:auto; }
-      #sl-settings-mini .sl-set-mini-av{
-        width:28px; height:28px; border-radius:50%;
-        background:linear-gradient(135deg,#5B8CFF,#7B6CFF);
-        background-size:cover; background-position:center;
-        flex-shrink:0; overflow:hidden;
-        opacity:0; transform:scale(.5) translateZ(0);
-        will-change:transform,opacity;
-      }
-      #sl-settings-mini .sl-set-mini-av img{
-        width:100%; height:100%; object-fit:cover; border-radius:50%; display:block;
-      }
-      #sl-settings-mini .sl-set-mini-name{
-        font-size:16px; font-weight:700; color:var(--text);
-        white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:60vw;
-        opacity:0; transform:translateY(8px) scale(.94) translateZ(0);
-        will-change:transform,opacity;
-      }
-      #sl-set-fly-av{
-        position:fixed; z-index:40; pointer-events:none;
-        border-radius:50%; overflow:hidden;
-        background:linear-gradient(135deg,#5B8CFF,#7B6CFF);
-        background-size:cover; background-position:center;
-        box-shadow:0 8px 28px rgba(0,0,0,.35);
-        opacity:0; will-change:transform,opacity;
-        display:flex; align-items:center; justify-content:center;
-        color:#fff; font-weight:800; font-size:28px;
-        transform:translate3d(-9999px,-9999px,0);
-        top:0; left:0;
-      }
-      #sl-set-fly-av img{ width:100%; height:100%; object-fit:cover; border-radius:50%; display:block; }
-      #sl-set-fly-name{
-        position:fixed; z-index:40; pointer-events:none;
-        font-weight:700; color:var(--text);
-        white-space:nowrap; opacity:0;
-        will-change:transform,opacity;
-        text-shadow:0 1px 8px rgba(0,0,0,.35);
-        transform:translate3d(-9999px,-9999px,0);
-        top:0; left:0;
-      }
-      #page-settings .settings-avatar,
-      #page-settings .settings-name,
-      #page-settings .settings-username,
-      #page-settings .settings-phone{
-        will-change:transform,opacity;
-        transform:translateZ(0);
-      }
-      body.theme-light #sl-settings-mini,
-      body.light-theme #sl-settings-mini{ background:rgba(255,255,255,.92); }
-    `;
-    document.head.appendChild(st);
-  }
+  let st = document.getElementById('sl-settings-collapse-css');
+  if(st) st.remove();
+  st = document.createElement('style');
+  st.id = 'sl-settings-collapse-css';
+  st.textContent = `
+    #sl-settings-mini{
+      position:sticky; top:0; z-index:30;
+      display:flex; align-items:center; justify-content:center; gap:10px;
+      height:0; opacity:0; pointer-events:none;
+      background:rgba(10,12,18,.92);
+      backdrop-filter:blur(20px) saturate(1.2);
+      -webkit-backdrop-filter:blur(20px) saturate(1.2);
+      border-bottom:1px solid transparent;
+      padding-top:env(safe-area-inset-top,0px);
+      box-sizing:content-box; overflow:hidden;
+      transform:translateZ(0);
+    }
+    #sl-settings-mini.show{ pointer-events:auto; }
+    #sl-settings-mini .sl-set-mini-av{
+      width:28px; height:28px; border-radius:50%;
+      background:linear-gradient(135deg,#5B8CFF,#7B6CFF);
+      background-size:cover; background-position:center;
+      flex-shrink:0; overflow:hidden;
+      opacity:0; transform:scale(.7);
+      will-change:transform,opacity;
+    }
+    #sl-settings-mini .sl-set-mini-av img{
+      width:100%; height:100%; object-fit:cover; border-radius:50%; display:block;
+    }
+    #sl-settings-mini .sl-set-mini-name{
+      font-size:16px; font-weight:700; color:var(--text);
+      white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:60vw;
+      opacity:0; transform:translateY(6px);
+      will-change:transform,opacity;
+    }
+    #page-settings .settings-avatar,
+    #page-settings .settings-name,
+    #page-settings .settings-username,
+    #page-settings .settings-phone,
+    #page-settings .settings-hero{
+      will-change:transform,opacity;
+      transform:translateZ(0);
+    }
+    /* hide any leftover fly clones */
+    #sl-set-fly-av, #sl-set-fly-name{ display:none!important; opacity:0!important; }
+    body.theme-light #sl-settings-mini,
+    body.light-theme #sl-settings-mini{ background:rgba(255,255,255,.94); }
+  `;
+  document.head.appendChild(st);
 
   function lerp(a,b,t){ return a+(b-a)*t; }
   function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
   function easeOutCubic(t){ return 1-Math.pow(1-t,3); }
   function easeInOutCubic(t){ return t<.5 ? 4*t*t*t : 1-Math.pow(-2*t+2,3)/2; }
 
-  // Cached geometry — refresh only when needed (not every frame)
-  let geo = null;
-  let geoAt = 0;
-  function refreshGeo(force){
-    const now = performance.now();
-    if(!force && geo && (now - geoAt) < 200) return geo;
-    const av = document.getElementById('settings-avatar');
-    const name = document.getElementById('settings-display-name');
-    const pageW = page.clientWidth || window.innerWidth;
-    const avR = av ? av.getBoundingClientRect() : null;
-    const nameR = name ? name.getBoundingClientRect() : null;
-    // Store ORIGIN positions relative to viewport when expanded (scroll~0)
-    // When scrolled, hero moves — we use scroll-compensated origins
-    const scrollY = page.scrollTop || 0;
-    geo = {
-      pageW,
-      // natural (unscrolled) centers: current rect + scroll offset for Y within page flow is tricky with sticky
-      // Use current rect when p is low; when scrolling, extrapolate from first measurement
-      avW: avR ? avR.width : 88,
-      avH: avR ? avR.height : 88,
-      avCX: avR ? avR.left + avR.width/2 : pageW/2,
-      avCY: avR ? avR.top + avR.height/2 + scrollY : 120, // page-relative-ish
-      nameW: nameR ? nameR.width : 120,
-      nameSize: name ? (parseFloat(getComputedStyle(name).fontSize)||22) : 22,
-      nameCX: nameR ? nameR.left + nameR.width/2 : pageW/2,
-      nameCY: nameR ? nameR.top + nameR.height/2 + scrollY : 180,
-      scrollY
-    };
-    // When expanded, lock the "rest" positions
-    if(scrollY < 8){
-      geo.restAvCX = geo.avCX;
-      geo.restAvCY = avR ? avR.top + avR.height/2 : 120;
-      geo.restNameCX = geo.nameCX;
-      geo.restNameCY = nameR ? nameR.top + nameR.height/2 : 180;
-      geo.restAvW = geo.avW;
-      geo.restNameSize = geo.nameSize;
-      geo.restNameW = geo.nameW;
-    }
-    geoAt = now;
-    return geo;
-  }
-
-  function syncContent(){
+  function syncMini(){
     const nameEl = document.getElementById('settings-display-name');
     const av = document.getElementById('settings-avatar');
     const miniName = document.getElementById('sl-set-mini-name');
     const miniAv = document.getElementById('sl-set-mini-av');
-    const nm = (nameEl && nameEl.textContent || '').trim() || 'SLine';
-    if(miniName) miniName.textContent = nm;
-    if(flyName) flyName.textContent = nm;
-
-    const applyAv = (el)=>{
-      if(!el || !av) return;
+    if(miniName && nameEl) miniName.textContent = (nameEl.textContent||'').trim() || 'SLine';
+    if(miniAv && av){
       const img = av.querySelector('img');
       const bg = av.style.backgroundImage || '';
       if(img && img.src){
-        el.innerHTML = `<img src="${img.src.replace(/"/g,'')}" alt="">`;
-        el.style.backgroundImage = 'none';
+        miniAv.innerHTML = `<img src="${img.src.replace(/"/g,'')}" alt="">`;
+        miniAv.style.backgroundImage = 'none';
       } else if(bg && bg !== 'none'){
-        el.innerHTML = '';
-        el.style.backgroundImage = bg;
+        miniAv.innerHTML = '';
+        miniAv.style.backgroundImage = bg;
       } else {
         const t = (document.getElementById('settings-avatar-text')||{}).textContent || '';
-        el.innerHTML = '';
-        el.style.backgroundImage = 'none';
-        el.textContent = (t||'').slice(0,2);
-        el.style.display = 'flex';
-        el.style.alignItems = 'center';
-        el.style.justifyContent = 'center';
-        el.style.color = '#fff';
-        el.style.fontWeight = '700';
+        miniAv.innerHTML = '';
+        miniAv.style.backgroundImage = 'none';
+        miniAv.textContent = (t||'').slice(0,2);
+        miniAv.style.display = 'flex';
+        miniAv.style.alignItems = 'center';
+        miniAv.style.justifyContent = 'center';
+        miniAv.style.color = '#fff';
+        miniAv.style.fontWeight = '700';
+        miniAv.style.fontSize = '12px';
       }
-    };
-    applyAv(miniAv);
-    applyAv(flyAv);
+    }
   }
 
-  let lastP = 0;
-  let contentSynced = false;
-
-  function applySettingsCollapse(y){
-    const RANGE = 130;
+  function apply(y){
+    const RANGE = 110;
     const p = clamp(y / RANGE, 0, 1);
     const e = easeInOutCubic(p);
-    const goingUp = p < lastP - 0.002;
-    lastP = p;
 
-    if(!contentSynced || (p < 0.05 && !contentSynced)){
-      syncContent();
-      contentSynced = true;
-    }
-    if(p < 0.02) contentSynced = false;
-
-    const g = refreshGeo(p < 0.08 || p > 0.92);
     const av = document.getElementById('settings-avatar');
     const name = document.getElementById('settings-display-name');
     const uname = document.getElementById('settings-display-username');
@@ -8055,132 +8163,69 @@ document.getElementById('settings-cover-edit')?.addEventListener('click', pickCo
     const hero = page.querySelector('.settings-hero');
     const topBtns = page.querySelector('.max-settings-top');
 
-    // Rest positions (viewport coords when expanded)
-    const restAvCX = g.restAvCX != null ? g.restAvCX : g.avCX;
-    const restAvCY = g.restAvCY != null ? g.restAvCY : 120;
-    const restNameCX = g.restNameCX != null ? g.restNameCX : g.nameCX;
-    const restNameCY = g.restNameCY != null ? g.restNameCY : 180;
-    const restAvW = g.restAvW || 88;
-    const restNameSize = g.restNameSize || 22;
-    const restNameW = g.restNameW || 120;
-
-    // Target in mini bar (viewport)
-    const miniH = lerp(0, 48, e);
-    const miniRect = mini.getBoundingClientRect();
-    const targetAvSize = 28;
-    const targetAvCX = g.pageW / 2 - 36;
-    const targetAvCY = (miniRect.top || 0) + Math.max(miniH, 8) / 2 + (parseFloat(getComputedStyle(mini).paddingTop)||0)/2;
-    const targetNameCX = g.pageW / 2 + 8;
-    const targetNameCY = targetAvCY;
-    const targetNameSize = 16;
-
-    // Subtitle fade
-    const fe = easeOutCubic(clamp(p * 1.5, 0, 1));
-    [uname, phone].forEach(el=>{
-      if(!el) return;
-      el.style.opacity = String(Math.max(0, 1 - fe * 1.35));
-      el.style.transform = `translate3d(0, ${(-12*fe).toFixed(1)}px, 0)`;
-    });
-
-    // Mini bar
-    const miniOpacity = easeOutCubic(clamp((p - 0.05) / 0.5, 0, 1));
-    const land = easeOutCubic(clamp((p - 0.5) / 0.45, 0, 1)); // content in mini visible when landed
-    mini.classList.toggle('show', miniOpacity > 0.04);
-    mini.style.height = Math.round(miniH) + 'px';
-    mini.style.opacity = String(miniOpacity);
-    mini.style.borderBottomColor = `rgba(120,120,128,${(0.18*miniOpacity).toFixed(2)})`;
-
-    const mav = mini.querySelector('.sl-set-mini-av');
-    const mnm = mini.querySelector('.sl-set-mini-name');
-    // When scrolling UP, mini content fades out with scale (animated disappear)
-    if(mav){
-      mav.style.opacity = String(land);
-      mav.style.transform = `scale(${lerp(0.55, 1, land).toFixed(3)}) translateZ(0)`;
-    }
-    if(mnm){
-      mnm.style.opacity = String(land);
-      mnm.style.transform = `translate3d(0, ${lerp(12, 0, land).toFixed(1)}px, 0) scale(${lerp(0.9, 1, land).toFixed(3)})`;
-    }
-
-    // Flight progress
-    const fp = e;
-    // Current flying avatar
-    const curAvSize = lerp(restAvW, targetAvSize, fp);
-    const curAvCX = lerp(restAvCX, targetAvCX, fp);
-    const curAvCY = lerp(restAvCY, Math.max(targetAvCY, 20), fp);
-    const midBoost = Math.sin(Math.PI * fp) * 0.06;
-
-    // Hide originals while flying
-    const hide = easeOutCubic(clamp(p / 0.18, 0, 1));
+    // === Original avatar + name: shrink, move up, FADE OUT completely ===
+    // Fade starts early so they fully disappear by ~70% scroll
+    const fade = easeOutCubic(clamp(p / 0.65, 0, 1));
     if(av){
-      av.style.opacity = String(Math.max(0, 1 - hide));
-      av.style.transform = `scale(${lerp(1, 0.92, hide).toFixed(3)}) translateZ(0)`;
+      av.style.opacity = String(Math.max(0, 1 - fade));
+      av.style.transform = `translate3d(0, ${(-36*e).toFixed(1)}px, 0) scale(${lerp(1, 0.35, e).toFixed(3)})`;
+      av.style.pointerEvents = fade > 0.85 ? 'none' : 'auto';
     }
     if(name){
-      name.style.opacity = String(Math.max(0, 1 - hide));
-      name.style.transform = `scale(${lerp(1, 0.94, hide).toFixed(3)}) translateZ(0)`;
+      name.style.opacity = String(Math.max(0, 1 - fade));
+      name.style.transform = `translate3d(0, ${(-28*e).toFixed(1)}px, 0) scale(${lerp(1, 0.7, e).toFixed(3)})`;
     }
-
-    // Fly avatar via transform3d (GPU)
-    if(flyAv && p > 0.01 && p < 0.99){
-      flyAv.style.width = curAvSize + 'px';
-      flyAv.style.height = curAvSize + 'px';
-      flyAv.style.fontSize = (curAvSize * 0.38).toFixed(1) + 'px';
-      flyAv.style.transform = `translate3d(${(curAvCX - curAvSize/2).toFixed(1)}px, ${(curAvCY - curAvSize/2).toFixed(1)}px, 0) scale(${(1+midBoost).toFixed(3)})`;
-      // fade out as mini content lands; fade in as soon as we leave top
-      const flyOp = clamp(p * 5, 0, 1) * (1 - land);
-      flyAv.style.opacity = String(flyOp);
-    } else if(flyAv){
-      flyAv.style.opacity = '0';
-      flyAv.style.transform = 'translate3d(-9999px,-9999px,0)';
-    }
-
-    // Fly name
-    if(flyName && p > 0.01 && p < 0.99){
-      const curNS = lerp(restNameSize, targetNameSize, fp);
-      const curNCX = lerp(restNameCX, targetNameCX, fp);
-      const curNCY = lerp(restNameCY, Math.max(targetNameCY, 18), fp);
-      const approxW = restNameW * (curNS / restNameSize);
-      flyName.style.fontSize = curNS.toFixed(1) + 'px';
-      flyName.style.transform = `translate3d(${(curNCX - approxW/2).toFixed(1)}px, ${(curNCY - curNS/2).toFixed(1)}px, 0)`;
-      const flyOp = clamp(p * 5, 0, 1) * (1 - land);
-      flyName.style.opacity = String(flyOp);
-    } else if(flyName){
-      flyName.style.opacity = '0';
-      flyName.style.transform = 'translate3d(-9999px,-9999px,0)';
-    }
+    // Username / phone disappear faster
+    const fadeSub = easeOutCubic(clamp(p / 0.4, 0, 1));
+    [uname, phone].forEach(el=>{
+      if(!el) return;
+      el.style.opacity = String(Math.max(0, 1 - fadeSub));
+      el.style.transform = `translate3d(0, ${(-14*fadeSub).toFixed(1)}px, 0)`;
+    });
 
     if(hero){
-      hero.style.marginBottom = (-18 * e).toFixed(1) + 'px';
-      hero.style.paddingBottom = (18 * (1 - e * 0.8)).toFixed(1) + 'px';
+      hero.style.marginBottom = (-22 * e).toFixed(1) + 'px';
+      hero.style.paddingBottom = (18 * (1 - e)).toFixed(1) + 'px';
     }
     if(topBtns){
-      topBtns.style.opacity = String(Math.max(0.3, 1 - e * 0.45));
+      topBtns.style.opacity = String(Math.max(0.25, 1 - e * 0.5));
     }
 
-    // endpoints
-    if(p <= 0.005){
-      if(flyAv) flyAv.style.opacity = '0';
-      if(flyName) flyName.style.opacity = '0';
-      if(av){ av.style.opacity = '1'; av.style.transform = 'none'; }
-      if(name){ name.style.opacity = '1'; name.style.transform = 'none'; }
-      if(mav){ mav.style.opacity = '0'; }
-      if(mnm){ mnm.style.opacity = '0'; }
+    // === Sticky mini bar: appears as originals disappear ===
+    // Starts appearing when originals are already fading
+    const miniIn = easeOutCubic(clamp((p - 0.25) / 0.5, 0, 1));
+    const miniH = Math.round(lerp(0, 48, miniIn));
+    if(mini){
+      if(miniIn > 0.02) syncMini();
+      mini.classList.toggle('show', miniIn > 0.05);
+      mini.style.height = miniH + 'px';
+      mini.style.opacity = String(miniIn);
+      mini.style.borderBottomColor = `rgba(120,120,128,${(0.18*miniIn).toFixed(2)})`;
+      const mav = mini.querySelector('.sl-set-mini-av');
+      const mnm = mini.querySelector('.sl-set-mini-name');
+      if(mav){
+        mav.style.opacity = String(miniIn);
+        mav.style.transform = `scale(${lerp(0.6, 1, miniIn).toFixed(3)})`;
+      }
+      if(mnm){
+        mnm.style.opacity = String(miniIn);
+        mnm.style.transform = `translateY(${lerp(8, 0, miniIn).toFixed(1)}px)`;
+      }
+    }
+
+    // Hard endpoints — no ghosts
+    if(p <= 0.01){
+      if(av){ av.style.opacity='1'; av.style.transform='none'; }
+      if(name){ name.style.opacity='1'; name.style.transform='none'; }
+      if(mini){ mini.style.opacity='0'; mini.style.height='0px'; }
     }
     if(p >= 0.98){
-      if(flyAv) flyAv.style.opacity = '0';
-      if(flyName) flyName.style.opacity = '0';
-      if(av) av.style.opacity = '0';
-      if(name) name.style.opacity = '0';
-      if(mav){ mav.style.opacity = '1'; mav.style.transform = 'scale(1) translateZ(0)'; }
-      if(mnm){ mnm.style.opacity = '1'; mnm.style.transform = 'translate3d(0,0,0) scale(1)'; }
+      if(av){ av.style.opacity='0'; }
+      if(name){ name.style.opacity='0'; }
+      if(uname) uname.style.opacity='0';
+      if(phone) phone.style.opacity='0';
     }
   }
-
-  const hideFly = ()=>{
-    if(flyAv){ flyAv.style.opacity='0'; flyAv.style.transform='translate3d(-9999px,-9999px,0)'; }
-    if(flyName){ flyName.style.opacity='0'; flyName.style.transform='translate3d(-9999px,-9999px,0)'; }
-  };
 
   if(!page._slCollapseBound){
     page._slCollapseBound = true;
@@ -8191,33 +8236,15 @@ document.getElementById('settings-cover-edit')?.addEventListener('click', pickCo
       if(raf) return;
       raf = requestAnimationFrame(()=>{
         raf = 0;
-        applySettingsCollapse(latestY);
+        apply(latestY);
       });
     }, {passive:true});
-    // continuous rAF while scrolling for smoother feel
-    let scrollEndTimer = null;
-    let liveRaf = 0;
-    const liveLoop = ()=>{
-      applySettingsCollapse(page.scrollTop || 0);
-      liveRaf = requestAnimationFrame(liveLoop);
-    };
-    page.addEventListener('scroll', ()=>{
-      if(!liveRaf) liveRaf = requestAnimationFrame(liveLoop);
-      clearTimeout(scrollEndTimer);
-      scrollEndTimer = setTimeout(()=>{
-        if(liveRaf){ cancelAnimationFrame(liveRaf); liveRaf = 0; }
-        applySettingsCollapse(page.scrollTop || 0);
-      }, 120);
-    }, {passive:true});
   }
-  // measure rest positions at start
   requestAnimationFrame(()=>{
-    page.scrollTop = page.scrollTop; // force
-    refreshGeo(true);
-    syncContent();
-    applySettingsCollapse(page.scrollTop || 0);
+    syncMini();
+    apply(page.scrollTop || 0);
   });
-  setInterval(()=>{ try{ if((page.scrollTop||0)<5){ refreshGeo(true); syncContent(); } }catch(e){} }, 2000);
+  setInterval(()=>{ try{ if((page.scrollTop||0)<8) syncMini(); }catch(e){} }, 2500);
 })();
 
 // ========== BETA FEATURES ==========
@@ -34441,6 +34468,99 @@ body{
 </script>
 
 <!--sl-end-->
+
+
+<script>
+/* ========== Send quality chooser + drag & drop into chat ========== */
+(function(){
+  function bindInputs(){
+    const photo = document.getElementById('photo-input');
+    const file = document.getElementById('file-input');
+    if(photo && !photo._slQuality){
+      photo._slQuality = 1;
+      photo.onchange = async function(e){
+        const list = e.target.files;
+        e.target.value = '';
+        if(!list || !list.length) return;
+        if(typeof sendChatFiles==='function') await sendChatFiles(list);
+      };
+    }
+    if(file && !file._slQuality){
+      file._slQuality = 1;
+      file.onchange = async function(e){
+        const list = e.target.files;
+        e.target.value = '';
+        if(!list || !list.length) return;
+        if(typeof sendChatFiles==='function') await sendChatFiles(list);
+      };
+    }
+  }
+  bindInputs();
+  setTimeout(bindInputs, 500);
+  setTimeout(bindInputs, 2000);
+
+  // Drag & drop onto chat pane / messages area
+  let dragDepth = 0;
+  let ov = document.getElementById('sl-drag-ov');
+  if(!ov){
+    ov = document.createElement('div');
+    ov.id = 'sl-drag-ov';
+    ov.className = 'sl-drag-ov';
+    ov.innerHTML = '<span>Отпустите, чтобы отправить</span>';
+    document.body.appendChild(ov);
+  }
+  function inChat(){
+    return !!(document.body.classList.contains('in-chat') || activePartner || activeGroup);
+  }
+  function showDrag(on){
+    ov.classList.toggle('show', !!on);
+  }
+  window.addEventListener('dragenter', (e)=>{
+    if(!e.dataTransfer || ![...e.dataTransfer.types].includes('Files')) return;
+    if(!inChat()) return;
+    dragDepth++;
+    showDrag(true);
+  });
+  window.addEventListener('dragleave', (e)=>{
+    dragDepth = Math.max(0, dragDepth-1);
+    if(dragDepth===0) showDrag(false);
+  });
+  window.addEventListener('dragover', (e)=>{
+    if(!e.dataTransfer || ![...e.dataTransfer.types].includes('Files')) return;
+    if(!inChat()) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+    showDrag(true);
+  });
+  window.addEventListener('drop', async (e)=>{
+    dragDepth = 0;
+    showDrag(false);
+    if(!e.dataTransfer || !e.dataTransfer.files || !e.dataTransfer.files.length) return;
+    if(!inChat()) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if(typeof sendChatFiles==='function') await sendChatFiles(e.dataTransfer.files);
+  });
+
+  // Paste image from clipboard (desktop)
+  window.addEventListener('paste', async (e)=>{
+    if(!inChat()) return;
+    const items = e.clipboardData && e.clipboardData.items;
+    if(!items) return;
+    const files = [];
+    for(const it of items){
+      if(it.type && it.type.startsWith('image/')){
+        const f = it.getAsFile();
+        if(f) files.push(f);
+      }
+    }
+    if(files.length){
+      e.preventDefault();
+      if(typeof sendChatFiles==='function') await sendChatFiles(files);
+    }
+  });
+})();
+</script>
 
 </body>
 </html>
