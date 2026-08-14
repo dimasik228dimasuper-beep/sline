@@ -27967,26 +27967,29 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
       if(_tgRaf){ cancelAnimationFrame(_tgRaf); _tgRaf=0; }
     };
     window._tgCircleStartCanvas = function(videoEl, face){
-      window._tgCircleStopCanvas();
+      // Update source without tearing down captureStream
+      window._tgCircleVideo = videoEl;
+      window._tgCircleFace = face;
       if(!_tgCanvas){
         _tgCanvas = document.createElement('canvas');
         _tgCanvas.width = 480; _tgCanvas.height = 480;
       }
+      if(_tgRaf) return _tgCanvas; // already looping
       const ctx = _tgCanvas.getContext('2d', {alpha:false});
       const draw = ()=>{
         _tgRaf = requestAnimationFrame(draw);
-        if(!videoEl) return;
-        const vw = videoEl.videoWidth|0, vh = videoEl.videoHeight|0;
-        if(videoEl.readyState<2 || vw<2 || vh<2) return;
+        const el = window._tgCircleVideo;
+        const f = window._tgCircleFace;
+        if(!el) return;
+        const vw = el.videoWidth|0, vh = el.videoHeight|0;
+        if(el.readyState<2 || vw<2 || vh<2) return; // keep last frame — no black flash
         try{
           const scale = Math.max(480/vw, 480/vh);
           const dw = vw*scale, dh = vh*scale;
           const dx = (480-dw)/2, dy = (480-dh)/2;
           ctx.save();
-          if(face==='user'){ ctx.translate(480,0); ctx.scale(-1,1); }
-          ctx.fillStyle='#000';
-          ctx.fillRect(0,0,480,480);
-          ctx.drawImage(videoEl, dx, dy, dw, dh);
+          if(f==='user'){ ctx.translate(480,0); ctx.scale(-1,1); }
+          ctx.drawImage(el, dx, dy, dw, dh);
           ctx.restore();
         }catch(e){}
       };
@@ -28046,14 +28049,13 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
       ov._flipping=1;
       const next = facing==='user'?'environment':'user';
       setScreenFlash(false);
-      const old=mediaStream;
       try{
-        // Stop OLD video first (required on iOS / many Android WebViews)
-        try{ old?.getVideoTracks().forEach(t=>{ try{t.stop();}catch(e){} }); }catch(e){}
+        // Keep ORIGINAL audio track alive — it is shared with MediaRecorder via canvas stream.
+        // Only swap the VIDEO track feeding the preview + canvas.
+        const oldVideoTracks = (mediaStream ? mediaStream.getVideoTracks().slice() : []);
 
         let newStream=null;
         const tryList=[];
-        // Prefer deviceId when labels known
         try{
           const devices=await navigator.mediaDevices.enumerateDevices();
           const cams=devices.filter(d=>d.kind==='videoinput');
@@ -28064,14 +28066,16 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
               return wantBack ? /back|rear|environment|задн|основн/i.test(L) : /front|user|face|перед/i.test(L);
             });
             if(!pick) pick = wantBack ? (cams[1]||cams[0]) : cams[0];
-            if(pick&&pick.deviceId) tryList.push({video:{deviceId:{exact:pick.deviceId}, width:{ideal:720}, height:{ideal:720}}, audio:true});
+            if(pick&&pick.deviceId){
+              tryList.push({video:{deviceId:{exact:pick.deviceId}, width:{ideal:720}, height:{ideal:720}}, audio:false});
+            }
           }
         }catch(e){}
         tryList.push(
-          {video:{facingMode:{exact:next}, width:{ideal:720}, height:{ideal:720}}, audio:true},
-          {video:{facingMode:{ideal:next}, width:{ideal:720}, height:{ideal:720}}, audio:true},
-          {video:{facingMode:next}, audio:true},
-          {video:true, audio:true}
+          {video:{facingMode:{exact:next}, width:{ideal:720}, height:{ideal:720}}, audio:false},
+          {video:{facingMode:{ideal:next}, width:{ideal:720}, height:{ideal:720}}, audio:false},
+          {video:{facingMode:next}, audio:false},
+          {video:true, audio:false}
         );
         let lastErr=null;
         for(const c of tryList){
@@ -28079,20 +28083,42 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
             newStream=await navigator.mediaDevices.getUserMedia(c);
             const vt=newStream.getVideoTracks()[0];
             if(vt && vt.readyState!=='ended') break;
-            newStream.getTracks().forEach(t=>t.stop());
+            newStream.getTracks().forEach(t=>{ try{t.stop();}catch(e){} });
             newStream=null;
           }catch(e){ lastErr=e; newStream=null; }
         }
         if(!newStream) throw (lastErr||new Error('no cam'));
 
-        facing=next;
-        mediaStream=newStream;
+        // Stop only OLD video tracks (never touch audio — MediaRecorder still uses it)
+        oldVideoTracks.forEach(t=>{ try{ t.stop(); }catch(e){} });
 
-        // Rebind video element cleanly
+        facing=next;
+
+        // Merge: keep old audio tracks on mediaStream, replace video
+        try{
+          if(mediaStream){
+            mediaStream.getVideoTracks().forEach(t=>{
+              try{ mediaStream.removeTrack(t); }catch(e){}
+              try{ t.stop(); }catch(e){}
+            });
+            newStream.getVideoTracks().forEach(t=>{
+              try{ mediaStream.addTrack(t); }catch(e){}
+            });
+            // stop unused audio from newStream (we requested audio:false, but just in case)
+            newStream.getAudioTracks().forEach(t=>{ try{ t.stop(); }catch(e){} });
+          } else {
+            mediaStream = newStream;
+          }
+        }catch(e){
+          // fallback: replace whole stream but preserve audio reference for recorder
+          mediaStream = newStream;
+        }
+
+        // Update preview video — do NOT touch MediaRecorder / recStream
         try{ v.pause(); }catch(e){}
-        v.srcObject=null;
-        await new Promise(r=>setTimeout(r,40));
-        v.srcObject=mediaStream;
+        // Use a stream that has the new video for preview
+        const previewStream = new MediaStream(mediaStream.getVideoTracks());
+        v.srcObject = previewStream;
         v.muted=true;
         v.playsInline=true;
         v.setAttribute('playsinline','');
@@ -28100,55 +28126,24 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
         v.classList.toggle('mirrored', facing==='user');
         try{ await v.play(); }catch(e){}
 
-        // Wait until real frames arrive
         const t0=Date.now();
         while(Date.now()-t0<3000){
           if(v.readyState>=2 && (v.videoWidth|0)>1) break;
-          await new Promise(r=>setTimeout(r,50));
+          await new Promise(r=>setTimeout(r,40));
         }
         if((v.videoWidth|0)<2){
           toast('Камера не дала картинку');
         }
 
-        // Restart canvas draw from new video (continuous recording)
+        // Canvas keeps same captureStream → MediaRecorder uninterrupted
         if(typeof window._tgCircleStartCanvas==='function'){
           window._tgCircleStartCanvas(v, facing);
         }
-
-        // Swap audio on recording stream if canvas-based
-        try{
-          if(mediaRec && mediaRec.state!=='inactive' && mediaRec.stream){
-            const recS=mediaRec.stream;
-            const na=mediaStream.getAudioTracks()[0];
-            if(na){
-              recS.getAudioTracks().forEach(t=>{
-                try{ recS.removeTrack(t); }catch(e){}
-                if(t.id!==na.id) try{ t.stop(); }catch(e){}
-              });
-              try{ recS.addTrack(na); }catch(e){}
-            }
-          }
-        }catch(e){}
-
-        // Stop leftover old audio
-        try{ old?.getAudioTracks().forEach(t=>{ try{t.stop();}catch(e){} }); }catch(e){}
+        // Do NOT remove/add tracks on mediaRec.stream — that aborts recording on many browsers
       }catch(e){
         console.warn('tg flip', e);
         toast('Не удалось переключить камеру');
-        // restore facing flag if failed
         facing = facing==='user'?'environment':'user';
-        try{
-          if(!mediaStream || !mediaStream.getVideoTracks().some(t=>t.readyState==='live')){
-            mediaStream = await navigator.mediaDevices.getUserMedia({
-              video:{ facingMode:{ideal:facing}, width:{ideal:720}, height:{ideal:720} },
-              audio:true
-            });
-            v.srcObject=mediaStream;
-            v.classList.toggle('mirrored', facing==='user');
-            await v.play().catch(()=>{});
-            if(typeof window._tgCircleStartCanvas==='function') window._tgCircleStartCanvas(v, facing);
-          }
-        }catch(e2){}
       } finally {
         ov._flipping=0;
       }
