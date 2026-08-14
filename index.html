@@ -7852,14 +7852,201 @@ function pickCoverImage(){
   inp.click();
 }
 document.getElementById('settings-cover-edit')?.addEventListener('click', pickCoverImage);
-// settings page scroll: ROUND avatar -> SQUARE, cover hides
+// settings page scroll: collapsing avatar + nickname (Telegram-style)
 (function setupSettingsScroll(){
   const page=document.getElementById('page-settings');
   if(!page) return;
-  // No stretch on settings — free scroll to bottom (beta, logout, etc.)
   page.classList.remove('is-stretch');
   page.style.overflowY = 'auto';
   page.style.webkitOverflowScrolling = 'touch';
+
+  // sticky mini title bar
+  let mini = document.getElementById('sl-settings-mini');
+  if(!mini){
+    mini = document.createElement('div');
+    mini.id = 'sl-settings-mini';
+    mini.innerHTML = `<span class="sl-set-mini-av" id="sl-set-mini-av"></span><span class="sl-set-mini-name" id="sl-set-mini-name"></span>`;
+    page.insertBefore(mini, page.firstChild);
+  }
+
+  if(!document.getElementById('sl-settings-collapse-css')){
+    const st = document.createElement('style');
+    st.id = 'sl-settings-collapse-css';
+    st.textContent = `
+      #sl-settings-mini{
+        position:sticky; top:0; z-index:20;
+        display:flex; align-items:center; justify-content:center; gap:10px;
+        height:0; opacity:0; pointer-events:none;
+        background:rgba(10,12,18,.82);
+        backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px);
+        border-bottom:1px solid transparent;
+        transition:none;
+        padding-top:env(safe-area-inset-top,0px);
+        box-sizing:content-box;
+        overflow:hidden;
+      }
+      #sl-settings-mini.show{
+        pointer-events:auto;
+      }
+      #sl-settings-mini .sl-set-mini-av{
+        width:28px; height:28px; border-radius:50%;
+        background:linear-gradient(135deg,#5B8CFF,#7B6CFF);
+        background-size:cover; background-position:center;
+        flex-shrink:0; overflow:hidden;
+        transform:scale(.6); opacity:0;
+      }
+      #sl-settings-mini .sl-set-mini-av img{
+        width:100%; height:100%; object-fit:cover; border-radius:50%; display:block;
+      }
+      #sl-settings-mini .sl-set-mini-name{
+        font-size:16px; font-weight:700; color:var(--text);
+        white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:60vw;
+        transform:translateY(6px); opacity:0;
+      }
+      #page-settings .settings-hero{
+        will-change:transform,opacity;
+        transform-origin:center top;
+      }
+      #page-settings .settings-avatar{
+        will-change:transform,opacity;
+        transform-origin:center center;
+        transition:none;
+      }
+      #page-settings .settings-name,
+      #page-settings .settings-username,
+      #page-settings .settings-phone{
+        will-change:transform,opacity;
+        transition:none;
+      }
+      body.theme-light #sl-settings-mini,
+      body.light-theme #sl-settings-mini{
+        background:rgba(255,255,255,.86);
+      }
+    `;
+    document.head.appendChild(st);
+  }
+
+  function lerp(a,b,t){ return a+(b-a)*t; }
+  function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
+  function easeOutCubic(t){ return 1-Math.pow(1-t,3); }
+
+  function syncMiniContent(){
+    const nameEl = document.getElementById('settings-display-name');
+    const miniName = document.getElementById('sl-set-mini-name');
+    const miniAv = document.getElementById('sl-set-mini-av');
+    const av = document.getElementById('settings-avatar');
+    if(miniName && nameEl) miniName.textContent = nameEl.textContent || 'SLine';
+    if(miniAv && av){
+      const img = av.querySelector('img');
+      const bg = av.style.backgroundImage || '';
+      if(img && img.src){
+        miniAv.innerHTML = `<img src="${img.src}" alt="">`;
+        miniAv.style.backgroundImage = 'none';
+      } else if(bg && bg !== 'none'){
+        miniAv.innerHTML = '';
+        miniAv.style.backgroundImage = bg;
+      } else {
+        const t = (document.getElementById('settings-avatar-text')||{}).textContent || '';
+        miniAv.innerHTML = '';
+        miniAv.style.backgroundImage = 'none';
+        miniAv.textContent = t.slice(0,2);
+        miniAv.style.display = 'flex';
+        miniAv.style.alignItems = 'center';
+        miniAv.style.justifyContent = 'center';
+        miniAv.style.fontSize = '12px';
+        miniAv.style.fontWeight = '700';
+        miniAv.style.color = '#fff';
+      }
+    }
+  }
+
+  function applySettingsCollapse(y){
+    const RANGE = 120;
+    const p = clamp(y / RANGE, 0, 1);
+    const e = easeOutCubic(p);
+    const hero = page.querySelector('.settings-hero');
+    const av = document.getElementById('settings-avatar');
+    const name = document.getElementById('settings-display-name');
+    const uname = document.getElementById('settings-display-username');
+    const phone = document.getElementById('settings-display-phone');
+    const cover = document.getElementById('settings-cover-wrap');
+    const topBtns = page.querySelector('.max-settings-top');
+
+    // Avatar: shrink + move up + fade
+    if(av){
+      const sc = lerp(1, 0.32, e);
+      const ty = lerp(0, -28, e);
+      av.style.transform = `translateY(${ty.toFixed(1)}px) scale(${sc.toFixed(3)})`;
+      av.style.opacity = String(Math.max(0, 1 - e*1.25));
+    }
+    // Name: shrink, slide up toward sticky bar
+    if(name){
+      const sc = lerp(1, 0.72, e);
+      const ty = lerp(0, -36, e);
+      name.style.transform = `translateY(${ty.toFixed(1)}px) scale(${sc.toFixed(3)})`;
+      name.style.opacity = String(Math.max(0, 1 - e*1.35));
+    }
+    // Username + phone fade faster
+    [uname, phone].forEach(el=>{
+      if(!el) return;
+      el.style.transform = `translateY(${(-24*e).toFixed(1)}px)`;
+      el.style.opacity = String(Math.max(0, 1 - e*1.8));
+    });
+    if(hero){
+      hero.style.paddingBottom = (18 * (1-e*0.7)).toFixed(1) + 'px';
+      hero.style.marginTop = (-12*e).toFixed(1) + 'px';
+    }
+    if(cover){
+      cover.style.transform = `translateY(${(-8*e).toFixed(1)}px)`;
+    }
+    if(topBtns){
+      topBtns.style.opacity = String(Math.max(0.35, 1 - e*0.4));
+    }
+
+    // Sticky mini bar appears as hero fades
+    const miniP = clamp((p - 0.45) / 0.4, 0, 1);
+    const me = easeOutCubic(miniP);
+    if(mini){
+      if(miniP > 0.02){
+        syncMiniContent();
+        mini.classList.add('show');
+        const h = Math.round(lerp(0, 44, me));
+        mini.style.height = h + 'px';
+        mini.style.opacity = String(me);
+        mini.style.borderBottomColor = `rgba(120,120,128,${(0.18*me).toFixed(2)})`;
+        const mav = mini.querySelector('.sl-set-mini-av');
+        const mnm = mini.querySelector('.sl-set-mini-name');
+        if(mav){
+          mav.style.opacity = String(me);
+          mav.style.transform = `scale(${lerp(0.6, 1, me).toFixed(3)})`;
+        }
+        if(mnm){
+          mnm.style.opacity = String(me);
+          mnm.style.transform = `translateY(${lerp(6, 0, me).toFixed(1)}px)`;
+        }
+      } else {
+        mini.classList.remove('show');
+        mini.style.height = '0px';
+        mini.style.opacity = '0';
+      }
+    }
+  }
+
+  if(!page._slCollapseBound){
+    page._slCollapseBound = true;
+    let ticking = false;
+    page.addEventListener('scroll', ()=>{
+      if(ticking) return;
+      ticking = true;
+      requestAnimationFrame(()=>{
+        ticking = false;
+        applySettingsCollapse(page.scrollTop || 0);
+      });
+    }, {passive:true});
+  }
+  applySettingsCollapse(page.scrollTop || 0);
+  // re-sync when profile data updates
+  setInterval(()=>{ try{ syncMiniContent(); }catch(e){} }, 2000);
 })();
 
 // ========== BETA FEATURES ==========
@@ -32655,8 +32842,8 @@ document.addEventListener('click', function(e){
 <script>
 /* ========== MAX stories collapse animation (scroll-linked morph) ========== */
 (function(){
-  const MAX_H = 96;
-  const RANGE = 80;
+  const MAX_H = 108;
+  const RANGE = 130;
 
   function css(){
     let s=document.getElementById('sl-max-stories-css');
@@ -32843,6 +33030,10 @@ document.addEventListener('click', function(e){
   function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
   function easeOutCubic(t){ return 1 - Math.pow(1-t, 3); }
 
+  function easeOutBack(t){
+    const c1=1.70158, c3=c1+1;
+    return 1 + c3*Math.pow(t-1,3) + c1*Math.pow(t-1,2);
+  }
   function applyCollapse(progress){
     const bar=document.getElementById('stories-bar');
     const chip=ensureChip();
@@ -32851,61 +33042,74 @@ document.addEventListener('click', function(e){
     if(!bar) return;
     const p = clamp(progress, 0, 1);
     const e = easeOutCubic(p);
+    const eFast = easeOutCubic(clamp(p*1.25, 0, 1));
 
+    // Stories bar collapses harder and travels up
     const h = Math.round(MAX_H * (1-e));
     bar.style.maxHeight = h + 'px';
-    bar.style.opacity = String(1 - e * 0.95);
+    bar.style.opacity = String(Math.max(0, 1 - e * 1.15));
     bar.style.paddingTop = (10*(1-e)).toFixed(1) + 'px';
     bar.style.paddingBottom = (8*(1-e)).toFixed(1) + 'px';
-    bar.style.marginBottom = (-4*e).toFixed(1) + 'px';
-    bar.style.transform = `scaleY(${Math.max(0.05, 1-e*0.35)}) translateY(${(-6*e).toFixed(1)}px)`;
-    bar.style.pointerEvents = p > 0.85 ? 'none' : 'auto';
+    bar.style.marginBottom = (-10*e).toFixed(1) + 'px';
+    bar.style.transform = `scaleY(${Math.max(0.02, 1-e*0.55)}) translateY(${(-18*e).toFixed(1)}px)`;
+    bar.style.filter = e > 0.4 ? `blur(${(e*2.5).toFixed(1)}px)` : 'none';
+    bar.style.pointerEvents = p > 0.75 ? 'none' : 'auto';
 
     const items = bar.querySelectorAll('.story-item');
     const n = items.length || 1;
     items.forEach((it, i)=>{
       const mid = (n-1)/2;
-      const dx = (i - mid) * 8 * e;
-      const sc = 1 - e * 0.45;
-      it.style.transform = `translateX(${(-dx).toFixed(1)}px) scale(${sc.toFixed(3)})`;
-      it.style.opacity = String(Math.max(0, 1 - e*1.15));
+      // converge toward center + shrink + fade with stagger
+      const stagger = Math.abs(i - mid) * 0.04;
+      const pe = easeOutCubic(clamp((p - stagger) / Math.max(0.01, 1-stagger), 0, 1));
+      const dx = (i - mid) * 14 * pe;
+      const sc = 1 - pe * 0.72;
+      it.style.transform = `translateX(${(-dx).toFixed(1)}px) translateY(${(-10*pe).toFixed(1)}px) scale(${Math.max(0.15, sc).toFixed(3)})`;
+      it.style.opacity = String(Math.max(0, 1 - pe*1.35));
       const sp = it.querySelector('span');
-      if(sp) sp.style.opacity = String(Math.max(0, 1 - e*1.8));
+      if(sp) sp.style.opacity = String(Math.max(0, 1 - pe*2.2));
     });
 
+    // Title «Чаты» slides to center, shrinks, fades into chip
     if(title){
       const headerW = header ? header.clientWidth : 320;
-      const travelX = headerW * 0.28;
-      const scale = lerp(1, 0.62, e);
-      const ty = lerp(0, -2, e);
-      title.style.transform = `translate(${(travelX*e).toFixed(1)}px, ${ty.toFixed(1)}px) scale(${scale.toFixed(3)})`;
-      title.style.opacity = String(Math.max(0, 1 - e*1.35));
-      title.style.pointerEvents = p > 0.7 ? 'none' : 'auto';
+      const titleW = title.offsetWidth || 80;
+      // move toward horizontal center of header
+      const centerX = (headerW / 2) - (titleW / 2) - 16;
+      const travelX = Math.max(24, centerX * 0.92);
+      const scale = lerp(1, 0.42, eFast);
+      const ty = lerp(0, -6, e);
+      title.style.transform = `translate(${(travelX*eFast).toFixed(1)}px, ${ty.toFixed(1)}px) scale(${scale.toFixed(3)})`;
+      title.style.opacity = String(Math.max(0, 1 - eFast*1.45));
+      title.style.letterSpacing = (eFast * -0.6).toFixed(2) + 'px';
+      title.style.pointerEvents = p > 0.55 ? 'none' : 'auto';
     }
 
     if(header){
-      header.classList.toggle('is-stories-collapsed', p > 0.5);
+      header.classList.toggle('is-stories-collapsed', p > 0.45);
     }
     if(chip){
-      const chipP = clamp((p - 0.35) / 0.45, 0, 1);
+      // chip appears earlier and bounces in
+      const chipP = clamp((p - 0.22) / 0.5, 0, 1);
       const ce = easeOutCubic(chipP);
-      if(chipP > 0.02){
+      const bounce = chipP > 0.01 ? Math.min(1, easeOutBack(Math.min(1, chipP*1.15))) : 0;
+      if(chipP > 0.01){
         if(!chip.classList.contains('show')){
           try{ updateChipAvatar(); }catch(err){}
           chip.classList.add('show');
         }
         chip.style.opacity = String(ce);
-        chip.style.transform = `translate(-50%, -50%) scale(${lerp(0.86, 1, ce).toFixed(3)})`;
-        chip.style.pointerEvents = chipP > 0.6 ? 'auto' : 'none';
+        chip.style.transform = `translate(-50%, -50%) scale(${lerp(0.7, 1, bounce).toFixed(3)})`;
+        chip.style.pointerEvents = chipP > 0.55 ? 'auto' : 'none';
         const ring = chip.querySelector('.chip-av-ring');
         if(ring){
           ring.style.opacity = String(ce);
-          ring.style.transform = `scale(${lerp(0.5, 1, ce).toFixed(3)})`;
+          ring.style.transform = `scale(${lerp(0.35, 1, bounce).toFixed(3)})`;
         }
       } else {
         chip.classList.remove('show');
         chip.style.opacity = '0';
-        chip.style.transform = 'translate(-50%, -50%) scale(0.86)';
+        chip.style.transform = 'translate(-50%, -50%) scale(0.7)';
         chip.style.pointerEvents = 'none';
       }
     }
