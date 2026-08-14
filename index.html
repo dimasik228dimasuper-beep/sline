@@ -27757,6 +27757,7 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
   }
 
   function stopTracks(){
+    try{ if(typeof window._tgCircleStopCanvas==='function') window._tgCircleStopCanvas(); }catch(e){}
     try{ mediaStream?.getTracks().forEach(t=>t.stop()); }catch(e){}
     mediaStream=null;
   }
@@ -27874,6 +27875,7 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
     try{ if(typeof setScreenFlash==='function') setScreenFlash(false); }catch(e){}
     try{ document.getElementById('tg-screen-flash')?.remove(); }catch(e){}
     try{ document.getElementById('sl-front-flash')?.remove(); }catch(e){}
+    try{ if(typeof window._tgCircleStopCanvas==='function') window._tgCircleStopCanvas(); }catch(e){}
     try{ if(mediaRec && mediaRec.state!=='inactive') mediaRec.stop(); }catch(e){}
     stopTracks();
     chunks=[];
@@ -27959,6 +27961,46 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
     // Extra frames so first captured frame isn't black
     await new Promise(r=>setTimeout(r, 250));
 
+    // Continuous canvas pipeline so camera flips don't black out the recording
+    let _tgCanvas = null, _tgRaf = 0;
+    window._tgCircleStopCanvas = function(){
+      if(_tgRaf){ cancelAnimationFrame(_tgRaf); _tgRaf=0; }
+    };
+    window._tgCircleStartCanvas = function(videoEl, face){
+      window._tgCircleStopCanvas();
+      if(!_tgCanvas){
+        _tgCanvas = document.createElement('canvas');
+        _tgCanvas.width = 480; _tgCanvas.height = 480;
+      }
+      const ctx = _tgCanvas.getContext('2d', {alpha:false});
+      const draw = ()=>{
+        _tgRaf = requestAnimationFrame(draw);
+        if(!videoEl) return;
+        const vw = videoEl.videoWidth|0, vh = videoEl.videoHeight|0;
+        if(videoEl.readyState<2 || vw<2 || vh<2) return;
+        try{
+          const scale = Math.max(480/vw, 480/vh);
+          const dw = vw*scale, dh = vh*scale;
+          const dx = (480-dw)/2, dy = (480-dh)/2;
+          ctx.save();
+          if(face==='user'){ ctx.translate(480,0); ctx.scale(-1,1); }
+          ctx.fillStyle='#000';
+          ctx.fillRect(0,0,480,480);
+          ctx.drawImage(videoEl, dx, dy, dw, dh);
+          ctx.restore();
+        }catch(e){}
+      };
+      draw();
+      return _tgCanvas;
+    };
+    const canvas = window._tgCircleStartCanvas(v, facing);
+    let recStream = mediaStream;
+    try{
+      recStream = canvas.captureStream(30);
+      const at = mediaStream.getAudioTracks()[0];
+      if(at) recStream.addTrack(at);
+    }catch(e){ recStream = mediaStream; }
+
     // iOS Safari cannot play WebM — prefer mp4/quicktime first
     let mime = '';
     const candidates = [
@@ -27973,10 +28015,12 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
     }
     try{
       mediaRec = mime
-        ? new MediaRecorder(mediaStream,{mimeType:mime, videoBitsPerSecond:1600000})
-        : new MediaRecorder(mediaStream);
+        ? new MediaRecorder(recStream,{mimeType:mime, videoBitsPerSecond:1600000})
+        : new MediaRecorder(recStream);
     }catch(e){
-      try{ mediaRec=new MediaRecorder(mediaStream); }catch(e2){ toast('Запись недоступна'); cancelRec(); return; }
+      try{ mediaRec=new MediaRecorder(recStream); }catch(e2){
+        try{ mediaRec=new MediaRecorder(mediaStream); }catch(e3){ toast('Запись недоступна'); cancelRec(); return; }
+      }
     }
     console.info('[circle] mime', mediaRec.mimeType || mime);
     mediaRec.ondataavailable=e=>{ if(e.data&&e.data.size) chunks.push(e.data); };
@@ -27998,28 +28042,116 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
       else { try{ mediaRec.resume(); }catch(e){} paused=false; ov.querySelector('#tg-cl-pause').innerHTML=PAUSE; }
     };
     ov.querySelector('#tg-cl-flip').onclick=async()=>{
-      facing = facing==='user'?'environment':'user';
+      if(ov._flipping) return;
+      ov._flipping=1;
+      const next = facing==='user'?'environment':'user';
       setScreenFlash(false);
+      const old=mediaStream;
       try{
-        const old=mediaStream;
-        mediaStream = await navigator.mediaDevices.getUserMedia({
-          video:{ facingMode: { ideal: facing }, width:{ideal:720}, height:{ideal:720} },
-          audio:true
-        });
-        v.srcObject=mediaStream;
-        v.classList.toggle('mirrored', facing==='user');
-        await v.play().catch(()=>{});
-        await new Promise(r=>setTimeout(r, 200));
+        // Stop OLD video first (required on iOS / many Android WebViews)
+        try{ old?.getVideoTracks().forEach(t=>{ try{t.stop();}catch(e){} }); }catch(e){}
+
+        let newStream=null;
+        const tryList=[];
+        // Prefer deviceId when labels known
         try{
-          if(mediaRec && mediaRec.stream){
-            const senders = mediaRec.stream;
-            senders.getVideoTracks().forEach(t=>{ try{ senders.removeTrack(t); t.stop(); }catch(e){} });
-            senders.getAudioTracks().forEach(t=>{ try{ senders.removeTrack(t); t.stop(); }catch(e){} });
-            mediaStream.getTracks().forEach(t=>{ try{ senders.addTrack(t); }catch(e){} });
+          const devices=await navigator.mediaDevices.enumerateDevices();
+          const cams=devices.filter(d=>d.kind==='videoinput');
+          if(cams.length>=2){
+            const wantBack=next==='environment';
+            let pick=cams.find(d=>{
+              const L=(d.label||'').toLowerCase();
+              return wantBack ? /back|rear|environment|задн|основн/i.test(L) : /front|user|face|перед/i.test(L);
+            });
+            if(!pick) pick = wantBack ? (cams[1]||cams[0]) : cams[0];
+            if(pick&&pick.deviceId) tryList.push({video:{deviceId:{exact:pick.deviceId}, width:{ideal:720}, height:{ideal:720}}, audio:true});
           }
         }catch(e){}
-        try{ old?.getTracks().forEach(t=>t.stop()); }catch(e){}
-      }catch(e){ toast('Не удалось переключить камеру'); facing=facing==='user'?'environment':'user'; }
+        tryList.push(
+          {video:{facingMode:{exact:next}, width:{ideal:720}, height:{ideal:720}}, audio:true},
+          {video:{facingMode:{ideal:next}, width:{ideal:720}, height:{ideal:720}}, audio:true},
+          {video:{facingMode:next}, audio:true},
+          {video:true, audio:true}
+        );
+        let lastErr=null;
+        for(const c of tryList){
+          try{
+            newStream=await navigator.mediaDevices.getUserMedia(c);
+            const vt=newStream.getVideoTracks()[0];
+            if(vt && vt.readyState!=='ended') break;
+            newStream.getTracks().forEach(t=>t.stop());
+            newStream=null;
+          }catch(e){ lastErr=e; newStream=null; }
+        }
+        if(!newStream) throw (lastErr||new Error('no cam'));
+
+        facing=next;
+        mediaStream=newStream;
+
+        // Rebind video element cleanly
+        try{ v.pause(); }catch(e){}
+        v.srcObject=null;
+        await new Promise(r=>setTimeout(r,40));
+        v.srcObject=mediaStream;
+        v.muted=true;
+        v.playsInline=true;
+        v.setAttribute('playsinline','');
+        v.setAttribute('webkit-playsinline','');
+        v.classList.toggle('mirrored', facing==='user');
+        try{ await v.play(); }catch(e){}
+
+        // Wait until real frames arrive
+        const t0=Date.now();
+        while(Date.now()-t0<3000){
+          if(v.readyState>=2 && (v.videoWidth|0)>1) break;
+          await new Promise(r=>setTimeout(r,50));
+        }
+        if((v.videoWidth|0)<2){
+          toast('Камера не дала картинку');
+        }
+
+        // Restart canvas draw from new video (continuous recording)
+        if(typeof window._tgCircleStartCanvas==='function'){
+          window._tgCircleStartCanvas(v, facing);
+        }
+
+        // Swap audio on recording stream if canvas-based
+        try{
+          if(mediaRec && mediaRec.state!=='inactive' && mediaRec.stream){
+            const recS=mediaRec.stream;
+            const na=mediaStream.getAudioTracks()[0];
+            if(na){
+              recS.getAudioTracks().forEach(t=>{
+                try{ recS.removeTrack(t); }catch(e){}
+                if(t.id!==na.id) try{ t.stop(); }catch(e){}
+              });
+              try{ recS.addTrack(na); }catch(e){}
+            }
+          }
+        }catch(e){}
+
+        // Stop leftover old audio
+        try{ old?.getAudioTracks().forEach(t=>{ try{t.stop();}catch(e){} }); }catch(e){}
+      }catch(e){
+        console.warn('tg flip', e);
+        toast('Не удалось переключить камеру');
+        // restore facing flag if failed
+        facing = facing==='user'?'environment':'user';
+        try{
+          if(!mediaStream || !mediaStream.getVideoTracks().some(t=>t.readyState==='live')){
+            mediaStream = await navigator.mediaDevices.getUserMedia({
+              video:{ facingMode:{ideal:facing}, width:{ideal:720}, height:{ideal:720} },
+              audio:true
+            });
+            v.srcObject=mediaStream;
+            v.classList.toggle('mirrored', facing==='user');
+            await v.play().catch(()=>{});
+            if(typeof window._tgCircleStartCanvas==='function') window._tgCircleStartCanvas(v, facing);
+          }
+        }catch(e2){}
+      } finally {
+        ov._flipping=0;
+      }
     };
     ov.querySelector('#tg-cl-flash').onclick=async()=>{
       try{
