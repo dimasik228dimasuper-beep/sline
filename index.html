@@ -6303,14 +6303,23 @@ function startCircleCanvasLoop(videoEl){
     _circleCanvas=document.createElement('canvas');
     _circleCanvas.width=480; _circleCanvas.height=480;
   }
-  const ctx=_circleCanvas.getContext('2d');
+  const ctx=_circleCanvas.getContext('2d', {alpha:false});
   const draw=()=>{
     _circleRaf=requestAnimationFrame(draw);
-    if(!videoEl || videoEl.readyState<2) return;
+    if(!videoEl) return;
+    const vw = videoEl.videoWidth|0;
+    const vh = videoEl.videoHeight|0;
+    if(videoEl.readyState<2 || vw<2 || vh<2) return;
     try{
+      // object-fit: cover into 480x480
+      const scale = Math.max(480/vw, 480/vh);
+      const dw = vw*scale, dh = vh*scale;
+      const dx = (480-dw)/2, dy = (480-dh)/2;
       ctx.save();
       if(circleFacing==='user'){ ctx.translate(480,0); ctx.scale(-1,1); }
-      ctx.drawImage(videoEl, 0, 0, 480, 480);
+      ctx.fillStyle='#000';
+      ctx.fillRect(0,0,480,480);
+      ctx.drawImage(videoEl, dx, dy, dw, dh);
       ctx.restore();
     }catch(e){}
   };
@@ -6319,15 +6328,82 @@ function startCircleCanvasLoop(videoEl){
   return _circleCanvas;
 }
 
+async function waitVideoReady(videoEl, timeoutMs){
+  if(!videoEl) return false;
+  const t0 = Date.now();
+  const limit = timeoutMs||2500;
+  if(videoEl.readyState>=2 && (videoEl.videoWidth|0)>1) return true;
+  await Promise.race([
+    new Promise(res=>{
+      const done=()=>{ if((videoEl.videoWidth|0)>1) res(true); };
+      videoEl.addEventListener('loadeddata', done, {once:true});
+      videoEl.addEventListener('loadedmetadata', done, {once:true});
+      videoEl.addEventListener('playing', done, {once:true});
+    }),
+    new Promise(res=>setTimeout(()=>res(false), limit))
+  ]);
+  // poll a bit more — some WebViews report metadata late
+  while(Date.now()-t0 < limit){
+    if(videoEl.readyState>=2 && (videoEl.videoWidth|0)>1) return true;
+    await new Promise(r=>setTimeout(r, 50));
+  }
+  return (videoEl.videoWidth|0)>1;
+}
+
+async function getCircleCameraStream(facing){
+  const tries = [
+    { video:{ facingMode:{ exact: facing }, width:{ideal:480}, height:{ideal:480} }, audio:true },
+    { video:{ facingMode:{ ideal: facing }, width:{ideal:480}, height:{ideal:480} }, audio:true },
+    { video:{ facingMode: facing, width:{ideal:640}, height:{ideal:480} }, audio:true },
+    { video:true, audio:true }
+  ];
+  // Prefer explicit deviceId when possible (more reliable flip on iOS/Android)
+  try{
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const cams = devices.filter(d=>d.kind==='videoinput');
+    if(cams.length>=2){
+      const wantBack = facing==='environment';
+      let pick = cams.find(d=>{
+        const L=(d.label||'').toLowerCase();
+        if(wantBack) return /back|rear|environment|задн|основн/i.test(L);
+        return /front|user|face|перед/i.test(L);
+      });
+      if(!pick){
+        // heuristic: often [0]=front, [1]=back on mobile
+        pick = wantBack ? (cams[1]||cams[0]) : cams[0];
+      }
+      if(pick && pick.deviceId){
+        tries.unshift({
+          video:{ deviceId:{ exact: pick.deviceId }, width:{ideal:480}, height:{ideal:480} },
+          audio:true
+        });
+      }
+    }
+  }catch(e){}
+  let lastErr=null;
+  for(const c of tries){
+    try{
+      const s = await navigator.mediaDevices.getUserMedia(c);
+      // Verify we actually got a live video track
+      const vt = s.getVideoTracks()[0];
+      if(vt && vt.readyState!=='ended') return s;
+      s.getTracks().forEach(t=>t.stop());
+    }catch(e){ lastErr=e; }
+  }
+  if(lastErr) throw lastErr;
+  throw new Error('no camera');
+}
+
 let circleFacing='user';
 async function beginRecording(){
   if(isRecording||(!activePartner&&!activeGroup)) return;
   recSeconds=0; recIsPaused=false; recordedChunks=[];
   try{
-    const c=recordMode==='circle'
-      ? {video:{facingMode:circleFacing, width:{ideal:480}, height:{ideal:480}}, audio:true}
-      : {audio:true};
-    circleStream=await navigator.mediaDevices.getUserMedia(c);
+    if(recordMode==='circle'){
+      circleStream = await getCircleCameraStream(circleFacing||'user');
+    } else {
+      circleStream = await navigator.mediaDevices.getUserMedia({audio:true});
+    }
   }catch(e){ showToast('Нет доступа к камере/микрофону'); return; }
   isRecording=true;
   const ov=document.getElementById('circle-record-overlay');
@@ -6345,8 +6421,13 @@ async function beginRecording(){
       </div>`;
     const vid=document.getElementById('clp');
     vid.srcObject=circleStream;
+    vid.muted=true;
+    vid.playsInline=true;
+    vid.setAttribute('playsinline','');
+    vid.setAttribute('webkit-playsinline','');
     vid.classList.toggle('mirrored', circleFacing==='user');
-    vid.play().catch(()=>{});
+    try{ await vid.play(); }catch(e){}
+    await waitVideoReady(vid, 2500);
     document.getElementById('cpt').onclick=()=>togglePauseRecording();
   } else {
     wrap.innerHTML=`<div class="voice-record-bars">${Array.from({length:16},(_,i)=>`<div class="voice-bar" style="animation-delay:${i*0.05}s"></div>`).join('')}</div>`;
@@ -6416,16 +6497,19 @@ async function toggleCircleTorch(){
     try{ caps = track.getCapabilities ? track.getCapabilities() : {}; }catch(e){}
     // Torch usually only on rear camera
     if(!caps.torch && circleFacing==='user'){
-      // switch to environment
+      // switch to environment for torch
       circleFacing='environment';
-      circleStream.getTracks().forEach(t=>t.stop());
-      circleStream = await navigator.mediaDevices.getUserMedia({
-        video:{facingMode:{ideal:'environment'}, width:{ideal:480}, height:{ideal:480}},
-        audio:true
-      });
+      try{ circleStream.getTracks().forEach(t=>t.stop()); }catch(e){}
+      circleStream = await getCircleCameraStream('environment');
       track = circleStream.getVideoTracks()[0];
       const v=document.getElementById('clp');
-      if(v){ v.srcObject=circleStream; v.classList.remove('mirrored'); v.play().catch(()=>{}); }
+      if(v){
+        v.srcObject=circleStream;
+        v.classList.remove('mirrored');
+        try{ await v.play(); }catch(e){}
+        await waitVideoReady(v, 2000);
+        if(typeof startCircleCanvasLoop==='function') startCircleCanvasLoop(v);
+      }
       try{ caps = track.getCapabilities ? track.getCapabilities() : {}; }catch(e){}
       // restart recorder, KEEP previous chunks
       if(mediaRecorder && mediaRecorder.state!=='inactive'){
@@ -6490,50 +6574,90 @@ function renderRecActions(){
   document.getElementById('rflash')?.addEventListener('click', (e)=>{ e.stopPropagation(); toggleCircleTorch(); });
   document.getElementById('rsend').onclick=finishRecording;
   document.getElementById('rflip')?.addEventListener('click', async ()=>{
+    if(document.getElementById('rflip')?._flipping) return;
+    const btn = document.getElementById('rflip');
+    if(btn) btn._flipping = 1;
     const nextFacing = circleFacing==='user' ? 'environment' : 'user';
+    const oldStream = circleStream;
     try{
-      // Continuous canvas recorder: only switch camera input, keep same MediaRecorder
-      const oldStream = circleStream;
-      const constraints = {
-        video: { facingMode: { ideal: nextFacing }, width: { ideal: 480 }, height: { ideal: 480 } },
-        audio: true
-      };
-      let newStream;
-      try{ newStream = await navigator.mediaDevices.getUserMedia(constraints); }
-      catch(e1){
-        newStream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: nextFacing, width: { ideal: 480 }, height: { ideal: 480 } },
-          audio: true
-        });
-      }
+      // iOS / many WebViews: MUST stop old video track before opening the other camera
+      try{
+        oldStream?.getVideoTracks().forEach(t=>{ try{ t.stop(); }catch(e){} });
+      }catch(e){}
+
+      const newStream = await getCircleCameraStream(nextFacing);
       circleFacing = nextFacing;
       circleStream = newStream;
-      const v=document.getElementById('clp');
+
+      const v = document.getElementById('clp');
       if(v){
-        v.srcObject=circleStream;
+        try{ v.pause(); }catch(e){}
+        v.srcObject = null;
+        // force rebind
+        await new Promise(r=>setTimeout(r, 30));
+        v.srcObject = circleStream;
+        v.muted = true;
+        v.playsInline = true;
+        v.setAttribute('playsinline','');
+        v.setAttribute('webkit-playsinline','');
         v.classList.toggle('mirrored', circleFacing==='user');
-        await v.play().catch(()=>{});
-        // canvas loop already draws from #clp — keep MediaRecorder running uninterrupted
+        try{ await v.play(); }catch(e){}
+        const ok = await waitVideoReady(v, 3000);
+        if(!ok) console.warn('camera video not ready after flip');
+        // restart canvas draw from the new video element
         if(typeof startCircleCanvasLoop==='function') startCircleCanvasLoop(v);
+        // give a couple frames to paint
+        await new Promise(r=>setTimeout(r, 120));
       }
-      // Replace audio track on recording stream if possible (canvas stream audio)
+
+      // Swap live audio into the recording stream (canvas video stays continuous)
       try{
         if(mediaRecorder && mediaRecorder.state!=='inactive' && mediaRecorder.stream){
-          const oldAudio = mediaRecorder.stream.getAudioTracks();
-          oldAudio.forEach(t=>{ try{ mediaRecorder.stream.removeTrack(t); t.stop(); }catch(e){} });
+          const oldAudio = mediaRecorder.stream.getAudioTracks().slice();
           const na = circleStream.getAudioTracks()[0];
-          if(na) mediaRecorder.stream.addTrack(na);
+          if(na){
+            try{ mediaRecorder.stream.addTrack(na); }catch(e){}
+          }
+          oldAudio.forEach(t=>{
+            try{ mediaRecorder.stream.removeTrack(t); }catch(e){}
+            // only stop if it's not the new track
+            if(na && t.id===na.id) return;
+            try{ t.stop(); }catch(e){}
+          });
         }
       }catch(e){}
-      // stop old camera tracks
-      try{ oldStream?.getTracks().forEach(t=>t.stop()); }catch(e){}
+
+      // Stop leftover old audio tracks
+      try{
+        oldStream?.getAudioTracks().forEach(t=>{
+          const stillUsed = circleStream && circleStream.getAudioTracks().some(a=>a.id===t.id);
+          if(!stillUsed) try{ t.stop(); }catch(e){}
+        });
+      }catch(e){}
+
       const hint=document.getElementById('rec-hint');
-      if(hint) hint.textContent = (circleFacing==='user' ? 'Фронтальная' : 'Основная') + ' · без разрыва';
-      setTimeout(()=>{ if(hint && isRecording) hint.textContent = recordMode==='circle' ? 'Тап — пауза' : 'Запись...'; }, 1000);
+      if(hint) hint.textContent = (circleFacing==='user' ? 'Фронтальная' : 'Основная');
+      setTimeout(()=>{ if(hint && isRecording) hint.textContent = recordMode==='circle' ? 'Тап — пауза' : 'Запись...'; }, 900);
       renderRecActions();
     }catch(e){
       console.warn('flip camera', e);
       showToast('Не удалось переключить камеру');
+      // try restore previous facing if flip failed
+      try{
+        if(!circleStream || !circleStream.getVideoTracks().some(t=>t.readyState==='live')){
+          circleStream = await getCircleCameraStream(circleFacing==='user'?'user':'environment');
+          const v=document.getElementById('clp');
+          if(v){
+            v.srcObject=circleStream;
+            v.classList.toggle('mirrored', circleFacing==='user');
+            await v.play().catch(()=>{});
+            await waitVideoReady(v, 2000);
+            startCircleCanvasLoop(v);
+          }
+        }
+      }catch(e2){}
+    } finally {
+      if(btn) btn._flipping = 0;
     }
   });
 }
