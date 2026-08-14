@@ -846,6 +846,138 @@ body.msg-ctx-open .chat-active{ /* dim via backdrop */ }
 .calls-section-title{padding:14px 12px 6px;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;font-weight:600}
 
 
+
+
+/* ===== MAX calls page ===== */
+#page-calls{
+  display:none;flex-direction:column;background:var(--bg)!important;
+  padding:calc(10px + env(safe-area-inset-top,0px)) 0 0;
+  overflow:hidden;
+}
+#page-calls.active{display:flex!important}
+.max-calls-head{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:8px 16px 6px;
+}
+.max-calls-title{font-size:28px;font-weight:800;letter-spacing:-.3px;color:var(--text)}
+.max-calls-head .calls-clear{
+  font-size:14px;font-weight:600;color:var(--muted);background:none;border:none;cursor:pointer;padding:6px 8px;
+}
+.max-calls-actions{padding:4px 8px 8px;display:flex;flex-direction:column;gap:2px}
+.max-calls-action{
+  display:flex;align-items:center;gap:14px;padding:12px 12px;border:none;background:transparent;
+  color:#3B82F6;font-size:16px;font-weight:500;cursor:pointer;border-radius:12px;text-align:left;width:100%;
+}
+.max-calls-action:active{background:rgba(120,120,128,.12)}
+.max-calls-action .mca-ico{
+  width:28px;height:28px;display:flex;align-items:center;justify-content:center;flex-shrink:0;
+}
+.max-calls-action .mca-ico svg{width:22px;height:22px;stroke:#3B82F6;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.max-calls-tabs{
+  display:flex;gap:0;padding:4px 16px 0;border-bottom:1px solid rgba(120,120,128,.18);
+}
+.max-calls-tab{
+  background:none;border:none;color:var(--muted);font-size:15px;font-weight:600;
+  padding:10px 14px 12px;cursor:pointer;position:relative;
+}
+.max-calls-tab.active{color:var(--text)}
+.max-calls-tab.active::after{
+  content:'';position:absolute;left:10px;right:10px;bottom:0;height:3px;border-radius:3px 3px 0 0;background:#3B82F6;
+}
+#calls-list{flex:1;overflow-y:auto;padding:4px 0 24px;-webkit-overflow-scrolling:touch}
+#page-calls .call-row{
+  display:flex;align-items:center;gap:12px;padding:10px 16px;border-radius:0;cursor:pointer;
+}
+#page-calls .call-row:active{background:rgba(120,120,128,.1)}
+#page-calls .call-row .avatar{width:48px;height:48px;border-radius:50%;flex-shrink:0}
+#page-calls .call-row-name{font-size:16px;font-weight:600}
+#page-calls .call-row-name.missed{color:#FF6B81}
+#page-calls .call-row-meta{font-size:13px;color:var(--muted);margin-top:2px;display:flex;align-items:center;gap:6px}
+#page-calls .call-row-meta.missed{color:#FF6B81}
+#page-calls .call-row-time{font-size:13px;color:var(--muted);margin-left:auto;flex-shrink:0}
+#page-calls .call-info-btn{
+  width:28px;height:28px;border-radius:50%;border:1.5px solid rgba(120,120,128,.35);
+  background:transparent;color:var(--muted);display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;cursor:pointer;padding:0;margin-left:8px;
+}
+#page-calls .call-info-btn svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2}
+
+/* ===== MAX-style settings ===== */
+#page-settings.settings-page{
+  overflow-y:auto!important;-webkit-overflow-scrolling:touch;
+  background:var(--bg)!important;padding-bottom:calc(88px + env(safe-area-inset-bottom,0px));
+}
+#page-settings .settings-profile{
+  padding:calc(12px + env(safe-area-inset-top,0px)) 16px 8px;
+  text-align:center;position:relative;
+}
+#page-settings .settings-cover-wrap{
+  border-radius:0;margin:0;overflow:visible;background:transparent!important;
+  min-height:0!important;padding-top:8px;
+}
+#page-settings .settings-cover,
+#page-settings .settings-av-stretch,
+#page-settings .settings-cover-fade{display:none!important}
+#page-settings .settings-cover-edit{display:none!important}
+#page-settings .settings-hero{
+  display:flex;flex-direction:column;align-items:center;gap:6px;
+  padding:12px 0 18px;position:relative;z-index:2;
+}
+#page-settings .settings-avatar{
+  width:88px!important;height:88px!important;border-radius:50%!important;
+  font-size:34px!important;font-weight:800;margin:0 auto 4px;
+  background:linear-gradient(135deg,#5B8CFF,#7B6CFF)!important;
+  border:none!important;box-shadow:none;
+  display:flex!important;align-items:center;justify-content:center;
+  background-size:cover!important;background-position:center!important;
+  color:#fff;
+}
+#page-settings .settings-name{
+  font-size:22px;font-weight:700;color:var(--text);margin-top:4px;
+}
+#page-settings .settings-username{
+  font-size:14px;font-weight:500;color:#3B82F6!important;margin-top:2px;
+}
+#page-settings .settings-section{
+  margin:10px 14px;padding:4px 0;
+  background:rgba(120,120,128,.12);border-radius:16px;
+  border:none;overflow:hidden;
+}
+#page-settings .settings-section-title{
+  display:none!important; /* MAX groups without section titles in cards */
+}
+#page-settings .settings-item{
+  display:flex;align-items:center;gap:14px;
+  padding:14px 16px;margin:0;border-radius:0;
+  font-size:16px;font-weight:500;color:var(--text);
+  border-bottom:1px solid rgba(120,120,128,.12);
+}
+#page-settings .settings-item:last-child{border-bottom:none}
+#page-settings .settings-item svg{
+  width:22px;height:22px;flex-shrink:0;stroke:currentColor;fill:none;stroke-width:1.8;
+  color:#8B9BB4;
+}
+#page-settings .settings-item .item-text{flex:1;text-align:left}
+#page-settings .settings-item::after{
+  content:'›';font-size:22px;color:rgba(120,120,128,.55);font-weight:300;line-height:1;margin-left:8px;
+}
+#page-settings .settings-item.danger{color:var(--danger)}
+#page-settings .settings-item.danger::after{content:none}
+#page-settings .settings-item .toggle-switch{margin-left:auto}
+#page-settings .settings-item:has(.toggle-switch)::after,
+#page-settings .settings-item:has(#settings-passkey-badge)::after,
+#page-settings .settings-item:has(#settings-2fa-badge)::after{content:none}
+/* top action icons row like MAX (qr / edit) — optional slots */
+#page-settings .max-settings-top{
+  position:absolute;left:0;right:0;top:calc(6px + env(safe-area-inset-top,0px));
+  display:flex;justify-content:space-between;padding:0 14px;z-index:5;pointer-events:none;
+}
+#page-settings .max-settings-top button{
+  pointer-events:auto;width:36px;height:36px;border-radius:10px;border:none;
+  background:transparent;color:var(--muted);display:flex;align-items:center;justify-content:center;cursor:pointer;
+}
+#page-settings .max-settings-top button svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:2}
+
 /* ===== Beta features ===== */
 body.beta-compact .contact{padding:6px 10px;border-radius:10px;gap:8px}
 body.beta-compact .contact .avatar{width:34px;height:34px;font-size:13px}
@@ -2588,12 +2720,23 @@ body.theme-light .topbar {
       </div>
     </div>
     <div class="app-page" id="page-calls">
-      <div class="calls-page-head">
-        <div>
-          <div data-i18n="calls_title" style="font-size:17px;font-weight:700">Звонки</div>
-          <div style="font-size:12px;color:var(--muted);font-weight:500;margin-top:2px">Недавние звонки</div>
-        </div>
-        <button type="button" class="calls-clear" id="calls-clear-btn">Очистить</button>
+      <div class="max-calls-head">
+        <div class="max-calls-title" data-i18n="calls_title">Звонки</div>
+        <button type="button" class="calls-clear" id="calls-clear-btn" title="Очистить">Очистить</button>
+      </div>
+      <div class="max-calls-actions">
+        <button type="button" class="max-calls-action" id="calls-call-contact">
+          <span class="mca-ico"><svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2A19.8 19.8 0 0111.19 18a19.5 19.5 0 01-6-6A19.8 19.8 0 012.12 3.38 2 2 0 014.11 2h3a2 2 0 012 1.72c.13.96.36 1.9.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0122 16.92z"/></svg></span>
+          <span>Позвонить контакту</span>
+        </button>
+        <button type="button" class="max-calls-action" id="calls-group-call">
+          <span class="mca-ico"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg></span>
+          <span>Создать групповой звонок</span>
+        </button>
+      </div>
+      <div class="max-calls-tabs" id="calls-filter-tabs">
+        <button type="button" class="max-calls-tab active" data-cf="all">Все</button>
+        <button type="button" class="max-calls-tab" data-cf="missed">Пропущенные</button>
       </div>
       <div id="calls-list"><div class="empty-state" data-i18n="no_calls">Нет звонков</div></div>
     </div>
@@ -2604,10 +2747,15 @@ body.theme-light .topbar {
           <div class="settings-av-stretch" id="settings-av-stretch"></div>
           <div class="settings-cover-fade"></div>
           <button type="button" class="settings-cover-edit" id="settings-cover-edit" title="Обложка">Обложка</button>
+          <div class="max-settings-top">
+            <button type="button" id="settings-qr-btn" title="QR" aria-label="QR"><svg viewBox="0 0 24 24"><path d="M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h3v3h-3zM20 14h1v1h-1zM17 17h1v1h-1zM20 17h1v4h-4v-1h3zM14 20h1v1h-1z"/></svg></button>
+            <button type="button" id="settings-edit-pencil" title="Изменить" aria-label="Edit"><svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg></button>
+          </div>
           <div class="settings-hero">
             <div class="settings-avatar" id="settings-avatar"><span id="settings-avatar-text"></span></div>
             <div class="settings-name" id="settings-display-name"></div>
             <div class="settings-username" id="settings-display-username"></div>
+            <div class="settings-phone" id="settings-display-phone" style="font-size:14px;color:#3B82F6;font-weight:500;margin-top:2px"></div>
           </div>
         </div>
       </div>
@@ -12618,57 +12766,61 @@ function formatCallDuration(sec){
   const m=Math.floor(sec/60), s=sec%60;
   return m?`${m} мин ${s} с`:`${s} с`;
 }
+window._callsFilter = window._callsFilter || 'all';
 function renderCallsList(){
   const list=document.getElementById('calls-list'); if(!list) return;
-  const arr=getCallHistory();
+  let arr=getCallHistory();
+  if(window._callsFilter==='missed'){
+    arr = arr.filter(c=>c.dir==='missed' || c.missed);
+  }
   if(!arr.length){
-    list.innerHTML=`<div class="empty-state">${currentLang==='en'?'No recent calls':'Нет недавних звонков'}</div>`;
+    list.innerHTML=`<div class="empty-state">${currentLang==='en'?'No recent calls':'Нет звонков'}</div>`;
     return;
   }
   const dirLabel={
     out: currentLang==='en'?'Outgoing':'Исходящий',
     in: currentLang==='en'?'Incoming':'Входящий',
-    missed: currentLang==='en'?'Missed':'Пропущенный'
+    missed: currentLang==='en'?'Missed':'Пропущенный',
+    cancelled: currentLang==='en'?'Cancelled':'Отменённый'
   };
   const dirSvg={
-    out:'<svg class="dir-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M7 17L17 7M7 7h10v10"/></svg>',
-    in:'<svg class="dir-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17 7L7 17M17 17H7V7"/></svg>',
-    missed:'<svg class="dir-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17 7L7 17M17 17H7V7"/><path d="M3 3l18 18"/></svg>'
+    out:'<svg class="dir-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M7 17L17 7M7 7h10v10"/></svg>',
+    in:'<svg class="dir-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M17 7L7 17M17 17H7V7"/></svg>',
+    missed:'<svg class="dir-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M22 16.92v3a2 2 0 01-2.18 2A19.8 19.8 0 0111.19 18a19.5 19.5 0 01-6-6A19.8 19.8 0 012.12 3.38 2 2 0 014.11 2h3a2 2 0 012 1.72c.13.96.36 1.9.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0122 16.92z"/><path d="M18 6L6 18"/></svg>',
+    cancelled:'<svg class="dir-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M22 16.92v3a2 2 0 01-2.18 2A19.8 19.8 0 0111.19 18a19.5 19.5 0 01-6-6A19.8 19.8 0 012.12 3.38 2 2 0 014.11 2h3a2 2 0 012 1.72c.13.96.36 1.9.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0122 16.92z"/><path d="M18 6L6 18"/></svg>'
   };
-  list.innerHTML=`<div class="calls-section-title">${currentLang==='en'?'Recent':'Недавние'}</div>`+arr.map(c=>{
-    const metaClass=c.dir==='missed'?'missed':(c.dir==='out'?'out':'');
-    const typeLab=c.video?(currentLang==='en'?'Video':'Видео'):(currentLang==='en'?'Audio':'Аудио');
-    const dur=formatCallDuration(c.duration);
-    const sub=`${dirSvg[c.dir]||dirSvg.out}<span>${dirLabel[c.dir]||''} · ${typeLab}${dur?' · '+dur:''}</span>`;
+  const infoSvg='<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>';
+  list.innerHTML=arr.map(c=>{
+    const dir = c.dir==='missed'||c.missed ? 'missed' : (c.dir||'out');
+    const metaClass = dir==='missed' ? 'missed' : '';
+    const nameClass = dir==='missed' ? 'missed' : '';
+    const dur=typeof formatCallDuration==='function'?formatCallDuration(c.duration):'';
+    const label = dirLabel[dir]||dirLabel.out;
+    const sub = `${dirSvg[dir]||dirSvg.out}<span>${label}${dur?' · '+dur:''}</span>`;
     const ch=(c.name||'?')[0].toUpperCase();
     const col=c.color||'#4C7CF3';
-    const avStyle=c.avatar?`background-image:url(${c.avatar})`:`background:${col}`;
+    const avStyle=c.avatar?`background-image:url(${c.avatar});background-size:cover;background-position:center`:`background:${col}`;
+    const timeStr = typeof formatCallTime==='function'?formatCallTime(c.at):(c.at||'');
     return `<div class="call-row" data-cid="${c.id}" data-peer="${c.peerId}">
-      <div class="avatar" style="${avStyle}">${c.avatar?'':ch}</div>
+      <div class="avatar" style="${avStyle}">${c.avatar?'':escapeHtml(ch)}</div>
       <div class="call-row-info">
-        <div class="call-row-name">${escapeHtml(c.name||'')}</div>
+        <div class="call-row-name ${nameClass}">${escapeHtml(c.name||'')}</div>
         <div class="call-row-meta ${metaClass}">${sub}</div>
       </div>
-      <div class="call-row-time">${formatCallTime(c.at)}</div>
-      <div class="call-row-actions">
-        <button type="button" class="icon-btn" data-act="audio" title="Звонок"><svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2A19.8 19.8 0 0111.19 18a19.5 19.5 0 01-6-6A19.8 19.8 0 012.12 3.38 2 2 0 014.11 2h3a2 2 0 012 1.72c.13.96.36 1.9.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0122 16.92z"/></svg></button>
-        <button type="button" class="icon-btn" data-act="video" title="Видео"><svg viewBox="0 0 24 24"><rect x="2" y="6" width="14" height="12" rx="2"/><path d="M16 10l6-4v12l-6-4"/></svg></button>
-      </div>
+      <div class="call-row-time">${escapeHtml(String(timeStr))}</div>
+      <button type="button" class="call-info-btn" data-act="info" title="Инфо">${infoSvg}</button>
     </div>`;
   }).join('');
   list.querySelectorAll('.call-row').forEach(row=>{
     const peerId=row.dataset.peer;
-    const entry=arr.find(x=>x.id===row.dataset.cid);
-    row.querySelector('[data-act="audio"]').onclick=async e=>{
+    const entry=arr.find(x=>String(x.id)===String(row.dataset.cid));
+    const infoBtn=row.querySelector('[data-act="info"]');
+    if(infoBtn) infoBtn.onclick=async e=>{
       e.stopPropagation();
-      await callBackPeer(peerId, entry, false);
-    };
-    row.querySelector('[data-act="video"]').onclick=async e=>{
-      e.stopPropagation();
-      await callBackPeer(peerId, entry, true);
+      await openPeerFromCall(peerId, entry);
     };
     row.onclick=async()=>{
-      await openPeerFromCall(peerId, entry);
+      await callBackPeer(peerId, entry, false);
     };
   });
 }
@@ -32108,10 +32260,10 @@ document.addEventListener('click', function(e){
       #sl-chats-title-chip{
         position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
         display:none;align-items:center;gap:8px;
-        pointer-events:auto;z-index:5;
-        opacity:0;transition:opacity .2s ease;
+        pointer-events:auto;z-index:6;
+        opacity:0;transition:opacity .18s ease;
       }
-      #sl-chats-title-chip.show{display:inline-flex;opacity:1}
+      #sl-chats-title-chip.show{display:inline-flex!important;opacity:1!important}
       #sl-chats-title-chip .chip-av-ring{
         width:28px;height:28px;border-radius:50%;padding:2px;
         background:linear-gradient(135deg,#f58529,#dd2a7b,#8134af,#515bd4);
@@ -32120,12 +32272,21 @@ document.addEventListener('click', function(e){
       #sl-chats-title-chip .chip-av{
         width:100%;height:100%;border-radius:50%;overflow:hidden;
         background:#333;background-size:cover;background-position:center;
+        display:flex;align-items:center;justify-content:center;
+        color:#fff;font-weight:700;font-size:12px;
       }
       #sl-chats-title-chip .chip-av img{
         width:100%;height:100%;object-fit:cover;display:block;border-radius:50%;
       }
       #sl-chats-title-chip .chip-label{
         font-size:17px;font-weight:700;color:var(--text);letter-spacing:-.2px;
+      }
+      /* header title fades out when collapsed chip is shown */
+      #max-chats-title{
+        transition:opacity .18s ease, transform .18s ease;
+      }
+      #page-chats .sidebar-header.is-stories-collapsed #max-chats-title{
+        opacity:0!important;pointer-events:none;transform:translateY(-4px);
       }
       #page-chats .sidebar-header{position:relative}
       /* hide me-row name while collapsed title shown (optional soft) */
@@ -32231,18 +32392,35 @@ document.addEventListener('click', function(e){
     bar.querySelectorAll('.story-item span').forEach(sp=>{
       sp.style.opacity = String(Math.max(0, 1 - p*1.6));
     });
+    // collapsed: header "Чаты" hides, chip (mini story + «Чаты») shows
+    if(header){
+      header.classList.toggle('is-stories-collapsed', p > 0.55);
+    }
+    try{
+      const title=document.getElementById('max-chats-title');
+      if(title){
+        if(p > 0.55){
+          title.style.opacity='0';
+          title.style.pointerEvents='none';
+        } else {
+          title.style.opacity='1';
+          title.style.pointerEvents='auto';
+        }
+      }
+    }catch(e){}
     if(chip){
       if(p > 0.55){
         if(!chip.classList.contains('show')){
-          updateChipAvatar();
+          try{ updateChipAvatar(); }catch(e){}
           chip.classList.add('show');
         }
+        chip.style.display='inline-flex';
+        chip.style.opacity='1';
       } else {
         chip.classList.remove('show');
+        chip.style.opacity='0';
+        // keep in layout briefly then hide via CSS
       }
-    }
-    if(header){
-      header.classList.toggle('is-stories-collapsed', p > 0.55);
     }
   }
 
@@ -32295,6 +32473,91 @@ document.addEventListener('click', function(e){
   setTimeout(boot, 1000);
   setTimeout(boot, 2000);
   console.log('[SL] MAX stories scroll-linked animation ready');
+})();
+</script>
+<script>
+
+// MAX settings polish: pencil → edit profile, phone line
+(function(){
+  function wire(){
+    try{
+      const pen=document.getElementById('settings-edit-pencil');
+      if(pen && !pen._wired){
+        pen._wired=1;
+        pen.onclick=()=>{ try{ document.getElementById('settings-edit-profile')?.click(); }catch(e){} };
+      }
+      const qr=document.getElementById('settings-qr-btn');
+      if(qr && !qr._wired){
+        qr._wired=1;
+        qr.onclick=()=>{ try{ document.getElementById('settings-my-link')?.click(); }catch(e){} };
+      }
+    }catch(e){}
+  }
+  // patch updateAllUIs to fill phone
+  const orig = window.updateAllUIs;
+  if(typeof updateAllUIs==='function' && !updateAllUIs._maxPhone){
+    const _u = updateAllUIs;
+    window.updateAllUIs = updateAllUIs = function(){
+      const r = _u.apply(this, arguments);
+      try{
+        const ph=document.getElementById('settings-display-phone');
+        if(ph && myProfile){
+          const p = myProfile.phone || '';
+          ph.textContent = p || '';
+          ph.style.display = p ? 'block' : 'none';
+        }
+      }catch(e){}
+      return r;
+    };
+    updateAllUIs._maxPhone=1;
+  }
+  wire();
+  setTimeout(wire, 500);
+  setTimeout(wire, 1500);
+})();
+
+</script>
+<script>
+// MAX calls tabs + actions
+(function(){
+  function wireCallsUI(){
+    document.querySelectorAll('#calls-filter-tabs .max-calls-tab').forEach(tab=>{
+      if(tab._wired) return;
+      tab._wired=1;
+      tab.addEventListener('click', ()=>{
+        document.querySelectorAll('#calls-filter-tabs .max-calls-tab').forEach(t=>t.classList.remove('active'));
+        tab.classList.add('active');
+        window._callsFilter = tab.dataset.cf || 'all';
+        try{ renderCallsList(); }catch(e){}
+      });
+    });
+    const cc=document.getElementById('calls-call-contact');
+    if(cc && !cc._wired){
+      cc._wired=1;
+      cc.onclick=()=>{
+        try{
+          switchPage('chats');
+          const si=document.getElementById('search-input');
+          if(si){ si.focus(); si.click(); }
+          showToast(currentLang==='en'?'Pick a contact to call':'Выберите контакт для звонка');
+        }catch(e){}
+      };
+    }
+    const gc=document.getElementById('calls-group-call');
+    if(gc && !gc._wired){
+      gc._wired=1;
+      gc.onclick=()=>{
+        showToast(currentLang==='en'?'Group calls coming soon':'Групповые звонки скоро');
+      };
+    }
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', wireCallsUI);
+  else wireCallsUI();
+  setTimeout(wireCallsUI, 400);
+  setTimeout(wireCallsUI, 1200);
+})();
+</script>
+<!--sl-end-->
 })();
 </script>
 
