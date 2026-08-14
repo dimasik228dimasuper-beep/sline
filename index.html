@@ -926,11 +926,21 @@ body.msg-ctx-open .chat-active{ /* dim via backdrop */ }
 #page-settings .settings-avatar{
   width:88px!important;height:88px!important;border-radius:50%!important;
   font-size:34px!important;font-weight:800;margin:0 auto 4px;
-  background:linear-gradient(135deg,#5B8CFF,#7B6CFF)!important;
+  background:linear-gradient(135deg,#5B8CFF,#7B6CFF);
   border:none!important;box-shadow:none;
   display:flex!important;align-items:center;justify-content:center;
   background-size:cover!important;background-position:center!important;
+  background-repeat:no-repeat!important;
   color:#fff;
+  overflow:hidden;
+}
+#page-settings .settings-avatar.has-photo{
+  background-image:var(--av-url)!important;
+  background-color:transparent!important;
+  font-size:0!important;
+}
+#page-settings .settings-avatar img{
+  width:100%;height:100%;object-fit:cover;border-radius:50%;display:block;
 }
 #page-settings .settings-name{
   font-size:22px;font-weight:700;color:var(--text);margin-top:4px;
@@ -3118,9 +3128,38 @@ function updateAllUIs(){
 function isVideoDataUrl(u){ return typeof u==='string' && u.startsWith('data:video'); }
 function renderAvatarInto(el, url, ch, color){
   if(!el) return;
-  el.innerHTML=''; el.style.backgroundImage=''; el.style.background='';
-  if(url && !isVideoDataUrl(url)){ el.style.backgroundImage=`url(${url})`; }
-  else { el.style.background=color||'#4C7CF3'; el.textContent=ch; }
+  el.innerHTML='';
+  el.style.backgroundImage='';
+  el.style.background='';
+  el.classList.remove('has-photo');
+  el.style.removeProperty('--av-url');
+  const isSettings = el.id==='settings-avatar' || el.id==='me-avatar-chats';
+  if(url && !isVideoDataUrl(url)){
+    // use img for reliability + background fallback
+    const img=document.createElement('img');
+    img.src=url;
+    img.alt='';
+    img.style.cssText='width:100%;height:100%;object-fit:cover;border-radius:50%;display:block';
+    img.onerror=function(){
+      this.remove();
+      el.classList.remove('has-photo');
+      el.style.backgroundImage='';
+      el.style.background=color||'#4C7CF3';
+      el.textContent=ch||'?';
+      el.style.fontSize='';
+    };
+    el.appendChild(img);
+    el.classList.add('has-photo');
+    el.style.setProperty('--av-url', `url(${url})`);
+    el.style.backgroundImage=`url(${url})`;
+    el.style.backgroundSize='cover';
+    el.style.backgroundPosition='center';
+    // keep letter behind in case image fails slowly
+    if(!el.textContent) el.dataset.letter=ch||'?';
+  } else {
+    el.style.background=color||'#4C7CF3';
+    el.textContent=ch||'?';
+  }
 }
 
 // ========== AUTH ==========
@@ -8332,7 +8371,16 @@ const _origRenderAvatarInto = renderAvatarInto;
 renderAvatarInto = function(el, url, ch, color){
   if(el && (el.id==='me-avatar-chats' || el.id==='settings-avatar')){
     const em=storage.getItem(EMOJI_AVATAR_KEY);
-    if(em){ el.innerHTML=''; el.style.backgroundImage=''; el.style.background='var(--panel-hover)'; el.classList.add('emoji-avatar'); el.textContent=em; return; }
+    if(em){
+      el.innerHTML='';
+      el.style.backgroundImage='';
+      el.style.background='var(--panel-hover)';
+      el.classList.add('emoji-avatar');
+      el.classList.remove('has-photo');
+      el.textContent=em;
+      el.style.fontSize='';
+      return;
+    }
     el.classList.remove('emoji-avatar');
   }
   _origRenderAvatarInto(el,url,ch,color);
@@ -32206,9 +32254,10 @@ document.addEventListener('click', function(e){
 
 
 <script>
-/* ========== MAX stories collapse animation (scroll-linked, no auto-scroll) ========== */
+/* ========== MAX stories collapse animation (scroll-linked morph) ========== */
 (function(){
-  const MAX_H = 96; // stories bar full height px
+  const MAX_H = 96;
+  const RANGE = 80;
 
   function css(){
     let s=document.getElementById('sl-max-stories-css');
@@ -32225,7 +32274,7 @@ document.addEventListener('click', function(e){
         border-bottom:none;
         -webkit-overflow-scrolling:touch;
         scroll-behavior:auto!important;
-        will-change:max-height,opacity,transform,padding;
+        will-change:max-height,opacity,transform,padding,margin;
         transform-origin:top center;
         max-height:${MAX_H}px;
         opacity:1;
@@ -32234,16 +32283,19 @@ document.addEventListener('click', function(e){
       #stories-bar .story-item{
         display:flex;flex-direction:column;align-items:center;gap:4px;
         flex-shrink:0;cursor:pointer;width:66px;
+        transition:transform .12s ease, opacity .12s ease;
+        will-change:transform,opacity;
       }
       #stories-bar .story-item span{
         font-size:11px;color:var(--text);max-width:66px;
         white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center;
-        transition:opacity .15s ease;
+        transition:opacity .12s ease;
       }
       #stories-bar .story-ring{
         width:60px;height:60px;border-radius:50%;padding:2.5px;
         background:linear-gradient(135deg,#f58529 0%,#dd2a7b 40%,#8134af 70%,#515bd4 100%);
         box-sizing:border-box;flex-shrink:0;
+        transition:transform .12s ease;
       }
       #stories-bar .story-ring > .avatar,
       #stories-bar .story-ring > div{
@@ -32256,18 +32308,30 @@ document.addEventListener('click', function(e){
       #stories-bar .story-ring.seen{background:linear-gradient(135deg,#5a6270,#3d4450)}
       #stories-bar #add-story-btn-bar .story-ring{background:var(--line,#2a3348)}
 
-      /* Center title chip with mini story — like MAX «Чаты» + avatar */
-      #sl-chats-title-chip{
-        position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
-        display:none;align-items:center;gap:8px;
-        pointer-events:auto;z-index:6;
-        opacity:0;transition:opacity .18s ease;
+      #max-chats-title{
+        position:relative;
+        z-index:5;
+        transform-origin:left center;
+        will-change:transform,opacity;
+        transition:none;
       }
-      #sl-chats-title-chip.show{display:inline-flex!important;opacity:1!important}
+
+      #sl-chats-title-chip{
+        position:absolute;left:50%;top:50%;
+        transform:translate(-50%,-50%) scale(.92);
+        display:inline-flex;align-items:center;gap:8px;
+        pointer-events:none;z-index:6;
+        opacity:0;
+        transition:none;
+        will-change:opacity,transform;
+      }
+      #sl-chats-title-chip.show{ pointer-events:auto; }
       #sl-chats-title-chip .chip-av-ring{
         width:28px;height:28px;border-radius:50%;padding:2px;
         background:linear-gradient(135deg,#f58529,#dd2a7b,#8134af,#515bd4);
         box-sizing:border-box;flex-shrink:0;
+        transform:scale(0.6);opacity:0;
+        will-change:transform,opacity;
       }
       #sl-chats-title-chip .chip-av{
         width:100%;height:100%;border-radius:50%;overflow:hidden;
@@ -32280,16 +32344,9 @@ document.addEventListener('click', function(e){
       }
       #sl-chats-title-chip .chip-label{
         font-size:17px;font-weight:700;color:var(--text);letter-spacing:-.2px;
+        white-space:nowrap;
       }
-      /* header title fades out when collapsed chip is shown */
-      #max-chats-title{
-        transition:opacity .18s ease, transform .18s ease;
-      }
-      #page-chats .sidebar-header.is-stories-collapsed #max-chats-title{
-        opacity:0!important;pointer-events:none;transform:translateY(-4px);
-      }
-      #page-chats .sidebar-header{position:relative}
-      /* hide me-row name while collapsed title shown (optional soft) */
+      #page-chats .sidebar-header{position:relative;overflow:visible}
       #page-chats .sidebar-header.is-stories-collapsed .me-row > div:last-child{
         opacity:0;pointer-events:none;transition:opacity .15s ease;
       }
@@ -32307,10 +32364,10 @@ document.addEventListener('click', function(e){
     if(img && img.src && img.src.indexOf('data:image/svg')===-1) return img.src;
     try{
       const bi = (el.style && el.style.backgroundImage) || '';
-      let m = bi.match(/url\(["']?([^"')]+)["']?\)/);
+      let m = bi.match(/url\\(["']?([^"')]+)["']?\\)/);
       if(m) return m[1];
       const cs = getComputedStyle(el);
-      m = (cs.backgroundImage||'').match(/url\(["']?([^"')]+)["']?\)/);
+      m = (cs.backgroundImage||'').match(/url\\(["']?([^"')]+)["']?\\)/);
       if(m && m[1] && m[1]!=='none') return m[1];
     }catch(e){}
     return '';
@@ -32348,16 +32405,25 @@ document.addEventListener('click', function(e){
     if(!chip) return;
     tagAvatars();
     const bar=document.getElementById('stories-bar');
-    const item=bar && bar.querySelector('.story-item[data-uid]');
+    let item = bar && (bar.querySelector('.story-item[data-uid="me"], .story-item#my-story, .story-item[data-self="1"]') || bar.querySelector('.story-item[data-uid]'));
     const avBox=document.getElementById('sl-chip-av');
     if(!avBox) return;
     if(!item){
-      avBox.innerHTML='';
-      avBox.style.backgroundImage='';
+      try{
+        if(window.myProfile && myProfile.avatar_url){
+          avBox.innerHTML=`<img src="${myProfile.avatar_url}" alt="" onerror="this.remove()">`;
+          avBox.style.backgroundImage='';
+          return;
+        }
+        const letter=(myProfile && (myProfile.first_name||myProfile.username||'?'))[0].toUpperCase();
+        avBox.innerHTML='';
+        avBox.style.background='#4C7CF3';
+        avBox.textContent=letter;
+      }catch(e){}
       return;
     }
     const url=item.dataset.avatarUrl || extractUrl(item.querySelector('.avatar'));
-    const letter=(item.dataset.name||'?').charAt(0).toUpperCase();
+    const letter=(item.dataset.name||item.getAttribute('data-name')||'?').charAt(0).toUpperCase();
     if(url){
       avBox.innerHTML=`<img src="${url}" alt="" onerror="this.parentNode.textContent='${letter}'">`;
       avBox.style.backgroundImage='';
@@ -32374,52 +32440,74 @@ document.addEventListener('click', function(e){
     }
   }
 
+  function lerp(a,b,t){ return a + (b-a)*t; }
+  function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
+  function easeOutCubic(t){ return 1 - Math.pow(1-t, 3); }
+
   function applyCollapse(progress){
-    // progress 0 = full stories, 1 = fully collapsed
     const bar=document.getElementById('stories-bar');
     const chip=ensureChip();
     const header=document.querySelector('#page-chats .sidebar-header');
+    const title=document.getElementById('max-chats-title');
     if(!bar) return;
-    const p = Math.max(0, Math.min(1, progress));
-    const h = Math.round(MAX_H * (1-p));
+    const p = clamp(progress, 0, 1);
+    const e = easeOutCubic(p);
+
+    const h = Math.round(MAX_H * (1-e));
     bar.style.maxHeight = h + 'px';
-    bar.style.opacity = String(1 - p);
-    bar.style.paddingTop = (10*(1-p)).toFixed(1) + 'px';
-    bar.style.paddingBottom = (8*(1-p)).toFixed(1) + 'px';
-    bar.style.transform = `scaleY(${Math.max(0.01, 1-p*0.15)})`;
+    bar.style.opacity = String(1 - e * 0.95);
+    bar.style.paddingTop = (10*(1-e)).toFixed(1) + 'px';
+    bar.style.paddingBottom = (8*(1-e)).toFixed(1) + 'px';
+    bar.style.marginBottom = (-4*e).toFixed(1) + 'px';
+    bar.style.transform = `scaleY(${Math.max(0.05, 1-e*0.35)}) translateY(${(-6*e).toFixed(1)}px)`;
     bar.style.pointerEvents = p > 0.85 ? 'none' : 'auto';
-    // labels fade faster
-    bar.querySelectorAll('.story-item span').forEach(sp=>{
-      sp.style.opacity = String(Math.max(0, 1 - p*1.6));
+
+    const items = bar.querySelectorAll('.story-item');
+    const n = items.length || 1;
+    items.forEach((it, i)=>{
+      const mid = (n-1)/2;
+      const dx = (i - mid) * 8 * e;
+      const sc = 1 - e * 0.45;
+      it.style.transform = `translateX(${(-dx).toFixed(1)}px) scale(${sc.toFixed(3)})`;
+      it.style.opacity = String(Math.max(0, 1 - e*1.15));
+      const sp = it.querySelector('span');
+      if(sp) sp.style.opacity = String(Math.max(0, 1 - e*1.8));
     });
-    // collapsed: header "Чаты" hides, chip (mini story + «Чаты») shows
-    if(header){
-      header.classList.toggle('is-stories-collapsed', p > 0.55);
+
+    if(title){
+      const headerW = header ? header.clientWidth : 320;
+      const travelX = headerW * 0.28;
+      const scale = lerp(1, 0.62, e);
+      const ty = lerp(0, -2, e);
+      title.style.transform = `translate(${(travelX*e).toFixed(1)}px, ${ty.toFixed(1)}px) scale(${scale.toFixed(3)})`;
+      title.style.opacity = String(Math.max(0, 1 - e*1.35));
+      title.style.pointerEvents = p > 0.7 ? 'none' : 'auto';
     }
-    try{
-      const title=document.getElementById('max-chats-title');
-      if(title){
-        if(p > 0.55){
-          title.style.opacity='0';
-          title.style.pointerEvents='none';
-        } else {
-          title.style.opacity='1';
-          title.style.pointerEvents='auto';
-        }
-      }
-    }catch(e){}
+
+    if(header){
+      header.classList.toggle('is-stories-collapsed', p > 0.5);
+    }
     if(chip){
-      if(p > 0.55){
+      const chipP = clamp((p - 0.35) / 0.45, 0, 1);
+      const ce = easeOutCubic(chipP);
+      if(chipP > 0.02){
         if(!chip.classList.contains('show')){
-          try{ updateChipAvatar(); }catch(e){}
+          try{ updateChipAvatar(); }catch(err){}
           chip.classList.add('show');
         }
-        chip.style.display='inline-flex';
-        chip.style.opacity='1';
+        chip.style.opacity = String(ce);
+        chip.style.transform = `translate(-50%, -50%) scale(${lerp(0.86, 1, ce).toFixed(3)})`;
+        chip.style.pointerEvents = chipP > 0.6 ? 'auto' : 'none';
+        const ring = chip.querySelector('.chip-av-ring');
+        if(ring){
+          ring.style.opacity = String(ce);
+          ring.style.transform = `scale(${lerp(0.5, 1, ce).toFixed(3)})`;
+        }
       } else {
         chip.classList.remove('show');
-        chip.style.opacity='0';
-        // keep in layout briefly then hide via CSS
+        chip.style.opacity = '0';
+        chip.style.transform = 'translate(-50%, -50%) scale(0.86)';
+        chip.style.pointerEvents = 'none';
       }
     }
   }
@@ -32429,7 +32517,6 @@ document.addEventListener('click', function(e){
     if(!sc || sc._maxStoryBound) return;
     sc._maxStoryBound=true;
     let ticking=false;
-    const RANGE=72; // px of scroll to fully collapse
     const onScroll=()=>{
       if(ticking) return;
       ticking=true;
@@ -32440,7 +32527,6 @@ document.addEventListener('click', function(e){
       });
     };
     sc.addEventListener('scroll', onScroll, {passive:true});
-    // initial
     applyCollapse((sc.scrollTop||0)/RANGE);
   }
 
@@ -32463,7 +32549,6 @@ document.addEventListener('click', function(e){
     patchLoadStories();
     tagAvatars();
     updateChipAvatar();
-    // kill any leftover auto-scroll timers on bar
     const bar=document.getElementById('stories-bar');
     if(bar && bar._autoScrollTimer){ clearInterval(bar._autoScrollTimer); bar._autoScrollTimer=null; }
   }
@@ -32475,6 +32560,7 @@ document.addEventListener('click', function(e){
   console.log('[SL] MAX stories scroll-linked animation ready');
 })();
 </script>
+
 <script>
 
 // MAX settings polish: pencil → edit profile, phone line
