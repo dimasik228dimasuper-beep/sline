@@ -195,6 +195,26 @@ body.chats-selecting .max-folder-tabs .folder-tab[data-can-del="1"] .ft-x{displa
 .plus-item:hover{background:var(--panel-hover)}
 /* stories-bar base above */
 .story-item{display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;flex-shrink:0}
+
+/* Interesting stories ring */
+#stories-bar .sl-interesting-item .story-ring{
+  background:linear-gradient(145deg,#8B7CFF 0%,#6D5DF6 50%,#5B8CFF 100%)!important;
+  padding:3px;
+}
+#stories-bar .sl-interesting-item .story-ring.seen{
+  background:linear-gradient(135deg,#5a6270,#3d4450)!important;
+}
+#stories-bar .sl-interesting-item .sl-interesting-av{
+  width:100%;height:100%;border-radius:50%;
+  background:linear-gradient(160deg,#9B8CFF,#6D5DF6);
+  border:2.5px solid var(--panel,#0d111a);
+  box-sizing:border-box;
+  display:flex;align-items:center;justify-content:center;
+}
+#stories-bar .sl-interesting-item .sl-interesting-av svg{
+  width:48%;height:48%;fill:#fff;opacity:.95;
+}
+
 .story-ring{width:52px;height:52px;border-radius:50%;padding:2px;background:linear-gradient(135deg,var(--accent-a),var(--mint))}
 .contacts{flex:none;overflow-x:hidden;overflow-y:visible;padding:6px 6px 24px;min-height:0;max-width:100%}
 .contact{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:14px;cursor:pointer;position:relative;overflow:hidden;transition:background .15s;background:var(--panel)}
@@ -6648,51 +6668,96 @@ document.addEventListener('keydown', e=>{ if((e.ctrlKey||e.metaKey)&&e.key==='f'
 async function loadStories(){
   const bar=document.getElementById('stories-bar'); if(!bar||!myProfile) return;
   let html='';
+  // contact ids = people from chats list (you've written to)
+  const contactIds=new Set();
+  try{ (contacts||[]).forEach(c=>{ if(c&&c.id) contactIds.add(String(c.id)); }); }catch(e){}
+  try{ (window.contacts||[]).forEach(c=>{ if(c&&c.id) contactIds.add(String(c.id)); }); }catch(e){}
+  window._slInterestingUids = [];
   try{
     const {data:stories,error}=await sb.from('stories').select('id,user_id,media_url,type,expires_at,created_at').gt('expires_at',new Date().toISOString()).order('created_at',{ascending:false});
     if(error) console.warn('stories load', error);
     let list=stories||[];
-    // Merge local stories (own device) so published stories always show
     const local=getLocalStories().filter(s=>s.user_id===myProfile.id);
     const seen=new Set(list.map(s=>String(s.id)));
     for(const ls of local){
       if(!seen.has(String(ls.id))) list = [ls, ...list];
     }
-    // also match by media if server returned without our local
     const myStories=list.filter(s=>s.user_id===myProfile.id);
-    const byUser=new Map();
+    const friendUsers=new Map();
+    const interestingUsers=new Map();
     for(const s of list){
       if(s.user_id===myProfile.id) continue;
-      if(!byUser.has(s.user_id)) byUser.set(s.user_id,[]);
-      byUser.get(s.user_id).push(s);
+      const uid=String(s.user_id);
+      const target = contactIds.has(uid) ? friendUsers : interestingUsers;
+      if(!target.has(uid)) target.set(uid,[]);
+      target.get(uid).push(s);
     }
-    // Always show "add" + own ring if published
+    window._slInterestingUids = [...interestingUsers.keys()];
+    window._slFriendStoryUids = [...friendUsers.keys()];
+
+    // Add + own
     html+=`<div class="story-item" id="add-story-btn-bar"><div class="story-ring" style="background:var(--line)"><div class="avatar" style="width:100%;height:100%;border-radius:50%;background:var(--panel-hover);display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700">+</div></div><span style="font-size:10px">${myStories.length?'Добавить':'Моя'}</span></div>`;
     if(myStories.length){
       html+=`<div class="story-item" data-uid="${myProfile.id}" data-name="${escapeHtml(myProfile.first_name||'Моя')}"><div class="story-ring"><div class="avatar" id="my-story-av" style="width:100%;height:100%;border-radius:50%"></div></div><span style="font-size:10px">Моя</span></div>`;
     }
-    const ids=[...byUser.keys()];
+    // Friend stories (contacts) — normal rings
+    const friendIds=[...friendUsers.keys()];
     let profs={};
-    if(ids.length){ const {data}=await sb.from('profiles').select('id,username,first_name,avatar_url,color').in('id',ids); (data||[]).forEach(p=>profs[p.id]=p); }
-    for(const [uid] of byUser){
+    const allOtherIds=[...friendIds, ...interestingUsers.keys()];
+    if(allOtherIds.length){
+      const {data}=await sb.from('profiles').select('id,username,first_name,avatar_url,color').in('id',allOtherIds);
+      (data||[]).forEach(p=>profs[p.id]=p);
+    }
+    for(const uid of friendIds){
       const p=profs[uid]||{}; const name=p.first_name||p.username||'?';
       html+=`<div class="story-item" data-uid="${uid}" data-name="${escapeHtml(name)}"><div class="story-ring"><div class="avatar" data-av="${uid}" style="width:100%;height:100%;border-radius:50%;background:${p.color||colorFor(uid)}"></div></div><span style="font-size:10px">${escapeHtml(name)}</span></div>`;
     }
+    // Always show «Интересное» ring (aggregated non-contacts; empty still visible)
+    const iq = window._slInterestingUids||[];
+    const seenClass = iq.length ? '' : ' seen';
+    html+=`<div class="story-item sl-interesting-item" data-interesting="1" data-uids="${iq.map(escapeHtml).join(',')}">
+      <div class="story-ring${seenClass}">
+        <div class="sl-interesting-av" aria-hidden="true">
+          <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 2l2.4 7.2H22l-6 4.8 2.4 7.2L12 16.4 5.6 21.2 8 14 2 9.2h7.6L12 2z"/></svg>
+        </div>
+      </div>
+      <span>Интересное</span>
+    </div>`;
+
     bar.innerHTML=html;
     if(myStories.length){
       renderAvatarInto(document.getElementById('my-story-av'), myProfile.avatar_url, (myProfile.username||'?')[0].toUpperCase(), myProfile.color||colorFor(myProfile.id));
     }
-    for(const [uid] of byUser){
+    for(const uid of friendIds){
       const p=profs[uid]||{};
       const el=bar.querySelector(`[data-av="${uid}"]`);
       if(el) renderAvatarInto(el, p.avatar_url, (p.username||'?')[0].toUpperCase(), p.color||colorFor(uid));
     }
   }catch(e){
     console.warn(e);
-    bar.innerHTML=`<div class="story-item" id="add-story-btn-bar"><div class="story-ring"><div class="avatar" style="width:100%;height:100%;border-radius:50%;background:var(--panel-hover);display:flex;align-items:center;justify-content:center">+</div></div><span style="font-size:10px">Моя</span></div>`;
+    bar.innerHTML=`<div class="story-item" id="add-story-btn-bar"><div class="story-ring"><div class="avatar" style="width:100%;height:100%;border-radius:50%;background:var(--panel-hover);display:flex;align-items:center;justify-content:center">+</div></div><span style="font-size:10px">Моя</span></div>
+      <div class="story-item sl-interesting-item" data-interesting="1" data-uids="">
+        <div class="story-ring seen"><div class="sl-interesting-av"><svg viewBox="0 0 24 24"><path d="M12 2l2.4 7.2H22l-6 4.8 2.4 7.2L12 16.4 5.6 21.2 8 14 2 9.2h7.6L12 2z"/></svg></div></div>
+        <span>Интересное</span>
+      </div>`;
   }
   document.getElementById('add-story-btn-bar')?.addEventListener('click',()=>document.getElementById('story-input').click());
-  bar.querySelectorAll('[data-uid]').forEach(el=>el.onclick=()=>openStoryViewer(el.dataset.uid, el.dataset.name));
+  bar.querySelectorAll('.story-item[data-uid]').forEach(el=>{
+    el.onclick=()=>openStoryViewer(el.dataset.uid, el.dataset.name);
+  });
+  bar.querySelectorAll('.sl-interesting-item').forEach(el=>{
+    el.onclick=(e)=>{
+      e.stopPropagation();
+      const uids=(el.dataset.uids||'').split(',').filter(Boolean);
+      if(!uids.length){
+        try{ showToast(typeof currentLang!=='undefined'&&currentLang==='en'?'No interesting stories yet':'Пока нет интересных историй'); }catch(err){}
+        return;
+      }
+      window._slInterestingQueue=uids.slice();
+      window._slInterestingIdx=0;
+      try{ openStoryViewer(uids[0], 'Интересное'); }catch(err){ console.warn(err); }
+    };
+  });
 }
 async function userHasActiveStories(userId){
   if(!userId) return false;
@@ -24046,237 +24111,96 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
     row.onclick=()=>openStickerPackManager();
   }, 900);
 
-  /* ========== 3) Stories: non-contacts → single «Интересное» ring ========== */
+    /* ========== 3) Stories: non-contacts → single «Интересное» ring ========== */
   (function patchStories(){
-    // Ensure CSS for Interesting ring
     if(!document.getElementById('sl-interesting-css')){
       const st=document.createElement('style');
       st.id='sl-interesting-css';
       st.textContent=`
-        #stories-bar .story-item.sl-interesting-item{
-          width:66px;
-        }
-        #stories-bar .story-item.sl-interesting-item .story-ring{
-          background:linear-gradient(145deg,#7B6CFF 0%,#5B8CFF 45%,#8B5CF6 100%)!important;
+        #stories-bar .story-item.sl-interesting-item{width:66px}
+        #stories-bar .sl-interesting-item .story-ring{
+          background:linear-gradient(145deg,#8B7CFF 0%,#6D5DF6 50%,#5B8CFF 100%)!important;
           padding:3px;
         }
-        #stories-bar .story-item.sl-interesting-item .story-ring.seen{
+        #stories-bar .sl-interesting-item .story-ring.seen{
           background:linear-gradient(135deg,#5a6270,#3d4450)!important;
         }
-        #stories-bar .story-item.sl-interesting-item .sl-interesting-av{
+        #stories-bar .sl-interesting-item .sl-interesting-av{
           width:100%;height:100%;border-radius:50%;
-          background:linear-gradient(160deg,#8B7CFF,#6D5DF6);
+          background:linear-gradient(160deg,#9B8CFF,#6D5DF6);
           border:2.5px solid var(--panel,#0d111a);
           box-sizing:border-box;
           display:flex;align-items:center;justify-content:center;
         }
-        #stories-bar .story-item.sl-interesting-item .sl-interesting-av svg{
-          width:52%;height:52%;fill:#fff;opacity:.95;
-        }
-        #stories-bar .story-item.sl-interesting-item > span{
-          font-size:10px;color:var(--text);max-width:66px;
-          white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center;
+        #stories-bar .sl-interesting-item .sl-interesting-av svg{
+          width:48%;height:48%;fill:#fff;opacity:.95;
         }
       `;
       document.head.appendChild(st);
     }
 
-    function getContactIds(){
-      const contactIds=new Set();
-      try{
-        (window.contacts||[]).forEach(c=>{ if(c&&c.id) contactIds.add(String(c.id)); });
-      }catch(e){}
-      try{
-        // chats you've already written to also count as "known"
-        (window.allUsers||[]).forEach(u=>{
-          if(u && u.id && (u._isContact || u.is_contact)) contactIds.add(String(u.id));
+    function bindInterestingClicks(){
+      const bar=document.getElementById('stories-bar');
+      if(!bar) return;
+      bar.querySelectorAll('.sl-interesting-item').forEach(el=>{
+        if(el._iqBound) return;
+        el._iqBound=1;
+        el.addEventListener('click', (e)=>{
+          e.stopPropagation();
+          const uids=(el.dataset.uids||'').split(',').filter(Boolean);
+          if(!uids.length && window._slInterestingUids) uids.push(...window._slInterestingUids);
+          if(!uids.length){
+            try{ showToast('Пока нет интересных историй'); }catch(err){}
+            return;
+          }
+          window._slInterestingQueue=uids.slice();
+          window._slInterestingIdx=0;
+          try{ openStoryViewer(uids[0], 'Интересное'); }catch(err){}
         });
-      }catch(e){}
-      return contactIds;
-    }
-
-    function makeInterestingRing(uids){
-      const el=document.createElement('div');
-      el.className='story-item sl-interesting-item';
-      el.dataset.interesting='1';
-      el.dataset.uids=uids.join(',');
-      el.innerHTML=`<div class="story-ring">
-        <div class="sl-interesting-av" aria-hidden="true">
-          <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-            <path d="M12 2C8.1 2 5 5.1 5 9c0 5.2 7 13 7 13s7-7.8 7-13c0-3.9-3.1-7-7-7zm0 9.5a2.5 2.5 0 110-5 2.5 2.5 0 010 5z"/>
-          </svg>
-        </div>
-      </div>
-      <span>Интересное</span>`;
-      el.addEventListener('click', (e)=>{
-        e.stopPropagation();
-        openInterestingStories(uids);
       });
-      return el;
     }
 
-    async function openInterestingStories(uids){
-      if(!uids || !uids.length) return;
-      // open first non-contact story, then chain via existing viewer if possible
-      const first = uids[0];
-      let name = 'Интересное';
-      try{
-        if(typeof openStoryViewer==='function'){
-          // stash queue so viewer can continue across these users
-          window._slInterestingQueue = uids.slice();
-          window._slInterestingIdx = 0;
-          openStoryViewer(first, name);
-          return;
-        }
-      }catch(e){}
-      try{ showToast('Нет историй'); }catch(err){}
-    }
-
-    // When story viewer ends one user, continue to next interesting uid
-    function patchViewerChain(){
-      if(typeof openStoryViewer!=='function' || openStoryViewer._interestingPatched) return;
-      const orig = openStoryViewer;
-      window.openStoryViewer = openStoryViewer = function(uid, name){
-        const r = orig.apply(this, arguments);
-        // try hook close / next
+    // Chain: after one interesting user finishes, open next
+    if(typeof openStoryViewer==='function' && !openStoryViewer._interestingPatched){
+      const orig=openStoryViewer;
+      window.openStoryViewer=openStoryViewer=function(uid,name){
+        const r=orig.apply(this,arguments);
         setTimeout(()=>{
           try{
-            const ov = document.querySelector('.story-viewer, #story-viewer, .sl-story-viewer, [data-story-viewer]');
-            if(!ov || ov._iqBound) return;
-            ov._iqBound = 1;
-            const onEnd = ()=>{
-              const q = window._slInterestingQueue;
-              if(!q || !q.length) return;
-              let idx = window._slInterestingIdx|0;
-              idx += 1;
-              if(idx >= q.length){ window._slInterestingQueue=null; return; }
-              window._slInterestingIdx = idx;
-              const nextUid = q[idx];
-              setTimeout(()=>{
-                try{ openStoryViewer(nextUid, 'Интересное'); }catch(e){}
-              }, 120);
-            };
-            // observe removal of viewer = ended
-            const mo = new MutationObserver(()=>{
+            const ov=document.querySelector('.story-viewer,#story-viewer,.sl-story-viewer,[data-story-viewer]');
+            if(!ov||ov._iqBound) return;
+            ov._iqBound=1;
+            const mo=new MutationObserver(()=>{
               if(!document.body.contains(ov)){
                 mo.disconnect();
-                onEnd();
+                const q=window._slInterestingQueue;
+                if(!q||!q.length) return;
+                let idx=(window._slInterestingIdx|0)+1;
+                if(idx>=q.length){ window._slInterestingQueue=null; return; }
+                window._slInterestingIdx=idx;
+                setTimeout(()=>{ try{ openStoryViewer(q[idx],'Интересное'); }catch(e){} }, 150);
               }
             });
-            mo.observe(document.body, {childList:true, subtree:true});
+            mo.observe(document.body,{childList:true,subtree:true});
           }catch(e){}
-        }, 200);
+        },250);
         return r;
       };
-      openStoryViewer._interestingPatched = true;
+      openStoryViewer._interestingPatched=true;
     }
 
-    function enhanceStoriesBar(){
-      const bar=document.getElementById('stories-bar');
-      if(!bar || !myProfile) return;
-      if(bar._slPatching) return;
-      bar._slPatching = 1;
-      try{
-        const contactIds = getContactIds();
-        const items=[...bar.querySelectorAll('.story-item[data-uid]')];
-        // skip if already processed and nothing new
-        const existingInteresting = bar.querySelector('.sl-interesting-item');
-        const addBtn=bar.querySelector('#add-story-btn-bar');
-        const mine=[];
-        const friends=[];
-        const interestingUids=[];
-        const interestingEls=[];
-
-        items.forEach(it=>{
-          if(it.classList.contains('sl-interesting-item')) return;
-          const uid=String(it.dataset.uid||'');
-          if(!uid) return;
-          if(uid===String(myProfile.id)) mine.push(it);
-          else if(contactIds.has(uid)) friends.push(it);
-          else {
-            interestingUids.push(uid);
-            interestingEls.push(it);
-          }
-        });
-
-        // If no non-contacts, remove leftover interesting ring and stop
-        if(!interestingUids.length){
-          if(existingInteresting) existingInteresting.remove();
-          // also remove old text label if any
-          bar.querySelectorAll('.sl-stories-label').forEach(n=>n.remove());
-          return;
-        }
-
-        // Deduplicate uids
-        const uniq=[];
-        const seen=new Set();
-        interestingUids.forEach(u=>{ if(!seen.has(u)){ seen.add(u); uniq.push(u); } });
-
-        // Hide individual non-contact rings (remove from bar)
-        interestingEls.forEach(el=>el.remove());
-        bar.querySelectorAll('.sl-stories-label').forEach(n=>n.remove());
-
-        // Build order: add | mine | friends | interesting
-        const frag=document.createDocumentFragment();
-        if(addBtn) frag.appendChild(addBtn);
-        mine.forEach(el=>frag.appendChild(el));
-        friends.forEach(el=>frag.appendChild(el));
-
-        let ring = bar.querySelector('.sl-interesting-item');
-        if(ring){
-          ring.dataset.uids = uniq.join(',');
-          // re-bind click
-          const fresh = makeInterestingRing(uniq);
-          ring.replaceWith(fresh);
-          ring = fresh;
-        } else {
-          ring = makeInterestingRing(uniq);
-        }
-        frag.appendChild(ring);
-
-        // Re-append remaining known order without wiping handlers on friends/mine unnecessarily
-        // Clear bar and put fragment
-        while(bar.firstChild) bar.removeChild(bar.firstChild);
-        bar.appendChild(frag);
-
-        // rebind add
-        document.getElementById('add-story-btn-bar')?.addEventListener('click',()=>document.getElementById('story-input')?.click());
-        // rebind friend/mine clicks
-        bar.querySelectorAll('.story-item[data-uid]:not(.sl-interesting-item)').forEach(el=>{
-          el.onclick=()=>openStoryViewer(el.dataset.uid, el.dataset.name);
-        });
-      }catch(e){ console.warn('[SL] interesting stories', e); }
-      finally{ bar._slPatching = 0; }
-    }
-
-    patchViewerChain();
-
-    const bar=document.getElementById('stories-bar');
-    if(bar && !bar._slInterestingObs){
-      bar._slInterestingObs = 1;
-      const mo=new MutationObserver(()=>{
-        if(bar._slPatching) return;
-        // avoid loop: only run if there are non-interesting data-uid items that aren't contacts
-        setTimeout(enhanceStoriesBar, 60);
-      });
-      try{ mo.observe(bar, {childList:true}); }catch(e){}
-    }
-
-    // Hook loadStories
-    if(typeof loadStories==='function' && !loadStories._interestingHook){
-      const _ls = loadStories;
-      window.loadStories = loadStories = async function(){
-        const r = await _ls.apply(this, arguments);
-        setTimeout(enhanceStoriesBar, 50);
-        setTimeout(enhanceStoriesBar, 300);
+    if(typeof loadStories==='function' && !loadStories._interestingBind){
+      const _ls=loadStories;
+      window.loadStories=loadStories=async function(){
+        const r=await _ls.apply(this,arguments);
+        setTimeout(bindInterestingClicks,30);
+        setTimeout(bindInterestingClicks,200);
         return r;
       };
-      loadStories._interestingHook = 1;
+      loadStories._interestingBind=1;
     }
-
-    setTimeout(enhanceStoriesBar, 200);
-    setTimeout(enhanceStoriesBar, 1000);
-    setInterval(enhanceStoriesBar, 5000);
+    setTimeout(bindInterestingClicks,400);
+    setTimeout(bindInterestingClicks,1500);
   })();
 
   /* ========== 6) Faster SPosts / SVideo loading ========== */
