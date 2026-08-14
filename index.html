@@ -8042,7 +8042,6 @@ document.getElementById('settings-cover-edit')?.addEventListener('click', pickCo
   page.style.overflowY = 'auto';
   page.style.webkitOverflowScrolling = 'touch';
 
-  // cleanup old fly clones
   ['sl-set-fly-av','sl-set-fly-name'].forEach(id=>{
     const el=document.getElementById(id);
     if(el) el.remove();
@@ -8052,21 +8051,22 @@ document.getElementById('settings-cover-edit')?.addEventListener('click', pickCo
   if(!mini){
     mini = document.createElement('div');
     mini.id = 'sl-settings-mini';
-    mini.innerHTML = `<span class="sl-set-mini-av" id="sl-set-mini-av"></span><span class="sl-set-mini-name" id="sl-set-mini-name"></span>`;
     page.insertBefore(mini, page.firstChild);
   }
+  // Always: avatar LEFT of name
+  mini.innerHTML = `<span class="sl-set-mini-av" id="sl-set-mini-av" aria-hidden="true"></span><span class="sl-set-mini-name" id="sl-set-mini-name"></span>`;
 
   let st = document.getElementById('sl-settings-collapse-css');
   if(st) st.remove();
   st = document.createElement('style');
   st.id = 'sl-settings-collapse-css';
   st.textContent = `
-    /* MAX-style sticky compact header */
     #sl-settings-mini{
       position:sticky; top:0; z-index:40;
-      display:flex; align-items:center; justify-content:center; gap:8px;
+      display:flex; align-items:center; justify-content:center;
+      gap:8px;
       height:0; opacity:0; pointer-events:none;
-      background:rgba(12,14,20,.88);
+      background:rgba(12,14,20,.9);
       backdrop-filter:blur(18px) saturate(1.2);
       -webkit-backdrop-filter:blur(18px) saturate(1.2);
       border-bottom:1px solid transparent;
@@ -8075,20 +8075,27 @@ document.getElementById('settings-cover-edit')?.addEventListener('click', pickCo
       transform:translateZ(0);
     }
     #sl-settings-mini.show{ pointer-events:auto; }
+    /* Avatar always to the LEFT of the name */
     #sl-settings-mini .sl-set-mini-av{
-      width:26px; height:26px; border-radius:50%;
+      order:0;
+      width:28px; height:28px; border-radius:50%;
       background:linear-gradient(135deg,#5B8CFF,#7B6CFF);
       background-size:cover; background-position:center;
       flex-shrink:0; overflow:hidden;
-      opacity:0;
+      display:flex!important; align-items:center; justify-content:center;
+      opacity:0; transform:scale(.75);
+      color:#fff; font-weight:700; font-size:12px;
     }
-    #sl-settings-mini .sl-set-mini-av img{
+    #sl-settings-mini .sl-set-mini-av img,
+    #sl-settings-mini .sl-set-mini-av svg{
       width:100%; height:100%; object-fit:cover; border-radius:50%; display:block;
     }
+    #sl-settings-mini .sl-set-mini-av svg{ width:62%; height:62%; object-fit:contain; }
     #sl-settings-mini .sl-set-mini-name{
-      font-size:15px; font-weight:650; color:var(--text);
-      white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:55vw;
-      opacity:0;
+      order:1;
+      font-size:16px; font-weight:650; color:var(--text);
+      white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:52vw;
+      opacity:0; transform:translateY(4px);
     }
     #page-settings .settings-avatar,
     #page-settings .settings-name,
@@ -8098,12 +8105,8 @@ document.getElementById('settings-cover-edit')?.addEventListener('click', pickCo
     }
     #sl-set-fly-av, #sl-set-fly-name{ display:none!important; }
     body.theme-light #sl-settings-mini,
-    body.light-theme #sl-settings-mini{ background:rgba(255,255,255,.92); }
-
-    /* Keep QR / edit on top of mini bar */
-    #page-settings .max-settings-top{
-      z-index:45 !important;
-    }
+    body.light-theme #sl-settings-mini{ background:rgba(255,255,255,.94); }
+    #page-settings .max-settings-top{ z-index:45 !important; }
   `;
   document.head.appendChild(st);
 
@@ -8119,31 +8122,39 @@ document.getElementById('settings-cover-edit')?.addEventListener('click', pickCo
     const miniAv=document.getElementById('sl-set-mini-av');
     if(miniName&&nameEl) miniName.textContent=(nameEl.textContent||'').trim()||'SLine';
     if(!miniAv||!av) return;
+
+    // Prefer real photo
     const img=av.querySelector('img');
+    const svg=av.querySelector('svg');
     const bg=av.style.backgroundImage||'';
-    if(img&&img.src){
+    const computed=getComputedStyle(av);
+    const compBg=computed.backgroundImage||'';
+
+    miniAv.innerHTML='';
+    miniAv.style.backgroundImage='none';
+    miniAv.style.background=computed.background || 'linear-gradient(135deg,#5B8CFF,#7B6CFF)';
+
+    if(img&&img.src&&!img.src.endsWith('/')){
+      miniAv.style.background='none';
       miniAv.innerHTML=`<img src="${img.src.replace(/"/g,'')}" alt="">`;
-      miniAv.style.backgroundImage='none';
-      miniAv.textContent='';
-    }else if(bg&&bg!=='none'){
-      miniAv.innerHTML='';
-      miniAv.style.backgroundImage=bg;
-    }else{
-      const t=(document.getElementById('settings-avatar-text')||{}).textContent||'';
-      miniAv.innerHTML='';
-      miniAv.style.backgroundImage='none';
-      miniAv.textContent=(t||'').slice(0,2);
-      miniAv.style.display='flex';
-      miniAv.style.alignItems='center';
-      miniAv.style.justifyContent='center';
-      miniAv.style.color='#fff';
-      miniAv.style.fontWeight='700';
-      miniAv.style.fontSize='11px';
+    } else if(svg){
+      // clone bubble/icon SVG into mini
+      miniAv.appendChild(svg.cloneNode(true));
+      miniAv.style.background=computed.backgroundColor!=='rgba(0, 0, 0, 0)'
+        ? computed.background
+        : 'linear-gradient(135deg,#5B8CFF,#7B6CFF)';
+    } else if((bg&&bg!=='none')||(compBg&&compBg!=='none')){
+      miniAv.style.backgroundImage=bg!=='none'?bg:compBg;
+      miniAv.style.backgroundSize='cover';
+      miniAv.style.backgroundPosition='center';
+    } else {
+      const t=(document.getElementById('settings-avatar-text')||{}).textContent
+        || (nameEl&&nameEl.textContent||'?').trim().slice(0,1);
+      miniAv.textContent=(t||'?').slice(0,2);
     }
   }
 
   function apply(y){
-    // RANGE tuned to MAX feel (~hero height)
     const RANGE=120;
     const p=clamp(y/RANGE,0,1);
     const e=easeInOut(p);
@@ -8155,7 +8166,7 @@ document.getElementById('settings-cover-edit')?.addEventListener('click', pickCo
     const hero=page.querySelector('.settings-hero');
     const profile=page.querySelector('.settings-profile');
 
-    // Phone / username: disappear first (like MAX phone fades)
+    // Subtitle first
     const sub=easeOut(clamp(p/0.35,0,1));
     [uname,phone].forEach(el=>{
       if(!el) return;
@@ -8163,58 +8174,54 @@ document.getElementById('settings-cover-edit')?.addEventListener('click', pickCo
       el.style.transform=`translate3d(0,${(-10*sub).toFixed(1)}px,0)`;
     });
 
-    // Large avatar: shrink + rise + fade out (gone by ~80%)
-    const avFade=easeOut(clamp(p/0.72,0,1));
+    // MAIN avatar disappears with animation (scale + rise + fade)
+    const avFade=easeOut(clamp(p/0.7,0,1));
     if(av){
       av.style.opacity=String(Math.max(0,1-avFade));
-      av.style.transform=`translate3d(0,${(-48*e).toFixed(1)}px,0) scale(${lerp(1,0.28,e).toFixed(3)})`;
-      if(avFade>0.95) av.style.visibility='hidden';
-      else av.style.visibility='visible';
+      av.style.transform=`translate3d(0,${(-52*e).toFixed(1)}px,0) scale(${lerp(1,0.22,e).toFixed(3)})`;
+      av.style.visibility=avFade>0.97?'hidden':'visible';
+      av.style.pointerEvents=avFade>0.8?'none':'auto';
     }
 
-    // Name under avatar: rise + fade (gone by ~75%)
-    const nameFade=easeOut(clamp(p/0.68,0,1));
+    // Name under avatar disappears
+    const nameFade=easeOut(clamp(p/0.65,0,1));
     if(name){
       name.style.opacity=String(Math.max(0,1-nameFade));
-      name.style.transform=`translate3d(0,${(-36*e).toFixed(1)}px,0) scale(${lerp(1,0.75,e).toFixed(3)})`;
-      if(nameFade>0.95) name.style.visibility='hidden';
-      else name.style.visibility='visible';
+      name.style.transform=`translate3d(0,${(-32*e).toFixed(1)}px,0) scale(${lerp(1,0.72,e).toFixed(3)})`;
+      name.style.visibility=nameFade>0.97?'hidden':'visible';
     }
 
-    // Collapse hero space so list slides under header
     if(hero){
       hero.style.paddingTop=(12*(1-e)).toFixed(1)+'px';
       hero.style.paddingBottom=(18*(1-e)).toFixed(1)+'px';
-      hero.style.marginBottom=(-8*e).toFixed(1)+'px';
+      hero.style.marginBottom=(-10*e).toFixed(1)+'px';
     }
     if(profile){
-      profile.style.paddingBottom=(8*(1-e*0.8)).toFixed(1)+'px';
+      profile.style.paddingBottom=(8*(1-e*0.85)).toFixed(1)+'px';
     }
 
-    // Sticky mini: appears after avatar mostly gone (MAX timing)
-    const miniP=easeOut(clamp((p-0.35)/0.45,0,1));
+    // Mini bar: avatar LEFT of name
+    const miniP=easeOut(clamp((p-0.3)/0.5,0,1));
     if(mini){
       if(miniP>0.01) syncMini();
-      const h=Math.round(lerp(0,44,miniP));
+      const h=Math.round(lerp(0,46,miniP));
       mini.style.height=h+'px';
       mini.style.opacity=String(miniP);
-      mini.style.borderBottomColor=`rgba(120,120,128,${(0.15*miniP).toFixed(2)})`;
-      mini.classList.toggle('show', miniP>0.08);
+      mini.style.borderBottomColor=`rgba(120,120,128,${(0.14*miniP).toFixed(2)})`;
+      mini.classList.toggle('show', miniP>0.06);
       const mav=mini.querySelector('.sl-set-mini-av');
       const mnm=mini.querySelector('.sl-set-mini-name');
-      // content pops in slightly after bar opens
-      const content=easeOut(clamp((miniP-0.15)/0.7,0,1));
+      const content=easeOut(clamp((miniP-0.08)/0.75,0,1));
       if(mav){
         mav.style.opacity=String(content);
         mav.style.transform=`scale(${lerp(0.7,1,content).toFixed(3)})`;
       }
       if(mnm){
         mnm.style.opacity=String(content);
-        mnm.style.transform=`translateY(${lerp(6,0,content).toFixed(1)}px)`;
+        mnm.style.transform=`translateY(${lerp(5,0,content).toFixed(1)}px)`;
       }
     }
 
-    // endpoints hard-set (no half-visible ghosts)
     if(p<=0.005){
       if(av){ av.style.opacity='1'; av.style.transform='none'; av.style.visibility='visible'; }
       if(name){ name.style.opacity='1'; name.style.transform='none'; name.style.visibility='visible'; }
@@ -8228,7 +8235,7 @@ document.getElementById('settings-cover-edit')?.addEventListener('click', pickCo
       if(uname) uname.style.opacity='0';
       if(phone) phone.style.opacity='0';
       if(mini){
-        mini.style.height='44px'; mini.style.opacity='1';
+        mini.style.height='46px'; mini.style.opacity='1';
         const mav=mini.querySelector('.sl-set-mini-av');
         const mnm=mini.querySelector('.sl-set-mini-name');
         if(mav){ mav.style.opacity='1'; mav.style.transform='scale(1)'; }
@@ -8249,11 +8256,8 @@ document.getElementById('settings-cover-edit')?.addEventListener('click', pickCo
       });
     },{passive:true});
   }
-  requestAnimationFrame(()=>{
-    syncMini();
-    apply(page.scrollTop||0);
-  });
-  setInterval(()=>{ try{ if((page.scrollTop||0)<6) syncMini(); }catch(e){} }, 2500);
+  requestAnimationFrame(()=>{ syncMini(); apply(page.scrollTop||0); });
+  setInterval(()=>{ try{ syncMini(); }catch(e){} }, 2000);
 })();
 
 // ========== BETA FEATURES ==========
