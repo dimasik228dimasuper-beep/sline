@@ -5798,26 +5798,85 @@ function renderMessage(msg, isGroup=false){
     } else {
       setTimeout(tryPreview, 80);
     }
-    circle.onclick=e=>{
-      e.preventDefault(); e.stopPropagation();
-      if(typeof e.stopImmediatePropagation==='function') e.stopImmediatePropagation();
-      if(!circle.classList.contains('is-expanded')){
-        expandAndPlay();
-      } else {
-        if(v.paused){
-          v.play().catch(()=>{});
-          setPausedUI(false);
-          startRingLoop();
-        } else {
-          v.pause();
-          setPausedUI(true);
-          stopRingLoop();
+    // Long-press → context menu; short tap → expand/pause
+    (function(circleEl, videoEl, msgRef){
+      let lpTimer=null, lpFired=false, lpX=0, lpY=0, lpId=null;
+      const LONG=420, MOVE=12;
+      const clearLp=()=>{ if(lpTimer){ clearTimeout(lpTimer); lpTimer=null; } };
+      const openCtx=(ev)=>{
+        lpFired=true;
+        clearLp();
+        try{ navigator.vibrate && navigator.vibrate(18); }catch(err){}
+        const pt = (ev.touches && ev.touches[0]) || (ev.changedTouches && ev.changedTouches[0]) || ev;
+        const fake={
+          clientX: pt.clientX||lpX, clientY: pt.clientY||lpY,
+          pageX: pt.pageX||pt.clientX||lpX, pageY: pt.pageY||pt.clientY||lpY,
+          preventDefault(){}, stopPropagation(){}
+        };
+        if(typeof showMsgCtx==='function') showMsgCtx(fake, msgRef);
+        window._slCtxOpened=true;
+        window._slCtxIgnoreClickUntil=Date.now()+450;
+        setTimeout(()=>{ window._slCtxOpened=false; }, 500);
+      };
+      const onDown=e=>{
+        if(e.pointerType==='mouse' && e.button!==0) return;
+        e.stopPropagation();
+        lpFired=false;
+        lpX=e.clientX; lpY=e.clientY;
+        lpId=e.pointerId!=null?e.pointerId:0;
+        clearLp();
+        lpTimer=setTimeout(()=>{
+          if(!lpFired) openCtx(e);
+        }, LONG);
+        try{ circleEl.setPointerCapture && circleEl.setPointerCapture(e.pointerId); }catch(err){}
+      };
+      const onMove=e=>{
+        if(lpId!=null && e.pointerId!=null && e.pointerId!==lpId) return;
+        if(Math.hypot((e.clientX||0)-lpX, (e.clientY||0)-lpY) > MOVE) clearLp();
+      };
+      const onUp=e=>{
+        e.stopPropagation();
+        const wasLong=lpFired;
+        clearLp();
+        const same=(lpId==null) || (e.pointerId==null) || (e.pointerId===lpId);
+        lpId=null;
+        if(wasLong){
+          // swallow click after long-press so it doesn't toggle play
+          if(e.cancelable) try{ e.preventDefault(); }catch(err){}
+          return;
         }
-      }
-    };
-    ['pointerdown','pointerup','touchstart','touchend'].forEach(evn=>{
-      circle.addEventListener(evn, e=>{ e.stopPropagation(); }, {passive:true});
-    });
+        if(!same) return;
+        if(window._slCtxOpened || (window._slCtxIgnoreClickUntil && Date.now()<window._slCtxIgnoreClickUntil)) return;
+        // short tap → play/pause
+        if(!circleEl.classList.contains('is-expanded')){
+          expandAndPlay();
+        } else {
+          if(videoEl.paused){
+            videoEl.play().catch(()=>{});
+            setPausedUI(false);
+            startRingLoop();
+          } else {
+            videoEl.pause();
+            setPausedUI(true);
+            stopRingLoop();
+          }
+        }
+      };
+      const onCancel=()=>{ clearLp(); lpFired=false; lpId=null; };
+      circleEl.addEventListener('pointerdown', onDown);
+      circleEl.addEventListener('pointermove', onMove);
+      circleEl.addEventListener('pointerup', onUp);
+      circleEl.addEventListener('pointercancel', onCancel);
+      circleEl.addEventListener('contextmenu', e=>{
+        e.preventDefault(); e.stopPropagation();
+        openCtx(e);
+      });
+      // prevent ghost click on some mobile browsers
+      circleEl.addEventListener('click', e=>{
+        e.preventDefault(); e.stopPropagation();
+        if(typeof e.stopImmediatePropagation==='function') e.stopImmediatePropagation();
+      });
+    })(circle, v, msg);
   }
 
   // Voice waveform + play
