@@ -33701,19 +33701,16 @@ document.addEventListener('click', function(e){
       #stories-bar .story-item{
         display:flex;flex-direction:column;align-items:center;gap:4px;
         flex-shrink:0;cursor:pointer;width:66px;
-        transition:transform .12s ease, opacity .12s ease;
         will-change:transform,opacity;
       }
       #stories-bar .story-item span{
         font-size:11px;color:var(--text);max-width:66px;
         white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center;
-        transition:opacity .12s ease;
       }
       #stories-bar .story-ring{
         width:60px;height:60px;border-radius:50%;padding:2.5px;
         background:linear-gradient(135deg,#f58529 0%,#dd2a7b 40%,#8134af 70%,#515bd4 100%);
         box-sizing:border-box;flex-shrink:0;
-        transition:transform .12s ease;
       }
       #stories-bar .story-ring > .avatar,
       #stories-bar .story-ring > div{
@@ -33731,42 +33728,59 @@ document.addEventListener('click', function(e){
         z-index:5;
         transform-origin:left center;
         will-change:transform,opacity;
-        transition:none;
+        transition:none!important;
+        backface-visibility:hidden;
+      }
+      #max-chats-title.is-gone{
+        opacity:0!important;
+        visibility:hidden!important;
+        pointer-events:none!important;
+        transform:translate(0,0) scale(.42)!important;
       }
 
       #sl-chats-title-chip{
         position:absolute;left:50%;top:50%;
         transform:translate(-50%,-50%) scale(.92);
         display:inline-flex;align-items:center;gap:8px;
-        pointer-events:none;z-index:6;
+        padding:4px 12px 4px 4px;
+        border-radius:999px;
+        background:rgba(255,255,255,.06);
+        border:1px solid rgba(255,255,255,.08);
         opacity:0;
-        transition:none;
-        will-change:opacity,transform;
+        pointer-events:none;
+        z-index:8;
+        will-change:transform,opacity;
+        transition:none!important;
+        backface-visibility:hidden;
+        white-space:nowrap;
       }
       #sl-chats-title-chip.show{ pointer-events:auto; }
+      #sl-chats-title-chip.is-solid{
+        opacity:1!important;
+        transform:translate(-50%,-50%) scale(1)!important;
+        pointer-events:auto!important;
+      }
       #sl-chats-title-chip .chip-av-ring{
-        width:28px;height:28px;border-radius:50%;padding:2px;
-        background:linear-gradient(135deg,#f58529,#dd2a7b,#8134af,#515bd4);
-        box-sizing:border-box;flex-shrink:0;
-        transform:scale(0.6);opacity:0;
+        width:28px;height:28px;border-radius:50%;padding:1.5px;
+        background:linear-gradient(135deg,#6c8cff,#a78bfa);
+        flex-shrink:0;box-sizing:border-box;
         will-change:transform,opacity;
       }
       #sl-chats-title-chip .chip-av{
         width:100%;height:100%;border-radius:50%;overflow:hidden;
-        background:#333;background-size:cover;background-position:center;
-        display:flex;align-items:center;justify-content:center;
-        color:#fff;font-weight:700;font-size:12px;
+        background:var(--panel,#0d111a);border:1.5px solid var(--panel,#0d111a);
+        box-sizing:border-box;
       }
       #sl-chats-title-chip .chip-av img{
-        width:100%;height:100%;object-fit:cover;display:block;border-radius:50%;
+        width:100%;height:100%;object-fit:cover;display:block;
       }
       #sl-chats-title-chip .chip-label{
-        font-size:17px;font-weight:700;color:var(--text);letter-spacing:-.2px;
-        white-space:nowrap;
+        font-size:15px;font-weight:700;color:var(--text,#fff);
+        letter-spacing:-.2px;line-height:1;
       }
       #page-chats .sidebar-header{position:relative;overflow:visible}
       #page-chats .sidebar-header.is-stories-collapsed .me-row > div:last-child{
-        opacity:0;pointer-events:none;transition:opacity .15s ease;
+        opacity:.0;pointer-events:none;
       }
       #page-chats .sidebar-header .me-row > div:last-child{
         transition:opacity .15s ease;
@@ -33775,31 +33789,10 @@ document.addEventListener('click', function(e){
     document.head.appendChild(s);
   }
 
-  function extractUrl(el){
-    if(!el) return '';
-    if(el.dataset && el.dataset.avatarUrl) return el.dataset.avatarUrl;
-    const img = el.tagName==='IMG' ? el : el.querySelector && el.querySelector('img');
-    if(img && img.src && img.src.indexOf('data:image/svg')===-1) return img.src;
-    try{
-      const bi = (el.style && el.style.backgroundImage) || '';
-      let m = bi.match(/url\\(["']?([^"')]+)["']?\\)/);
-      if(m) return m[1];
-      const cs = getComputedStyle(el);
-      m = (cs.backgroundImage||'').match(/url\\(["']?([^"')]+)["']?\\)/);
-      if(m && m[1] && m[1]!=='none') return m[1];
-    }catch(e){}
-    return '';
-  }
-
-  function tagAvatars(){
-    const bar=document.getElementById('stories-bar');
-    if(!bar) return;
-    bar.querySelectorAll('.story-item[data-uid]').forEach(it=>{
-      const av=it.querySelector('.avatar')||it.querySelector('.story-ring > div');
-      const url=extractUrl(av);
-      if(url) it.dataset.avatarUrl=url;
-    });
-  }
+  const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+  const lerp=(a,b,t)=>a+(b-a)*t;
+  const easeOutCubic=t=>1-Math.pow(1-t,3);
+  const easeOutBack=t=>{const c=1.70158;return 1+c*Math.pow(t-1,3)+c*Math.pow(t-1,2)};
 
   function ensureChip(){
     let chip=document.getElementById('sl-chats-title-chip');
@@ -33809,63 +33802,75 @@ document.addEventListener('click', function(e){
     chip=document.createElement('div');
     chip.id='sl-chats-title-chip';
     chip.innerHTML=`<div class="chip-av-ring"><div class="chip-av" id="sl-chip-av"></div></div><span class="chip-label">Чаты</span>`;
-    chip.addEventListener('click', (e)=>{
-      e.stopPropagation();
-      const sc=document.getElementById('sidebar-scroll');
-      if(sc) sc.scrollTo({top:0, behavior:'smooth'});
-    });
     header.appendChild(chip);
     return chip;
   }
 
   function updateChipAvatar(){
-    const chip=ensureChip();
-    if(!chip) return;
-    tagAvatars();
-    const bar=document.getElementById('stories-bar');
-    let item = bar && (bar.querySelector('.story-item[data-uid="me"], .story-item#my-story, .story-item[data-self="1"]') || bar.querySelector('.story-item[data-uid]'));
-    const avBox=document.getElementById('sl-chip-av');
-    if(!avBox) return;
-    if(!item){
-      try{
-        if(window.myProfile && myProfile.avatar_url){
-          avBox.innerHTML=`<img src="${myProfile.avatar_url}" alt="" onerror="this.remove()">`;
-          avBox.style.backgroundImage='';
-          return;
+    const el=document.getElementById('sl-chip-av');
+    if(!el) return;
+    try{
+      if(typeof myProfile!=='undefined' && myProfile){
+        if(myProfile.avatar_url){
+          el.innerHTML=`<img src="${myProfile.avatar_url}" alt="">`;
+        } else if(typeof renderAvatarInto==='function'){
+          renderAvatarInto(el, myProfile);
+        } else {
+          const n=(myProfile.first_name||myProfile.username||'?')[0]||'?';
+          el.textContent=n.toUpperCase();
+          el.style.display='flex';el.style.alignItems='center';el.style.justifyContent='center';
+          el.style.fontWeight='700';el.style.fontSize='12px';el.style.color='#fff';
         }
-        const letter=(myProfile && (myProfile.first_name||myProfile.username||'?'))[0].toUpperCase();
-        avBox.innerHTML='';
-        avBox.style.background='#4C7CF3';
-        avBox.textContent=letter;
-      }catch(e){}
-      return;
-    }
-    const url=item.dataset.avatarUrl || extractUrl(item.querySelector('.avatar'));
-    const letter=(item.dataset.name||item.getAttribute('data-name')||'?').charAt(0).toUpperCase();
-    if(url){
-      avBox.innerHTML=`<img src="${url}" alt="" onerror="this.parentNode.textContent='${letter}'">`;
-      avBox.style.backgroundImage='';
-    } else {
-      avBox.innerHTML='';
-      avBox.style.background='#4C7CF3';
-      avBox.style.display='flex';
-      avBox.style.alignItems='center';
-      avBox.style.justifyContent='center';
-      avBox.style.color='#fff';
-      avBox.style.fontWeight='700';
-      avBox.style.fontSize='12px';
-      avBox.textContent=letter;
-    }
+      }
+    }catch(e){}
   }
 
-  function lerp(a,b,t){ return a + (b-a)*t; }
-  function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
-  function easeOutCubic(t){ return 1 - Math.pow(1-t, 3); }
-
-  function easeOutBack(t){
-    const c1=1.70158, c3=c1+1;
-    return 1 + c3*Math.pow(t-1,3) + c1*Math.pow(t-1,2);
+  function tagAvatars(){
+    const bar=document.getElementById('stories-bar');
+    if(!bar) return;
+    bar.querySelectorAll('.story-item').forEach(it=>{
+      it.style.willChange='transform,opacity';
+    });
   }
+
+  function resetTitle(title){
+    if(!title) return;
+    title.classList.remove('is-gone');
+    title.style.transform='';
+    title.style.opacity='';
+    title.style.letterSpacing='';
+    title.style.visibility='';
+    title.style.pointerEvents='';
+  }
+
+  function resetChip(chip){
+    if(!chip) return;
+    chip.classList.remove('show','is-solid');
+    chip.style.opacity='0';
+    chip.style.transform='translate(-50%, -50%) scale(0.7)';
+    chip.style.pointerEvents='none';
+    const ring=chip.querySelector('.chip-av-ring');
+    if(ring){ ring.style.opacity=''; ring.style.transform=''; }
+  }
+
+  function resetStories(bar){
+    if(!bar) return;
+    bar.style.maxHeight='';
+    bar.style.opacity='';
+    bar.style.paddingTop='';
+    bar.style.paddingBottom='';
+    bar.style.marginBottom='';
+    bar.style.transform='';
+    bar.style.filter='';
+    bar.style.pointerEvents='';
+    bar.querySelectorAll('.story-item').forEach(it=>{
+      it.style.transform='';
+      it.style.opacity='';
+      const sp=it.querySelector('span');
+      if(sp) sp.style.opacity='';
+    });
+  }
+
   function applyCollapse(progress){
     const bar=document.getElementById('stories-bar');
     const chip=ensureChip();
@@ -33873,10 +33878,53 @@ document.addEventListener('click', function(e){
     const title=document.getElementById('max-chats-title');
     if(!bar) return;
     const p = clamp(progress, 0, 1);
+
+    // ===== clean endpoints: no ghosts =====
+    if(p <= 0.02){
+      resetStories(bar);
+      resetTitle(title);
+      resetChip(chip);
+      if(header) header.classList.remove('is-stories-collapsed');
+      return;
+    }
+    if(p >= 0.98){
+      // fully collapsed: title completely gone, chip solid, stories gone
+      bar.style.maxHeight='0px';
+      bar.style.opacity='0';
+      bar.style.paddingTop='0px';
+      bar.style.paddingBottom='0px';
+      bar.style.marginBottom='0px';
+      bar.style.transform='scaleY(0.02) translateY(-18px)';
+      bar.style.filter='none';
+      bar.style.pointerEvents='none';
+      bar.querySelectorAll('.story-item').forEach(it=>{
+        it.style.transform='scale(0.15)';
+        it.style.opacity='0';
+        const sp=it.querySelector('span');
+        if(sp) sp.style.opacity='0';
+      });
+      if(title){
+        title.classList.add('is-gone');
+        title.style.opacity='0';
+        title.style.visibility='hidden';
+        title.style.pointerEvents='none';
+      }
+      if(chip){
+        chip.classList.add('show','is-solid');
+        chip.style.opacity='1';
+        chip.style.transform='translate(-50%, -50%) scale(1)';
+        chip.style.pointerEvents='auto';
+        const ring=chip.querySelector('.chip-av-ring');
+        if(ring){ ring.style.opacity='1'; ring.style.transform='scale(1)'; }
+      }
+      if(header) header.classList.add('is-stories-collapsed');
+      return;
+    }
+
     const e = easeOutCubic(p);
     const eFast = easeOutCubic(clamp(p*1.25, 0, 1));
 
-    // Stories bar collapses harder and travels up
+    // Stories bar
     const h = Math.round(MAX_H * (1-e));
     bar.style.maxHeight = h + 'px';
     bar.style.opacity = String(Math.max(0, 1 - e * 1.15));
@@ -33884,14 +33932,13 @@ document.addEventListener('click', function(e){
     bar.style.paddingBottom = (8*(1-e)).toFixed(1) + 'px';
     bar.style.marginBottom = (-10*e).toFixed(1) + 'px';
     bar.style.transform = `scaleY(${Math.max(0.02, 1-e*0.55)}) translateY(${(-18*e).toFixed(1)}px)`;
-    bar.style.filter = e > 0.4 ? `blur(${(e*2.5).toFixed(1)}px)` : 'none';
+    bar.style.filter = e > 0.55 ? `blur(${((e-0.55)*4).toFixed(1)}px)` : 'none';
     bar.style.pointerEvents = p > 0.75 ? 'none' : 'auto';
 
     const items = bar.querySelectorAll('.story-item');
     const n = items.length || 1;
     items.forEach((it, i)=>{
       const mid = (n-1)/2;
-      // converge toward center + shrink + fade with stagger
       const stagger = Math.abs(i - mid) * 0.04;
       const pe = easeOutCubic(clamp((p - stagger) / Math.max(0.01, 1-stagger), 0, 1));
       const dx = (i - mid) * 14 * pe;
@@ -33902,26 +33949,36 @@ document.addEventListener('click', function(e){
       if(sp) sp.style.opacity = String(Math.max(0, 1 - pe*2.2));
     });
 
-    // Title «Чаты» slides to center, shrinks, fades into chip
+    // Title «Чаты» — hard hide once mostly faded so no ghost double
     if(title){
       const headerW = header ? header.clientWidth : 320;
       const titleW = title.offsetWidth || 80;
-      // move toward horizontal center of header
       const centerX = (headerW / 2) - (titleW / 2) - 16;
       const travelX = Math.max(24, centerX * 0.92);
       const scale = lerp(1, 0.42, eFast);
       const ty = lerp(0, -6, e);
-      title.style.transform = `translate(${(travelX*eFast).toFixed(1)}px, ${ty.toFixed(1)}px) scale(${scale.toFixed(3)})`;
-      title.style.opacity = String(Math.max(0, 1 - eFast*1.45));
-      title.style.letterSpacing = (eFast * -0.6).toFixed(2) + 'px';
-      title.style.pointerEvents = p > 0.55 ? 'none' : 'auto';
+      const top = Math.max(0, 1 - eFast*1.55);
+      if(top < 0.04 || p > 0.72){
+        title.classList.add('is-gone');
+        title.style.opacity='0';
+        title.style.visibility='hidden';
+        title.style.pointerEvents='none';
+        title.style.transform = `translate(${(travelX).toFixed(1)}px, ${ty.toFixed(1)}px) scale(${scale.toFixed(3)})`;
+      } else {
+        title.classList.remove('is-gone');
+        title.style.visibility='visible';
+        title.style.transform = `translate(${(travelX*eFast).toFixed(1)}px, ${ty.toFixed(1)}px) scale(${scale.toFixed(3)})`;
+        title.style.opacity = String(top);
+        title.style.letterSpacing = (eFast * -0.6).toFixed(2) + 'px';
+        title.style.pointerEvents = p > 0.55 ? 'none' : 'auto';
+      }
     }
 
     if(header){
       header.classList.toggle('is-stories-collapsed', p > 0.45);
     }
+
     if(chip){
-      // chip appears earlier and bounces in
       const chipP = clamp((p - 0.22) / 0.5, 0, 1);
       const ce = easeOutCubic(chipP);
       const bounce = chipP > 0.01 ? Math.min(1, easeOutBack(Math.min(1, chipP*1.15))) : 0;
@@ -33930,6 +33987,7 @@ document.addEventListener('click', function(e){
           try{ updateChipAvatar(); }catch(err){}
           chip.classList.add('show');
         }
+        chip.classList.remove('is-solid');
         chip.style.opacity = String(ce);
         chip.style.transform = `translate(-50%, -50%) scale(${lerp(0.7, 1, bounce).toFixed(3)})`;
         chip.style.pointerEvents = chipP > 0.55 ? 'auto' : 'none';
@@ -33938,20 +33996,38 @@ document.addEventListener('click', function(e){
           ring.style.opacity = String(ce);
           ring.style.transform = `scale(${lerp(0.35, 1, bounce).toFixed(3)})`;
         }
+        // when nearly fully in, lock solid so no half-faded chip remains
+        if(chipP > 0.95){
+          chip.classList.add('is-solid');
+          chip.style.opacity='1';
+          chip.style.transform='translate(-50%, -50%) scale(1)';
+        }
       } else {
-        chip.classList.remove('show');
-        chip.style.opacity = '0';
-        chip.style.transform = 'translate(-50%, -50%) scale(0.7)';
-        chip.style.pointerEvents = 'none';
+        resetChip(chip);
       }
     }
   }
 
+  function settle(){
+    const sc=document.getElementById('sidebar-scroll');
+    if(!sc) return;
+    const y = sc.scrollTop || 0;
+    // snap to clean end states so no mid-frame ghosts stick
+    if(y < 8) applyCollapse(0);
+    else if(y > RANGE - 8) applyCollapse(1);
+    else applyCollapse(y / RANGE);
+  }
+
   function bindScroll(){
     const sc=document.getElementById('sidebar-scroll');
-    if(!sc || sc._maxStoryBound) return;
+    if(!sc) return;
+    if(sc._maxStoryBound){
+      // re-bind settle if needed
+      return;
+    }
     sc._maxStoryBound=true;
     let ticking=false;
+    let settleTimer=null;
     const onScroll=()=>{
       if(ticking) return;
       ticking=true;
@@ -33959,10 +34035,15 @@ document.addEventListener('click', function(e){
         ticking=false;
         const y = sc.scrollTop || 0;
         applyCollapse(y / RANGE);
+        clearTimeout(settleTimer);
+        settleTimer=setTimeout(settle, 120);
       });
     };
     sc.addEventListener('scroll', onScroll, {passive:true});
+    sc.addEventListener('touchend', ()=>setTimeout(settle, 80), {passive:true});
+    sc.addEventListener('mouseup', ()=>setTimeout(settle, 80));
     applyCollapse((sc.scrollTop||0)/RANGE);
+    setTimeout(settle, 200);
   }
 
   function patchLoadStories(){
@@ -33986,6 +34067,9 @@ document.addEventListener('click', function(e){
     updateChipAvatar();
     const bar=document.getElementById('stories-bar');
     if(bar && bar._autoScrollTimer){ clearInterval(bar._autoScrollTimer); bar._autoScrollTimer=null; }
+    // force clean initial state
+    setTimeout(settle, 50);
+    setTimeout(settle, 400);
   }
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', boot);
   else boot();
