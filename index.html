@@ -5751,19 +5751,9 @@ function openSendQualityDialog(file){
           background:#fff;
         }
         /* Drag overlay */
-        .sl-drag-ov{
-          position:fixed; inset:0; z-index:12040;
-          background:rgba(40,80,200,.22);
-          border:3px dashed #5B8CFF;
-          display:none; align-items:center; justify-content:center;
-          pointer-events:none;
-        }
-        .sl-drag-ov.show{ display:flex; }
-        .sl-drag-ov span{
-          background:rgba(20,24,36,.9); color:#fff;
-          padding:14px 22px; border-radius:14px; font-weight:600; font-size:16px;
-          box-shadow:0 8px 30px rgba(0,0,0,.35);
-        }
+        
+        
+        
       `;
       document.head.appendChild(st);
     }
@@ -34499,42 +34489,18 @@ body{
   setTimeout(bindInputs, 500);
   setTimeout(bindInputs, 2000);
 
-  // Drag & drop onto chat pane / messages area
-  let dragDepth = 0;
-  let ov = document.getElementById('sl-drag-ov');
-  if(!ov){
-    ov = document.createElement('div');
-    ov.id = 'sl-drag-ov';
-    ov.className = 'sl-drag-ov';
-    ov.innerHTML = '<span>Отпустите, чтобы отправить</span>';
-    document.body.appendChild(ov);
-  }
+  // Drag & drop into chat — silently, no overlay banner
+  document.querySelectorAll('#sl-drag-ov,.sl-drag-ov').forEach(el=>el.remove());
   function inChat(){
-    return !!(document.body.classList.contains('in-chat') || activePartner || activeGroup);
+    return !!(document.body.classList.contains('in-chat') || (typeof activePartner!=='undefined' && activePartner) || (typeof activeGroup!=='undefined' && activeGroup));
   }
-  function showDrag(on){
-    ov.classList.toggle('show', !!on);
-  }
-  window.addEventListener('dragenter', (e)=>{
-    if(!e.dataTransfer || ![...e.dataTransfer.types].includes('Files')) return;
-    if(!inChat()) return;
-    dragDepth++;
-    showDrag(true);
-  });
-  window.addEventListener('dragleave', (e)=>{
-    dragDepth = Math.max(0, dragDepth-1);
-    if(dragDepth===0) showDrag(false);
-  });
   window.addEventListener('dragover', (e)=>{
     if(!e.dataTransfer || ![...e.dataTransfer.types].includes('Files')) return;
     if(!inChat()) return;
     e.preventDefault();
     e.dataTransfer.dropEffect = 'copy';
-    showDrag(true);
   });
   window.addEventListener('drop', async (e)=>{
-    dragDepth = 0;
-    showDrag(false);
     if(!e.dataTransfer || !e.dataTransfer.files || !e.dataTransfer.files.length) return;
     if(!inChat()) return;
     e.preventDefault();
