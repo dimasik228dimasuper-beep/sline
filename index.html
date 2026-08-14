@@ -445,7 +445,7 @@ body.beta-oled .sw-clip{background:var(--panel)!important}
 .circle-msg .circle-ring{position:absolute;inset:-5px;pointer-events:none;z-index:4}
 .circle-msg .circle-ring svg{width:100%;height:100%;transform:rotate(-90deg);overflow:visible}
 .circle-msg .circle-ring .ring-bg{fill:none;stroke:rgba(255,255,255,.18);stroke-width:3}
-.circle-msg .circle-ring .ring-prog{fill:none;stroke:#fff;stroke-width:3;stroke-linecap:round;stroke-dasharray:0;stroke-dashoffset:0;opacity:0;transition:opacity .2s}
+.circle-msg .circle-ring .ring-prog{fill:none;stroke:#fff;stroke-width:3.2;stroke-linecap:round;stroke-dasharray:0;stroke-dashoffset:0;opacity:0;transition:opacity .15s;will-change:stroke-dashoffset}
 .circle-msg.is-expanded .circle-ring .ring-prog{opacity:1}
 .circle-msg.is-expanded .circle-mute{display:none!important}
 .circle-msg.is-expanded .circle-play-overlay{display:none!important}
@@ -5248,13 +5248,36 @@ function renderMessage(msg, isGroup=false){
     const muteEl=circle.querySelector('.circle-mute');
     const ringProg=circle.querySelector('.ring-prog');
     const C=2*Math.PI*47;
-    if(ringProg){ ringProg.style.strokeDasharray=String(C); ringProg.style.strokeDashoffset=String(C); }
+    if(ringProg){
+      ringProg.setAttribute('stroke-dasharray', String(C));
+      ringProg.setAttribute('stroke-dashoffset', String(C));
+      ringProg.style.strokeDasharray=String(C);
+      ringProg.style.strokeDashoffset=String(C);
+    }
+    let ringRaf=0;
     const fmt=s=>{ s=Math.max(0,Math.floor(s||0)); return Math.floor(s/60)+':'+String(s%60).padStart(2,'0'); };
     const setRing=(t)=>{
       if(!ringProg) return;
       const d=v.duration||0;
       const p=d>0?Math.min(1,Math.max(0,t/d)):0;
-      ringProg.style.strokeDashoffset=String(C*(1-p));
+      const off=C*(1-p);
+      // attribute + style for max browser smoothness
+      ringProg.setAttribute('stroke-dashoffset', off.toFixed(2));
+      ringProg.style.strokeDashoffset=off.toFixed(2);
+    };
+    const stopRingLoop=()=>{ if(ringRaf){ cancelAnimationFrame(ringRaf); ringRaf=0; } };
+    const startRingLoop=()=>{
+      stopRingLoop();
+      const tick=()=>{
+        if(!circle.classList.contains('is-expanded') || v.paused || v.ended){
+          ringRaf=0;
+          return;
+        }
+        setRing(v.currentTime||0);
+        if(durEl) durEl.textContent=fmt(v.currentTime||0);
+        ringRaf=requestAnimationFrame(tick);
+      };
+      ringRaf=requestAnimationFrame(tick);
     };
     const setPausedUI=(paused)=>{
       if(ov){
@@ -5267,6 +5290,7 @@ function renderMessage(msg, isGroup=false){
       }
     };
     const collapse=()=>{
+      stopRingLoop();
       circle.classList.remove('is-expanded');
       circle.classList.remove('is-paused');
       v.muted=true; v.loop=true;
@@ -5275,7 +5299,6 @@ function renderMessage(msg, isGroup=false){
       if(muteEl) muteEl.style.display='';
       if(ov) ov.style.display='none';
       try{ v.play().catch(()=>{}); }catch(e){}
-      // hide top bar if any
       const bar=document.getElementById('sl-circle-topbar');
       if(bar) bar.remove();
     };
@@ -5288,7 +5311,6 @@ function renderMessage(msg, isGroup=false){
           <div class="sl-c-tb-info"><b>SLine</b><span>Видеосообщение</span></div>
           <button type="button" class="sl-c-tb-speed">1×</button>
           <button type="button" class="sl-c-tb-close" aria-label="close">✕</button>`;
-        // insert near chat header if possible
         const chatPage=document.getElementById('page-chat')||document.body;
         chatPage.appendChild(bar);
         if(!document.getElementById('sl-circle-topbar-css')){
@@ -5315,11 +5337,11 @@ function renderMessage(msg, isGroup=false){
           `;
           document.head.appendChild(st);
         }
-        bar.querySelector('.sl-c-tb-close').onclick=(e)=>{ e.stopPropagation(); collapse(); try{v.pause();}catch(err){} };
+        bar.querySelector('.sl-c-tb-close').onclick=(e)=>{ e.stopPropagation(); try{v.pause();}catch(err){} collapse(); };
         bar.querySelector('.sl-c-tb-play').onclick=(e)=>{
           e.stopPropagation();
-          if(v.paused){ v.play().catch(()=>{}); setPausedUI(false); bar.querySelector('.sl-c-tb-play').textContent='❚❚'; }
-          else { v.pause(); setPausedUI(true); bar.querySelector('.sl-c-tb-play').textContent='▶'; }
+          if(v.paused){ v.play().catch(()=>{}); setPausedUI(false); startRingLoop(); bar.querySelector('.sl-c-tb-play').textContent='❚❚'; }
+          else { v.pause(); setPausedUI(true); stopRingLoop(); bar.querySelector('.sl-c-tb-play').textContent='▶'; }
         };
         bar.querySelector('.sl-c-tb-speed').onclick=(e)=>{
           e.stopPropagation();
@@ -5333,18 +5355,12 @@ function renderMessage(msg, isGroup=false){
       bar.style.display='flex';
     };
     const playNextCircle=()=>{
-      // find next circle-msg after this one in DOM
       const all=[...document.querySelectorAll('#messages-list .circle-msg, .messages-list .circle-msg, #chat-messages .circle-msg')];
       if(!all.length) all.push(...document.querySelectorAll('.circle-msg'));
       const idx=all.indexOf(circle);
       const next=idx>=0?all[idx+1]:null;
       collapse();
-      if(next){
-        // slight delay so collapse finishes
-        setTimeout(()=>{
-          try{ next.click(); }catch(e){}
-        }, 120);
-      }
+      if(next) setTimeout(()=>{ try{ next.click(); }catch(e){} }, 120);
     };
     const expandAndPlay=async()=>{
       document.querySelectorAll('.circle-msg.is-expanded').forEach(el=>{
@@ -5372,31 +5388,31 @@ function renderMessage(msg, isGroup=false){
       try{
         if(v.readyState<2&&v.src){ try{v.load();}catch(e){} }
         await v.play();
+        startRingLoop();
       }catch(err){
-        try{ v.muted=true; await v.play(); v.muted=false; }catch(e2){
+        try{ v.muted=true; await v.play(); v.muted=false; startRingLoop(); }catch(e2){
           showToast('Не удалось воспроизвести кружок');
           collapse();
         }
       }
     };
     v.addEventListener('loadedmetadata',()=>{ if(durEl) durEl.textContent=fmt(v.duration); setRing(0); });
+    // timeupdate only as fallback for duration text when not expanded
     v.addEventListener('timeupdate',()=>{
-      if(durEl){
-        const show=circle.classList.contains('is-expanded')?v.currentTime:(v.duration||0);
-        durEl.textContent=fmt(show);
+      if(!circle.classList.contains('is-expanded') && durEl){
+        durEl.textContent=fmt(v.duration||0);
       }
-      if(circle.classList.contains('is-expanded')) setRing(v.currentTime||0);
     });
     v.addEventListener('ended', ()=>{
-      if(circle.classList.contains('is-expanded')){
-        // auto next circle
-        playNextCircle();
-      }
+      stopRingLoop();
+      if(circle.classList.contains('is-expanded')) playNextCircle();
     });
     v.addEventListener('pause', ()=>{
+      stopRingLoop();
       if(circle.classList.contains('is-expanded') && !v.ended){
         circle.classList.add('is-paused');
         setPausedUI(true);
+        setRing(v.currentTime||0);
         const bar=document.getElementById('sl-circle-topbar');
         if(bar) bar.querySelector('.sl-c-tb-play').textContent='▶';
       }
@@ -5405,11 +5421,11 @@ function renderMessage(msg, isGroup=false){
       if(circle.classList.contains('is-expanded')){
         circle.classList.remove('is-paused');
         setPausedUI(false);
+        startRingLoop();
         const bar=document.getElementById('sl-circle-topbar');
         if(bar) bar.querySelector('.sl-c-tb-play').textContent='❚❚';
       }
     });
-    // muted autoplay when visible
     v.muted=true; v.loop=true;
     const tryPreview=()=>{
       if(circle.classList.contains('is-expanded')) return;
@@ -5431,16 +5447,16 @@ function renderMessage(msg, isGroup=false){
       e.preventDefault(); e.stopPropagation();
       if(typeof e.stopImmediatePropagation==='function') e.stopImmediatePropagation();
       if(!circle.classList.contains('is-expanded')){
-        // first tap: expand + play from start with sound
         expandAndPlay();
       } else {
-        // expanded: tap = pause / resume (NOT collapse)
         if(v.paused){
           v.play().catch(()=>{});
           setPausedUI(false);
+          startRingLoop();
         } else {
           v.pause();
           setPausedUI(true);
+          stopRingLoop();
         }
       }
     };
