@@ -440,7 +440,15 @@ body.beta-oled .sw-clip{background:var(--panel)!important}
 .bubble.me.bubble-circle .bubble-time{ float:right; clear:both; }
 .circle-msg-wrap{position:relative;display:inline-block;flex-shrink:0}
 
-.circle-msg{width:200px;height:200px;border-radius:50%;overflow:hidden;position:relative;background:#111;border:3px solid rgba(255,255,255,.2);cursor:pointer;box-shadow:0 8px 28px rgba(0,0,0,.4);flex-shrink:0}
+.circle-msg{width:140px;height:140px;border-radius:50%;overflow:visible;position:relative;background:#111;border:2.5px solid rgba(255,255,255,.22);cursor:pointer;box-shadow:0 6px 20px rgba(0,0,0,.35);flex-shrink:0;transition:width .28s cubic-bezier(.2,.8,.2,1),height .28s cubic-bezier(.2,.8,.2,1),box-shadow .28s}
+.circle-msg.is-expanded{width:260px;height:260px;z-index:20;box-shadow:0 12px 40px rgba(0,0,0,.55);border-color:rgba(255,255,255,.35)}
+.circle-msg .circle-ring{position:absolute;inset:-5px;pointer-events:none;z-index:4}
+.circle-msg .circle-ring svg{width:100%;height:100%;transform:rotate(-90deg);overflow:visible}
+.circle-msg .circle-ring .ring-bg{fill:none;stroke:rgba(255,255,255,.18);stroke-width:3}
+.circle-msg .circle-ring .ring-prog{fill:none;stroke:#fff;stroke-width:3;stroke-linecap:round;stroke-dasharray:0;stroke-dashoffset:0;opacity:0;transition:opacity .2s}
+.circle-msg.is-expanded .circle-ring .ring-prog{opacity:1}
+.circle-msg.is-expanded .circle-mute{display:none!important}
+.circle-msg.is-expanded .circle-play-overlay{display:none!important}
 .circle-transcribe-btn{
   position:absolute!important;top:8px;right:-4px;z-index:6;
   width:36px;height:36px;border-radius:12px;border:none;cursor:pointer;
@@ -449,10 +457,11 @@ body.beta-oled .sw-clip{background:var(--panel)!important}
 }
 .bubble.them .circle-transcribe-btn{background:rgba(76,124,243,.35);color:var(--text)}
 
-.circle-msg video{width:100%;height:100%;object-fit:cover;border-radius:50%;display:block}
-.circle-msg .circle-mute{position:absolute;right:12px;bottom:14px;width:32px;height:32px;border-radius:50%;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;z-index:3;pointer-events:none;border:1.5px solid rgba(255,255,255,.35)}
+.circle-msg video{width:100%;height:100%;object-fit:cover;border-radius:50%;display:block;background:#000}
+.circle-msg-inner{width:100%;height:100%;border-radius:50%;overflow:hidden;position:relative;background:#000}
+.circle-msg .circle-mute{position:absolute;right:8px;bottom:10px;width:26px;height:26px;border-radius:50%;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;z-index:3;pointer-events:none;border:1.5px solid rgba(255,255,255,.35)}
 .circle-msg .circle-mute svg{width:16px;height:16px;fill:#fff;stroke:none}
-.circle-msg .circle-dur{position:absolute;left:12px;bottom:16px;font-size:13px;font-weight:800;color:#fff;text-shadow:0 1px 4px rgba(0,0,0,.85);z-index:3;pointer-events:none}
+.circle-msg .circle-dur{position:absolute;left:10px;bottom:12px;font-size:12px;font-weight:800;color:#fff;text-shadow:0 1px 4px rgba(0,0,0,.85);z-index:3;pointer-events:none}
 .circle-play-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.28);border-radius:50%;z-index:2}
 .circle-play-overlay svg{width:44px;height:44px;filter:drop-shadow(0 2px 6px rgba(0,0,0,.5))}
 .bubble.me .circle-msg{border-color:rgba(255,255,255,.45)}
@@ -5128,10 +5137,13 @@ function buildMessageBody(msg, replyHtml, bodyText){
     const src = escapeHtml(msg.file_url||'');
     return `<div class="circle-msg-wrap" data-mid="${msg.id}">
       <div class="circle-msg" data-src="${src}">
-        <video src="${src}" playsinline webkit-playsinline preload="auto" loop muted></video>
-        <div class="circle-play-overlay"><svg viewBox="0 0 24 24" style="width:48px;height:48px;fill:#fff"><path d="M8 5v14l11-7z"/></svg></div>
-        <div class="circle-mute"><svg viewBox="0 0 24 24"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M23 9l-6 6M17 9l6 6" stroke="#fff" stroke-width="2" fill="none"/></svg></div>
-        <div class="circle-dur">0:00</div>
+        <div class="circle-ring" aria-hidden="true"><svg viewBox="0 0 100 100"><circle class="ring-bg" cx="50" cy="50" r="47"/><circle class="ring-prog" cx="50" cy="50" r="47"/></svg></div>
+        <div class="circle-msg-inner">
+          <video src="${src}" playsinline webkit-playsinline preload="metadata" muted loop></video>
+          <div class="circle-play-overlay" style="display:none"><svg viewBox="0 0 24 24" style="width:36px;height:36px;fill:#fff"><path d="M8 5v14l11-7z"/></svg></div>
+          <div class="circle-mute"><svg viewBox="0 0 24 24"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M23 9l-6 6M17 9l6 6" stroke="#fff" stroke-width="2" fill="none"/></svg></div>
+          <div class="circle-dur">0:00</div>
+        </div>
       </div>
       <button type="button" class="voice-transcribe-btn circle-transcribe-btn" title="Расшифровать" aria-label="Transcribe"><span class="vt-arrow">→</span><span class="vt-t">T</span><span class="vt-x">×</span></button>
     </div>`;
@@ -5227,63 +5239,211 @@ function renderMessage(msg, isGroup=false){
   const isCircle = msg.type==='circle';
   row.innerHTML=`<div class="bubble ${mine?'me':'them'}${isCircle?' bubble-circle':''}" data-id="${msg.id}">${sender}${content}<span class="bubble-time">${time}</span><div class="reaction-bar" style="display:none"></div></div>`;
 
-  // Circle play/pause
+  // Circle: small muted autoplay → tap expands (sound+ring) → tap pause/resume → next on end
   const circle=row.querySelector('.circle-msg');
   if(circle){
     const v=circle.querySelector('video');
     const ov=circle.querySelector('.circle-play-overlay');
     const durEl=circle.querySelector('.circle-dur');
     const muteEl=circle.querySelector('.circle-mute');
+    const ringProg=circle.querySelector('.ring-prog');
+    const C=2*Math.PI*47;
+    if(ringProg){ ringProg.style.strokeDasharray=String(C); ringProg.style.strokeDashoffset=String(C); }
     const fmt=s=>{ s=Math.max(0,Math.floor(s||0)); return Math.floor(s/60)+':'+String(s%60).padStart(2,'0'); };
-    v.addEventListener('loadedmetadata',()=>{ if(durEl) durEl.textContent=fmt(v.duration); });
-    v.addEventListener('timeupdate',()=>{ if(durEl && !v.paused) durEl.textContent=fmt(v.currentTime); });
-    // Tap circle = play / pause
-    const syncUI = (playing)=>{
-      if(ov) ov.style.display = playing ? 'none' : 'flex';
-      if(muteEl) muteEl.innerHTML = playing
-        ? '<svg viewBox="0 0 24 24"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M19.07 4.93a10 10 0 010 14.14M15.54 8.46a5 5 0 010 7.07" stroke="#fff" stroke-width="2" fill="none"/></svg>'
-        : '<svg viewBox="0 0 24 24"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M23 9l-6 6M17 9l6 6" stroke="#fff" stroke-width="2" fill="none"/></svg>';
+    const setRing=(t)=>{
+      if(!ringProg) return;
+      const d=v.duration||0;
+      const p=d>0?Math.min(1,Math.max(0,t/d)):0;
+      ringProg.style.strokeDashoffset=String(C*(1-p));
     };
-    const playCircle = async ()=>{
-      document.querySelectorAll('.circle-msg video').forEach(x=>{
-        if(x===v) return;
-        try{ x.pause(); }catch(e){}
-        const p=x.closest('.circle-msg');
-        const o=p?.querySelector('.circle-play-overlay');
-        if(o) o.style.display='flex';
-      });
-      try{
-        v.muted = false;
-        v.volume = 1;
-        // iOS: must play after user gesture; reload if src stuck
-        if(v.readyState < 2 && v.src){ try{ v.load(); }catch(e){} }
-        await v.play();
-        syncUI(true);
-      }catch(err){
-        console.warn('circle play', err);
-        // Retry muted once (autoplay policies), then unmute
-        try{
-          v.muted = true;
-          await v.play();
-          v.muted = false;
-          syncUI(true);
-        }catch(e2){
-          showToast('Не удалось воспроизвести кружок');
-          syncUI(false);
+    const setPausedUI=(paused)=>{
+      if(ov){
+        if(paused && circle.classList.contains('is-expanded')){
+          ov.style.display='flex';
+          ov.innerHTML='<svg viewBox="0 0 24 24" style="width:44px;height:44px;fill:#fff;filter:drop-shadow(0 2px 6px rgba(0,0,0,.5))"><path d="M8 5v14l11-7z"/></svg>';
+        } else {
+          ov.style.display='none';
         }
       }
     };
-    circle.onclick=e=>{
-      e.preventDefault();
-      e.stopPropagation();
-      if(typeof e.stopImmediatePropagation==='function') e.stopImmediatePropagation();
-      if(v.paused) playCircle();
-      else { try{ v.pause(); }catch(e){} syncUI(false); }
+    const collapse=()=>{
+      circle.classList.remove('is-expanded');
+      circle.classList.remove('is-paused');
+      v.muted=true; v.loop=true;
+      try{ v.currentTime=0; }catch(e){}
+      setRing(0);
+      if(muteEl) muteEl.style.display='';
+      if(ov) ov.style.display='none';
+      try{ v.play().catch(()=>{}); }catch(e){}
+      // hide top bar if any
+      const bar=document.getElementById('sl-circle-topbar');
+      if(bar) bar.remove();
     };
-    v.addEventListener('ended', ()=>{ try{ v.currentTime=0; }catch(e){} syncUI(false); if(durEl) durEl.textContent=fmt(v.duration); });
-    v.addEventListener('pause', ()=>{ if(v.currentTime>0 && !v.ended) syncUI(false); });
-    v.addEventListener('play', ()=> syncUI(true));
-    // Don't let bubble swipe/forward steal circle taps
+    const showTopBar=(playing)=>{
+      let bar=document.getElementById('sl-circle-topbar');
+      if(!bar){
+        bar=document.createElement('div');
+        bar.id='sl-circle-topbar';
+        bar.innerHTML=`<button type="button" class="sl-c-tb-play" aria-label="pause">${playing?'❚❚':'▶'}</button>
+          <div class="sl-c-tb-info"><b>SLine</b><span>Видеосообщение</span></div>
+          <button type="button" class="sl-c-tb-speed">1×</button>
+          <button type="button" class="sl-c-tb-close" aria-label="close">✕</button>`;
+        // insert near chat header if possible
+        const chatPage=document.getElementById('page-chat')||document.body;
+        chatPage.appendChild(bar);
+        if(!document.getElementById('sl-circle-topbar-css')){
+          const st=document.createElement('style');
+          st.id='sl-circle-topbar-css';
+          st.textContent=`
+            #sl-circle-topbar{
+              position:fixed; left:12px; right:12px; top:calc(52px + env(safe-area-inset-top,0px));
+              z-index:5000; display:flex; align-items:center; gap:10px;
+              background:rgba(20,22,30,.88); backdrop-filter:blur(14px);
+              border-radius:14px; padding:8px 12px; color:#fff;
+              box-shadow:0 8px 24px rgba(0,0,0,.35);
+            }
+            #sl-circle-topbar .sl-c-tb-play{
+              width:34px;height:34px;border-radius:10px;border:none;background:rgba(255,255,255,.1);
+              color:#fff;font-size:14px;cursor:pointer;flex-shrink:0;
+            }
+            #sl-circle-topbar .sl-c-tb-info{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.15}
+            #sl-circle-topbar .sl-c-tb-info b{font-size:13px;font-weight:700}
+            #sl-circle-topbar .sl-c-tb-info span{font-size:11px;opacity:.7}
+            #sl-circle-topbar .sl-c-tb-speed,#sl-circle-topbar .sl-c-tb-close{
+              border:none;background:transparent;color:#fff;font-size:14px;font-weight:600;cursor:pointer;padding:6px 8px;
+            }
+          `;
+          document.head.appendChild(st);
+        }
+        bar.querySelector('.sl-c-tb-close').onclick=(e)=>{ e.stopPropagation(); collapse(); try{v.pause();}catch(err){} };
+        bar.querySelector('.sl-c-tb-play').onclick=(e)=>{
+          e.stopPropagation();
+          if(v.paused){ v.play().catch(()=>{}); setPausedUI(false); bar.querySelector('.sl-c-tb-play').textContent='❚❚'; }
+          else { v.pause(); setPausedUI(true); bar.querySelector('.sl-c-tb-play').textContent='▶'; }
+        };
+        bar.querySelector('.sl-c-tb-speed').onclick=(e)=>{
+          e.stopPropagation();
+          const rates=[1,1.5,2,0.5];
+          const i=rates.indexOf(v.playbackRate||1);
+          v.playbackRate=rates[(i+1)%rates.length];
+          bar.querySelector('.sl-c-tb-speed').textContent=v.playbackRate+'×';
+        };
+      }
+      bar.querySelector('.sl-c-tb-play').textContent=playing?'❚❚':'▶';
+      bar.style.display='flex';
+    };
+    const playNextCircle=()=>{
+      // find next circle-msg after this one in DOM
+      const all=[...document.querySelectorAll('#messages-list .circle-msg, .messages-list .circle-msg, #chat-messages .circle-msg')];
+      if(!all.length) all.push(...document.querySelectorAll('.circle-msg'));
+      const idx=all.indexOf(circle);
+      const next=idx>=0?all[idx+1]:null;
+      collapse();
+      if(next){
+        // slight delay so collapse finishes
+        setTimeout(()=>{
+          try{ next.click(); }catch(e){}
+        }, 120);
+      }
+    };
+    const expandAndPlay=async()=>{
+      document.querySelectorAll('.circle-msg.is-expanded').forEach(el=>{
+        if(el===circle) return;
+        el.classList.remove('is-expanded');
+        el.classList.remove('is-paused');
+        const ov2=el.querySelector('video');
+        if(ov2){ ov2.muted=true; ov2.loop=true; try{ov2.pause();}catch(e){} }
+      });
+      document.querySelectorAll('.circle-msg video').forEach(x=>{
+        if(x===v) return;
+        try{ x.pause(); x.muted=true; }catch(e){}
+      });
+      circle.classList.add('is-expanded');
+      circle.classList.remove('is-paused');
+      v.loop=false;
+      v.muted=false;
+      v.volume=1;
+      v.playbackRate=1;
+      try{ v.currentTime=0; }catch(e){}
+      setRing(0);
+      if(muteEl) muteEl.style.display='none';
+      setPausedUI(false);
+      showTopBar(true);
+      try{
+        if(v.readyState<2&&v.src){ try{v.load();}catch(e){} }
+        await v.play();
+      }catch(err){
+        try{ v.muted=true; await v.play(); v.muted=false; }catch(e2){
+          showToast('Не удалось воспроизвести кружок');
+          collapse();
+        }
+      }
+    };
+    v.addEventListener('loadedmetadata',()=>{ if(durEl) durEl.textContent=fmt(v.duration); setRing(0); });
+    v.addEventListener('timeupdate',()=>{
+      if(durEl){
+        const show=circle.classList.contains('is-expanded')?v.currentTime:(v.duration||0);
+        durEl.textContent=fmt(show);
+      }
+      if(circle.classList.contains('is-expanded')) setRing(v.currentTime||0);
+    });
+    v.addEventListener('ended', ()=>{
+      if(circle.classList.contains('is-expanded')){
+        // auto next circle
+        playNextCircle();
+      }
+    });
+    v.addEventListener('pause', ()=>{
+      if(circle.classList.contains('is-expanded') && !v.ended){
+        circle.classList.add('is-paused');
+        setPausedUI(true);
+        const bar=document.getElementById('sl-circle-topbar');
+        if(bar) bar.querySelector('.sl-c-tb-play').textContent='▶';
+      }
+    });
+    v.addEventListener('play', ()=>{
+      if(circle.classList.contains('is-expanded')){
+        circle.classList.remove('is-paused');
+        setPausedUI(false);
+        const bar=document.getElementById('sl-circle-topbar');
+        if(bar) bar.querySelector('.sl-c-tb-play').textContent='❚❚';
+      }
+    });
+    // muted autoplay when visible
+    v.muted=true; v.loop=true;
+    const tryPreview=()=>{
+      if(circle.classList.contains('is-expanded')) return;
+      v.muted=true; v.loop=true;
+      try{ v.play().catch(()=>{}); }catch(e){}
+    };
+    if(typeof IntersectionObserver!=='undefined'){
+      const io=new IntersectionObserver((ents)=>{
+        ents.forEach(ent=>{
+          if(ent.isIntersecting) tryPreview();
+          else if(!circle.classList.contains('is-expanded')){ try{v.pause();}catch(e){} }
+        });
+      },{threshold:0.35});
+      io.observe(circle);
+    } else {
+      setTimeout(tryPreview, 80);
+    }
+    circle.onclick=e=>{
+      e.preventDefault(); e.stopPropagation();
+      if(typeof e.stopImmediatePropagation==='function') e.stopImmediatePropagation();
+      if(!circle.classList.contains('is-expanded')){
+        // first tap: expand + play from start with sound
+        expandAndPlay();
+      } else {
+        // expanded: tap = pause / resume (NOT collapse)
+        if(v.paused){
+          v.play().catch(()=>{});
+          setPausedUI(false);
+        } else {
+          v.pause();
+          setPausedUI(true);
+        }
+      }
+    };
     ['pointerdown','pointerup','touchstart','touchend'].forEach(evn=>{
       circle.addEventListener(evn, e=>{ e.stopPropagation(); }, {passive:true});
     });
