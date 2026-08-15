@@ -2531,54 +2531,6 @@ body.theme-light #auth-screen .auth-card{
 </head>
 <body>
 
-<div id="sl-emergency" style="position:fixed;top:0;left:0;right:0;z-index:2147483646;background:#1a1a2e;color:#fff;font:600 13px/1.4 system-ui,sans-serif;padding:calc(10px + env(safe-area-inset-top,0px)) 14px 12px;text-align:center;display:block">
-  <div>SLine загружается…</div>
-  <div style="font-weight:400;font-size:11px;opacity:.75;margin-top:4px">Если экран пустой — обновите страницу</div>
-</div>
-<script>
-(function(){
-  function kill(){
-    var e=document.getElementById('sl-emergency');
-    if(e) e.remove();
-  }
-  function ok(){
-    try{
-      var auth=document.getElementById('auth-screen');
-      var app=document.getElementById('app-screen');
-      function vis(el){
-        if(!el) return false;
-        var st=getComputedStyle(el);
-        if(st.display==='none'||st.visibility==='hidden') return false;
-        var r=el.getBoundingClientRect();
-        return r.width>50 && r.height>50;
-      }
-      return vis(auth)||vis(app);
-    }catch(e){return false}
-  }
-  var n=0;
-  var iv=setInterval(function(){
-    n++;
-    if(ok()){ kill(); clearInterval(iv); }
-    else if(n>25){
-      // force show auth with inline styles
-      try{
-        var auth=document.getElementById('auth-screen');
-        var app=document.getElementById('app-screen');
-        document.documentElement.classList.remove('sl-booting');
-        if(auth){
-          auth.style.cssText='display:flex!important;min-height:100dvh;background:#0F1419;color:#F4F7FB;z-index:5;position:relative';
-        }
-        if(app) app.style.display='none';
-        var card=document.querySelector('.auth-card');
-        if(card) card.style.cssText='background:#1A222D;color:#F4F7FB;padding:28px;border-radius:20px;max-width:420px;width:100%;margin:auto';
-      }catch(e){}
-      var e=document.getElementById('sl-emergency');
-      if(e) e.innerHTML='<div style="color:#FF6B81">Не удалось загрузить UI</div><div style="margin-top:8px"><button type="button" onclick="location.reload()" style="background:#5B8CFF;color:#fff;border:0;padding:10px 18px;border-radius:12px;font-weight:700">Обновить</button></div>';
-      clearInterval(iv);
-    }
-  }, 400);
-})();
-</script>
 
 <div id="app-boot" style="position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:#0B1120;z-index:2147483000;color:#E8EEF8;font-family:system-ui,-apple-system,sans-serif">
   <div class="dot" style="width:12px;height:12px;border-radius:50%;background:#4C7CF3"></div>
@@ -35665,231 +35617,63 @@ body{
 
 
 <script>
-/* ===== UI Design switch: SLine / SLine Green (WhatsApp-like) ===== */
+/* ===== UI Design: SLine / SLine Green — buttons change, deferred & safe ===== */
 (function(){
-  if(window._slMsgSkinsV4) return;
-  window._slMsgSkinsV4 = 1;
-  const LS = (typeof storage!=='undefined'?storage:localStorage);
-  const KEY = 'sl_ui_skin';
+  if(window._slMsgSkinsV6) return;
+  window._slMsgSkinsV6 = 1;
+  var LS = (typeof storage!=='undefined' ? storage : localStorage);
+  var KEY = 'sl_ui_skin';
+  var ORIG_TABS = null;
 
   function getSkin(){
     try{
-      let v = LS.getItem(KEY) || 'sline';
+      var v = LS.getItem(KEY) || 'sline';
       if(v==='max'||v==='tg'||v==='telegram') v='sline';
       if(v==='wa'||v==='whatsapp') v='green';
-      return v;
+      return v==='green' ? 'green' : 'sline';
     }catch(e){ return 'sline'; }
   }
-  function setSkin(id){ try{ LS.setItem(KEY, id); }catch(e){} applySkin(id); }
 
   function ensureCss(){
     if(document.getElementById('sl-msg-skins-css')) return;
-    const s = document.createElement('style');
+    var s = document.createElement('style');
     s.id = 'sl-msg-skins-css';
-    s.textContent = `
-/* Picker */
-.sl-skin-opt{display:flex;align-items:center;gap:14px;padding:14px 16px;border-radius:14px;cursor:pointer;margin-bottom:8px;background:var(--panel-hover,rgba(120,120,128,.12));border:1.5px solid transparent}
-.sl-skin-opt.on{border-color:var(--accent-a,#4C7CF3);background:rgba(76,124,243,.12)}
-html.skin-green .sl-skin-opt.on{border-color:#25D366;background:rgba(37,211,102,.12)}
-.sl-skin-opt .sl-skin-radio{width:22px;height:22px;border-radius:50%;border:2px solid var(--muted,#8B9BB4);flex-shrink:0;display:flex;align-items:center;justify-content:center}
-.sl-skin-opt.on .sl-skin-radio{border-color:var(--accent-a,#4C7CF3);background:var(--accent-a,#4C7CF3)}
-html.skin-green .sl-skin-opt.on .sl-skin-radio{border-color:#25D366;background:#25D366}
-.sl-skin-opt.on .sl-skin-radio::after{content:"";width:8px;height:8px;border-radius:50%;background:#fff}
-.sl-skin-opt .sl-skin-meta{flex:1;min-width:0}
-.sl-skin-opt .sl-skin-title{font-weight:700;font-size:16px;color:var(--text)}
-.sl-skin-opt .sl-skin-sub{font-size:12px;color:var(--muted);margin-top:2px}
-.sl-skin-opt .sl-skin-badge{font-size:10px;font-weight:700;padding:3px 8px;border-radius:999px;background:rgba(76,124,243,.2);color:var(--accent-a,#4C7CF3)}
-
-/* ========== SLine Green — WhatsApp-like ========== */
-html.skin-green{
-  --accent-a:#25D366 !important;
-  --accent-b:#128C7E !important;
-  --mint:#25D366 !important;
-}
-
-/* Header: title + actions */
-html.skin-green #page-chats .max-chats-title,
-html.skin-green #page-chats .chats-header h1,
-html.skin-green #page-chats .page-title{
-  font-size:28px !important; font-weight:700 !important; letter-spacing:-.02em;
-}
-html.skin-green #page-chats .sidebar-header,
-html.skin-green #page-chats .max-chats-hdr{
-  padding:8px 12px 4px !important;
-  align-items:center !important;
-}
-html.skin-green #page-chats .max-chats-actions{
-  display:flex !important; align-items:center !important; gap:6px !important;
-}
-
-/* Green circular + */
-html.skin-green #plus-btn,
-html.skin-green #page-chats .fab-add,
-html.skin-green #page-chats #add-chat-btn,
-html.skin-green #page-chats .header-add,
-html.skin-green button#new-chat-btn,
-html.skin-green .max-hdr-btn.plus{
-  width:40px !important; height:40px !important; min-width:40px !important;
-  border-radius:50% !important;
-  background:#25D366 !important; color:#fff !important; border:none !important;
-  box-shadow:0 3px 12px rgba(37,211,102,.4) !important;
-  font-size:26px !important; font-weight:400 !important; line-height:1 !important;
-  display:inline-flex !important; align-items:center !important; justify-content:center !important;
-}
-html.skin-green #chats-select-btn,
-html.skin-green .max-hdr-btn:not(.plus){
-  width:36px !important; height:36px !important; border-radius:50% !important;
-  background:transparent !important; border:none !important;
-  font-size:22px !important; color:var(--text) !important;
-}
-
-/* Hide stories in green (WA has Status tab instead) */
-html.skin-green .stories-bar,
-html.skin-green #stories-bar,
-html.skin-green .story-bar,
-html.skin-green .stories-row{ display:none !important; }
-
-/* Search field pill */
-html.skin-green #search-input,
-html.skin-green .chats-search input,
-html.skin-green input[placeholder*="оиск"],
-html.skin-green input[placeholder*="айти"]{
-  border-radius:12px !important;
-  background:rgba(120,120,128,.14) !important;
-  border:none !important;
-  padding:10px 14px !important;
-  font-size:15px !important;
-}
-
-/* Filter chips like WA: Все / Непрочитанное / Избранное / Группы */
-html.skin-green .folder-tabs,
-html.skin-green .chat-folders,
-html.skin-green #folder-tabs,
-html.skin-green .max-folder-tabs{
-  display:flex !important; gap:8px !important; overflow-x:auto !important;
-  padding:8px 12px 10px !important; scrollbar-width:none;
-}
-html.skin-green .folder-tabs::-webkit-scrollbar,
-html.skin-green .max-folder-tabs::-webkit-scrollbar{display:none}
-html.skin-green .folder-tab,
-html.skin-green .chat-folders button,
-html.skin-green #folder-tabs button,
-html.skin-green .max-folder-tabs .folder-tab{
-  background:rgba(120,120,128,.12) !important;
-  border:1px solid rgba(120,120,128,.18) !important;
-  border-radius:999px !important; padding:7px 14px !important;
-  font-size:13px !important; font-weight:600 !important;
-  color:var(--text) !important; white-space:nowrap !important;
-}
-html.skin-green .folder-tab.active,
-html.skin-green .chat-folders button.active,
-html.skin-green #folder-tabs button.active,
-html.skin-green .max-folder-tabs .folder-tab.active{
-  background:#25D366 !important; color:#0b1a10 !important; border-color:#25D366 !important;
-}
-html.skin-green .folder-tab.active::after{ display:none !important; }
-
-/* Chat rows */
-html.skin-green .contact{
-  border-radius:0 !important;
-  border-bottom:0.5px solid rgba(120,120,128,.12) !important;
-  padding:12px 14px !important;
-  background:transparent !important;
-}
-html.skin-green .contact.active{
-  background:rgba(37,211,102,.1) !important; box-shadow:none !important;
-}
-html.skin-green .contact-name{ font-weight:600 !important; }
-
-/* Bottom nav — WA pill dock */
-html.skin-green .bottom-tabs,
-html.skin-green .bottom-nav,
-html.skin-green #bottom-tabs{
-  background:var(--panel,#111) !important;
-  border-top:0.5px solid rgba(120,120,128,.22) !important;
-  border-radius:0 !important; left:0 !important; right:0 !important; margin:0 !important;
-  backdrop-filter:none !important; -webkit-backdrop-filter:none !important;
-  box-shadow:none !important;
-  display:flex !important; justify-content:space-around !important;
-  padding:6px 4px calc(6px + var(--safe-bottom,0px)) !important;
-  gap:0 !important;
-}
-html.skin-green .bottom-tab{
-  flex:1 !important; margin:0 !important; border-radius:12px !important;
-  background:transparent !important; color:var(--muted,#8B9BB4) !important;
-  display:flex !important; flex-direction:column !important; align-items:center !important;
-  gap:2px !important; padding:6px 2px !important; font-size:10px !important;
-  font-weight:500 !important; min-width:0 !important;
-}
-html.skin-green .bottom-tab svg{
-  width:24px !important; height:24px !important;
-  fill:none !important; stroke:currentColor !important; stroke-width:1.8 !important;
-}
-html.skin-green .bottom-tab.active{
-  color:#25D366 !important; background:transparent !important;
-}
-html.skin-green .bottom-tab.active svg{ stroke:#25D366 !important; fill:none !important; }
-/* Active pill highlight under chats like WA video */
-html.skin-green .bottom-tab.active{
-  background:rgba(120,120,128,.14) !important;
-  border-radius:16px !important;
-}
-
-/* Bubbles */
-html.skin-green .bubble.me{ background:#005C4B !important; color:#fff !important; }
-html.skin-green.theme-light .bubble.me,
-html.skin-green.light-theme .bubble.me{
-  background:#D9FDD3 !important; color:#111 !important;
-}
-html.skin-green .send-btn,
-html.skin-green #send-btn{ background:#25D366 !important; }
-html.skin-green .btn-primary{
-  background:linear-gradient(135deg,#25D366,#128C7E) !important;
-}
-html.skin-green .toggle-switch.on{ background:#25D366 !important; }
-html.skin-green .story-ring{
-  background:linear-gradient(135deg,#25D366,#128C7E) !important;
-}
-html.skin-green .msg-check.read{ color:#53BDEB !important; }
-
-/* Light theme under green */
-html.skin-green.theme-light,
-html.skin-green.light-theme{
-  --accent-a:#128C7E !important;
-  --accent-b:#25D366 !important;
-}
-html.skin-green.theme-light .bottom-tabs,
-html.skin-green.light-theme .bottom-tabs,
-html.skin-green.theme-light .bottom-nav,
-html.skin-green.light-theme .bottom-nav{
-  background:#f6f6f6 !important;
-  border-top:0.5px solid rgba(0,0,0,.08) !important;
-}
-html.skin-green.theme-light .folder-tab.active,
-html.skin-green.light-theme .folder-tab.active,
-html.skin-green.theme-light .max-folder-tabs .folder-tab.active,
-html.skin-green.light-theme .max-folder-tabs .folder-tab.active{
-  background:#25D366 !important; color:#fff !important;
-}
-html.skin-green.theme-light #plus-btn,
-html.skin-green.light-theme #plus-btn,
-html.skin-green.theme-light .max-hdr-btn.plus,
-html.skin-green.light-theme .max-hdr-btn.plus{
-  background:#25D366 !important;
-}
-
-/* Extra WA camera button slot */
-html.skin-green #wa-cam-btn{
-  width:36px;height:36px;border-radius:50%;border:none;background:transparent;
-  color:var(--text);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;
-}
-html.skin-green #wa-cam-btn svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8}
-`;
+    /* Use array join — no template literals, no </style> risk */
+    s.textContent = [
+      'html.skin-green{--accent-a:#25D366!important;--accent-b:#128C7E!important;--mint:#25D366!important}',
+      'html.skin-green #plus-btn,html.skin-green .max-hdr-btn.plus{background:#25D366!important;color:#fff!important;border-radius:50%!important;width:40px!important;height:40px!important;min-width:40px!important;font-size:24px!important;box-shadow:0 3px 12px rgba(37,211,102,.35)!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;border:none!important}',
+      'html.skin-green #chats-select-btn,html.skin-green .max-hdr-btn:not(.plus){border-radius:50%!important;width:36px!important;height:36px!important}',
+      'html.skin-green #wa-cam-btn{width:36px;height:36px;border-radius:50%;border:none;background:transparent;color:var(--text);display:inline-flex;align-items:center;justify-content:center;padding:0;cursor:pointer}',
+      'html.skin-green #wa-cam-btn svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8}',
+      'html.skin-green .folder-tab,html.skin-green .max-folder-tabs .folder-tab{border-radius:999px!important;padding:7px 14px!important;font-weight:600!important}',
+      'html.skin-green .folder-tab.active,html.skin-green .max-folder-tabs .folder-tab.active{background:#25D366!important;color:#0b1a10!important;border-color:#25D366!important}',
+      'html.skin-green .folder-tab.active::after{display:none!important}',
+      'html.skin-green .stories-bar,html.skin-green #stories-bar,html.skin-green .story-bar{display:none!important}',
+      'html.skin-green .bottom-tabs,html.skin-green .bottom-nav{border-radius:0!important;box-shadow:none!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;justify-content:space-around!important;gap:0!important;padding:4px 2px calc(4px + env(safe-area-inset-bottom,0px))!important}',
+      'html.skin-green .bottom-tab{flex:1!important;margin:0!important;border-radius:14px!important;background:transparent!important;color:var(--muted)!important;font-size:10px!important;font-weight:500!important;gap:2px!important;padding:6px 2px!important;min-width:0!important}',
+      'html.skin-green .bottom-tab svg{width:24px!important;height:24px!important;fill:none!important;stroke:currentColor!important;stroke-width:1.8!important}',
+      'html.skin-green .bottom-tab.active{color:#25D366!important;background:rgba(120,120,128,.14)!important}',
+      'html.skin-green .bottom-tab.active svg{stroke:#25D366!important}',
+      'html.skin-green .bubble.me{background:#005C4B!important;color:#fff!important}',
+      'html.skin-green.theme-light .bubble.me,html.skin-green.light-theme .bubble.me,html.skin-green body.theme-light .bubble.me{background:#D9FDD3!important;color:#111!important}',
+      'html.skin-green .send-btn,html.skin-green #send-btn{background:#25D366!important}',
+      'html.skin-green .toggle-switch.on{background:#25D366!important}',
+      'html.skin-green .contact.active{background:rgba(37,211,102,.1)!important;box-shadow:none!important}',
+      'html.skin-green .msg-check.read{color:#53BDEB!important}',
+      'html.skin-green.theme-light .bottom-tabs,html.skin-green.light-theme .bottom-tabs{background:#f6f6f6!important}',
+      '.sl-skin-opt{display:flex;align-items:center;gap:14px;padding:14px 16px;border-radius:14px;cursor:pointer;margin-bottom:8px;background:rgba(120,120,128,.12);border:1.5px solid transparent}',
+      '.sl-skin-opt.on{border-color:var(--accent-a,#4C7CF3);background:rgba(76,124,243,.12)}',
+      'html.skin-green .sl-skin-opt.on{border-color:#25D366;background:rgba(37,211,102,.12)}',
+      '.sl-skin-opt .sl-skin-radio{width:22px;height:22px;border-radius:50%;border:2px solid var(--muted,#8B9BB4);flex-shrink:0}',
+      '.sl-skin-opt.on .sl-skin-radio{border-color:var(--accent-a,#4C7CF3);background:var(--accent-a,#4C7CF3)}',
+      'html.skin-green .sl-skin-opt.on .sl-skin-radio{border-color:#25D366;background:#25D366}',
+      '.sl-skin-title{font-weight:700;font-size:16px;color:var(--text)}',
+      '.sl-skin-sub{font-size:12px;color:var(--muted);margin-top:2px}'
+    ].join('\n');
     document.head.appendChild(s);
   }
 
-  /* Icons for WA-like bottom bar */
-  const ICO = {
+  var ICO = {
     status: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/></svg>',
     calls: '<svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2A19.8 19.8 0 0111.19 18a19.5 19.5 0 01-6-6A19.8 19.8 0 012.12 3.38 2 2 0 014.11 2h3a2 2 0 012 1.72c.13.96.36 1.9.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0122 16.92z"/></svg>',
     communities: '<svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>',
@@ -35897,181 +35681,196 @@ html.skin-green #wa-cam-btn svg{width:22px;height:22px;stroke:currentColor;fill:
     you: '<svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>'
   };
 
-  function restyleBottomTabs(green){
-    const bar = document.querySelector('.bottom-tabs, .bottom-nav, #bottom-tabs');
-    if(!bar) return;
-    if(!green){
-      // restore original 3 tabs if we expanded
-      if(bar.dataset.waExpanded === '1'){
-        try{
-          const orig = bar.dataset.waOrig;
-          if(orig) bar.innerHTML = orig;
-          delete bar.dataset.waExpanded;
-          delete bar.dataset.waOrig;
-        }catch(e){}
-      }
-      return;
-    }
-    if(bar.dataset.waExpanded === '1') return;
+  function findTabBar(){
+    return document.querySelector('.bottom-tabs') || document.querySelector('.bottom-nav') || document.getElementById('bottom-tabs');
+  }
+
+  function goTab(name){
     try{
-      bar.dataset.waOrig = bar.innerHTML;
-      bar.dataset.waExpanded = '1';
-      // Build WA-like 5 tabs; map to existing pages
-      bar.innerHTML = `
-        <div class="bottom-tab" data-tab="status" data-wa="1">${ICO.status}<span>Статус</span></div>
-        <div class="bottom-tab" data-tab="calls" data-wa="1">${ICO.calls}<span>Звонки</span></div>
-        <div class="bottom-tab" data-tab="communities" data-wa="1">${ICO.communities}<span>Сообщества</span></div>
-        <div class="bottom-tab active" data-tab="chats" data-wa="1"><span class="tab-badge" id="chats-tab-badge">0</span>${ICO.chats}<span>Чаты</span></div>
-        <div class="bottom-tab" data-tab="settings" data-wa="1">${ICO.you}<span>Вы</span></div>
-      `;
-      // Wire clicks
-      bar.querySelectorAll('.bottom-tab').forEach(tab=>{
-        tab.addEventListener('click', function(e){
-          const t = this.getAttribute('data-tab');
-          bar.querySelectorAll('.bottom-tab').forEach(x=>x.classList.remove('active'));
-          this.classList.add('active');
+      if(typeof switchTab === 'function'){ switchTab(name); return; }
+      if(typeof showTab === 'function'){ showTab(name); return; }
+    }catch(e){}
+    try{
+      var map = {chats:'page-chats', calls:'page-calls', settings:'page-settings'};
+      document.querySelectorAll('.page').forEach(function(p){ p.classList.remove('active'); });
+      var el = document.getElementById(map[name] || ('page-'+name));
+      if(el) el.classList.add('active');
+      document.querySelectorAll('.bottom-tab').forEach(function(t){
+        t.classList.toggle('active', t.getAttribute('data-tab') === name);
+      });
+    }catch(e){}
+  }
+
+  function restoreTabs(){
+    try{
+      var bar = findTabBar();
+      if(!bar || !ORIG_TABS) return;
+      bar.innerHTML = ORIG_TABS;
+      bar.removeAttribute('data-wa');
+      /* re-bind basic clicks if app uses delegation it still works */
+      bar.querySelectorAll('.bottom-tab').forEach(function(tab){
+        tab.addEventListener('click', function(){
+          var t = tab.getAttribute('data-tab');
+          if(t) goTab(t);
+        });
+      });
+    }catch(e){}
+  }
+
+  function applyGreenTabs(){
+    try{
+      var bar = findTabBar();
+      if(!bar) return;
+      if(!ORIG_TABS) ORIG_TABS = bar.innerHTML;
+      if(bar.getAttribute('data-wa') === '1') return;
+      bar.setAttribute('data-wa', '1');
+      bar.innerHTML =
+        '<div class="bottom-tab" data-tab="status">'+ICO.status+'<span>Статус</span></div>'+
+        '<div class="bottom-tab" data-tab="calls">'+ICO.calls+'<span>Звонки</span></div>'+
+        '<div class="bottom-tab" data-tab="communities">'+ICO.communities+'<span>Сообщества</span></div>'+
+        '<div class="bottom-tab active" data-tab="chats"><span class="tab-badge" id="chats-tab-badge">0</span>'+ICO.chats+'<span>Чаты</span></div>'+
+        '<div class="bottom-tab" data-tab="settings">'+ICO.you+'<span>Вы</span></div>';
+      bar.querySelectorAll('.bottom-tab').forEach(function(tab){
+        tab.addEventListener('click', function(){
+          var t = tab.getAttribute('data-tab');
+          bar.querySelectorAll('.bottom-tab').forEach(function(x){ x.classList.remove('active'); });
+          tab.classList.add('active');
           if(t === 'status'){
-            // open stories / status flow if available
             try{
-              if(typeof openMyStories==='function') openMyStories();
-              else if(typeof showStoriesComposer==='function') showStoriesComposer();
+              if(typeof openMyStories === 'function') openMyStories();
               else if(document.getElementById('add-story-btn-side')) document.getElementById('add-story-btn-side').click();
-              else try{ showToast('Статус'); }catch(e){}
-            }catch(err){}
+              else if(typeof showToast === 'function') showToast('Статус');
+            }catch(e){}
             return;
           }
           if(t === 'communities'){
             try{
-              // Prefer groups folder / show toast
-              const groupsTab = document.querySelector('.folder-tab[data-folder="groups"], .folder-tab[data-id="groups"]');
-              if(groupsTab) groupsTab.click();
-              // switch to chats page visually
-              if(typeof switchTab==='function') switchTab('chats');
-              else if(typeof showTab==='function') showTab('chats');
-              else {
-                document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
-                const pc = document.getElementById('page-chats');
-                if(pc) pc.classList.add('active');
-              }
-              try{ showToast('Сообщества'); }catch(e){}
-            }catch(err){}
+              goTab('chats');
+              var gt = document.querySelector('.folder-tab[data-folder="groups"], .folder-tab[data-id="groups"]');
+              if(gt) gt.click();
+              else if(typeof showToast === 'function') showToast('Сообщества');
+            }catch(e){}
             return;
           }
-          // default: use existing tab system
-          try{
-            if(typeof switchTab==='function') switchTab(t);
-            else if(typeof showTab==='function') showTab(t);
-            else {
-              // fallback click original handlers via data-tab on pages
-              const pages = {chats:'page-chats', calls:'page-calls', settings:'page-settings'};
-              document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
-              const el = document.getElementById(pages[t]||('page-'+t));
-              if(el) el.classList.add('active');
-            }
-          }catch(err){}
+          goTab(t);
         });
       });
-    }catch(e){ console.warn('wa tabs', e); }
+    }catch(e){ console.warn('green tabs', e); }
   }
 
-  function ensureCamBtn(green){
-    const actions = document.querySelector('#page-chats .max-chats-actions, #page-chats .sidebar-actions');
-    if(!actions) return;
-    let cam = document.getElementById('wa-cam-btn');
-    if(green){
-      if(!cam){
-        cam = document.createElement('button');
-        cam.type = 'button';
-        cam.id = 'wa-cam-btn';
-        cam.title = 'Камера';
-        cam.innerHTML = '<svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>';
-        cam.onclick = function(){
-          try{
-            if(typeof openCamera==='function') openCamera();
-            else if(document.getElementById('add-story-btn-side')) document.getElementById('add-story-btn-side').click();
-            else try{ showToast('Камера'); }catch(e){}
-          }catch(e){}
-        };
-        // insert before plus
-        const plus = actions.querySelector('#plus-menu, #plus-btn');
-        if(plus) actions.insertBefore(cam, plus);
-        else actions.appendChild(cam);
+  function ensureCam(on){
+    try{
+      var actions = document.querySelector('#page-chats .max-chats-actions, #page-chats .sidebar-actions');
+      if(!actions) return;
+      var cam = document.getElementById('wa-cam-btn');
+      if(on){
+        if(!cam){
+          cam = document.createElement('button');
+          cam.type = 'button';
+          cam.id = 'wa-cam-btn';
+          cam.title = 'Камера';
+          cam.innerHTML = '<svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>';
+          cam.onclick = function(){
+            try{
+              if(document.getElementById('add-story-btn-side')) document.getElementById('add-story-btn-side').click();
+              else if(typeof showToast === 'function') showToast('Камера');
+            }catch(e){}
+          };
+          var plus = actions.querySelector('#plus-menu, #plus-btn');
+          if(plus) actions.insertBefore(cam, plus);
+          else actions.appendChild(cam);
+        }
+        cam.style.display = '';
+      } else if(cam){
+        cam.style.display = 'none';
       }
-      cam.style.display = '';
-    } else if(cam){
-      cam.style.display = 'none';
-    }
+    }catch(e){}
   }
 
   function applySkin(id){
     ensureCss();
-    const root = document.documentElement;
-    ['skin-sline','skin-max','skin-tg','skin-wa','skin-green'].forEach(c=>{
+    var green = (id === 'green');
+    var root = document.documentElement;
+    ['skin-sline','skin-max','skin-tg','skin-wa','skin-green'].forEach(function(c){
       root.classList.remove(c);
-      document.body.classList.remove(c);
+      try{ document.body.classList.remove(c); }catch(e){}
     });
-    const green = (id === 'green');
-    const cls = green ? 'skin-green' : 'skin-sline';
-    root.classList.add(cls);
-    document.body.classList.add(cls);
-    restyleBottomTabs(green);
-    ensureCamBtn(green);
+    root.classList.add(green ? 'skin-green' : 'skin-sline');
+    try{ document.body.classList.add(green ? 'skin-green' : 'skin-sline'); }catch(e){}
+    /* DOM button changes ONLY after app shell exists — never block first paint */
+    function doDom(){
+      if(green){
+        applyGreenTabs();
+        ensureCam(true);
+      } else {
+        restoreTabs();
+        ensureCam(false);
+      }
+    }
+    if(document.getElementById('app-screen') || document.querySelector('.bottom-tabs')){
+      /* defer to next frames so boot UI paints first */
+      setTimeout(doDom, 0);
+      setTimeout(doDom, 800);
+    } else {
+      setTimeout(doDom, 1200);
+    }
+  }
+
+  function setSkin(id){
+    try{ LS.setItem(KEY, id); }catch(e){}
+    applySkin(id);
   }
 
   window.slApplyMessengerSkin = applySkin;
   window.slGetMessengerSkin = getSkin;
-
   window.slOpenMessengerSkins = function(){
     ensureCss();
-    const cur = getSkin();
-    const opts = [
-      {id:'sline', title:'SLine', sub:'Стандартный дизайн', badge:'По умолчанию'},
-      {id:'green', title:'SLine Green', sub:'Как WhatsApp: статус, сообщества, зелёный акцент'},
-    ];
-    try{ document.getElementById('sl-skin-picker')?.remove(); }catch(e){}
-    const ov = document.createElement('div');
+    var cur = getSkin();
+    try{ var old = document.getElementById('sl-skin-picker'); if(old) old.remove(); }catch(e){}
+    var ov = document.createElement('div');
     ov.className = 'modal-overlay';
     ov.id = 'sl-skin-picker';
     ov.style.zIndex = '22000';
-    ov.innerHTML = `<div class="modal" style="max-width:420px;max-height:90vh;overflow:auto;padding:0 0 18px">
-      <div style="position:sticky;top:0;background:var(--panel);padding:14px 16px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--line);z-index:2">
-        <button type="button" class="icon-btn" id="sk-back" style="width:36px;height:36px">←</button>
-        <h3 style="flex:1;margin:0;text-align:center;font-size:17px">Переключить дизайн</h3>
-        <div style="width:36px"></div>
-      </div>
-      <div style="padding:14px 16px">
-        <p style="font-size:13px;color:var(--muted);margin:0 0 14px;line-height:1.45">SLine Green повторяет кнопки и навигацию как на видео (WhatsApp-стиль). Светлая и тёмная тема поддерживаются.</p>
-        <div id="sk-list"></div>
-      </div>
-    </div>`;
+    ov.innerHTML = '<div class="modal" style="max-width:420px;padding:0 0 18px">'
+      + '<div style="padding:14px 16px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--line)">'
+      + '<button type="button" class="icon-btn" id="sk-back" style="width:36px;height:36px">←</button>'
+      + '<h3 style="flex:1;margin:0;text-align:center;font-size:17px">Переключить дизайн</h3>'
+      + '<div style="width:36px"></div></div>'
+      + '<div style="padding:14px 16px" id="sk-list"></div></div>';
     document.body.appendChild(ov);
-    const list = ov.querySelector('#sk-list');
-    opts.forEach(o=>{
-      const el = document.createElement('div');
-      el.className = 'sl-skin-opt' + (o.id === cur ? ' on' : '');
-      el.innerHTML = `<div class="sl-skin-radio"></div>
-        <div class="sl-skin-meta"><div class="sl-skin-title">${o.title}</div><div class="sl-skin-sub">${o.sub}</div></div>
-        ${o.badge ? `<span class="sl-skin-badge">${o.badge}</span>` : ''}`;
-      el.onclick = ()=>{
-        list.querySelectorAll('.sl-skin-opt').forEach(x=>x.classList.remove('on'));
+    var list = ov.querySelector('#sk-list');
+    [{id:'sline',title:'SLine',sub:'Стандартные кнопки'},
+     {id:'green',title:'SLine Green',sub:'Статус, Сообщества, Вы, зелёный +'}].forEach(function(o){
+      var el = document.createElement('div');
+      el.className = 'sl-skin-opt' + (o.id===cur ? ' on' : '');
+      el.innerHTML = '<div class="sl-skin-radio"></div><div><div class="sl-skin-title">'+o.title+'</div><div class="sl-skin-sub">'+o.sub+'</div></div>';
+      el.onclick = function(){
+        list.querySelectorAll('.sl-skin-opt').forEach(function(x){ x.classList.remove('on'); });
         el.classList.add('on');
         setSkin(o.id);
-        try{ showToast(o.id === 'green' ? 'SLine Green' : 'SLine'); }catch(e){}
-        setTimeout(()=>ov.remove(), 250);
+        try{ showToast(o.id==='green' ? 'SLine Green' : 'SLine'); }catch(e){}
+        setTimeout(function(){ ov.remove(); }, 200);
       };
       list.appendChild(el);
     });
-    ov.querySelector('#sk-back').onclick = ()=>ov.remove();
-    ov.addEventListener('click', e=>{ if(e.target === ov) ov.remove(); });
+    ov.querySelector('#sk-back').onclick = function(){ ov.remove(); };
+    ov.onclick = function(e){ if(e.target===ov) ov.remove(); };
   };
 
-  function boot(){
+  /* Apply CSS class early, DOM later */
+  try{
+    ensureCss();
+    var sk = getSkin();
+    document.documentElement.classList.add(sk==='green' ? 'skin-green' : 'skin-sline');
+  }catch(e){}
+
+  function bootDom(){
     try{ applySkin(getSkin()); }catch(e){}
   }
-  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
-  else boot();
-  setTimeout(boot, 400);
-  setTimeout(boot, 1200);
+  /* Wait until window load + extra delay so entry screen never blocked */
+  if(document.readyState === 'complete') setTimeout(bootDom, 300);
+  else window.addEventListener('load', function(){ setTimeout(bootDom, 300); });
+  setTimeout(bootDom, 2000);
 })();
 </script>
 
