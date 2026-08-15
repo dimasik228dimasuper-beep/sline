@@ -2538,6 +2538,8 @@ body:not(.sl-content-ready) #app-screen:not(:has(*)){background:#0F1419}
 </style>
 </head>
 <body>
+<script>(function(){try{document.documentElement.classList.remove('skin-green','skin-wa','skin-tg','skin-max','skin-sline');localStorage.removeItem('sl_ui_skin');}catch(e){}})();</script>
+
 
 
 <div id="app-boot" style="position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:#0B1120;z-index:2147483000;color:#E8EEF8;font-family:system-ui,-apple-system,sans-serif">
@@ -23800,7 +23802,6 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
         <div class="sl-appear-row" id="ap-wallpapers"><span>Обои для чатов</span><span class="arrow">›</span></div>
         <div class="sl-appear-row" id="ap-colors"><span>Персональные цвета</span><span style="display:flex;align-items:center;gap:8px"><span class="sl-color-dot" id="ap-dot"></span><span class="arrow">›</span></span></div>
         <div class="sl-appear-row" id="ap-change-theme"><span>Сменить тему</span><span class="arrow">›</span></div>
-        <div class="sl-appear-row" id="ap-messenger-skins"><span>Переключить дизайн</span><span class="arrow">›</span></div>
         <div class="sl-appear-row" id="ap-night"><span>Ночной режим</span>
           <div class="toggle-switch ${night?'on':''}" id="ap-night-tg"></div>
         </div>
@@ -23864,9 +23865,7 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
       ov.remove();
       try{ window.slOpenThemePicker(); }catch(e){}
     });
-    ov.querySelector('#ap-messenger-skins')?.addEventListener('click', ()=>{
       ov.remove();
-      try{ window.slOpenMessengerSkins(); }catch(e){ console.warn(e); }
     });
     ov.querySelector('#ap-chat-themes').onclick=()=>toast('Выберите карточку темы выше');
     ov.querySelector('#ap-wallpapers').onclick=()=>{
@@ -35615,265 +35614,7 @@ body{
 </script>
 
 
-<script>
-/* ===== UI Design: SLine / SLine Green — buttons change, deferred & safe ===== */
-(function(){
-  if(window._slMsgSkinsV6) return;
-  window._slMsgSkinsV6 = 1;
-  var LS = (typeof storage!=='undefined' ? storage : localStorage);
-  var KEY = 'sl_ui_skin';
-  var ORIG_TABS = null;
 
-  function getSkin(){
-    try{
-      var v = LS.getItem(KEY) || 'sline';
-      if(v==='max'||v==='tg'||v==='telegram') v='sline';
-      if(v==='wa'||v==='whatsapp') v='green';
-      return v==='green' ? 'green' : 'sline';
-    }catch(e){ return 'sline'; }
-  }
-
-  function ensureCss(){
-    if(document.getElementById('sl-msg-skins-css')) return;
-    var s = document.createElement('style');
-    s.id = 'sl-msg-skins-css';
-    /* Use array join — no template literals, no </style> risk */
-    s.textContent = [
-      'html.skin-green{--accent-a:#25D366!important;--accent-b:#128C7E!important;--mint:#25D366!important}',
-      'html.skin-green #plus-btn,html.skin-green .max-hdr-btn.plus{background:#25D366!important;color:#fff!important;border-radius:50%!important;width:40px!important;height:40px!important;min-width:40px!important;font-size:24px!important;box-shadow:0 3px 12px rgba(37,211,102,.35)!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;border:none!important}',
-      'html.skin-green #chats-select-btn,html.skin-green .max-hdr-btn:not(.plus){border-radius:50%!important;width:36px!important;height:36px!important}',
-      'html.skin-green #wa-cam-btn{width:36px;height:36px;border-radius:50%;border:none;background:transparent;color:var(--text);display:inline-flex;align-items:center;justify-content:center;padding:0;cursor:pointer}',
-      'html.skin-green #wa-cam-btn svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8}',
-      'html.skin-green .folder-tab,html.skin-green .max-folder-tabs .folder-tab{border-radius:999px!important;padding:7px 14px!important;font-weight:600!important}',
-      'html.skin-green .folder-tab.active,html.skin-green .max-folder-tabs .folder-tab.active{background:#25D366!important;color:#0b1a10!important;border-color:#25D366!important}',
-      'html.skin-green .folder-tab.active::after{display:none!important}',
-      'html.skin-green .stories-bar,html.skin-green #stories-bar,html.skin-green .story-bar{display:none!important}',
-      'html.skin-green .bottom-tabs,html.skin-green .bottom-nav{border-radius:0!important;box-shadow:none!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;justify-content:space-around!important;gap:0!important;padding:4px 2px calc(4px + env(safe-area-inset-bottom,0px))!important}',
-      'html.skin-green .bottom-tab{flex:1!important;margin:0!important;border-radius:14px!important;background:transparent!important;color:var(--muted)!important;font-size:10px!important;font-weight:500!important;gap:2px!important;padding:6px 2px!important;min-width:0!important}',
-      'html.skin-green .bottom-tab svg{width:24px!important;height:24px!important;fill:none!important;stroke:currentColor!important;stroke-width:1.8!important}',
-      'html.skin-green .bottom-tab.active{color:#25D366!important;background:rgba(120,120,128,.14)!important}',
-      'html.skin-green .bottom-tab.active svg{stroke:#25D366!important}',
-      'html.skin-green .bubble.me{background:#005C4B!important;color:#fff!important}',
-      'html.skin-green.theme-light .bubble.me,html.skin-green.light-theme .bubble.me,html.skin-green body.theme-light .bubble.me{background:#D9FDD3!important;color:#111!important}',
-      'html.skin-green .send-btn,html.skin-green #send-btn{background:#25D366!important}',
-      'html.skin-green .toggle-switch.on{background:#25D366!important}',
-      'html.skin-green .contact.active{background:rgba(37,211,102,.1)!important;box-shadow:none!important}',
-      'html.skin-green .msg-check.read{color:#53BDEB!important}',
-      'html.skin-green.theme-light .bottom-tabs,html.skin-green.light-theme .bottom-tabs{background:#f6f6f6!important}',
-      '.sl-skin-opt{display:flex;align-items:center;gap:14px;padding:14px 16px;border-radius:14px;cursor:pointer;margin-bottom:8px;background:rgba(120,120,128,.12);border:1.5px solid transparent}',
-      '.sl-skin-opt.on{border-color:var(--accent-a,#4C7CF3);background:rgba(76,124,243,.12)}',
-      'html.skin-green .sl-skin-opt.on{border-color:#25D366;background:rgba(37,211,102,.12)}',
-      '.sl-skin-opt .sl-skin-radio{width:22px;height:22px;border-radius:50%;border:2px solid var(--muted,#8B9BB4);flex-shrink:0}',
-      '.sl-skin-opt.on .sl-skin-radio{border-color:var(--accent-a,#4C7CF3);background:var(--accent-a,#4C7CF3)}',
-      'html.skin-green .sl-skin-opt.on .sl-skin-radio{border-color:#25D366;background:#25D366}',
-      '.sl-skin-title{font-weight:700;font-size:16px;color:var(--text)}',
-      '.sl-skin-sub{font-size:12px;color:var(--muted);margin-top:2px}'
-    ].join('\n');
-    document.head.appendChild(s);
-  }
-
-  var ICO = {
-    status: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/></svg>',
-    calls: '<svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2A19.8 19.8 0 0111.19 18a19.5 19.5 0 01-6-6A19.8 19.8 0 012.12 3.38 2 2 0 014.11 2h3a2 2 0 012 1.72c.13.96.36 1.9.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0122 16.92z"/></svg>',
-    communities: '<svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>',
-    chats: '<svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>',
-    you: '<svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>'
-  };
-
-  function findTabBar(){
-    return document.querySelector('.bottom-tabs') || document.querySelector('.bottom-nav') || document.getElementById('bottom-tabs');
-  }
-
-  function goTab(name){
-    try{
-      if(typeof switchTab === 'function'){ switchTab(name); return; }
-      if(typeof showTab === 'function'){ showTab(name); return; }
-    }catch(e){}
-    try{
-      var map = {chats:'page-chats', calls:'page-calls', settings:'page-settings'};
-      document.querySelectorAll('.page').forEach(function(p){ p.classList.remove('active'); });
-      var el = document.getElementById(map[name] || ('page-'+name));
-      if(el) el.classList.add('active');
-      document.querySelectorAll('.bottom-tab').forEach(function(t){
-        t.classList.toggle('active', t.getAttribute('data-tab') === name);
-      });
-    }catch(e){}
-  }
-
-  function restoreTabs(){
-    try{
-      var bar = findTabBar();
-      if(!bar || !ORIG_TABS) return;
-      bar.innerHTML = ORIG_TABS;
-      bar.removeAttribute('data-wa');
-      /* re-bind basic clicks if app uses delegation it still works */
-      bar.querySelectorAll('.bottom-tab').forEach(function(tab){
-        tab.addEventListener('click', function(){
-          var t = tab.getAttribute('data-tab');
-          if(t) goTab(t);
-        });
-      });
-    }catch(e){}
-  }
-
-  function applyGreenTabs(){
-    try{
-      var bar = findTabBar();
-      if(!bar) return;
-      if(!ORIG_TABS) ORIG_TABS = bar.innerHTML;
-      if(bar.getAttribute('data-wa') === '1') return;
-      bar.setAttribute('data-wa', '1');
-      bar.innerHTML =
-        '<div class="bottom-tab" data-tab="status">'+ICO.status+'<span>Статус</span></div>'+
-        '<div class="bottom-tab" data-tab="calls">'+ICO.calls+'<span>Звонки</span></div>'+
-        '<div class="bottom-tab" data-tab="communities">'+ICO.communities+'<span>Сообщества</span></div>'+
-        '<div class="bottom-tab active" data-tab="chats"><span class="tab-badge" id="chats-tab-badge">0</span>'+ICO.chats+'<span>Чаты</span></div>'+
-        '<div class="bottom-tab" data-tab="settings">'+ICO.you+'<span>Вы</span></div>';
-      bar.querySelectorAll('.bottom-tab').forEach(function(tab){
-        tab.addEventListener('click', function(){
-          var t = tab.getAttribute('data-tab');
-          bar.querySelectorAll('.bottom-tab').forEach(function(x){ x.classList.remove('active'); });
-          tab.classList.add('active');
-          if(t === 'status'){
-            try{
-              if(typeof openMyStories === 'function') openMyStories();
-              else if(document.getElementById('add-story-btn-side')) document.getElementById('add-story-btn-side').click();
-              else if(typeof showToast === 'function') showToast('Статус');
-            }catch(e){}
-            return;
-          }
-          if(t === 'communities'){
-            try{
-              goTab('chats');
-              var gt = document.querySelector('.folder-tab[data-folder="groups"], .folder-tab[data-id="groups"]');
-              if(gt) gt.click();
-              else if(typeof showToast === 'function') showToast('Сообщества');
-            }catch(e){}
-            return;
-          }
-          goTab(t);
-        });
-      });
-    }catch(e){ console.warn('green tabs', e); }
-  }
-
-  function ensureCam(on){
-    try{
-      var actions = document.querySelector('#page-chats .max-chats-actions, #page-chats .sidebar-actions');
-      if(!actions) return;
-      var cam = document.getElementById('wa-cam-btn');
-      if(on){
-        if(!cam){
-          cam = document.createElement('button');
-          cam.type = 'button';
-          cam.id = 'wa-cam-btn';
-          cam.title = 'Камера';
-          cam.innerHTML = '<svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>';
-          cam.onclick = function(){
-            try{
-              if(document.getElementById('add-story-btn-side')) document.getElementById('add-story-btn-side').click();
-              else if(typeof showToast === 'function') showToast('Камера');
-            }catch(e){}
-          };
-          var plus = actions.querySelector('#plus-menu, #plus-btn');
-          try{
-            if(plus && plus.parentNode === actions) actions.insertBefore(cam, plus);
-            else actions.appendChild(cam);
-          }catch(err){ try{ actions.appendChild(cam); }catch(e2){} }
-        }
-        cam.style.display = '';
-      } else if(cam){
-        cam.style.display = 'none';
-      }
-    }catch(e){}
-  }
-
-  function applySkin(id){
-    ensureCss();
-    var green = (id === 'green');
-    var root = document.documentElement;
-    ['skin-sline','skin-max','skin-tg','skin-wa','skin-green'].forEach(function(c){
-      root.classList.remove(c);
-      try{ document.body.classList.remove(c); }catch(e){}
-    });
-    root.classList.add(green ? 'skin-green' : 'skin-sline');
-    try{ document.body.classList.add(green ? 'skin-green' : 'skin-sline'); }catch(e){}
-    /* DOM button changes ONLY after app shell exists — never block first paint */
-    function doDom(){
-      if(green){
-        applyGreenTabs();
-        ensureCam(true);
-      } else {
-        restoreTabs();
-        ensureCam(false);
-      }
-    }
-    if(document.getElementById('app-screen') || document.querySelector('.bottom-tabs')){
-      /* defer to next frames so boot UI paints first */
-      setTimeout(doDom, 0);
-      setTimeout(doDom, 800);
-    } else {
-      setTimeout(doDom, 1200);
-    }
-  }
-
-  function setSkin(id){
-    try{ LS.setItem(KEY, id); }catch(e){}
-    applySkin(id);
-  }
-
-  window.slApplyMessengerSkin = applySkin;
-  window.slGetMessengerSkin = getSkin;
-  window.slOpenMessengerSkins = function(){
-    ensureCss();
-    var cur = getSkin();
-    try{ var old = document.getElementById('sl-skin-picker'); if(old) old.remove(); }catch(e){}
-    var ov = document.createElement('div');
-    ov.className = 'modal-overlay';
-    ov.id = 'sl-skin-picker';
-    ov.style.zIndex = '22000';
-    ov.innerHTML = '<div class="modal" style="max-width:420px;padding:0 0 18px">'
-      + '<div style="padding:14px 16px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--line)">'
-      + '<button type="button" class="icon-btn" id="sk-back" style="width:36px;height:36px">←</button>'
-      + '<h3 style="flex:1;margin:0;text-align:center;font-size:17px">Переключить дизайн</h3>'
-      + '<div style="width:36px"></div></div>'
-      + '<div style="padding:14px 16px" id="sk-list"></div></div>';
-    document.body.appendChild(ov);
-    var list = ov.querySelector('#sk-list');
-    [{id:'sline',title:'SLine',sub:'Стандартные кнопки'},
-     {id:'green',title:'SLine Green',sub:'Статус, Сообщества, Вы, зелёный +'}].forEach(function(o){
-      var el = document.createElement('div');
-      el.className = 'sl-skin-opt' + (o.id===cur ? ' on' : '');
-      el.innerHTML = '<div class="sl-skin-radio"></div><div><div class="sl-skin-title">'+o.title+'</div><div class="sl-skin-sub">'+o.sub+'</div></div>';
-      el.onclick = function(){
-        list.querySelectorAll('.sl-skin-opt').forEach(function(x){ x.classList.remove('on'); });
-        el.classList.add('on');
-        setSkin(o.id);
-        try{ showToast(o.id==='green' ? 'SLine Green' : 'SLine'); }catch(e){}
-        setTimeout(function(){ ov.remove(); }, 200);
-      };
-      list.appendChild(el);
-    });
-    ov.querySelector('#sk-back').onclick = function(){ ov.remove(); };
-    ov.onclick = function(e){ if(e.target===ov) ov.remove(); };
-  };
-
-  /* Apply CSS class early, DOM later */
-  try{
-    ensureCss();
-    var sk = getSkin();
-    document.documentElement.classList.add(sk==='green' ? 'skin-green' : 'skin-sline');
-  }catch(e){}
-
-  function bootDom(){
-    try{ applySkin(getSkin()); }catch(e){}
-  }
-  /* Wait until window load + extra delay so entry screen never blocked */
-  if(document.readyState === 'complete') setTimeout(bootDom, 300);
-  else window.addEventListener('load', function(){ setTimeout(bootDom, 300); });
-  setTimeout(bootDom, 2000);
-})();
-</script>
 
 
 
