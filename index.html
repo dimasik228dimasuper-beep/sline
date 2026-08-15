@@ -1705,7 +1705,12 @@ body.theme-light,body{transition:background-color .35s ease}
 .story-progress i.active b{width:0%}
 
 /* Story viewer — Instagram/Telegram style */
-#story-viewer{background:#000}
+#story-viewer{background:#000;z-index:20000}
+#story-viewer[style*="display: none"],#story-viewer[style*="display:none"]{
+  visibility:hidden!important;opacity:0!important;pointer-events:none!important;
+  content-visibility:hidden;
+}
+#story-viewer img,#story-viewer video{max-width:100%;max-height:100%}
 .story-top-bar{position:absolute;left:0;right:0;top:0;z-index:8;padding:calc(10px + env(safe-area-inset-top,0px)) 12px 8px;pointer-events:none}
 .story-top-bar > *{pointer-events:auto}
 .story-header-row{display:flex;align-items:center;gap:10px;margin-top:10px}
@@ -7687,9 +7692,16 @@ async function loadStories(){
     if(error) console.warn('stories load', error);
     let list=stories||[];
     const local=getLocalStories().filter(s=>s.user_id===myProfile.id);
-    const seen=new Set(list.map(s=>String(s.id)));
+    const seenIds=new Set(list.map(s=>String(s.id)));
+    const seenUrls=new Set(list.map(s=>String(s.media_url||'')).filter(Boolean));
     for(const ls of local){
-      if(!seen.has(String(ls.id))) list = [ls, ...list];
+      const url=String(ls.media_url||'');
+      // skip if same id OR same media already on server (avoid double story)
+      if(seenIds.has(String(ls.id))) continue;
+      if(url && seenUrls.has(url)) continue;
+      list = [ls, ...list];
+      seenIds.add(String(ls.id));
+      if(url) seenUrls.add(url);
     }
     const myStories=list.filter(s=>s.user_id===myProfile.id);
     const friendUsers=new Map();
@@ -7816,7 +7828,15 @@ async function openStoryViewer(userId, name){
   if(String(userId)===String(myProfile?.id)){
     const local=getLocalStories().filter(s=>s.user_id===myProfile.id);
     const ids=new Set(stories.map(s=>String(s.id)));
-    for(const ls of local){ if(!ids.has(String(ls.id))) stories.push(ls); }
+    const urls=new Set(stories.map(s=>String(s.media_url||'')).filter(Boolean));
+    for(const ls of local){
+      const url=String(ls.media_url||'');
+      if(ids.has(String(ls.id))) continue;
+      if(url && urls.has(url)) continue;
+      stories.push(ls);
+      ids.add(String(ls.id));
+      if(url) urls.add(url);
+    }
   }
   if(!stories?.length){ showToast(currentLang==='en'?'No stories':'Нет историй'); return; }
   let viewer=document.getElementById('story-viewer');
@@ -7860,9 +7880,14 @@ async function openStoryViewer(userId, name){
       <div id="story-likes-sheet" class="story-likes-sheet" style="display:none"></div>`;
     document.body.appendChild(viewer);
     document.getElementById('story-close').onclick=()=>{
+      try{ if(typeof closeStoryViewer==='function'){ closeStoryViewer(); return; } }catch(e){}
       clearInterval(window._storyTimer);
-      try{ const v=document.getElementById('story-video'); if(v){ v.pause(); v.removeAttribute('src'); v.load(); } }catch(e){}
+      try{ const v=document.getElementById('story-video'); if(v){ v.pause(); v.removeAttribute('src'); v.load(); v.style.display='none'; } }catch(e){}
+      try{ const img=document.getElementById('story-image'); if(img){ img.removeAttribute('src'); img.style.display='none'; } }catch(e){}
       viewer.style.display='none';
+      viewer.style.visibility='hidden';
+      viewer.style.opacity='0';
+      viewer.style.pointerEvents='none';
     };
   }
   document.getElementById('story-user').textContent=name||'';
@@ -7955,10 +7980,25 @@ async function openStoryViewer(userId, name){
     stopStoryMedia();
     try{
       const v=document.getElementById('story-video');
-      if(v){ v.removeAttribute('src'); v.load(); }
+      if(v){ v.pause(); v.removeAttribute('src'); v.removeAttribute('poster'); v.load(); v.style.display='none'; }
     }catch(e){}
+    try{
+      const img=document.getElementById('story-image');
+      if(img){ img.removeAttribute('src'); img.style.display='none'; }
+    }catch(e){}
+    try{
+      const ov=viewer.querySelector('#story-overlays');
+      if(ov) ov.innerHTML='';
+    }catch(e){}
+    try{ clearInterval(window._storyTimer); window._storyTimer=null; }catch(e){}
     setChromeVisible(true);
+    // hard hide: display + visibility + opacity so no residual frames leak over chats
     viewer.style.display='none';
+    viewer.style.visibility='hidden';
+    viewer.style.opacity='0';
+    viewer.style.pointerEvents='none';
+    // remove any stray clones / transition leftovers
+    document.querySelectorAll('[data-story-clone],.sl-story-clone,.story-viewer-clone').forEach(el=>{ try{ el.remove(); }catch(e){} });
   }
   const show=()=>{
     if(idx<0){ idx=0; }
@@ -8261,7 +8301,7 @@ async function openStoryViewer(userId, name){
     })();
   }catch(e){}
 
-  show(); viewer.style.display='flex';
+  show(); viewer.style.display='flex'; viewer.style.visibility='visible'; viewer.style.opacity='1'; viewer.style.pointerEvents='auto';
   try{ refreshLikeUI(); }catch(e){}
 }
 document.getElementById('add-story-btn-side').onclick=()=>document.getElementById('story-input').click();
@@ -11077,7 +11117,14 @@ async function openStoryEditor(file, opts){
           delete payload.caption; ins=await sb.from('stories').insert(payload).select();
         }
         if(ins.error) showToast('Сохранено локально: '+String(ins.error.message||'').slice(0,60));
-        else showToast('История опубликована');
+        else {
+          showToast('История опубликована');
+          // drop local duplicates of the same media so bar/viewer show 1 story
+          try{
+            const kept=getLocalStories().filter(s=>String(s.media_url||'')!==String(publicUrl||''));
+            setLocalStories(kept);
+          }catch(e3){}
+        }
       }catch(e){ showToast('История сохранена локально'); }
       try{ await loadStories(); }catch(e){}
     }catch(e){ showToast('Ошибка публикации'); console.warn(e); }
@@ -14524,7 +14571,15 @@ async function renderSocialStoriesBar(container){
     if(myProfile){
       const local=getLocalStories().filter(s=>s.user_id===myProfile.id && new Date(s.expires_at)>new Date());
       const seen=new Set(list.map(s=>String(s.id)));
-      for(const ls of local){ if(!seen.has(String(ls.id))) list=[ls,...list]; }
+      const seenUrls=new Set(list.map(s=>String(s.media_url||'')).filter(Boolean));
+      for(const ls of local){
+        const url=String(ls.media_url||'');
+        if(seen.has(String(ls.id))) continue;
+        if(url && seenUrls.has(url)) continue;
+        list=[ls,...list];
+        seen.add(String(ls.id));
+        if(url) seenUrls.add(url);
+      }
     }
     const byUser=new Map();
     for(const s of list){
