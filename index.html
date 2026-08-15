@@ -4638,7 +4638,9 @@ function renderContactsAndGroups(){
   (q?srcGroups.filter(g=>(g.name||'').toLowerCase().includes(q) || 'sline новости'.includes(q) || 'новости'.includes(q)):srcGroups).forEach(g=>items.push({type:'group',data:g,unread:unread[g.id]||0}));
   (q?srcContacts.filter(p=>{
     if(p.isBildBot||p.id==='bild_bot') return false;
-    const n=((p.first_name||'')+' '+(p.last_name||'')+' '+(p.username||'')+' '+(p.email||'')+' '+(p.phone||'')).toLowerCase();
+    let localN='';
+    try{ const o=(JSON.parse(localStorage.getItem('sl_local_names')||'{}')||{})[p.id]; if(o) localN=((o.first||'')+' '+(o.last||'')).trim(); }catch(e){}
+    const n=((p.first_name||'')+' '+(p.last_name||'')+' '+(p.username||'')+' '+(p.email||'')+' '+(p.phone||'')+' '+localN).toLowerCase();
     return n.includes(q);
   }):srcContacts.filter(p=>!(p.isBildBot||p.id==='bild_bot'))).forEach(p=>items.push({type:'user',data:p,unread:p.isBot?0:(unread[p.id]||0)}));
   if(!showArchive && activeFolder && activeFolder!=='Все' && activeFolder!=='Архив'){
@@ -4662,7 +4664,15 @@ function renderContactsAndGroups(){
     const isActive=(type==='user'&&activePartner?.id===data.id)||(type==='group'&&activeGroup?.id===data.id);
     row.className='contact'+(isActive?' active':'');
     const isSelf=data.id===myProfile?.id;
-    const name=type==='group'?data.name:(isSelf?t('it_favorites'):(data.first_name?`${data.first_name} ${data.last_name||''}`:data.username));
+    let name=type==='group'?data.name:(isSelf?t('it_favorites'):(typeof window.slGetDisplayName==='function'?window.slGetDisplayName(data):(data.first_name?`${data.first_name} ${data.last_name||''}`:data.username)));
+    if(type==='user' && !isSelf && (!name || name===data.username)){
+      try{
+        const _ln=JSON.parse(localStorage.getItem('sl_local_names')||'{}')||{};
+        const o=_ln[data.id];
+        if(o && ((o.first||'').trim()||(o.last||'').trim()))
+          name=((o.first||'').trim()+' '+(o.last||'').trim()).trim();
+      }catch(e){}
+    }
     const newsVerified = type==='group' && (data._verified || data.username==='signal_line_news' || data.name==='SLine новости');
     let sub;
     if(type==='group'){
@@ -5014,7 +5024,11 @@ async function openChat(partner){
   setTimeout(()=>{ if(typeof loadDraft==='function') loadDraft(); }, 80);
   if(typeof startChatLiveSync==='function') startChatLiveSync();
   const isSelf=partner.id===myProfile.id;
-  document.getElementById('chat-partner-name').innerHTML=(isSelf?t('it_favorites'):escapeHtml(partner.first_name?`${partner.first_name} ${partner.last_name||''}`:partner.username))+verifiedBadgeIf(partner.email)+(typeof slBadgeHtml==='function'?slBadgeHtml(typeof slGetBadge==='function'?slGetBadge(partner):partner.badge_id, partner.color):'');
+  (function(){
+    let _pn = isSelf ? t('it_favorites') : (typeof window.slGetDisplayName==='function' ? window.slGetDisplayName(partner) : (partner.first_name?`${partner.first_name} ${partner.last_name||''}`:partner.username));
+    if(!isSelf && !_pn) _pn = partner.username||'';
+    document.getElementById('chat-partner-name').innerHTML=escapeHtml(_pn)+verifiedBadgeIf(partner.email)+(typeof slBadgeHtml==='function'?slBadgeHtml(typeof slGetBadge==='function'?slGetBadge(partner):partner.badge_id, partner.color):'');
+  })();
   updatePartnerStatus();
   renderAvatarInto(document.getElementById('partner-avatar'), partner.avatar_url, (partner.username||'?')[0].toUpperCase(), partner.color||colorFor(partner.id));
   if(innerWidth<=1024) document.getElementById('sidebar').classList.add('hidden');
@@ -7829,30 +7843,51 @@ async function userHasActiveStories(userId){
 }
 async function openStoriesOrProfile(profileLike){
   if(!profileLike) return;
-  const uid=profileLike.id||profileLike;
-  const name=profileLike.first_name||profileLike.username||'';
-  if(await userHasActiveStories(uid)){
-    // choice: watch story or profile
-    const ov=document.createElement('div');
-    ov.className='modal-overlay';
-    ov.innerHTML=`<div class="modal" style="max-width:320px;text-align:center">
-      <h3 style="margin:0 0 8px">${escapeHtml(name)}</h3>
-      <p style="color:var(--muted);font-size:13px;margin:0 0 16px">Есть активная история</p>
-      <button class="btn-primary" id="ch-story" style="margin-bottom:8px">Смотреть историю</button>
-      <button class="btn-secondary" id="ch-photo" style="margin-bottom:8px">Фото профиля</button>
-      <button class="btn-secondary" id="ch-info">Доп. информация</button>
-    </div>`;
-    document.body.appendChild(ov);
-    ov.addEventListener('click', e=>{ if(e.target===ov) ov.remove(); });
-    ov.querySelector('#ch-story').onclick=()=>{ ov.remove(); openStoryViewer(uid, name); };
-    ov.querySelector('#ch-info').onclick=()=>{ ov.remove(); if(typeof openFullProfile==='function') openFullProfile(profileLike); };
-    ov.querySelector('#ch-photo') && (ov.querySelector('#ch-photo').onclick=()=>{ ov.remove(); if(typeof openAvatarHistory==='function') openAvatarHistory(profileLike); });
-    return;
+  // Prevent profile + chooser opening together (race from multiple click handlers)
+  if(window._slOpeningProfile) return;
+  window._slOpeningProfile = true;
+  try{
+    const uid=profileLike.id||profileLike;
+    let name=profileLike.first_name||profileLike.username||'';
+    try{
+      if(typeof window.slGetDisplayName==='function'){
+        const dn=window.slGetDisplayName(profileLike);
+        if(dn) name=dn;
+      } else if(uid){
+        const _ln=JSON.parse(localStorage.getItem('sl_local_names')||'{}')||{};
+        const o=_ln[uid];
+        if(o && ((o.first||'').trim()||(o.last||'').trim()))
+          name=((o.first||'').trim()+' '+(o.last||'').trim()).trim()||name;
+      }
+    }catch(e){}
+    if(document.getElementById('sl-story-or-profile-chooser')) return;
+    const hasStories = await userHasActiveStories(uid);
+    if(hasStories){
+      // Only menu — do not open profile underneath
+      const ov=document.createElement('div');
+      ov.className='modal-overlay';
+      ov.id='sl-story-or-profile-chooser';
+      ov.innerHTML=`<div class="modal" style="max-width:320px;text-align:center">
+        <h3 style="margin:0 0 8px">${escapeHtml(name)}</h3>
+        <p style="color:var(--muted);font-size:13px;margin:0 0 16px">Есть активная история</p>
+        <button class="btn-primary" id="ch-story" style="margin-bottom:8px">Смотреть историю</button>
+        <button class="btn-secondary" id="ch-photo" style="margin-bottom:8px">Фото профиля</button>
+        <button class="btn-secondary" id="ch-info">Доп. информация</button>
+      </div>`;
+      document.body.appendChild(ov);
+      ov.addEventListener('click', e=>{ if(e.target===ov) ov.remove(); });
+      ov.querySelector('#ch-story').onclick=()=>{ ov.remove(); openStoryViewer(uid, name); };
+      ov.querySelector('#ch-info').onclick=()=>{ ov.remove(); if(typeof openFullProfile==='function') openFullProfile(profileLike); };
+      const ph=ov.querySelector('#ch-photo');
+      if(ph) ph.onclick=()=>{ ov.remove(); if(typeof openAvatarHistory==='function') openAvatarHistory(profileLike); };
+      return;
+    }
+    if(typeof openFullProfile==='function') openFullProfile(profileLike);
+    else if(typeof openUserInfo==='function') openUserInfo(profileLike);
+    else if(typeof openAvatarHistory==='function') openAvatarHistory(profileLike);
+  } finally {
+    setTimeout(()=>{ window._slOpeningProfile=false; }, 450);
   }
-  // Tap avatar → additional profile info (photo history only from inside profile)
-  if(typeof openFullProfile==='function') openFullProfile(profileLike);
-  else if(typeof openUserInfo==='function') openUserInfo(profileLike);
-  else if(typeof openAvatarHistory==='function') openAvatarHistory(profileLike);
 }
 
 async function openStoryViewer(userId, name){
@@ -15355,6 +15390,8 @@ document.querySelectorAll('.bottom-tab').forEach(t=>{
 
 // Fullscreen profile when tapping avatar / contact
 async function openFullProfile(profileLike){
+  // Don't open under the story/profile chooser
+  if(document.getElementById('sl-story-or-profile-chooser')) return;
   let p=profileLike||{};
   try{
     const {data}=await sb.from('profiles').select('*').eq('id',profileLike.id).maybeSingle();
@@ -22045,8 +22082,9 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
         if(typeof window.slOpenChatInfo==='function') return window.slOpenChatInfo();
       }
       if(activePartner){
+        // Single path: chooser if stories, else profile — never both
+        if(typeof openStoriesOrProfile==='function') return openStoriesOrProfile(activePartner);
         if(typeof openFullProfile==='function') return openFullProfile(activePartner);
-        if(typeof window.openUserProfile==='function') return window.openUserProfile(activePartner);
         if(typeof window.slOpenChatInfo==='function') return window.slOpenChatInfo();
       }
     }catch(e){ console.warn(e); }
@@ -31298,6 +31336,22 @@ document.addEventListener('click', function(e){
   function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
   /* ---- Local contact name overrides (only for you) ---- */
+  
+window.slGetDisplayName = function(p){
+  if(!p) return '';
+  try{
+    if(p.id && myProfile && p.id !== myProfile.id){
+      const _ln = JSON.parse(localStorage.getItem('sl_local_names')||'{}')||{};
+      const o = _ln[p.id];
+      if(o && ((o.first||'').trim() || (o.last||'').trim())){
+        return ((o.first||'').trim() + ' ' + (o.last||'').trim()).trim();
+      }
+    }
+  }catch(e){}
+  if(p.first_name) return (p.first_name + ' ' + (p.last_name||'')).trim();
+  return p.username || p.name || '';
+};
+
   const LN_KEY = 'sl_local_names';
   function loadLocalNames(){
     try{ return JSON.parse(localStorage.getItem(LN_KEY)||'{}')||{}; }catch(e){ return {}; }
@@ -31384,7 +31438,7 @@ document.addEventListener('click', function(e){
       setLocalName(profile.id, f, l);
       try{ showToast('Имя сохранено только у вас'); }catch(e){}
       close();
-      // refresh visible names
+      // refresh visible names + chat list
       try{
         const full = (String(f||'').trim()+' '+String(l||'').trim()).trim()
           || (profile.first_name?`${profile.first_name} ${profile.last_name||''}`.trim():profile.username);
@@ -31396,6 +31450,7 @@ document.addEventListener('click', function(e){
           const nameEl = el.querySelector('.contact-name, .chat-name, .name, .title');
           if(nameEl) nameEl.textContent = full;
         });
+        try{ if(typeof renderContactsAndGroups==='function') renderContactsAndGroups(); }catch(e){}
         // re-open profile if still open
         const sheet = document.querySelector('.sl-user-profile, .profile-sheet');
         if(sheet){
