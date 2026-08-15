@@ -2457,8 +2457,17 @@ body.light-theme .circle-record-overlay {
 </style>
 
 <style id="sl-vo-toggle-hide">#sl-vo-toggle{display:none!important}</style>
+<style id="sl-boot-bg">html,body{background:#0B1120;color:#E8EEF8;margin:0}
+html.theme-light,html.light-theme,html.theme-light body,html.light-theme body{background:#F4F6F9;color:#0F1419}
+#app-boot{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:inherit;z-index:99999;transition:opacity .25s}
+#app-boot.hide{opacity:0;pointer-events:none}
+#app-boot .dot{width:10px;height:10px;border-radius:50%;background:#4C7CF3;animation:bootPulse 0.9s ease-in-out infinite alternate}
+@keyframes bootPulse{from{opacity:.35;transform:scale(.85)}to{opacity:1;transform:scale(1)}}
+</style>
 </head>
 <body>
+<div id="app-boot"><div class="dot"></div></div>
+
 
 <script>
 /* Early: suppress opaque cross-origin "Script error." before other scripts run */
@@ -35517,7 +35526,6 @@ body{
 
 
 <script>
-<script>
 /* ===== UI Design switch: SLine / SLine Green ===== */
 (function(){
   if(window._slMsgSkinsV3) return;
@@ -35726,6 +35734,22 @@ html.skin-green .contact-name{ font-weight:600; }
 
   try{ applySkin(getSkin()); }catch(e){}
   setTimeout(function(){ try{ applySkin(getSkin()); }catch(e){} }, 600);
+})();
+</script>
+
+
+<script>
+(function(){
+  function hideBoot(){
+    var b=document.getElementById('app-boot');
+    if(!b) return;
+    b.classList.add('hide');
+    setTimeout(function(){ try{ b.remove(); }catch(e){} }, 300);
+  }
+  if(document.readyState==='complete') hideBoot();
+  else window.addEventListener('load', hideBoot);
+  // safety: never stuck more than 2.5s
+  setTimeout(hideBoot, 2500);
 })();
 </script>
 
