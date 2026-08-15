@@ -2490,8 +2490,96 @@ html.sl-force-app #app-screen{display:flex!important}
 html.sl-force-app #auth-screen{display:none!important}
 html.sl-force-app::before,html.sl-force-auth::before{display:none!important}
 </style>
+
+<style id="sl-auth-readable">
+/* Never allow white-on-white on entry */
+#auth-screen{
+  background: var(--bg, #0F1419) !important;
+  color: var(--text, #F4F7FB) !important;
+  min-height: 100dvh !important;
+  z-index: 1;
+}
+html.theme-light #auth-screen,
+html.light-theme #auth-screen,
+body.theme-light #auth-screen,
+body.light-theme #auth-screen{
+  background: #F2F4F8 !important;
+  color: #0F172A !important;
+}
+#auth-screen .auth-card{
+  background: var(--panel, #1A222D) !important;
+  color: var(--text, #F4F7FB) !important;
+}
+html.theme-light #auth-screen .auth-card,
+body.theme-light #auth-screen .auth-card{
+  background: #FFFFFF !important;
+  color: #0F172A !important;
+  border: 1px solid rgba(0,0,0,.08) !important;
+}
+#auth-screen .brand-name,
+#auth-screen .auth-sub,
+#auth-screen label,
+#auth-screen .btn-secondary{
+  color: inherit !important;
+}
+#auth-screen .btn-primary{
+  background: linear-gradient(135deg,#5B8CFF,#7B6CFF) !important;
+  color: #fff !important;
+}
+/* If still booting overlay is stuck dark, fine; if light stuck empty, show auth */
+</style>
 </head>
 <body>
+
+<div id="sl-emergency" style="position:fixed;top:0;left:0;right:0;z-index:2147483646;background:#1a1a2e;color:#fff;font:600 13px/1.4 system-ui,sans-serif;padding:calc(10px + env(safe-area-inset-top,0px)) 14px 12px;text-align:center;display:block">
+  <div>SLine загружается…</div>
+  <div style="font-weight:400;font-size:11px;opacity:.75;margin-top:4px">Если экран пустой — обновите страницу</div>
+</div>
+<script>
+(function(){
+  function kill(){
+    var e=document.getElementById('sl-emergency');
+    if(e) e.remove();
+  }
+  function ok(){
+    try{
+      var auth=document.getElementById('auth-screen');
+      var app=document.getElementById('app-screen');
+      function vis(el){
+        if(!el) return false;
+        var st=getComputedStyle(el);
+        if(st.display==='none'||st.visibility==='hidden') return false;
+        var r=el.getBoundingClientRect();
+        return r.width>50 && r.height>50;
+      }
+      return vis(auth)||vis(app);
+    }catch(e){return false}
+  }
+  var n=0;
+  var iv=setInterval(function(){
+    n++;
+    if(ok()){ kill(); clearInterval(iv); }
+    else if(n>25){
+      // force show auth with inline styles
+      try{
+        var auth=document.getElementById('auth-screen');
+        var app=document.getElementById('app-screen');
+        document.documentElement.classList.remove('sl-booting');
+        if(auth){
+          auth.style.cssText='display:flex!important;min-height:100dvh;background:#0F1419;color:#F4F7FB;z-index:5;position:relative';
+        }
+        if(app) app.style.display='none';
+        var card=document.querySelector('.auth-card');
+        if(card) card.style.cssText='background:#1A222D;color:#F4F7FB;padding:28px;border-radius:20px;max-width:420px;width:100%;margin:auto';
+      }catch(e){}
+      var e=document.getElementById('sl-emergency');
+      if(e) e.innerHTML='<div style="color:#FF6B81">Не удалось загрузить UI</div><div style="margin-top:8px"><button type="button" onclick="location.reload()" style="background:#5B8CFF;color:#fff;border:0;padding:10px 18px;border-radius:12px;font-weight:700">Обновить</button></div>';
+      clearInterval(iv);
+    }
+  }, 400);
+})();
+</script>
+
 <div id="app-boot" style="position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:#0B1120;z-index:2147483000;color:#E8EEF8;font-family:system-ui,-apple-system,sans-serif">
   <div class="dot" style="width:12px;height:12px;border-radius:50%;background:#4C7CF3"></div>
   <div class="boot-msg" style="font:600 14px/1.3 system-ui,-apple-system,sans-serif;color:#8B9BB4">SLine</div>
@@ -2499,14 +2587,20 @@ html.sl-force-app::before,html.sl-force-auth::before{display:none!important}
 <script>
 (function(){
   try{
-    if(window.__slLight){
-      var b=document.getElementById('app-boot');
-      if(b){ b.style.background='#F4F6F9'; b.style.color='#0F1419';
+    var light = !!window.__slLight;
+    if(document.body){
+      document.body.classList.toggle('theme-light', light);
+      document.body.classList.toggle('light-theme', light);
+      document.body.classList.toggle('theme-dark', !light);
+      document.body.classList.toggle('night-mode', !light);
+    }
+    var b=document.getElementById('app-boot');
+    if(b){
+      if(light){
+        b.style.background='#F4F6F9'; b.style.color='#0F1419';
         var m=b.querySelector('.boot-msg'); if(m) m.style.color='#64748B';
-      }
-      if(document.body){
-        document.body.classList.add('theme-light','light-theme');
-        document.body.classList.remove('theme-dark','night-mode');
+      } else {
+        b.style.background='#0B1120'; b.style.color='#E8EEF8';
       }
     }
   }catch(e){}
@@ -2580,7 +2674,7 @@ html.sl-ready.sl-booting::before{display:none!important}
   --input-bg:#151C27 !important;
 }
 
-body.theme-light {
+body.theme-light, html.theme-light, html.light-theme, body.light-theme {
   --bg:#F2F4F8 !important;
   --panel:#FFFFFF !important;
   --panel-hover:#EEF2F8 !important;
