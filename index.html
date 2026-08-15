@@ -3490,10 +3490,18 @@ function updateAllUIs(){
     const ch = (myProfile.username||myProfile.first_name||'?')[0].toUpperCase();
     const col = myProfile.color||colorFor(myProfile.id);
     const setTxt=(id,v)=>{ const el=document.getElementById(id); if(el) el.textContent=v; };
-    setTxt('me-name-chats', name);
     setTxt('me-initial-chats', ch);
-    setTxt('settings-display-name', name);
+    const _nameEl=document.getElementById('settings-display-name');
+    if(_nameEl){
+      const b=(typeof slBadgeHtml==='function'?slBadgeHtml(typeof slGetBadge==='function'?slGetBadge(myProfile):myProfile.badge_id, myProfile.color||'#4C7CF3'):'');
+      _nameEl.innerHTML=escapeHtml(name)+b;
+    } else setTxt('settings-display-name', name);
     setTxt('settings-display-username', '@'+(myProfile.username||''));
+    const _meName=document.getElementById('me-name-chats');
+    if(_meName){
+      const b2=(typeof slBadgeHtml==='function'?slBadgeHtml(typeof slGetBadge==='function'?slGetBadge(myProfile):myProfile.badge_id, myProfile.color||'#4C7CF3'):'');
+      _meName.innerHTML=escapeHtml(name)+b2;
+    } else setTxt('me-name-chats', name);
     setTxt('settings-avatar-text', ch);
     renderAvatarInto(document.getElementById('me-avatar-chats'), myProfile.avatar_url, ch, col);
     renderAvatarInto(document.getElementById('settings-avatar'), myProfile.avatar_url, ch, col);
@@ -4675,7 +4683,7 @@ function renderContactsAndGroups(){
     row.innerHTML=`<div style="display:flex;align-items:center;gap:10px;width:100%;padding:10px 12px">
       <div class="avatar" style="width:48px;height:48px;font-size:16px"></div>
       <div style="min-width:0;flex:1">
-        <div class="contact-name">${escapeHtml(name)}${newsVerified?(typeof verifiedSvg!=='undefined'?verifiedSvg:' <span style="color:#4C7CF3">✓</span>'):verifiedBadgeIf(data.email)}${online&&type==='user'&&!data.isBot?' <span style="color:var(--mint);font-size:10px">●</span>':''}</div>
+        <div class="contact-name">${escapeHtml(name)}${newsVerified?(typeof verifiedSvg!=='undefined'?verifiedSvg:' <span style="color:#4C7CF3">✓</span>'):verifiedBadgeIf(data.email)}${(type==='user'&&typeof slBadgeHtml==='function'?slBadgeHtml(typeof slGetBadge==='function'?slGetBadge(data):data.badge_id, data.color):'')}${online&&type==='user'&&!data.isBot?' <span style="color:var(--mint);font-size:10px">●</span>':''}</div>
         <div class="contact-sub">${escapeHtml(sub)}</div>
       </div>
       <div class="contact-meta">
@@ -5006,7 +5014,7 @@ async function openChat(partner){
   setTimeout(()=>{ if(typeof loadDraft==='function') loadDraft(); }, 80);
   if(typeof startChatLiveSync==='function') startChatLiveSync();
   const isSelf=partner.id===myProfile.id;
-  document.getElementById('chat-partner-name').innerHTML=(isSelf?t('it_favorites'):escapeHtml(partner.first_name?`${partner.first_name} ${partner.last_name||''}`:partner.username))+verifiedBadgeIf(partner.email);
+  document.getElementById('chat-partner-name').innerHTML=(isSelf?t('it_favorites'):escapeHtml(partner.first_name?`${partner.first_name} ${partner.last_name||''}`:partner.username))+verifiedBadgeIf(partner.email)+(typeof slBadgeHtml==='function'?slBadgeHtml(typeof slGetBadge==='function'?slGetBadge(partner):partner.badge_id, partner.color):'');
   updatePartnerStatus();
   renderAvatarInto(document.getElementById('partner-avatar'), partner.avatar_url, (partner.username||'?')[0].toUpperCase(), partner.color||colorFor(partner.id));
   if(innerWidth<=1024) document.getElementById('sidebar').classList.add('hidden');
@@ -8509,8 +8517,12 @@ document.getElementById('settings-edit-profile').onclick=()=>{
     <div class="sl-sheet-body" style="padding:16px 16px 40px;display:flex;flex-direction:column;align-items:center;gap:12px">
       <div style="position:relative;width:96px;height:96px;margin-bottom:8px">
         <div id="ep-av" class="avatar" style="width:96px;height:96px;border-radius:50%;font-size:36px"></div>
-        <button type="button" id="ep-av-btn" style="position:absolute;right:0;bottom:0;width:32px;height:32px;border-radius:50%;border:none;background:var(--accent-a,#4C7CF3);display:flex;align-items:center;justify-content:center;cursor:pointer">${camIco}</button>
+        <button type="button" id="ep-av-btn" title="Аватар" style="position:absolute;right:0;bottom:0;width:32px;height:32px;border-radius:50%;border:none;background:var(--accent-a,#4C7CF3);display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:2">${camIco}</button>
       </div>
+      <button type="button" id="ep-cover-btn" style="width:100%;padding:12px 14px;border-radius:14px;border:1px solid var(--line);background:var(--panel);color:var(--text);font-size:15px;font-weight:600;display:flex;align-items:center;justify-content:center;gap:10px;cursor:pointer">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+        Изменить обложку
+      </button>
       <input class="cd-input" id="ef" value="${(myProfile.first_name||'').replace(/"/g,'&quot;')}" placeholder="Имя" style="width:100%;box-sizing:border-box;border-radius:14px;padding:14px">
       <input class="cd-input" id="el" value="${(myProfile.last_name||'').replace(/"/g,'&quot;')}" placeholder="Фамилия" style="width:100%;box-sizing:border-box;border-radius:14px;padding:14px">
       <div style="width:100%">
@@ -8542,6 +8554,7 @@ document.getElementById('settings-edit-profile').onclick=()=>{
   sheet.querySelector('#ep-exit').onclick=()=>sheet.remove();
   sheet.querySelector('#ebio').oninput=function(){ sheet.querySelector('#ebio-c').textContent=String(this.value.length); };
   sheet.querySelector('#ep-av-btn').onclick=()=>{ try{ document.getElementById('avatar-upload')?.click(); }catch(e){} };
+  sheet.querySelector('#ep-cover-btn')?.addEventListener('click', ()=>{ try{ if(typeof pickCoverImage==='function') pickCoverImage(); }catch(e){} });
   sheet.querySelector('#esave').onclick=async()=>{
     const first=sheet.querySelector('#ef').value.trim();
     const last=sheet.querySelector('#el').value.trim();
@@ -8558,6 +8571,9 @@ document.getElementById('settings-edit-profile').onclick=()=>{
       try{ await sb.from('profiles').update({first_name:first,last_name:last}).eq('id',myProfile.id); }catch(e2){}
     }
     if(typeof updateAllUIs==='function') updateAllUIs();
+    try{ if(typeof renderContacts==='function') renderContacts(); }catch(e){}
+    try{ if(typeof loadChats==='function') loadChats(); }catch(e){}
+    try{ if(typeof renderChatList==='function') renderChatList(); }catch(e){}
     sheet.remove();
     showToast('Сохранено');
   };
@@ -14264,7 +14280,7 @@ async function appendGlobalSearchResults(list, q){
     const name=p.first_name?`${p.first_name} ${p.last_name||''}`:p.username;
     row.innerHTML=`<div style="display:flex;align-items:center;gap:10px;width:100%;padding:10px 12px">
       <div class="avatar" style="width:40px;height:40px;font-size:14px"></div>
-      <div style="min-width:0;flex:1"><div class="contact-name">${escapeHtml(name)}${verifiedBadgeIf(p.email)}</div>
+      <div style="min-width:0;flex:1"><div class="contact-name">${escapeHtml(name)}${verifiedBadgeIf(p.email)}${(typeof slBadgeHtml==='function'?slBadgeHtml(typeof slGetBadge==='function'?slGetBadge(p):p.badge_id, p.color):'')}</div>
       <div class="contact-sub">@${escapeHtml(p.username||'')}</div></div></div>`;
     renderAvatarInto(row.querySelector('.avatar'), p.avatar_url, (name||'?')[0].toUpperCase(), p.color||colorFor(p.id));
     row.onclick=()=>{ ensureInContacts(p); openChat(p); };
@@ -14497,7 +14513,7 @@ async function buildPostCard(p){
   el.innerHTML=`
     <div class="post-head">
       <div class="avatar" data-authorbtn style="width:36px;height:36px;font-size:13px;cursor:pointer"></div>
-      <div class="p-name" data-authorbtn style="cursor:pointer;flex:1">${escapeHtml(name)}${verifiedBadgeIf(author.email)}</div>
+      <div class="p-name" data-authorbtn style="cursor:pointer;flex:1">${escapeHtml(name)}${verifiedBadgeIf(author.email)}${(typeof slBadgeHtml==='function'?slBadgeHtml(typeof slGetBadge==='function'?slGetBadge(author):author.badge_id, author.color):'')}</div>
       <button class="icon-btn" data-postmenu title="···" style="width:32px;height:32px;font-size:18px;line-height:1">⋮</button>
     </div>
     ${p.media_type==='video' ? `<video class="post-media" src="${p.media_url}" controls playsinline preload="metadata"></video>` : `<img class="post-media" src="${p.media_url}" loading="lazy">`}
@@ -14851,7 +14867,7 @@ async function renderSocialProfile(body, userId, kind){
   body.innerHTML = `
     <div class="profile-header">
       <div class="avatar" id="sp-avatar" style="width:84px;height:84px;font-size:30px"></div>
-      <div style="font-weight:800;font-size:17px">${escapeHtml(name)}${verifiedBadgeIf(profile.email)}</div>
+      <div style="font-weight:800;font-size:17px">${escapeHtml(name)}${verifiedBadgeIf(profile.email)}${(typeof slBadgeHtml==='function'?slBadgeHtml(typeof slGetBadge==='function'?slGetBadge(profile):profile.badge_id, profile.color):'')}</div>
       <div style="color:var(--muted);font-size:13px">@${escapeHtml(profile.username||'')}</div>
       <div class="profile-stats">
         <div class="profile-stat"><b>${postsList.length}</b><span>${currentLang==='en'?'posts':'постов'}</span></div>
@@ -23629,24 +23645,43 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
     if(fs) document.documentElement.style.setProperty('--msg-font', fs+'px');
   }catch(e){}
 
-  /* ---- 11) Badge click → how to get same ---- */
+  /* ---- 11) Badge click: verified ≠ name icon ---- */
   document.addEventListener('click', (e)=>{
-    const badge = e.target.closest('.sl-name-badge, .verified-badge, [data-badge]');
-    if(!badge) return;
-    // only in chat header or profile context
-    const inHeader = badge.closest('#chat-header, .chat-header, .profile-sheet, .sl-sheet, .contact-name');
-    if(!inHeader && !badge.classList.contains('sl-name-badge')) return;
+    const verified = e.target.closest('.verified-badge');
+    const nameBadge = e.target.closest('.sl-name-badge');
+    if(!verified && !nameBadge) return;
+    // verified blue check — show verification info, NOT "icon next to name"
+    if(verified && !nameBadge){
+      e.preventDefault(); e.stopPropagation();
+      const ov=document.createElement('div'); ov.className='modal-overlay';
+      ov.innerHTML=`<div class="modal" style="max-width:360px">
+        <button class="close-x" id="bdg-x">×</button>
+        <h3>Подтверждённый аккаунт</h3>
+        <p style="font-size:14px;color:var(--muted);line-height:1.5;margin:8px 0 14px">
+          Синяя галочка означает, что это официальный или подтверждённый аккаунт SLine.
+        </p>
+        <button class="btn-primary" id="bdg-x2" style="width:100%">Понятно</button>
+      </div>`;
+      document.body.appendChild(ov);
+      ov.querySelector('#bdg-x').onclick=()=>ov.remove();
+      ov.querySelector('#bdg-x2').onclick=()=>ov.remove();
+      return;
+    }
+    // custom name badge (star, crown, …)
+    if(!nameBadge) return;
+    const inHeader = nameBadge.closest('#chat-header, .chat-header, .profile-sheet, .sl-sheet, .contact-name, .settings-name, #settings-display-name, #me-name-chats');
+    if(!inHeader && !nameBadge.classList.contains('sl-name-badge')) return;
     e.preventDefault(); e.stopPropagation();
     const ov=document.createElement('div'); ov.className='modal-overlay';
     ov.innerHTML=`<div class="modal" style="max-width:360px">
       <button class="close-x" id="bdg-x">×</button>
-      <h3>Значок профиля</h3>
+      <h3>Значок рядом с именем</h3>
       <p style="font-size:14px;color:var(--muted);line-height:1.5;margin:8px 0 14px">
         Такой значок можно поставить себе в профиле.<br><br>
         <b>Как получить:</b><br>
-        1. Откройте <b>Настройки → Редактировать профиль</b><br>
+        1. Откройте <b>Настройки → Изменить профиль</b><br>
         2. Выберите значок (звезда, корона, молния и др.)<br>
-        3. Сохраните — он появится рядом с именем
+        3. Нажмите <b>Сохранить</b> — он появится рядом с именем
       </p>
       <button class="btn-primary" id="bdg-go" style="width:100%">Открыть профиль</button>
     </div>`;
@@ -23654,8 +23689,8 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
     ov.querySelector('#bdg-x').onclick=()=>ov.remove();
     ov.querySelector('#bdg-go').onclick=()=>{
       ov.remove();
-      try{ document.getElementById('settings-edit-profile')?.click(); }catch(e){}
       try{ document.querySelector('[data-tab="settings"]')?.click(); }catch(e){}
+      setTimeout(()=>{ try{ document.getElementById('settings-edit-profile')?.click(); }catch(e){} }, 200);
     };
   }, true);
 
