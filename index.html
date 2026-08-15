@@ -18579,6 +18579,14 @@ function slWhisperLang(){
 async function slLoadWhisper(){
   if(window._slWhisperPipe) return window._slWhisperPipe;
   if(window._slWhisperLoading) return window._slWhisperLoading;
+  /* soft-block very early boot on mobile */
+  try{
+    if(!window._slWhisperUserInitiated && (navigator.userAgent||'').match(/iPhone|iPad|Android/i)){
+      var up = (typeof performance!=='undefined' && performance.timing && performance.timing.navigationStart)
+        ? (Date.now() - performance.timing.navigationStart) : 99999;
+      if(up < 20000) throw new Error('whisper deferred until UI ready');
+    }
+  }catch(e){ if(e && e.message && e.message.indexOf('deferred')!==-1) throw e; }
   window._slWhisperLoading = (async()=>{
     let mod;
     try{ mod = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2'); }
@@ -18599,19 +18607,12 @@ async function slLoadWhisper(){
 }
 
 window.slPreloadWhisper = function(){
-  try{
-    if(window._slWhisperReady || window._slWhisperLoading) return;
-    try{ if(navigator.deviceMemory && navigator.deviceMemory < 3) return; }catch(e){}
-    setTimeout(()=>{
-      if(document.hidden) return;
-      slLoadWhisper().then(()=>console.log('[SL] Whisper-tiny ready')).catch(()=>{});
-    }, 8000);
-  }catch(e){}
+  /* Disabled auto-preload: downloading Whisper on iPhone caused blank black/white screen */
+  return;
 };
 (function(){
   try{
-    if(document.readyState==='complete') setTimeout(()=>{ try{ if(typeof myProfile!=='undefined'&&myProfile) window.slPreloadWhisper(); }catch(e){} }, 8000);
-    else window.addEventListener('load', ()=> setTimeout(()=>{ try{ if(typeof myProfile!=='undefined'&&myProfile) window.slPreloadWhisper(); }catch(e){} }, 8000));
+    if(document.readyState==='complete') /* whisper auto preload off */else window.addEventListener('load', ()=> /* whisper auto preload off */
   }catch(e){}
 })();
 
@@ -22523,8 +22524,7 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
   }
 
   // ---------- 5) Instant-feeling transcription ----------
-  // Prefer cached; optimistic UI; parallel warm-up of whisper
-  setTimeout(()=>{ try{ if(typeof slLoadWhisper==='function') slLoadWhisper().catch(()=>{}); }catch(e){} }, 3000);
+  // Whisper warm-up OFF at boot (froze iPhone → black/white screen). Loads only on transcribe tap.
 
   if(typeof window.transcribeVoiceMsg==='function' && !window._slFastTr){
     window._slFastTr = 1;
@@ -24279,16 +24279,7 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
     }
   };
 
-  // Preload local model in background so fallback is instant
-  setTimeout(()=>{
-    try{
-      if(typeof slLoadWhisper==='function'){
-        slLoadWhisper().then(()=>console.log('[SL] local Whisper ready (fallback)')).catch(()=>{});
-      } else if(typeof window.slPreloadWhisper==='function'){
-        window.slPreloadWhisper();
-      }
-    }catch(e){}
-  }, 5000);
+  // Preload OFF — same freeze issue on mobile LTE
 
   // Update settings text about fallback
   setTimeout(()=>{
