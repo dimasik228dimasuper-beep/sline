@@ -24580,8 +24580,7 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
     'Выберите карточку темы выше':'Pick a theme card above',
     'Пак «':'Pack «','» открыт!':'» unlocked!','» добавлен':'» added',
     'Нажми 50 раз':'Tap 50 times','Самый редкий пак · 50 нажатий! ':'Rarest pack · 50 taps! ',
-    '':'Swipe · dot = jump · 10 taps = unlock',
-    '':'Swipe packs · 10 taps to unlock',
+
     'Открытие «':'Opening «','»…':'»…',
     'Вставьте ключ':'Paste a key','Вставьте ключ или выберите «Только локальная»':'Paste a key or choose local only',
     'API снова будет пробоваться':'API will be tried again',
@@ -24605,6 +24604,7 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
         }
         // partial known phrases
         Object.keys(RU2EN).sort((a,b)=>b.length-a.length).forEach(ru=>{
+          if(!ru || ru.length<1) return;
           if(out.includes(ru)) out = out.split(ru).join(RU2EN[ru]);
         });
         if(out!==s) node.nodeValue = out;
@@ -24616,13 +24616,13 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
         if(node.placeholder && /[А-Яа-яЁё]/.test(node.placeholder)){
           let p=node.placeholder;
           if(RU2EN[p]) node.placeholder=RU2EN[p];
-          else Object.keys(RU2EN).forEach(ru=>{ if(p.includes(ru)) p=p.split(ru).join(RU2EN[ru]); });
+          else Object.keys(RU2EN).forEach(ru=>{ if(ru && p.includes(ru)) p=p.split(ru).join(RU2EN[ru]); });
           node.placeholder=p;
         }
         if(node.title && /[А-Яа-яЁё]/.test(node.title)){
           let p=node.title;
           if(RU2EN[p]) node.title=RU2EN[p];
-          else Object.keys(RU2EN).forEach(ru=>{ if(p.includes(ru)) p=p.split(ru).join(RU2EN[ru]); });
+          else Object.keys(RU2EN).forEach(ru=>{ if(ru && p.includes(ru)) p=p.split(ru).join(RU2EN[ru]); });
           node.title=p;
         }
         node.childNodes && node.childNodes.forEach(walk);
@@ -35526,18 +35526,18 @@ body{
 
 
 <script>
-/* ===== UI Design switch: SLine / SLine Green ===== */
+/* ===== UI Design switch: SLine / SLine Green (WhatsApp-like) ===== */
 (function(){
-  if(window._slMsgSkinsV3) return;
-  window._slMsgSkinsV3 = 1;
+  if(window._slMsgSkinsV4) return;
+  window._slMsgSkinsV4 = 1;
   const LS = (typeof storage!=='undefined'?storage:localStorage);
   const KEY = 'sl_ui_skin';
 
   function getSkin(){
     try{
       let v = LS.getItem(KEY) || 'sline';
-      // migrate old skins
-      if(v==='max'||v==='tg'||v==='telegram'||v==='wa'||v==='whatsapp') v = (v==='wa'||v==='whatsapp') ? 'green' : 'sline';
+      if(v==='max'||v==='tg'||v==='telegram') v='sline';
+      if(v==='wa'||v==='whatsapp') v='green';
       return v;
     }catch(e){ return 'sline'; }
   }
@@ -35561,27 +35561,56 @@ html.skin-green .sl-skin-opt.on .sl-skin-radio{border-color:#25D366;background:#
 .sl-skin-opt .sl-skin-sub{font-size:12px;color:var(--muted);margin-top:2px}
 .sl-skin-opt .sl-skin-badge{font-size:10px;font-weight:700;padding:3px 8px;border-radius:999px;background:rgba(76,124,243,.2);color:var(--accent-a,#4C7CF3)}
 
-/* ========== SLine Green (WhatsApp-like UI from video) ========== */
+/* ========== SLine Green — WhatsApp-like ========== */
 html.skin-green{
   --accent-a:#25D366 !important;
   --accent-b:#128C7E !important;
   --mint:#25D366 !important;
 }
+
+/* Header: title + actions */
+html.skin-green #page-chats .max-chats-title,
 html.skin-green #page-chats .chats-header h1,
 html.skin-green #page-chats .page-title{
   font-size:28px !important; font-weight:700 !important; letter-spacing:-.02em;
 }
+html.skin-green #page-chats .sidebar-header,
+html.skin-green #page-chats .max-chats-hdr{
+  padding:8px 12px 4px !important;
+  align-items:center !important;
+}
+html.skin-green #page-chats .max-chats-actions{
+  display:flex !important; align-items:center !important; gap:6px !important;
+}
+
+/* Green circular + */
+html.skin-green #plus-btn,
 html.skin-green #page-chats .fab-add,
 html.skin-green #page-chats #add-chat-btn,
 html.skin-green #page-chats .header-add,
-html.skin-green button#new-chat-btn{
-  width:44px !important; height:44px !important; border-radius:50% !important;
+html.skin-green button#new-chat-btn,
+html.skin-green .max-hdr-btn.plus{
+  width:40px !important; height:40px !important; min-width:40px !important;
+  border-radius:50% !important;
   background:#25D366 !important; color:#fff !important; border:none !important;
-  box-shadow:0 4px 14px rgba(37,211,102,.35) !important;
+  box-shadow:0 3px 12px rgba(37,211,102,.4) !important;
+  font-size:26px !important; font-weight:400 !important; line-height:1 !important;
+  display:inline-flex !important; align-items:center !important; justify-content:center !important;
 }
-html.skin-green .story-bar,
+html.skin-green #chats-select-btn,
+html.skin-green .max-hdr-btn:not(.plus){
+  width:36px !important; height:36px !important; border-radius:50% !important;
+  background:transparent !important; border:none !important;
+  font-size:22px !important; color:var(--text) !important;
+}
+
+/* Hide stories in green (WA has Status tab instead) */
+html.skin-green .stories-bar,
 html.skin-green #stories-bar,
+html.skin-green .story-bar,
 html.skin-green .stories-row{ display:none !important; }
+
+/* Search field pill */
 html.skin-green #search-input,
 html.skin-green .chats-search input,
 html.skin-green input[placeholder*="оиск"],
@@ -35589,45 +35618,85 @@ html.skin-green input[placeholder*="айти"]{
   border-radius:12px !important;
   background:rgba(120,120,128,.14) !important;
   border:none !important;
+  padding:10px 14px !important;
+  font-size:15px !important;
 }
+
+/* Filter chips like WA: Все / Непрочитанное / Избранное / Группы */
 html.skin-green .folder-tabs,
 html.skin-green .chat-folders,
-html.skin-green #folder-tabs{
+html.skin-green #folder-tabs,
+html.skin-green .max-folder-tabs{
   display:flex !important; gap:8px !important; overflow-x:auto !important;
-  padding:8px 12px !important; scrollbar-width:none;
+  padding:8px 12px 10px !important; scrollbar-width:none;
 }
+html.skin-green .folder-tabs::-webkit-scrollbar,
+html.skin-green .max-folder-tabs::-webkit-scrollbar{display:none}
 html.skin-green .folder-tab,
 html.skin-green .chat-folders button,
-html.skin-green #folder-tabs button{
+html.skin-green #folder-tabs button,
+html.skin-green .max-folder-tabs .folder-tab{
   background:rgba(120,120,128,.12) !important;
   border:1px solid rgba(120,120,128,.18) !important;
-  border-radius:999px !important; padding:8px 14px !important;
+  border-radius:999px !important; padding:7px 14px !important;
   font-size:13px !important; font-weight:600 !important;
   color:var(--text) !important; white-space:nowrap !important;
 }
 html.skin-green .folder-tab.active,
 html.skin-green .chat-folders button.active,
-html.skin-green #folder-tabs button.active{
+html.skin-green #folder-tabs button.active,
+html.skin-green .max-folder-tabs .folder-tab.active{
   background:#25D366 !important; color:#0b1a10 !important; border-color:#25D366 !important;
 }
 html.skin-green .folder-tab.active::after{ display:none !important; }
+
+/* Chat rows */
 html.skin-green .contact{
   border-radius:0 !important;
   border-bottom:0.5px solid rgba(120,120,128,.12) !important;
   padding:12px 14px !important;
+  background:transparent !important;
 }
 html.skin-green .contact.active{
   background:rgba(37,211,102,.1) !important; box-shadow:none !important;
 }
+html.skin-green .contact-name{ font-weight:600 !important; }
+
+/* Bottom nav — WA pill dock */
+html.skin-green .bottom-tabs,
 html.skin-green .bottom-nav,
-html.skin-green .tab-bar,
-html.skin-green #bottom-nav{
+html.skin-green #bottom-tabs{
   background:var(--panel,#111) !important;
-  border-top:0.5px solid rgba(120,120,128,.2) !important;
+  border-top:0.5px solid rgba(120,120,128,.22) !important;
   border-radius:0 !important; left:0 !important; right:0 !important; margin:0 !important;
+  backdrop-filter:none !important; -webkit-backdrop-filter:none !important;
+  box-shadow:none !important;
+  display:flex !important; justify-content:space-around !important;
+  padding:6px 4px calc(6px + var(--safe-bottom,0px)) !important;
+  gap:0 !important;
 }
-html.skin-green .nav-item.active,
-html.skin-green .bottom-tab.active{ color:#25D366 !important; }
+html.skin-green .bottom-tab{
+  flex:1 !important; margin:0 !important; border-radius:12px !important;
+  background:transparent !important; color:var(--muted,#8B9BB4) !important;
+  display:flex !important; flex-direction:column !important; align-items:center !important;
+  gap:2px !important; padding:6px 2px !important; font-size:10px !important;
+  font-weight:500 !important; min-width:0 !important;
+}
+html.skin-green .bottom-tab svg{
+  width:24px !important; height:24px !important;
+  fill:none !important; stroke:currentColor !important; stroke-width:1.8 !important;
+}
+html.skin-green .bottom-tab.active{
+  color:#25D366 !important; background:transparent !important;
+}
+html.skin-green .bottom-tab.active svg{ stroke:#25D366 !important; fill:none !important; }
+/* Active pill highlight under chats like WA video */
+html.skin-green .bottom-tab.active{
+  background:rgba(120,120,128,.14) !important;
+  border-radius:16px !important;
+}
+
+/* Bubbles */
 html.skin-green .bubble.me{ background:#005C4B !important; color:#fff !important; }
 html.skin-green.theme-light .bubble.me,
 html.skin-green.light-theme .bubble.me{
@@ -35642,36 +35711,157 @@ html.skin-green .toggle-switch.on{ background:#25D366 !important; }
 html.skin-green .story-ring{
   background:linear-gradient(135deg,#25D366,#128C7E) !important;
 }
-/* Light theme green polish */
+html.skin-green .msg-check.read{ color:#53BDEB !important; }
+
+/* Light theme under green */
 html.skin-green.theme-light,
 html.skin-green.light-theme{
   --accent-a:#128C7E !important;
   --accent-b:#25D366 !important;
 }
+html.skin-green.theme-light .bottom-tabs,
+html.skin-green.light-theme .bottom-tabs,
 html.skin-green.theme-light .bottom-nav,
-html.skin-green.light-theme .bottom-nav,
-html.skin-green.theme-light .tab-bar,
-html.skin-green.light-theme .tab-bar{
-  background:#fff !important;
+html.skin-green.light-theme .bottom-nav{
+  background:#f6f6f6 !important;
   border-top:0.5px solid rgba(0,0,0,.08) !important;
 }
 html.skin-green.theme-light .folder-tab.active,
 html.skin-green.light-theme .folder-tab.active,
-html.skin-green.theme-light .chat-folders button.active,
-html.skin-green.light-theme .chat-folders button.active{
+html.skin-green.theme-light .max-folder-tabs .folder-tab.active,
+html.skin-green.light-theme .max-folder-tabs .folder-tab.active{
   background:#25D366 !important; color:#fff !important;
 }
-html.skin-green.theme-light #page-chats .fab-add,
-html.skin-green.light-theme #page-chats .fab-add,
-html.skin-green.theme-light #page-chats #add-chat-btn,
-html.skin-green.light-theme #page-chats #add-chat-btn{
+html.skin-green.theme-light #plus-btn,
+html.skin-green.light-theme #plus-btn,
+html.skin-green.theme-light .max-hdr-btn.plus,
+html.skin-green.light-theme .max-hdr-btn.plus{
   background:#25D366 !important;
 }
-/* Settings accent under green */
-html.skin-green .settings-item:active{ background:rgba(37,211,102,.08); }
-html.skin-green .contact-name{ font-weight:600; }
+
+/* Extra WA camera button slot */
+html.skin-green #wa-cam-btn{
+  width:36px;height:36px;border-radius:50%;border:none;background:transparent;
+  color:var(--text);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;
+}
+html.skin-green #wa-cam-btn svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8}
 `;
     document.head.appendChild(s);
+  }
+
+  /* Icons for WA-like bottom bar */
+  const ICO = {
+    status: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/></svg>',
+    calls: '<svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2A19.8 19.8 0 0111.19 18a19.5 19.5 0 01-6-6A19.8 19.8 0 012.12 3.38 2 2 0 014.11 2h3a2 2 0 012 1.72c.13.96.36 1.9.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0122 16.92z"/></svg>',
+    communities: '<svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>',
+    chats: '<svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>',
+    you: '<svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>'
+  };
+
+  function restyleBottomTabs(green){
+    const bar = document.querySelector('.bottom-tabs, .bottom-nav, #bottom-tabs');
+    if(!bar) return;
+    if(!green){
+      // restore original 3 tabs if we expanded
+      if(bar.dataset.waExpanded === '1'){
+        try{
+          const orig = bar.dataset.waOrig;
+          if(orig) bar.innerHTML = orig;
+          delete bar.dataset.waExpanded;
+          delete bar.dataset.waOrig;
+        }catch(e){}
+      }
+      return;
+    }
+    if(bar.dataset.waExpanded === '1') return;
+    try{
+      bar.dataset.waOrig = bar.innerHTML;
+      bar.dataset.waExpanded = '1';
+      // Build WA-like 5 tabs; map to existing pages
+      bar.innerHTML = `
+        <div class="bottom-tab" data-tab="status" data-wa="1">${ICO.status}<span>Статус</span></div>
+        <div class="bottom-tab" data-tab="calls" data-wa="1">${ICO.calls}<span>Звонки</span></div>
+        <div class="bottom-tab" data-tab="communities" data-wa="1">${ICO.communities}<span>Сообщества</span></div>
+        <div class="bottom-tab active" data-tab="chats" data-wa="1"><span class="tab-badge" id="chats-tab-badge">0</span>${ICO.chats}<span>Чаты</span></div>
+        <div class="bottom-tab" data-tab="settings" data-wa="1">${ICO.you}<span>Вы</span></div>
+      `;
+      // Wire clicks
+      bar.querySelectorAll('.bottom-tab').forEach(tab=>{
+        tab.addEventListener('click', function(e){
+          const t = this.getAttribute('data-tab');
+          bar.querySelectorAll('.bottom-tab').forEach(x=>x.classList.remove('active'));
+          this.classList.add('active');
+          if(t === 'status'){
+            // open stories / status flow if available
+            try{
+              if(typeof openMyStories==='function') openMyStories();
+              else if(typeof showStoriesComposer==='function') showStoriesComposer();
+              else if(document.getElementById('add-story-btn-side')) document.getElementById('add-story-btn-side').click();
+              else try{ showToast('Статус'); }catch(e){}
+            }catch(err){}
+            return;
+          }
+          if(t === 'communities'){
+            try{
+              // Prefer groups folder / show toast
+              const groupsTab = document.querySelector('.folder-tab[data-folder="groups"], .folder-tab[data-id="groups"]');
+              if(groupsTab) groupsTab.click();
+              // switch to chats page visually
+              if(typeof switchTab==='function') switchTab('chats');
+              else if(typeof showTab==='function') showTab('chats');
+              else {
+                document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+                const pc = document.getElementById('page-chats');
+                if(pc) pc.classList.add('active');
+              }
+              try{ showToast('Сообщества'); }catch(e){}
+            }catch(err){}
+            return;
+          }
+          // default: use existing tab system
+          try{
+            if(typeof switchTab==='function') switchTab(t);
+            else if(typeof showTab==='function') showTab(t);
+            else {
+              // fallback click original handlers via data-tab on pages
+              const pages = {chats:'page-chats', calls:'page-calls', settings:'page-settings'};
+              document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+              const el = document.getElementById(pages[t]||('page-'+t));
+              if(el) el.classList.add('active');
+            }
+          }catch(err){}
+        });
+      });
+    }catch(e){ console.warn('wa tabs', e); }
+  }
+
+  function ensureCamBtn(green){
+    const actions = document.querySelector('#page-chats .max-chats-actions, #page-chats .sidebar-actions');
+    if(!actions) return;
+    let cam = document.getElementById('wa-cam-btn');
+    if(green){
+      if(!cam){
+        cam = document.createElement('button');
+        cam.type = 'button';
+        cam.id = 'wa-cam-btn';
+        cam.title = 'Камера';
+        cam.innerHTML = '<svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>';
+        cam.onclick = function(){
+          try{
+            if(typeof openCamera==='function') openCamera();
+            else if(document.getElementById('add-story-btn-side')) document.getElementById('add-story-btn-side').click();
+            else try{ showToast('Камера'); }catch(e){}
+          }catch(e){}
+        };
+        // insert before plus
+        const plus = actions.querySelector('#plus-menu, #plus-btn');
+        if(plus) actions.insertBefore(cam, plus);
+        else actions.appendChild(cam);
+      }
+      cam.style.display = '';
+    } else if(cam){
+      cam.style.display = 'none';
+    }
   }
 
   function applySkin(id){
@@ -35681,9 +35871,12 @@ html.skin-green .contact-name{ font-weight:600; }
       root.classList.remove(c);
       document.body.classList.remove(c);
     });
-    const cls = (id === 'green') ? 'skin-green' : 'skin-sline';
+    const green = (id === 'green');
+    const cls = green ? 'skin-green' : 'skin-sline';
     root.classList.add(cls);
     document.body.classList.add(cls);
+    restyleBottomTabs(green);
+    ensureCamBtn(green);
   }
 
   window.slApplyMessengerSkin = applySkin;
@@ -35694,7 +35887,7 @@ html.skin-green .contact-name{ font-weight:600; }
     const cur = getSkin();
     const opts = [
       {id:'sline', title:'SLine', sub:'Стандартный дизайн', badge:'По умолчанию'},
-      {id:'green', title:'SLine Green', sub:'Зелёный акцент, чипы фильтров, как на видео'},
+      {id:'green', title:'SLine Green', sub:'Как WhatsApp: статус, сообщества, зелёный акцент'},
     ];
     try{ document.getElementById('sl-skin-picker')?.remove(); }catch(e){}
     const ov = document.createElement('div');
@@ -35708,7 +35901,7 @@ html.skin-green .contact-name{ font-weight:600; }
         <div style="width:36px"></div>
       </div>
       <div style="padding:14px 16px">
-        <p style="font-size:13px;color:var(--muted);margin:0 0 14px;line-height:1.45">Выберите оформление интерфейса. Тёмная и светлая тема работают с обоими дизайнами.</p>
+        <p style="font-size:13px;color:var(--muted);margin:0 0 14px;line-height:1.45">SLine Green повторяет кнопки и навигацию как на видео (WhatsApp-стиль). Светлая и тёмная тема поддерживаются.</p>
         <div id="sk-list"></div>
       </div>
     </div>`;
@@ -35725,6 +35918,7 @@ html.skin-green .contact-name{ font-weight:600; }
         el.classList.add('on');
         setSkin(o.id);
         try{ showToast(o.id === 'green' ? 'SLine Green' : 'SLine'); }catch(e){}
+        setTimeout(()=>ov.remove(), 250);
       };
       list.appendChild(el);
     });
@@ -35732,10 +35926,16 @@ html.skin-green .contact-name{ font-weight:600; }
     ov.addEventListener('click', e=>{ if(e.target === ov) ov.remove(); });
   };
 
-  try{ applySkin(getSkin()); }catch(e){}
-  setTimeout(function(){ try{ applySkin(getSkin()); }catch(e){} }, 600);
+  function boot(){
+    try{ applySkin(getSkin()); }catch(e){}
+  }
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+  else boot();
+  setTimeout(boot, 400);
+  setTimeout(boot, 1200);
 })();
 </script>
+
 
 
 <script>
