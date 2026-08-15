@@ -11145,6 +11145,120 @@ function ensureInContacts(profile){
     renderContactsAndGroups();
   }
 }
+
+window.slIsInMyContacts = function(uid){
+  if(!uid) return false;
+  try{
+    if(typeof contacts!=='undefined' && Array.isArray(contacts) && contacts.some(c=>c && c.id===uid)) return true;
+  }catch(e){}
+  try{
+    const arr=JSON.parse(localStorage.getItem('sl_my_contacts')||'[]');
+    if(Array.isArray(arr) && arr.includes(uid)) return true;
+  }catch(e){}
+  return false;
+};
+window.slMarkInContacts = function(uid){
+  if(!uid) return;
+  try{
+    let arr=[]; try{arr=JSON.parse(localStorage.getItem('sl_my_contacts')||'[]');}catch(e){}
+    if(!Array.isArray(arr)) arr=[];
+    if(!arr.includes(uid)){ arr.push(uid); localStorage.setItem('sl_my_contacts', JSON.stringify(arr)); }
+  }catch(e){}
+};
+window.slOpenAddContact = function(profile, profileSheet){
+  if(!profile || !profile.id) return;
+  if(myProfile && profile.id===myProfile.id){ try{ showToast('Это ваш профиль'); }catch(e){} return; }
+  // already contact → optional rename
+  if(window.slIsInMyContacts(profile.id)){
+    try{ if(typeof window.slOpenLocalRename==='function') window.slOpenLocalRename(profile); }catch(e){}
+    return;
+  }
+  const esc = (s)=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+  const first0 = (profile.first_name||'').trim();
+  const last0 = (profile.last_name||'').trim();
+  const ch = ((first0||profile.username||'?')[0]||'?').toUpperCase() + ((last0||'')[0]||'').toUpperCase();
+  const col = profile.color || (typeof colorFor==='function'?colorFor(profile.id):'#4C7CF3');
+  try{ document.getElementById('sl-add-contact')?.remove(); }catch(e){}
+  const ov = document.createElement('div');
+  ov.id = 'sl-add-contact';
+  ov.style.cssText = 'position:fixed;inset:0;z-index:50000;background:var(--bg,#0C0E14);display:flex;flex-direction:column;';
+  ov.innerHTML = `
+    <div style="padding:calc(12px + env(safe-area-inset-top)) 12px 8px;display:flex;align-items:center;gap:8px">
+      <button type="button" id="ac-close" style="width:40px;height:40px;border:none;border-radius:12px;background:transparent;color:var(--text);font-size:22px;cursor:pointer">×</button>
+      <div style="flex:1;text-align:center;font-weight:700;font-size:17px">Новый контакт</div>
+      <span style="width:40px"></span>
+    </div>
+    <div style="flex:1;overflow-y:auto;padding:24px 20px 20px;display:flex;flex-direction:column;align-items:center">
+      <div id="ac-av" style="width:88px;height:88px;border-radius:50%;margin-bottom:28px;background:${esc(col)};display:flex;align-items:center;justify-content:center;font-size:32px;font-weight:700;color:#fff;overflow:hidden;background-size:cover;background-position:center">
+        ${profile.avatar_url?`<img src="${esc(profile.avatar_url)}" style="width:100%;height:100%;object-fit:cover" alt="">`:`${esc(ch.slice(0,2))}`}
+      </div>
+      <input id="ac-first" placeholder="Имя" value="${esc(first0)}"
+        style="width:100%;max-width:420px;box-sizing:border-box;margin-bottom:12px;padding:16px 18px;border-radius:16px;border:none;background:rgba(120,120,128,.16);color:var(--text);font-size:16px;outline:none">
+      <input id="ac-last" placeholder="Фамилия" value="${esc(last0)}"
+        style="width:100%;max-width:420px;box-sizing:border-box;margin-bottom:12px;padding:16px 18px;border-radius:16px;border:none;background:rgba(120,120,128,.16);color:var(--text);font-size:16px;outline:none">
+    </div>
+    <div style="padding:12px 20px calc(16px + env(safe-area-inset-bottom))">
+      <button type="button" id="ac-save" style="width:100%;padding:16px;border:none;border-radius:16px;background:#3B82F6;color:#fff;font-weight:700;font-size:16px;cursor:pointer">Сохранить</button>
+    </div>`;
+  document.body.appendChild(ov);
+  const close = ()=>ov.remove();
+  ov.querySelector('#ac-close').onclick = close;
+  setTimeout(()=>{ try{ ov.querySelector('#ac-first')?.focus(); }catch(e){} }, 200);
+  ov.querySelector('#ac-save').onclick = ()=>{
+    const f = (ov.querySelector('#ac-first')?.value||'').trim();
+    const l = (ov.querySelector('#ac-last')?.value||'').trim();
+    // save local name
+    try{
+      if(typeof setLocalName==='function') setLocalName(profile.id, f, l);
+      else if(typeof window.slSetLocalName==='function') window.slSetLocalName(profile.id, f, l);
+      else {
+        const key='sl_local_names';
+        let m={}; try{m=JSON.parse(localStorage.getItem(key)||'{}');}catch(e){}
+        if(!f && !l) delete m[profile.id];
+        else m[profile.id]={first:f,last:l};
+        localStorage.setItem(key, JSON.stringify(m));
+      }
+    }catch(e){}
+    // add to contacts list
+    const displayFirst = f || profile.first_name || profile.username || '';
+    const displayLast = l || (!f ? (profile.last_name||'') : '');
+    const enriched = {...profile, first_name: displayFirst, last_name: displayLast};
+    try{ if(typeof ensureInContacts==='function') ensureInContacts(enriched); }catch(e){}
+    try{ window.slMarkInContacts(profile.id); }catch(e){}
+    // update contacts array entry names
+    try{
+      if(typeof contacts!=='undefined' && Array.isArray(contacts)){
+        const idx=contacts.findIndex(c=>c&&c.id===profile.id);
+        if(idx>=0){ contacts[idx]={...contacts[idx], first_name:displayFirst, last_name:displayLast}; }
+        else contacts.unshift({...enriched, lastMessage:'', lastAt:new Date().toISOString()});
+      }
+    }catch(e){}
+    try{ if(typeof renderContactsAndGroups==='function') renderContactsAndGroups(); }catch(e){}
+    close();
+    try{ showToast('Вы добавили контакт'); }catch(e){}
+    // update open profile sheet: name + remove button
+    try{
+      if(profileSheet){
+        const nameEl = profileSheet.querySelector('.sl-profile-hero div[style*="font-size:22px"], .sl-profile-hero > div:nth-child(2)');
+        const full = (displayFirst+' '+displayLast).trim() || profile.username || '';
+        if(nameEl) {
+          const badge = nameEl.querySelector('.sl-name-badge, .verified-badge');
+          nameEl.innerHTML = (typeof escapeHtml==='function'?escapeHtml(full):full) + (badge?badge.outerHTML:'');
+        }
+        profileSheet.querySelector('#up-add-contact-wrap')?.remove();
+      }
+    }catch(e){}
+    // update chat header if same partner
+    try{
+      if(typeof activePartner!=='undefined' && activePartner && activePartner.id===profile.id){
+        activePartner.first_name=displayFirst; activePartner.last_name=displayLast;
+        const cn=document.getElementById('chat-partner-name');
+        if(cn) cn.textContent=(displayFirst+' '+displayLast).trim();
+      }
+    }catch(e){}
+  };
+};
+
 async function searchProfilesSafe(q, excludeId, limit, fields){
   fields = fields || ['username','email','phone','first_name','last_name'];
   let attempt = [...fields];
@@ -15417,6 +15531,14 @@ async function openFullProfile(profileLike){
     }
   }catch(e){}
   const name=p.first_name?`${p.first_name} ${p.last_name||''}`.trim():(p.username||'');
+  let _isInContacts = false;
+  try{
+    if(typeof contacts!=='undefined' && Array.isArray(contacts) && contacts.some(c=>c&&c.id===p.id)) _isInContacts=true;
+    if(!_isInContacts){
+      const arr=JSON.parse(localStorage.getItem('sl_my_contacts')||'[]');
+      if(Array.isArray(arr) && arr.includes(p.id)) _isInContacts=true;
+    }
+  }catch(e){}
   const about = p.bio || p.about || p.status_text || p.emoji_status || '';
   const statusLine = (typeof onlineUsers!=='undefined' && onlineUsers.has(p.id))
     ? (typeof t==='function'?t('online'):'в сети')
@@ -15457,11 +15579,12 @@ async function openFullProfile(profileLike){
       </div>
       <div style="padding:0 0 0">
       ${!isMe?`<div class="sl-info-actions">
-        <button type="button" class="sl-info-chip" data-a="call">${ico.call}<span>звонок</span></button>
-        <button type="button" class="sl-info-chip" data-a="video">${ico.video}<span>видео</span></button>
-        <button type="button" class="sl-info-chip" data-a="mute">${ico.sound}<span>звук</span></button>
-        <button type="button" class="sl-info-chip" data-a="search">${ico.search||ico.more}<span>поиск</span></button>
-        <button type="button" class="sl-info-chip" data-a="more">${ico.more}<span>ещё</span></button>
+        <button type="button" class="sl-info-chip" data-a="call">${ico.call}<span>Звонок</span></button>
+        <button type="button" class="sl-info-chip" data-a="video">${ico.video}<span>Видео</span></button>
+        <button type="button" class="sl-info-chip" data-a="more">${ico.more}<span>Ещё</span></button>
+      </div>
+      <div style="padding:0 16px 12px" id="up-add-contact-wrap">
+        ${!_isInContacts?`<button type="button" id="up-add-contact" class="btn-primary" style="width:100%;padding:14px;border-radius:14px;font-size:16px;font-weight:700;border:none;cursor:pointer;background:#3B82F6">В контакты</button>`:''}
       </div>`:''}
       <div class="sl-info-block">
         ${(p.phone||p.phone_number||p.mobile)?`
@@ -15502,6 +15625,11 @@ async function openFullProfile(profileLike){
   sheet.querySelector('#up-rename-local')?.addEventListener('click',(e)=>{
     e.preventDefault(); e.stopPropagation();
     try{ if(typeof window.slOpenLocalRename==='function') window.slOpenLocalRename(p); }catch(err){}
+  });
+  // MAX-style: add to contacts
+  sheet.querySelector('#up-add-contact')?.addEventListener('click', (e)=>{
+    e.preventDefault(); e.stopPropagation();
+    try{ if(typeof window.slOpenAddContact==='function') window.slOpenAddContact(p, sheet); }catch(err){ console.warn(err); }
   });
   sheet.querySelector('#up-qr')?.addEventListener('click', async()=>{
     const u = p.username ? ('@'+p.username) : (p.phone||'');
