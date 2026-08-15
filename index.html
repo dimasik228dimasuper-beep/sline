@@ -5754,7 +5754,16 @@ function renderMessage(msg, isGroup=false){
   const row=document.createElement('div');
   row.className='bubble-row '+(mine?'me':'them');
   row.dataset.id=msg.id;
-  const time=new Date(msg.created_at||Date.now()).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'});
+  const _msgTs = new Date(msg.created_at||Date.now());
+  row.dataset.ts = String(_msgTs.getTime());
+  row.dataset.day = _msgTs.toDateString();
+  // Day separator (Сегодня / Вчера / 15 августа)
+  try{
+    if(list && typeof window.slEnsureDaySep==='function'){
+      window.slEnsureDaySep(list, _msgTs);
+    }
+  }catch(e){}
+  const time=_msgTs.toLocaleTimeString((typeof currentLang!=='undefined'&&currentLang==='en')?'en-US':'ru-RU',{hour:'2-digit',minute:'2-digit'});
   let bodyText=msg.content||'', replyHtml='';
   if((msg.type==='text'||!msg.type)&&bodyText.startsWith('↪ ')){
     const nl=bodyText.indexOf('\n');
@@ -35829,6 +35838,304 @@ body{
     hideBoot(true);
     clearInterval(iv);
   }, 15000);
+})();
+</script>
+
+
+<script>
+/* ========== Chat day separators + sticky date header (MAX-style) ========== */
+(function(){
+  const MONTHS_RU = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
+  const MONTHS_EN = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+  function isEn(){ try{ return typeof currentLang!=='undefined' && currentLang==='en'; }catch(e){ return false; } }
+
+  function dayKey(d){
+    const x = d instanceof Date ? d : new Date(d);
+    return x.getFullYear()+'-'+(x.getMonth()+1)+'-'+x.getDate();
+  }
+
+  function formatDayLabel(d){
+    const date = d instanceof Date ? d : new Date(d);
+    if(isNaN(date.getTime())) return '';
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const that = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const diff = Math.round((today - that) / 86400000);
+    if(diff === 0) return isEn() ? 'Today' : 'Сегодня';
+    if(diff === 1) return isEn() ? 'Yesterday' : 'Вчера';
+    if(diff === -1) return isEn() ? 'Tomorrow' : 'Завтра';
+    if(isEn()){
+      if(date.getFullYear() === now.getFullYear())
+        return MONTHS_EN[date.getMonth()] + ' ' + date.getDate();
+      return MONTHS_EN[date.getMonth()] + ' ' + date.getDate() + ', ' + date.getFullYear();
+    }
+    // Russian: "15 августа" or "15 августа 2025"
+    let s = date.getDate() + ' ' + MONTHS_RU[date.getMonth()];
+    if(date.getFullYear() !== now.getFullYear()) s += ' ' + date.getFullYear();
+    return s;
+  }
+
+  function injectCSS(){
+    if(document.getElementById('sl-day-sep-css')) return;
+    const s = document.createElement('style');
+    s.id = 'sl-day-sep-css';
+    s.textContent = `
+      .msg-day-sep{
+        display:flex; justify-content:center; align-items:center;
+        padding:10px 12px 8px; position:relative; z-index:1;
+        pointer-events:none; user-select:none;
+      }
+      .msg-day-sep span{
+        display:inline-block;
+        padding:5px 12px;
+        border-radius:999px;
+        font-size:13px; font-weight:600; letter-spacing:-.1px;
+        color:var(--text,#F4F7FB);
+        background:rgba(36,48,65,.88);
+        backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+        box-shadow:0 2px 10px rgba(0,0,0,.18);
+        line-height:1.25; max-width:90%; text-align:center;
+      }
+      body.theme-light .msg-day-sep span{
+        background:rgba(255,255,255,.92);
+        color:#1a1a1a;
+        box-shadow:0 1px 6px rgba(0,0,0,.1);
+      }
+      /* Sticky floating date at top of chat while scrolling */
+      #sl-sticky-day{
+        position:absolute; left:0; right:0; top:0;
+        display:flex; justify-content:center; align-items:flex-start;
+        padding:8px 12px 0;
+        pointer-events:none; z-index:30;
+        opacity:0; transform:translateY(-8px);
+        transition:opacity .18s ease, transform .18s ease;
+      }
+      #sl-sticky-day.show{
+        opacity:1; transform:translateY(0);
+      }
+      #sl-sticky-day span{
+        display:inline-block;
+        padding:5px 12px;
+        border-radius:999px;
+        font-size:13px; font-weight:600;
+        color:var(--text,#F4F7FB);
+        background:rgba(36,48,65,.92);
+        backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+        box-shadow:0 4px 16px rgba(0,0,0,.28);
+        line-height:1.25;
+      }
+      body.theme-light #sl-sticky-day span{
+        background:rgba(255,255,255,.95);
+        color:#1a1a1a;
+        box-shadow:0 2px 12px rgba(0,0,0,.12);
+      }
+      #chat-active, .chat-pane{ position:relative; }
+      #messages-list, .messages{
+        position:relative;
+      }
+    `;
+    document.head.appendChild(s);
+  }
+
+  function ensureStickyEl(){
+    // Prefer overlay inside the messages scroller host so it tracks chat area
+    let host = document.getElementById('chat-active') || document.querySelector('.chat-pane');
+    if(!host) return null;
+    // Ensure host can position absolute children
+    try{
+      const st = getComputedStyle(host);
+      if(st.position === 'static') host.style.position = 'relative';
+    }catch(e){}
+    let el = document.getElementById('sl-sticky-day');
+    if(el){
+      // keep under header
+      try{
+        const header = host.querySelector('.chat-header');
+        const h = header ? header.getBoundingClientRect().height : 52;
+        el.style.top = h + 'px';
+      }catch(e){}
+      return el;
+    }
+    el = document.createElement('div');
+    el.id = 'sl-sticky-day';
+    el.innerHTML = '<span></span>';
+    const header = host.querySelector('.chat-header');
+    if(header && header.nextSibling){
+      host.insertBefore(el, header.nextSibling);
+    } else {
+      host.appendChild(el);
+    }
+    try{
+      const h = header ? header.getBoundingClientRect().height : 52;
+      el.style.top = h + 'px';
+    }catch(e){}
+    return el;
+  }
+
+  /** Insert day separator into list if last day differs */
+  window.slEnsureDaySep = function(list, msgDate){
+    if(!list || !msgDate) return;
+    const label = formatDayLabel(msgDate);
+    const key = dayKey(msgDate);
+    // Find last day sep or last bubble-row
+    const lastSep = list.querySelector('.msg-day-sep:last-of-type');
+    const rows = list.querySelectorAll('.bubble-row');
+    const lastRow = rows.length ? rows[rows.length-1] : null;
+    let need = true;
+    if(lastRow && lastRow.dataset.day){
+      const lastD = new Date(Number(lastRow.dataset.ts)||lastRow.dataset.day);
+      if(dayKey(lastD) === key) need = false;
+    }
+    // Also if last element is already a sep for this day
+    const children = list.children;
+    if(children.length){
+      const last = children[children.length-1];
+      if(last && last.classList && last.classList.contains('msg-day-sep') && last.dataset.day === key){
+        need = false;
+      }
+    }
+    if(!need) return;
+    const sep = document.createElement('div');
+    sep.className = 'msg-day-sep';
+    sep.dataset.day = key;
+    sep.innerHTML = '<span>' + label + '</span>';
+    list.appendChild(sep);
+  };
+
+  /** Rebuild all day seps from existing rows (for language switch / load) */
+  function rebuildDaySeps(list){
+    if(!list) list = document.getElementById('messages-list');
+    if(!list) return;
+    list.querySelectorAll('.msg-day-sep').forEach(el=>el.remove());
+    const rows = [...list.querySelectorAll('.bubble-row')];
+    let prevKey = null;
+    rows.forEach(row=>{
+      let d;
+      if(row.dataset.ts) d = new Date(Number(row.dataset.ts));
+      else if(row.dataset.day) d = new Date(row.dataset.day);
+      else return;
+      const key = dayKey(d);
+      if(key !== prevKey){
+        const sep = document.createElement('div');
+        sep.className = 'msg-day-sep';
+        sep.dataset.day = key;
+        sep.innerHTML = '<span>' + formatDayLabel(d) + '</span>';
+        row.parentNode.insertBefore(sep, row);
+        prevKey = key;
+      }
+    });
+  }
+  window.slRebuildDaySeps = rebuildDaySeps;
+
+  /** Sticky date: show label of the topmost visible day while scrolling */
+  let stickyHideTimer = null;
+  function updateSticky(){
+    const list = document.getElementById('messages-list');
+    const sticky = ensureStickyEl();
+    if(!list || !sticky) return;
+    const seps = list.querySelectorAll('.msg-day-sep');
+    if(!seps.length){ sticky.classList.remove('show'); return; }
+
+    const listRect = list.getBoundingClientRect();
+    // Find the last day-sep whose top is above the visible top of the list
+    let current = null;
+    for(let i=0;i<seps.length;i++){
+      const r = seps[i].getBoundingClientRect();
+      // sep is at or above the top of the viewport of the list
+      if(r.top <= listRect.top + 8) current = seps[i];
+      else break;
+    }
+    // If scrolled near top, hide sticky (native seps are visible)
+    if(list.scrollTop < 24){
+      sticky.classList.remove('show');
+      return;
+    }
+    if(!current){
+      // first visible messages before any sep crossed — use first sep if any
+      current = seps[0];
+    }
+    const label = current.querySelector('span')?.textContent || '';
+    const span = sticky.querySelector('span');
+    if(span && label){
+      if(span.textContent !== label) span.textContent = label;
+      sticky.classList.add('show');
+      clearTimeout(stickyHideTimer);
+      // keep visible while scrolling; fade a bit after stop
+      stickyHideTimer = setTimeout(()=>{ sticky.classList.remove('show'); }, 1400);
+    }
+  }
+
+  function bindScroll(){
+    const list = document.getElementById('messages-list');
+    if(!list || list._slDayBound) return;
+    list._slDayBound = true;
+    let ticking = false;
+    list.addEventListener('scroll', ()=>{
+      if(ticking) return;
+      ticking = true;
+      requestAnimationFrame(()=>{
+        ticking = false;
+        updateSticky();
+      });
+    }, {passive:true});
+  }
+
+  // Patch paintMessages to rebuild seps after full paint (safety)
+  function patchPaint(){
+    if(typeof paintMessages!=='function' || paintMessages._dayPatched) return;
+    const orig = paintMessages;
+    window.paintMessages = paintMessages = function(rows, isGroup){
+      const r = orig.apply(this, arguments);
+      try{
+        // renderMessage already inserts seps; ensure sticky bound
+        bindScroll();
+        setTimeout(()=>{
+          const list=document.getElementById('messages-list');
+          // If seps missing (old path), rebuild
+          if(list && !list.querySelector('.msg-day-sep') && list.querySelector('.bubble-row')){
+            rebuildDaySeps(list);
+          }
+          ensureStickyEl();
+        }, 30);
+      }catch(e){}
+      return r;
+    };
+    paintMessages._dayPatched = true;
+  }
+
+  // Language change → relabel seps
+  function patchI18n(){
+    if(typeof applyI18n!=='function' || applyI18n._dayPatched) return;
+    const orig = applyI18n;
+    window.applyI18n = applyI18n = function(){
+      const r = orig.apply(this, arguments);
+      try{ rebuildDaySeps(); }catch(e){}
+      return r;
+    };
+    applyI18n._dayPatched = true;
+  }
+
+  function boot(){
+    injectCSS();
+    ensureStickyEl();
+    bindScroll();
+    patchPaint();
+    patchI18n();
+    // If messages already present
+    try{
+      const list=document.getElementById('messages-list');
+      if(list && list.querySelector('.bubble-row') && !list.querySelector('.msg-day-sep')){
+        // backfill data-ts from bubble times if possible — skip; rebuild needs ts
+      }
+    }catch(e){}
+  }
+
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', boot);
+  else boot();
+  setTimeout(boot, 400);
+  setTimeout(boot, 1200);
+  console.log('[SL] day separators + sticky date ready');
 })();
 </script>
 
