@@ -448,7 +448,31 @@ body.beta-oled .sw-clip{background:var(--panel)!important}
 .circle-msg .circle-ring .ring-prog{fill:none;stroke:#fff;stroke-width:3.2;stroke-linecap:round;stroke-dasharray:0;stroke-dashoffset:0;opacity:0;transition:opacity .15s;will-change:stroke-dashoffset}
 .circle-msg.is-expanded .circle-ring .ring-prog{opacity:1}
 .circle-msg.is-expanded .circle-mute{display:none!important}
-.circle-msg.is-expanded .circle-play-overlay{display:none!important}
+.circle-msg.is-expanded:not(.is-paused) .circle-play-overlay{display:none!important}
+.circle-msg.is-expanded.is-paused .circle-play-overlay{
+  display:flex!important;
+  animation:slCirclePlayIn .32s cubic-bezier(.34,1.4,.64,1) both;
+}
+.circle-msg.is-expanded.is-paused .circle-play-overlay svg{
+  animation:slCirclePlayIcon .38s cubic-bezier(.34,1.4,.64,1) both;
+}
+@keyframes slCirclePlayIn{
+  from{opacity:0;background:rgba(0,0,0,0)}
+  to{opacity:1;background:rgba(0,0,0,.32)}
+}
+@keyframes slCirclePlayIcon{
+  from{opacity:0;transform:scale(.55)}
+  60%{transform:scale(1.12)}
+  to{opacity:1;transform:scale(1)}
+}
+.circle-msg .circle-ring .ring-knob{
+  fill:#fff;
+  opacity:0;
+  transition:opacity .15s;
+  pointer-events:none;
+}
+.circle-msg.is-expanded .circle-ring .ring-knob{opacity:1}
+.circle-msg .circle-ring .ring-prog{stroke-width:3.6}
 .circle-transcribe-btn{
   position:absolute!important;top:8px;right:-4px;z-index:6;
   width:36px;height:36px;border-radius:12px;border:none;cursor:pointer;
@@ -5482,7 +5506,7 @@ function buildMessageBody(msg, replyHtml, bodyText){
     const src = escapeHtml(msg.file_url||'');
     return `<div class="circle-msg-wrap" data-mid="${msg.id}">
       <div class="circle-msg" data-src="${src}">
-        <div class="circle-ring" aria-hidden="true"><svg viewBox="0 0 100 100"><circle class="ring-bg" cx="50" cy="50" r="47"/><circle class="ring-prog" cx="50" cy="50" r="47"/></svg></div>
+        <div class="circle-ring" aria-hidden="true"><svg viewBox="0 0 100 100"><circle class="ring-bg" cx="50" cy="50" r="47"/><circle class="ring-prog" cx="50" cy="50" r="47"/><circle class="ring-knob" cx="97" cy="50" r="4.2"/></svg></div>
         <div class="circle-msg-inner">
           <video src="${src}" playsinline webkit-playsinline preload="metadata" muted loop></video>
           <div class="circle-play-overlay" style="display:none"><svg viewBox="0 0 24 24" style="width:36px;height:36px;fill:#fff"><path d="M8 5v14l11-7z"/></svg></div>
@@ -5602,6 +5626,7 @@ function renderMessage(msg, isGroup=false){
     const durEl=circle.querySelector('.circle-dur');
     const muteEl=circle.querySelector('.circle-mute');
     const ringProg=circle.querySelector('.ring-prog');
+    const ringKnob=circle.querySelector('.ring-knob');
     const C=2*Math.PI*47;
     if(ringProg){
       ringProg.setAttribute('stroke-dasharray', String(C));
@@ -5616,9 +5641,15 @@ function renderMessage(msg, isGroup=false){
       const d=v.duration||0;
       const p=d>0?Math.min(1,Math.max(0,t/d)):0;
       const off=C*(1-p);
-      // attribute + style for max browser smoothness
       ringProg.setAttribute('stroke-dashoffset', off.toFixed(2));
       ringProg.style.strokeDashoffset=off.toFixed(2);
+      if(ringKnob){
+        // SVG path starts at 3 o'clock; svg rotated -90deg → visual start at top
+        const ang = p * 2 * Math.PI;
+        const r = 47;
+        ringKnob.setAttribute('cx', (50 + r * Math.cos(ang)).toFixed(2));
+        ringKnob.setAttribute('cy', (50 + r * Math.sin(ang)).toFixed(2));
+      }
     };
     const stopRingLoop=()=>{ if(ringRaf){ cancelAnimationFrame(ringRaf); ringRaf=0; } };
     const startRingLoop=()=>{
@@ -5635,13 +5666,20 @@ function renderMessage(msg, isGroup=false){
       ringRaf=requestAnimationFrame(tick);
     };
     const setPausedUI=(paused)=>{
-      if(ov){
-        if(paused && circle.classList.contains('is-expanded')){
-          ov.style.display='flex';
-          ov.innerHTML='<svg viewBox="0 0 24 24" style="width:44px;height:44px;fill:#fff;filter:drop-shadow(0 2px 6px rgba(0,0,0,.5))"><path d="M8 5v14l11-7z"/></svg>';
-        } else {
-          ov.style.display='none';
+      if(paused && circle.classList.contains('is-expanded')){
+        if(ov){
+          ov.innerHTML='<svg viewBox="0 0 24 24" style="width:48px;height:48px;fill:#fff;filter:drop-shadow(0 2px 8px rgba(0,0,0,.55))"><path d="M8 5v14l11-7z"/></svg>';
+          ov.style.display='';
+          ov.style.animation='none';
         }
+        // re-trigger CSS animation each time
+        circle.classList.remove('is-paused');
+        void circle.offsetWidth;
+        circle.classList.add('is-paused');
+        if(ov){ void ov.offsetWidth; ov.style.animation=''; }
+      } else {
+        circle.classList.remove('is-paused');
+        if(ov){ ov.style.display='none'; ov.style.animation=''; }
       }
     };
     const collapse=()=>{
