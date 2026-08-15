@@ -442,7 +442,9 @@ body.beta-oled .sw-clip{background:var(--panel)!important}
 
 .circle-msg{width:140px;height:140px;border-radius:50%;overflow:visible;position:relative;background:#111;border:2.5px solid rgba(255,255,255,.22);cursor:pointer;box-shadow:0 6px 20px rgba(0,0,0,.35);flex-shrink:0;transition:width .28s cubic-bezier(.2,.8,.2,1),height .28s cubic-bezier(.2,.8,.2,1),box-shadow .28s}
 .circle-msg.is-expanded{width:260px;height:260px;z-index:20;box-shadow:0 12px 40px rgba(0,0,0,.55);border-color:rgba(255,255,255,.35)}
-.circle-msg .circle-ring{position:absolute;inset:-5px;pointer-events:none;z-index:4}
+.circle-msg .circle-ring{position:absolute;inset:-8px;pointer-events:none;z-index:4}
+.circle-msg.is-expanded .circle-ring{pointer-events:auto;cursor:pointer;touch-action:none}
+
 .circle-msg .circle-ring svg{width:100%;height:100%;transform:rotate(-90deg);overflow:visible}
 .circle-msg .circle-ring .ring-bg{fill:none;stroke:rgba(255,255,255,.18);stroke-width:3}
 .circle-msg .circle-ring .ring-prog{fill:none;stroke:#fff;stroke-width:3.2;stroke-linecap:round;stroke-dasharray:0;stroke-dashoffset:0;opacity:0;transition:opacity .15s;will-change:stroke-dashoffset}
@@ -5914,6 +5916,69 @@ function renderMessage(msg, isGroup=false){
         e.preventDefault(); e.stopPropagation();
         if(typeof e.stopImmediatePropagation==='function') e.stopImmediatePropagation();
       });
+
+      // ===== Seek by dragging on the progress ring =====
+      (function bindCircleSeek(){
+        const ring = circleEl.querySelector('.circle-ring');
+        if(!ring || ring._seekBound) return;
+        ring._seekBound = true;
+        let seeking = false;
+        const angleToProgress = (clientX, clientY)=>{
+          const rect = circleEl.getBoundingClientRect();
+          const cx = rect.left + rect.width/2;
+          const cy = rect.top + rect.height/2;
+          let ang = Math.atan2(clientY - cy, clientX - cx); // -PI..PI, 0 = right
+          // visual start is top (= -PI/2), clockwise
+          let p = (ang + Math.PI/2) / (2*Math.PI);
+          if(p < 0) p += 1;
+          if(p > 1) p -= 1;
+          return Math.min(1, Math.max(0, p));
+        };
+        const applySeek = (clientX, clientY)=>{
+          if(!videoEl.duration || !isFinite(videoEl.duration)) return;
+          const p = angleToProgress(clientX, clientY);
+          try{ videoEl.currentTime = p * videoEl.duration; }catch(err){}
+          setRing(videoEl.currentTime||0);
+          if(durEl) durEl.textContent = fmt(videoEl.currentTime||0);
+        };
+        const onSeekStart = (e)=>{
+          if(!circleEl.classList.contains('is-expanded')) return;
+          // only start seek if touch is near the ring edge (outer 22% of radius)
+          const rect = circleEl.getBoundingClientRect();
+          const cx = rect.left + rect.width/2;
+          const cy = rect.top + rect.height/2;
+          const pt = e.touches ? e.touches[0] : e;
+          const dx = pt.clientX - cx, dy = pt.clientY - cy;
+          const dist = Math.sqrt(dx*dx + dy*dy);
+          const r = Math.min(rect.width, rect.height)/2;
+          if(dist < r * 0.72) return; // center = play/pause, edge = seek
+          seeking = true;
+          e.preventDefault(); e.stopPropagation();
+          clearLp(); // cancel long-press
+          lpFired = true; // prevent tap toggle
+          applySeek(pt.clientX, pt.clientY);
+          try{ ring.setPointerCapture && e.pointerId!=null && ring.setPointerCapture(e.pointerId); }catch(err){}
+        };
+        const onSeekMove = (e)=>{
+          if(!seeking) return;
+          e.preventDefault(); e.stopPropagation();
+          const pt = e.touches ? e.touches[0] : e;
+          applySeek(pt.clientX, pt.clientY);
+        };
+        const onSeekEnd = (e)=>{
+          if(!seeking) return;
+          seeking = false;
+          e.preventDefault(); e.stopPropagation();
+        };
+        ring.addEventListener('pointerdown', onSeekStart, {passive:false});
+        ring.addEventListener('pointermove', onSeekMove, {passive:false});
+        ring.addEventListener('pointerup', onSeekEnd);
+        ring.addEventListener('pointercancel', onSeekEnd);
+        // touch fallbacks
+        ring.addEventListener('touchstart', onSeekStart, {passive:false});
+        ring.addEventListener('touchmove', onSeekMove, {passive:false});
+        ring.addEventListener('touchend', onSeekEnd);
+      })();
     })(circle, v, msg);
   }
 
@@ -6774,7 +6839,9 @@ async function sendMessage(type='text', fileUrl=null, content=null){
     const _prev=String(_rm.content||'вложение').replace(/^↪ [^\n]*\n/,'').slice(0,60);
     const _rid=_rm.id?String(_rm.id):'';
     text = _rid ? (`↪ #${_rid}|${_prev}\n${text}`) : (`↪ ${_prev}\n${text}`);
-    _replyIdForPayload = _rid || null;
+    // only real UUIDs are valid for reply_to_msg_id FK — skip local_/temp ids
+    const _isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(_rid);
+    _replyIdForPayload = (_rid && _isUuid) ? _rid : null;
     replyToMsg=null; input.placeholder='Сообщение...';
     try{ window.hideReplyBar && window.hideReplyBar(); }catch(e){}
   }
@@ -6832,7 +6899,15 @@ async function sendMessage(type='text', fileUrl=null, content=null){
   renderMessage({...payload, id:localId, created_at:new Date().toISOString(), _pending:true}, !!activeGroup);
   scrollToBottom();
   try{
-    const {data,error}=await sb.from('messages').insert(payload).select().single();
+    let {data,error}=await sb.from('messages').insert(payload).select().single();
+    // If reply_to_msg_id causes FK/uuid error — retry without it (text quote still preserved)
+    if(error && payload.reply_to_msg_id && /uuid|foreign key|reply_to|invalid input|violates/i.test(String(error.message||error))){
+      try{
+        const p2={...payload}; delete p2.reply_to_msg_id;
+        const r2=await sb.from('messages').insert(p2).select().single();
+        if(!r2.error){ data=r2.data; error=null; }
+      }catch(e2){}
+    }
     if(error){
       const msg=String(error.message||error);
       // uuid / FK errors for synthetic news → local fallback
