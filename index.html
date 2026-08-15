@@ -2459,15 +2459,15 @@ body.light-theme .circle-record-overlay {
 
 
 <style id="sl-header-clean">
-  #chat-search-btn,
+  /* search is visible — media/wall stay optional */
   #media-btn,
   #sl-wall-btn,
-  .chat-actions #chat-search-btn,
   .chat-actions #media-btn{
     display:none !important;
   }
-  .chat-actions .icon-btn:not(#call-btn):not(#video-call-btn):not(#invite-btn):not(#group-settings-btn){
-    /* keep only call + video (+ group controls when shown) */
+  #chat-search-btn,
+  .chat-actions #chat-search-btn{
+    display:inline-flex !important;
   }
 </style>
 
@@ -3183,7 +3183,7 @@ body.theme-light .topbar {
               <div class="avatar" id="partner-avatar" style="width:38px;height:38px;font-size:14px"></div>
               <div style="min-width:0;flex:1"><div class="chat-title" id="chat-partner-name"></div><div id="chat-partner-status" class="chat-status">в сети</div></div>
               <div class="chat-actions">
-                <button class="icon-btn" id="chat-search-btn" title="Поиск" data-i18n-title="tt_search" style="display:none!important"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg></button>
+                <button class="icon-btn" id="chat-search-btn" title="Поиск" data-i18n-title="tt_search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg></button>
                 <button class="icon-btn" id="media-btn" title="Медиа" data-i18n-title="tt_media" style="display:none!important"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg></button>
                 <button class="icon-btn" id="invite-btn" style="display:none" title="Пригласить" data-i18n-title="tt_invite"><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4-4v2"/><circle cx="8.5" cy="7" r="4"/><path d="M20 8v6M23 11h-6"/></svg></button>
                 <button class="icon-btn" id="group-settings-btn" style="display:none" title="Настройки" data-i18n-title="tt_settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2"/></svg></button>
@@ -7828,24 +7828,8 @@ document.getElementById('media-btn').onclick=async()=>{
 };
 
 // ========== SEARCH IN CHAT ==========
-document.getElementById('chat-search-btn').onclick=()=>{
-  document.getElementById('search-in-chat').classList.add('show');
-  document.getElementById('chat-search-input').focus();
-};
-document.getElementById('chat-search-close').onclick=()=>{
-  document.getElementById('search-in-chat').classList.remove('show');
-  document.getElementById('chat-search-input').value='';
-  document.querySelectorAll('.bubble-row').forEach(r=>r.style.outline='');
-};
-document.getElementById('chat-search-input').oninput=function(){
-  const q=this.value.trim().toLowerCase();
-  document.querySelectorAll('.bubble-row').forEach(r=>{
-    const text=r.textContent.toLowerCase();
-    r.style.outline = q && text.includes(q) ? '2px solid var(--mint)' : '';
-    if(q && text.includes(q)) r.scrollIntoView({block:'center',behavior:'smooth'});
-  });
-};
-document.addEventListener('keydown', e=>{ if((e.ctrlKey||e.metaKey)&&e.key==='f' && (activePartner||activeGroup)){ e.preventDefault(); document.getElementById('chat-search-btn').click(); } });
+/* Chat search is upgraded by SL UX polish pack (counter + next/prev) */
+document.addEventListener('keydown', e=>{ if((e.ctrlKey||e.metaKey)&&e.key==='f' && (activePartner||activeGroup)){ e.preventDefault(); try{ document.getElementById('chat-search-btn')?.click(); }catch(err){} } });
 
 // ========== STORIES + REPLY ==========
 async function loadStories(){
@@ -36136,6 +36120,338 @@ body{
   setTimeout(boot, 400);
   setTimeout(boot, 1200);
   console.log('[SL] day separators + sticky date ready');
+})();
+</script>
+
+
+<script>
+/* ========== SL UX polish pack: search, reply bar, drafts, unread sep ========== */
+(function(){
+  const L = (ru,en)=>{ try{ return (typeof currentLang!=='undefined'&&currentLang==='en')?en:ru; }catch(e){ return ru; } };
+
+  function css(){
+    if(document.getElementById('sl-ux-polish-css')) return;
+    const s=document.createElement('style');
+    s.id='sl-ux-polish-css';
+    s.textContent=`
+      #chat-search-btn{display:inline-flex!important}
+      .search-in-chat{
+        position:absolute;top:0;left:0;right:0;z-index:40;
+        display:none;align-items:center;gap:6px;
+        padding:8px 10px;background:var(--panel,#1A222D);
+        border-bottom:1px solid var(--line);box-sizing:border-box;
+      }
+      .search-in-chat.show{display:flex!important}
+      .search-in-chat input{flex:1;min-width:0;padding:8px 12px;border-radius:10px;border:1px solid var(--line);background:var(--input-bg);color:var(--text);font-size:14px;outline:none}
+      .search-in-chat .sic-count{font-size:12px;color:var(--muted);white-space:nowrap;min-width:42px;text-align:center}
+      .search-in-chat .sic-nav{width:32px;height:32px;border:none;border-radius:8px;background:rgba(120,120,128,.15);color:var(--text);cursor:pointer;font-size:14px;display:inline-flex;align-items:center;justify-content:center}
+      .search-in-chat .sic-nav:active{transform:scale(.92)}
+      .search-in-chat .sic-close{width:32px;height:32px;border:none;background:transparent;color:var(--muted);font-size:18px;cursor:pointer}
+      .bubble-row.sl-search-hit .bubble{outline:2px solid var(--accent-a,#4C7CF3);outline-offset:1px}
+      .bubble-row.sl-search-current .bubble{outline:2px solid var(--mint,#3EE0C6);outline-offset:2px;box-shadow:0 0 0 4px rgba(62,224,198,.2)}
+      mark.sl-hl{background:rgba(255,214,10,.45);color:inherit;border-radius:2px;padding:0 1px}
+      .sl-reply-bar,.reply-bar{
+        display:none;align-items:center;gap:10px;
+        padding:8px 12px;background:var(--panel);border-top:1px solid var(--line);
+        flex-shrink:0;width:100%;box-sizing:border-box;
+      }
+      .sl-reply-bar.show,.reply-bar.show{display:flex!important}
+      .sl-reply-bar .rb-accent{width:3px;align-self:stretch;border-radius:2px;background:var(--accent-a,#4C7CF3);flex-shrink:0}
+      .sl-reply-bar .rb-body{flex:1;min-width:0}
+      .sl-reply-bar .rb-label{font-size:12px;font-weight:700;color:var(--accent-a,#4C7CF3)}
+      .sl-reply-bar .rb-text{font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+      .sl-reply-bar .rb-close{border:none;background:transparent;color:var(--muted);font-size:20px;cursor:pointer;padding:4px 8px}
+      .sl-unread-sep{
+        display:flex;align-items:center;gap:10px;padding:8px 16px;margin:4px 0;
+        pointer-events:none;user-select:none;
+      }
+      .sl-unread-sep::before,.sl-unread-sep::after{
+        content:'';flex:1;height:1px;background:rgba(255,107,129,.45);
+      }
+      .sl-unread-sep span{
+        font-size:12px;font-weight:700;color:#FF6B81;white-space:nowrap;
+      }
+      .bubble-row.sl-swiping{transition:none!important}
+      .bubble-row.sl-swipe-hint{transition:transform .2s cubic-bezier(.22,1,.36,1)}
+      .composer.has-reply{padding-top:0}
+    `;
+    document.head.appendChild(s);
+  }
+
+  /* ---------- Reply bar in DOM ---------- */
+  function ensureReplyBar(){
+    let bar=document.getElementById('sl-reply-bar')||document.getElementById('reply-bar');
+    if(bar) return bar;
+    const composer=document.getElementById('composer');
+    if(!composer) return null;
+    bar=document.createElement('div');
+    bar.id='sl-reply-bar';
+    bar.className='sl-reply-bar';
+    bar.innerHTML=`<div class="rb-accent"></div>
+      <div class="rb-body"><div class="rb-label" id="sl-reply-label">${L('Ответ','Reply')}</div>
+      <div class="rb-text" id="sl-reply-text"></div></div>
+      <button type="button" class="rb-close" id="sl-reply-close" aria-label="Close">×</button>`;
+    composer.parentNode.insertBefore(bar, composer);
+    bar.querySelector('#sl-reply-close').onclick=()=>{ try{ hideReplyBar(); }catch(e){} };
+    return bar;
+  }
+
+  window.showReplyBar = function(msg){
+    if(!msg) return;
+    try{ replyToMsg = msg; }catch(e){}
+    const bar=ensureReplyBar(); if(!bar) return;
+    const label=bar.querySelector('#sl-reply-label')||bar.querySelector('.rb-label');
+    const txt=bar.querySelector('#sl-reply-text')||bar.querySelector('.rb-text')||document.getElementById('reply-bar-text');
+    if(label) label.textContent = L('Ответ','Reply');
+    const preview = (msg.content||msg.type||L('вложение','attachment'))+'';
+    if(txt) txt.textContent = preview.replace(/^↪ [^\n]*\n/,'').slice(0,90);
+    bar.classList.add('show');
+    const inp=document.getElementById('message-input');
+    if(inp){
+      inp.placeholder = L('Ответ: ','Reply: ')+preview.slice(0,40);
+      try{ inp.focus(); }catch(e){}
+    }
+    document.getElementById('composer')?.classList.add('has-reply');
+  };
+
+  window.hideReplyBar = function(){
+    document.getElementById('sl-reply-bar')?.classList.remove('show');
+    document.getElementById('reply-bar')?.classList.remove('show');
+    try{ replyToMsg=null; }catch(e){}
+    const inp=document.getElementById('message-input');
+    if(inp) inp.placeholder = (typeof t==='function'?t('ph_message'):L('Сообщение...','Message...'));
+    document.getElementById('composer')?.classList.remove('has-reply');
+  };
+
+  /* ---------- Chat search with counter ---------- */
+  let _hits=[], _hitIdx=-1;
+
+  function clearSearchHits(){
+    document.querySelectorAll('.bubble-row.sl-search-hit,.bubble-row.sl-search-current').forEach(r=>{
+      r.classList.remove('sl-search-hit','sl-search-current');
+    });
+    document.querySelectorAll('mark.sl-hl').forEach(m=>{
+      const p=m.parentNode; if(!p) return;
+      p.replaceChild(document.createTextNode(m.textContent), m);
+      p.normalize();
+    });
+    _hits=[]; _hitIdx=-1;
+  }
+
+  function runChatSearch(q){
+    clearSearchHits();
+    const countEl=document.getElementById('sic-count');
+    q=(q||'').trim().toLowerCase();
+    if(!q){ if(countEl) countEl.textContent=''; return; }
+    const rows=[...document.querySelectorAll('#messages-list .bubble-row')];
+    _hits=[];
+    rows.forEach(row=>{
+      const text=(row.textContent||'').toLowerCase();
+      if(text.includes(q)){
+        row.classList.add('sl-search-hit');
+        _hits.push(row);
+      }
+    });
+    if(countEl){
+      countEl.textContent = _hits.length ? `1/${_hits.length}` : L('0','0');
+    }
+    if(_hits.length){
+      _hitIdx=0;
+      goHit(0);
+    }
+  }
+
+  function goHit(dir){
+    if(!_hits.length) return;
+    if(_hitIdx>=0 && _hits[_hitIdx]) _hits[_hitIdx].classList.remove('sl-search-current');
+    if(dir===0) _hitIdx=0;
+    else _hitIdx = (_hitIdx + dir + _hits.length) % _hits.length;
+    const row=_hits[_hitIdx];
+    row.classList.add('sl-search-current');
+    try{ row.scrollIntoView({block:'center', behavior:'smooth'}); }catch(e){}
+    const countEl=document.getElementById('sic-count');
+    if(countEl) countEl.textContent = `${_hitIdx+1}/${_hits.length}`;
+  }
+
+  function ensureSearchUI(){
+    let box=document.getElementById('search-in-chat');
+    if(!box){
+      const chat=document.getElementById('chat-active')||document.querySelector('.chat-pane');
+      if(!chat) return;
+      box=document.createElement('div');
+      box.id='search-in-chat';
+      box.className='search-in-chat';
+      chat.insertBefore(box, chat.querySelector('.messages')||chat.firstChild);
+    }
+    // rebuild controls for counter + nav
+    if(!box.querySelector('#sic-count')){
+      box.innerHTML=`
+        <input type="text" id="chat-search-input" placeholder="${L('Поиск в чате...','Search in chat...')}" autocomplete="off">
+        <span class="sic-count" id="sic-count"></span>
+        <button type="button" class="sic-nav" id="sic-prev" title="↑">↑</button>
+        <button type="button" class="sic-nav" id="sic-next" title="↓">↓</button>
+        <button type="button" class="sic-close" id="chat-search-close">✕</button>`;
+    }
+    const inp=document.getElementById('chat-search-input');
+    const btn=document.getElementById('chat-search-btn');
+    if(btn && !btn._slSearch){
+      btn._slSearch=1;
+      btn.style.removeProperty('display');
+      btn.style.display='inline-flex';
+      btn.removeAttribute('hidden');
+      btn.onclick=()=>{
+        ensureSearchUI();
+        const b=document.getElementById('search-in-chat');
+        b.classList.add('show');
+        const i=document.getElementById('chat-search-input');
+        if(i){ i.value=''; i.focus(); }
+        clearSearchHits();
+        const c=document.getElementById('sic-count'); if(c) c.textContent='';
+      };
+    }
+    const close=document.getElementById('chat-search-close');
+    if(close && !close._sl){
+      close._sl=1;
+      close.onclick=()=>{
+        document.getElementById('search-in-chat')?.classList.remove('show');
+        clearSearchHits();
+        const i=document.getElementById('chat-search-input'); if(i) i.value='';
+      };
+    }
+    if(inp && !inp._sl){
+      inp._sl=1;
+      let tmr;
+      inp.addEventListener('input', ()=>{
+        clearTimeout(tmr);
+        tmr=setTimeout(()=>runChatSearch(inp.value), 120);
+      });
+      inp.addEventListener('keydown', e=>{
+        if(e.key==='Enter'){ e.preventDefault(); goHit(e.shiftKey?-1:1); }
+        if(e.key==='Escape'){ document.getElementById('chat-search-close')?.click(); }
+      });
+    }
+    document.getElementById('sic-prev')?.addEventListener('click', ()=>goHit(-1));
+    document.getElementById('sic-next')?.addEventListener('click', ()=>goHit(1));
+  }
+
+  /* ---------- Unread separator ---------- */
+  function insertUnreadSep(list, afterId){
+    if(!list) return;
+    list.querySelectorAll('.sl-unread-sep').forEach(e=>e.remove());
+    // Find first unread-looking message from others after last-read — heuristic: first them-row if we had unread badge
+    // Simpler: if chat had unread when opened, mark first non-mine after midpoint of new msgs
+    // Use dataset from open
+    const n = Number(list.dataset.unreadAtOpen||0);
+    if(n<=0) return;
+    const them=[...list.querySelectorAll('.bubble-row.them')];
+    if(!them.length) return;
+    // place sep before the N-th last them message (approx unread count)
+    const idx = Math.max(0, them.length - n);
+    const target = them[idx];
+    if(!target) return;
+    const sep=document.createElement('div');
+    sep.className='sl-unread-sep';
+    sep.innerHTML=`<span>${L('Непрочитанные','Unread')}</span>`;
+    target.parentNode.insertBefore(sep, target);
+  }
+
+  function patchOpenForUnread(){
+    if(typeof openChat==='function' && !openChat._unreadSep){
+      const orig=openChat;
+      window.openChat=openChat=function(partner){
+        try{
+          const list=document.getElementById('messages-list');
+          // try to capture unread from contact badge
+          let n=0;
+          try{
+            const row=document.querySelector(`#contacts-list [data-cid="${partner?.id}"], #contacts-list .contact[data-cid="${partner?.id}"]`);
+            const badge=row?.querySelector?.('.unread-badge');
+            if(badge) n=parseInt(badge.textContent,10)||0;
+          }catch(e){}
+          if(list) list.dataset.unreadAtOpen=String(n);
+        }catch(e){}
+        const r=orig.apply(this, arguments);
+        setTimeout(()=>{
+          try{
+            const list=document.getElementById('messages-list');
+            insertUnreadSep(list);
+          }catch(e){}
+        }, 200);
+        setTimeout(()=>{ try{ insertUnreadSep(document.getElementById('messages-list')); }catch(e){} }, 600);
+        return r;
+      };
+      openChat._unreadSep=1;
+    }
+  }
+
+  /* ---------- Drafts always on ---------- */
+  function forceDrafts(){
+    try{
+      if(typeof getBeta==='function' && typeof setBeta==='function'){
+        const b=getBeta();
+        if(!b.drafts){ b.drafts=true; setBeta(b); }
+      }
+    }catch(e){}
+    // ensure save/load not gated
+    if(typeof saveDraft==='function' && !saveDraft._always){
+      const _s=saveDraft;
+      window.saveDraft=saveDraft=function(){
+        try{
+          const k=(typeof draftKey==='function'?draftKey():(window.activeGroup?.id||window.activePartner?.id));
+          if(!k) return;
+          const val=(document.getElementById('message-input')?.value||'');
+          const all=JSON.parse((window.storage||localStorage).getItem('sl_drafts')||'{}');
+          if(val) all[k]=val; else delete all[k];
+          (window.storage||localStorage).setItem('sl_drafts', JSON.stringify(all));
+        }catch(e){ try{ _s(); }catch(e2){} }
+      };
+      saveDraft._always=1;
+    }
+  }
+
+  /* ---------- Swipe-to-reply polish (ensure reply bar shows) ---------- */
+  function patchSwipeReply(){
+    // After any assignment to replyToMsg via existing swipe, show bar
+    const list=document.getElementById('messages-list');
+    if(!list || list._slSwipePolish) return;
+    list._slSwipePolish=1;
+    // capture phase: when bubble gets .swiped class, show bar
+    const mo=new MutationObserver(muts=>{
+      muts.forEach(m=>{
+        if(m.type==='attributes' && m.attributeName==='class'){
+          const el=m.target;
+          if(el.classList?.contains('swiped') && el.classList.contains('bubble-row')){
+            const id=el.dataset.id;
+            let msg=null;
+            try{ if(window.messageStore) msg=messageStore.get(String(id)); }catch(e){}
+            if(msg) showReplyBar(msg);
+          }
+        }
+      });
+    });
+    mo.observe(list,{attributes:true,subtree:true,attributeFilter:['class']});
+  }
+
+  /* ---------- Profile link: keep #/user/ as canonical ---------- */
+  window.slProfileLink = function(username){
+    const u = String(username||'').replace(/^@/,'');
+    return `${location.origin}${location.pathname}#/user/@${u}`;
+  };
+
+  function boot(){
+    css();
+    ensureReplyBar();
+    ensureSearchUI();
+    forceDrafts();
+    patchOpenForUnread();
+    patchSwipeReply();
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', boot);
+  else boot();
+  setTimeout(boot, 500);
+  setTimeout(boot, 1500);
+  setTimeout(boot, 3000);
+  console.log('[SL] UX polish pack ready (search, reply bar, drafts, unread sep)');
 })();
 </script>
 
