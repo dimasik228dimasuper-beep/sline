@@ -2457,16 +2457,27 @@ body.light-theme .circle-record-overlay {
 </style>
 
 <style id="sl-vo-toggle-hide">#sl-vo-toggle{display:none!important}</style>
-<style id="sl-boot-bg">html,body{background:#0B1120;color:#E8EEF8;margin:0}
-html.theme-light,html.light-theme,html.theme-light body,html.light-theme body{background:#F4F6F9;color:#0F1419}
-#app-boot{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:inherit;z-index:99999;transition:opacity .25s}
+<style id="sl-boot-bg">
+html,body{background:#0B1120;color:#E8EEF8;margin:0}
+html.theme-light,html.light-theme{background:#F4F6F9;color:#0F1419}
+html.theme-light body,html.light-theme body{background:#F4F6F9;color:#0F1419}
+#app-boot{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:#0B1120;z-index:2147483000;transition:opacity .3s}
+html.theme-light #app-boot,html.light-theme #app-boot{background:#F4F6F9}
 #app-boot.hide{opacity:0;pointer-events:none}
-#app-boot .dot{width:10px;height:10px;border-radius:50%;background:#4C7CF3;animation:bootPulse 0.9s ease-in-out infinite alternate}
+#app-boot .dot{width:12px;height:12px;border-radius:50%;background:#4C7CF3;animation:bootPulse .9s ease-in-out infinite alternate}
+#app-boot .boot-msg{font:600 13px/1.3 system-ui,-apple-system,sans-serif;color:#8B9BB4;letter-spacing:.02em}
+html.theme-light #app-boot .boot-msg,html.light-theme #app-boot .boot-msg{color:#64748B}
 @keyframes bootPulse{from{opacity:.35;transform:scale(.85)}to{opacity:1;transform:scale(1)}}
+/* Failsafe: if booting overlay stuck with no UI, force visible */
+html.sl-force-auth #auth-screen{display:flex!important}
+html.sl-force-auth #app-screen{display:none!important}
+html.sl-force-app #app-screen{display:flex!important}
+html.sl-force-app #auth-screen{display:none!important}
+html.sl-force-app::before,html.sl-force-auth::before{display:none!important}
 </style>
 </head>
 <body>
-<div id="app-boot"><div class="dot"></div></div>
+<div id="app-boot"><div class="dot"></div><div class="boot-msg">SLine</div></div>
 
 
 <script>
@@ -35940,16 +35951,69 @@ html.skin-green #wa-cam-btn svg{width:22px;height:22px;stroke:currentColor;fill:
 
 <script>
 (function(){
-  function hideBoot(){
+  var hidden=false;
+  function hasVisibleUI(){
+    try{
+      var auth=document.getElementById('auth-screen');
+      var app=document.getElementById('app-screen');
+      function vis(el){
+        if(!el) return false;
+        var st=window.getComputedStyle(el);
+        if(st.display==='none'||st.visibility==='hidden'||Number(st.opacity)===0) return false;
+        var r=el.getBoundingClientRect();
+        return r.width>40 && r.height>40;
+      }
+      return vis(auth) || vis(app);
+    }catch(e){ return false; }
+  }
+  function forceUI(){
+    try{
+      var auth=document.getElementById('auth-screen');
+      var app=document.getElementById('app-screen');
+      var logged=false;
+      try{
+        logged = localStorage.getItem('sl_logged_in')==='1' ||
+          Object.keys(localStorage||{}).some(function(k){ return k.indexOf('auth-token')!==-1||k.indexOf('supabase.auth')!==-1; });
+      }catch(e){}
+      document.documentElement.classList.remove('sl-booting');
+      if(logged && app){
+        document.documentElement.classList.add('sl-force-app','sl-ready');
+        app.style.display='flex';
+        if(auth) auth.style.display='none';
+      } else if(auth){
+        document.documentElement.classList.add('sl-force-auth','sl-ready');
+        auth.style.display='flex';
+        if(app) app.style.display='none';
+      }
+    }catch(e){}
+  }
+  function hideBoot(force){
+    if(hidden) return;
+    if(!force && !hasVisibleUI()){
+      // keep spinner, try force UI
+      forceUI();
+      if(!hasVisibleUI()) return;
+    }
+    hidden=true;
     var b=document.getElementById('app-boot');
     if(!b) return;
     b.classList.add('hide');
-    setTimeout(function(){ try{ b.remove(); }catch(e){} }, 300);
+    setTimeout(function(){ try{ b.remove(); }catch(e){} }, 320);
   }
-  if(document.readyState==='complete') hideBoot();
-  else window.addEventListener('load', hideBoot);
-  // safety: never stuck more than 2.5s
-  setTimeout(hideBoot, 2500);
+  // Try hide when load fires IF ui visible
+  function onLoad(){ setTimeout(function(){ hideBoot(false); }, 50); }
+  if(document.readyState==='complete') onLoad();
+  else window.addEventListener('load', onLoad);
+  // Poll briefly
+  var tries=0;
+  var iv=setInterval(function(){
+    tries++;
+    if(hasVisibleUI()){ hideBoot(false); clearInterval(iv); }
+    else if(tries===8){ forceUI(); }
+    else if(tries>=16){ forceUI(); hideBoot(true); clearInterval(iv); }
+  }, 400);
+  // Absolute max 8s
+  setTimeout(function(){ forceUI(); hideBoot(true); clearInterval(iv); }, 8000);
 })();
 </script>
 
