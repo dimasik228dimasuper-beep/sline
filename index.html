@@ -23692,6 +23692,7 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
         <div class="sl-appear-row" id="ap-wallpapers"><span>Обои для чатов</span><span class="arrow">›</span></div>
         <div class="sl-appear-row" id="ap-colors"><span>Персональные цвета</span><span style="display:flex;align-items:center;gap:8px"><span class="sl-color-dot" id="ap-dot"></span><span class="arrow">›</span></span></div>
         <div class="sl-appear-row" id="ap-change-theme"><span>Сменить тему</span><span class="arrow">›</span></div>
+        <div class="sl-appear-row" id="ap-messenger-skins"><span>Дизайны других мессенджеров</span><span class="arrow">›</span></div>
         <div class="sl-appear-row" id="ap-night"><span>Ночной режим</span>
           <div class="toggle-switch ${night?'on':''}" id="ap-night-tg"></div>
         </div>
@@ -23754,6 +23755,10 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
     ov.querySelector('#ap-change-theme')?.addEventListener('click', ()=>{
       ov.remove();
       try{ window.slOpenThemePicker(); }catch(e){}
+    });
+    ov.querySelector('#ap-messenger-skins')?.addEventListener('click', ()=>{
+      ov.remove();
+      try{ window.slOpenMessengerSkins(); }catch(e){ console.warn(e); }
     });
     ov.querySelector('#ap-chat-themes').onclick=()=>toast('Выберите карточку темы выше');
     ov.querySelector('#ap-wallpapers').onclick=()=>{
@@ -35507,6 +35512,179 @@ body{
     `;
     document.head.appendChild(s);
   }
+})();
+</script>
+
+
+<script>
+/* ===== Messenger UI skins: SLine / MAX / Telegram / WhatsApp ===== */
+(function(){
+  if(window._slMsgSkinsV2) return;
+  window._slMsgSkinsV2 = 1;
+  const LS = (typeof storage!=='undefined'?storage:localStorage);
+  const KEY = 'sl_ui_skin';
+
+  function getSkin(){ try{ return LS.getItem(KEY) || 'sline'; }catch(e){ return 'sline'; } }
+  function setSkin(id){ try{ LS.setItem(KEY, id); }catch(e){} applySkin(id); }
+
+  function ensureCss(){
+    if(document.getElementById('sl-msg-skins-css')) return;
+    const s = document.createElement('style');
+    s.id = 'sl-msg-skins-css';
+    s.textContent = `
+.sl-skin-opt{display:flex;align-items:center;gap:14px;padding:14px 16px;border-radius:14px;cursor:pointer;margin-bottom:8px;background:var(--panel-hover,rgba(120,120,128,.12));border:1.5px solid transparent}
+.sl-skin-opt.on{border-color:var(--accent-a,#4C7CF3);background:rgba(76,124,243,.12)}
+.sl-skin-opt .sl-skin-radio{width:22px;height:22px;border-radius:50%;border:2px solid var(--muted,#8B9BB4);flex-shrink:0;display:flex;align-items:center;justify-content:center}
+.sl-skin-opt.on .sl-skin-radio{border-color:var(--accent-a,#4C7CF3);background:var(--accent-a,#4C7CF3)}
+.sl-skin-opt.on .sl-skin-radio::after{content:"";width:8px;height:8px;border-radius:50%;background:#fff}
+.sl-skin-opt .sl-skin-meta{flex:1;min-width:0}
+.sl-skin-opt .sl-skin-title{font-weight:700;font-size:16px;color:var(--text)}
+.sl-skin-opt .sl-skin-sub{font-size:12px;color:var(--muted);margin-top:2px}
+.sl-skin-opt .sl-skin-badge{font-size:10px;font-weight:700;padding:3px 8px;border-radius:999px;background:rgba(76,124,243,.2);color:var(--accent-a,#4C7CF3)}
+
+html.skin-max #page-chats .chats-header h1,html.skin-max #page-chats .page-title{font-size:28px;font-weight:800;letter-spacing:-.02em}
+html.skin-max #page-chats .fab-add,html.skin-max #page-chats #add-chat-btn,html.skin-max #page-chats .header-add,
+html.skin-max #page-chats .icon-btn.add,html.skin-max button#new-chat-btn{
+  width:44px!important;height:44px!important;border-radius:50%!important;
+  background:#3B82F6!important;color:#fff!important;border:none!important;
+  box-shadow:0 4px 14px rgba(59,130,246,.35)!important;
+}
+html.skin-max .story-ring{background:conic-gradient(from 210deg,#60a5fa,#a78bfa,#f472b6,#60a5fa)!important;padding:2.5px!important}
+html.skin-max #search-input,html.skin-max .chats-search input,html.skin-max input[placeholder*="оиск"],html.skin-max input[placeholder*="айти"]{
+  border-radius:999px!important;background:rgba(120,120,128,.14)!important;border:none!important;
+}
+html.skin-max .folder-tabs,html.skin-max .chat-folders,html.skin-max #folder-tabs{gap:18px!important;padding:8px 4px!important}
+html.skin-max .folder-tab,html.skin-max .chat-folders button,html.skin-max #folder-tabs button{
+  background:transparent!important;border:none!important;border-radius:0!important;
+  font-weight:600!important;color:var(--muted)!important;padding:8px 4px!important;position:relative;
+}
+html.skin-max .folder-tab.active,html.skin-max .chat-folders button.active,html.skin-max #folder-tabs button.active{color:#3B82F6!important}
+html.skin-max .folder-tab.active::after,html.skin-max .chat-folders button.active::after,html.skin-max #folder-tabs button.active::after{
+  content:"";position:absolute;left:0;right:0;bottom:0;height:2.5px;border-radius:2px;background:#3B82F6;
+}
+html.skin-max .contact{border-radius:0!important;padding:12px 14px!important}
+html.skin-max .contact.active{box-shadow:none!important;background:rgba(120,120,128,.1)!important}
+html.skin-max .bottom-nav,html.skin-max .tab-bar,html.skin-max #bottom-nav{
+  background:rgba(12,14,20,.92)!important;backdrop-filter:blur(16px);border-top:1px solid rgba(120,120,128,.12)!important;
+}
+html.skin-max.theme-light .bottom-nav,html.skin-max.light-theme .bottom-nav{background:rgba(255,255,255,.94)!important}
+html.skin-max .nav-item.active,html.skin-max .bottom-tab.active{color:#3B82F6!important}
+
+html.skin-tg #page-chats .chats-header h1,html.skin-tg #page-chats .page-title{font-size:18px!important;font-weight:700!important;text-align:center!important}
+html.skin-tg #page-chats .fab-add,html.skin-tg #page-chats #add-chat-btn{
+  background:transparent!important;color:var(--text)!important;box-shadow:none!important;border-radius:12px!important;
+}
+html.skin-tg .story-ring{background:linear-gradient(135deg,#2AABEE,#229ED9)!important;padding:2px!important}
+html.skin-tg #search-input,html.skin-tg .chats-search input{border-radius:12px!important;background:rgba(120,120,128,.12)!important}
+html.skin-tg .folder-tabs,html.skin-tg .chat-folders,html.skin-tg #folder-tabs{display:none!important}
+html.skin-tg .contact{border-radius:0!important;border-bottom:0.5px solid rgba(120,120,128,.15)!important;padding:10px 14px!important}
+html.skin-tg .contact.active{background:rgba(42,171,238,.12)!important;box-shadow:none!important}
+html.skin-tg .bottom-nav,html.skin-tg .tab-bar,html.skin-tg #bottom-nav{
+  left:12px!important;right:12px!important;bottom:calc(10px + env(safe-area-inset-bottom,0px))!important;
+  border-radius:28px!important;width:auto!important;margin:0 12px!important;
+  background:rgba(28,28,30,.82)!important;backdrop-filter:blur(24px) saturate(1.4)!important;
+  -webkit-backdrop-filter:blur(24px) saturate(1.4)!important;
+  border:1px solid rgba(255,255,255,.08)!important;box-shadow:0 8px 32px rgba(0,0,0,.35)!important;
+  padding:6px 8px!important;
+}
+html.skin-tg.theme-light .bottom-nav,html.skin-tg.light-theme .bottom-nav{background:rgba(255,255,255,.88)!important;border-color:rgba(0,0,0,.06)!important}
+html.skin-tg .nav-item.active,html.skin-tg .bottom-tab.active{color:#2AABEE!important}
+html.skin-tg .bubble.me{background:linear-gradient(135deg,#2AABEE,#229ED9)!important}
+
+html.skin-wa{--accent-a:#25D366!important;--accent-b:#128C7E!important}
+html.skin-wa #page-chats .chats-header h1,html.skin-wa #page-chats .page-title{font-size:26px!important;font-weight:700!important}
+html.skin-wa #page-chats .fab-add,html.skin-wa #page-chats #add-chat-btn,html.skin-wa #page-chats .header-add{
+  width:44px!important;height:44px!important;border-radius:50%!important;
+  background:#25D366!important;color:#fff!important;border:none!important;
+  box-shadow:0 4px 14px rgba(37,211,102,.35)!important;
+}
+html.skin-wa .story-bar,html.skin-wa #stories-bar,html.skin-wa .stories-row{display:none!important}
+html.skin-wa #search-input,html.skin-wa .chats-search input{border-radius:12px!important;background:rgba(120,120,128,.12)!important}
+html.skin-wa .folder-tabs,html.skin-wa .chat-folders,html.skin-wa #folder-tabs{
+  display:flex!important;gap:8px!important;overflow-x:auto!important;padding:8px 12px!important;scrollbar-width:none;
+}
+html.skin-wa .folder-tab,html.skin-wa .chat-folders button,html.skin-wa #folder-tabs button{
+  background:rgba(120,120,128,.12)!important;border:1px solid rgba(120,120,128,.18)!important;
+  border-radius:999px!important;padding:8px 14px!important;font-size:13px!important;font-weight:600!important;
+  color:var(--text)!important;white-space:nowrap!important;
+}
+html.skin-wa .folder-tab.active,html.skin-wa .chat-folders button.active,html.skin-wa #folder-tabs button.active{
+  background:#25D366!important;color:#0b1a10!important;border-color:#25D366!important;
+}
+html.skin-wa .folder-tab.active::after{display:none!important}
+html.skin-wa .contact{border-radius:0!important;border-bottom:0.5px solid rgba(120,120,128,.12)!important;padding:12px 14px!important}
+html.skin-wa .contact.active{background:rgba(37,211,102,.1)!important;box-shadow:none!important}
+html.skin-wa .bottom-nav,html.skin-wa .tab-bar,html.skin-wa #bottom-nav{
+  background:var(--panel,#111)!important;border-top:0.5px solid rgba(120,120,128,.2)!important;border-radius:0!important;
+  left:0!important;right:0!important;margin:0!important;
+}
+html.skin-wa .nav-item.active,html.skin-wa .bottom-tab.active{color:#25D366!important}
+html.skin-wa .bubble.me{background:#005C4B!important}
+html.skin-wa.theme-light .bubble.me,html.skin-wa.light-theme .bubble.me{background:#D9FDD3!important;color:#111!important}
+html.skin-wa .send-btn{background:#25D366!important}
+`;
+    document.head.appendChild(s);
+  }
+
+  function applySkin(id){
+    ensureCss();
+    const root = document.documentElement;
+    ['skin-sline','skin-max','skin-tg','skin-wa'].forEach(c=>{ root.classList.remove(c); document.body.classList.remove(c); });
+    const map = {sline:'skin-sline', max:'skin-max', tg:'skin-tg', telegram:'skin-tg', wa:'skin-wa', whatsapp:'skin-wa'};
+    const cls = map[id] || 'skin-sline';
+    root.classList.add(cls);
+    document.body.classList.add(cls);
+  }
+
+  window.slApplyMessengerSkin = applySkin;
+  window.slGetMessengerSkin = getSkin;
+  window.slOpenMessengerSkins = function(){
+    ensureCss();
+    const cur = getSkin();
+    const opts = [
+      {id:'sline', title:'SLine', sub:'Текущий дизайн приложения', badge:'Рекомендуется'},
+      {id:'max', title:'MAX', sub:'Как на скриншотах 1–2'},
+      {id:'tg', title:'Telegram', sub:'Как на скриншотах 3–4'},
+      {id:'wa', title:'WhatsApp', sub:'Как на скриншотах 5–6'},
+    ];
+    try{ document.getElementById('sl-skin-picker')?.remove(); }catch(e){}
+    const ov=document.createElement('div');
+    ov.className='modal-overlay';
+    ov.id='sl-skin-picker';
+    ov.style.zIndex='22000';
+    ov.innerHTML=`<div class="modal" style="max-width:420px;max-height:90vh;overflow:auto;padding:0 0 18px">
+      <div style="position:sticky;top:0;background:var(--panel);padding:14px 16px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--line);z-index:2">
+        <button type="button" class="icon-btn" id="sk-back" style="width:36px;height:36px">←</button>
+        <h3 style="flex:1;margin:0;text-align:center;font-size:17px">Дизайны мессенджеров</h3>
+        <div style="width:36px"></div>
+      </div>
+      <div style="padding:14px 16px">
+        <p style="font-size:13px;color:var(--muted);margin:0 0 14px;line-height:1.45">Меняет вид списка чатов, историй, поиска и нижней панели. Тёмная и светлая тема сохраняются.</p>
+        <div id="sk-list"></div>
+      </div>
+    </div>`;
+    document.body.appendChild(ov);
+    const list=ov.querySelector('#sk-list');
+    opts.forEach(o=>{
+      const el=document.createElement('div');
+      el.className='sl-skin-opt'+(o.id===cur?' on':'');
+      el.innerHTML=`<div class="sl-skin-radio"></div>
+        <div class="sl-skin-meta"><div class="sl-skin-title">${o.title}</div><div class="sl-skin-sub">${o.sub}</div></div>
+        ${o.badge?`<span class="sl-skin-badge">${o.badge}</span>`:''}`;
+      el.onclick=()=>{
+        list.querySelectorAll('.sl-skin-opt').forEach(x=>x.classList.remove('on'));
+        el.classList.add('on');
+        setSkin(o.id);
+        try{ showToast(o.id==='sline'?'SLine (по умолчанию)':('Дизайн: '+o.title)); }catch(e){}
+      };
+      list.appendChild(el);
+    });
+    ov.querySelector('#sk-back').onclick=()=>ov.remove();
+    ov.addEventListener('click',e=>{ if(e.target===ov) ov.remove(); });
+  };
+
+  try{ applySkin(getSkin()); }catch(e){}
+  setTimeout(function(){ try{ applySkin(getSkin()); }catch(e){} }, 600);
 })();
 </script>
 
