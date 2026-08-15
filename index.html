@@ -2528,6 +2528,14 @@ body.theme-light #auth-screen .auth-card{
 }
 /* If still booting overlay is stuck dark, fine; if light stuck empty, show auth */
 </style>
+
+<style id="sl-boot-v7">
+#app-boot{position:fixed!important;inset:0!important;z-index:2147483000!important;display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:center!important;background:#0B1120!important;pointer-events:none}
+#app-boot.hide{opacity:0!important;transition:opacity .35s ease}
+html.theme-light #app-boot,html.light-theme #app-boot{background:#F4F6F9!important}
+body:not(.sl-content-ready) #app-screen:empty,
+body:not(.sl-content-ready) #app-screen:not(:has(*)){background:#0F1419}
+</style>
 </head>
 <body>
 
@@ -35879,70 +35887,141 @@ body{
 
 
 <script>
+/* Boot recovery v7 — never leave blank black/white screen */
 (function(){
-  var hidden=false;
-  function hasVisibleUI(){
+  if(window._slBootV7) return;
+  window._slBootV7 = 1;
+  var hidden = false;
+
+  function hasContent(){
     try{
-      var auth=document.getElementById('auth-screen');
-      var app=document.getElementById('app-screen');
-      function vis(el){
+      var auth = document.getElementById('auth-screen');
+      var app = document.getElementById('app-screen');
+      function shown(el){
         if(!el) return false;
-        var st=window.getComputedStyle(el);
-        if(st.display==='none'||st.visibility==='hidden'||Number(st.opacity)===0) return false;
-        var r=el.getBoundingClientRect();
-        return r.width>40 && r.height>40;
+        var st = window.getComputedStyle(el);
+        if(st.display==='none' || st.visibility==='hidden' || Number(st.opacity)===0) return false;
+        var r = el.getBoundingClientRect();
+        return r.width > 40 && r.height > 40;
       }
-      return vis(auth) || vis(app);
+      /* Need REAL content, not empty shell */
+      if(shown(auth)){
+        var card = auth.querySelector('.auth-card, .brand-name, .btn-primary, input');
+        if(card) return true;
+      }
+      if(shown(app)){
+        var body = app.querySelector('.bottom-tabs, .contact, .settings-item, .sidebar, #contacts-list, .max-chats-list, .page.active');
+        if(body){
+          var br = body.getBoundingClientRect();
+          if(br.width > 20 && br.height > 20) return true;
+        }
+      }
+      /* onboarding / next button */
+      if(document.querySelector('.onboard, #onboard-next, .btn-primary')){
+        var b = document.querySelector('.btn-primary, #onboard-next');
+        if(b){
+          var st = getComputedStyle(b);
+          if(st.display!=='none' && b.getBoundingClientRect().width>20) return true;
+        }
+      }
+      return false;
     }catch(e){ return false; }
   }
+
   function forceUI(){
     try{
-      var auth=document.getElementById('auth-screen');
-      var app=document.getElementById('app-screen');
-      var logged=false;
+      var auth = document.getElementById('auth-screen');
+      var app = document.getElementById('app-screen');
+      var logged = false;
       try{
         logged = localStorage.getItem('sl_logged_in')==='1' ||
-          Object.keys(localStorage||{}).some(function(k){ return k.indexOf('auth-token')!==-1||k.indexOf('supabase.auth')!==-1; });
+          Object.keys(localStorage||{}).some(function(k){
+            return k.indexOf('auth-token')!==-1 || k.indexOf('supabase.auth')!==-1;
+          });
       }catch(e){}
       document.documentElement.classList.remove('sl-booting');
+      document.documentElement.classList.add('sl-ready');
       if(logged && app){
-        document.documentElement.classList.add('sl-force-app','sl-ready');
-        app.style.display='flex';
-        if(auth) auth.style.display='none';
+        app.style.cssText = (app.style.cssText||'') + ';display:flex!important;min-height:100dvh;visibility:visible;opacity:1';
+        if(auth) auth.style.display = 'none';
+        /* ensure dark fallback if light text issue */
+        if(!document.body.classList.contains('theme-light')){
+          app.style.background = app.style.background || '#0F1419';
+        }
       } else if(auth){
-        document.documentElement.classList.add('sl-force-auth','sl-ready');
-        auth.style.display='flex';
-        if(app) app.style.display='none';
+        auth.style.cssText = (auth.style.cssText||'') + ';display:flex!important;min-height:100dvh;visibility:visible;opacity:1';
+        if(app) app.style.display = 'none';
       }
     }catch(e){}
   }
+
+  function ensureBootVisible(){
+    try{
+      var b = document.getElementById('app-boot');
+      if(!b || hidden) return;
+      b.classList.remove('hide');
+      b.style.display = 'flex';
+      b.style.opacity = '1';
+      b.style.zIndex = '2147483000';
+      if(!b.querySelector('.boot-msg')){
+        var m = document.createElement('div');
+        m.className = 'boot-msg';
+        m.textContent = 'SLine';
+        m.style.cssText = 'font:600 14px system-ui;color:#8B9BB4';
+        b.appendChild(m);
+      }
+    }catch(e){}
+  }
+
   function hideBoot(force){
     if(hidden) return;
-    if(!force && !hasVisibleUI()){
-      // keep spinner, try force UI
+    if(!force && !hasContent()){
       forceUI();
-      if(!hasVisibleUI()) return;
+      if(!hasContent()){
+        ensureBootVisible();
+        return;
+      }
     }
-    hidden=true;
-    var b=document.getElementById('app-boot');
+    hidden = true;
+    var b = document.getElementById('app-boot');
     if(!b) return;
     b.classList.add('hide');
-    setTimeout(function(){ try{ b.remove(); }catch(e){} }, 320);
+    b.style.opacity = '0';
+    setTimeout(function(){ try{ b.remove(); }catch(e){} }, 400);
   }
-  // Try hide when load fires IF ui visible
-  function onLoad(){ setTimeout(function(){ hideBoot(false); }, 50); }
-  if(document.readyState==='complete') onLoad();
-  else window.addEventListener('load', onLoad);
-  // Poll briefly
-  var tries=0;
-  var iv=setInterval(function(){
+
+  ensureBootVisible();
+
+  var tries = 0;
+  var iv = setInterval(function(){
     tries++;
-    if(hasVisibleUI()){ hideBoot(false); clearInterval(iv); }
-    else if(tries===8){ forceUI(); }
-    else if(tries>=16){ forceUI(); hideBoot(true); clearInterval(iv); }
+    if(hasContent()){
+      hideBoot(false);
+      clearInterval(iv);
+    } else if(tries === 10){
+      forceUI();
+      ensureBootVisible();
+    } else if(tries >= 30){
+      /* 12s max — force show whatever we have + hide boot */
+      forceUI();
+      hideBoot(true);
+      clearInterval(iv);
+    }
   }, 400);
-  // Absolute max 8s
-  setTimeout(function(){ forceUI(); hideBoot(true); clearInterval(iv); }, 8000);
+
+  window.addEventListener('load', function(){
+    setTimeout(function(){
+      if(hasContent()) hideBoot(false);
+      else { forceUI(); ensureBootVisible(); }
+    }, 100);
+  });
+
+  /* Absolute safety 15s */
+  setTimeout(function(){
+    forceUI();
+    hideBoot(true);
+    clearInterval(iv);
+  }, 15000);
 })();
 </script>
 
