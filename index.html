@@ -1257,12 +1257,12 @@ body.msg-ctx-open .chat-active{ /* dim via backdrop */ }
   background:var(--bg)!important;padding-bottom:calc(88px + env(safe-area-inset-bottom,0px));
 }
 #page-settings .settings-profile{
-  padding:calc(12px + env(safe-area-inset-top,0px)) 16px 8px;
+  padding:calc(6px + env(safe-area-inset-top,0px)) 16px 4px;
   text-align:center;position:relative;
 }
 #page-settings .settings-cover-wrap{
   border-radius:0;margin:0;overflow:visible;background:transparent!important;
-  min-height:0!important;padding-top:8px;
+  min-height:0!important;padding-top:2px;
 }
 #page-settings .settings-cover,
 #page-settings .settings-av-stretch,
@@ -1270,7 +1270,7 @@ body.msg-ctx-open .chat-active{ /* dim via backdrop */ }
 #page-settings .settings-cover-edit{display:none!important}
 #page-settings .settings-hero{
   display:flex;flex-direction:column;align-items:center;gap:6px;
-  padding:12px 0 18px;position:relative;z-index:2;
+  padding:4px 0 14px;position:relative;z-index:2;
 }
 #page-settings .settings-avatar{
   width:88px!important;height:88px!important;border-radius:50%!important;
@@ -8829,245 +8829,34 @@ function pickCoverImage(){
   inp.click();
 }
 document.getElementById('settings-cover-edit')?.addEventListener('click', pickCoverImage);
-// settings page scroll: collapsing avatar + nickname (MAX-style)
+// settings page: no collapse animation — static hero (avatar high)
 (function setupSettingsScroll(){
   const page=document.getElementById('page-settings');
   if(!page) return;
   page.classList.remove('is-stretch');
-  page.style.overflowY = 'auto';
-  page.style.webkitOverflowScrolling = 'touch';
-
+  // remove mini sticky bar if any previous session left it
+  const mini=document.getElementById('sl-settings-mini');
+  if(mini) mini.remove();
+  const st=document.getElementById('sl-settings-collapse-css');
+  if(st) st.remove();
   ['sl-set-fly-av','sl-set-fly-name'].forEach(id=>{
     const el=document.getElementById(id);
     if(el) el.remove();
   });
-
-  let mini = document.getElementById('sl-settings-mini');
-  if(!mini){
-    mini = document.createElement('div');
-    mini.id = 'sl-settings-mini';
-    page.insertBefore(mini, page.firstChild);
-  }
-  // MAX: small avatar LEFT of name, centered in sticky bar
-  mini.innerHTML = `<span class="sl-set-mini-av" id="sl-set-mini-av" aria-hidden="true"></span><span class="sl-set-mini-name" id="sl-set-mini-name"></span>`;
-
-  let st = document.getElementById('sl-settings-collapse-css');
-  if(st) st.remove();
-  st = document.createElement('style');
-  st.id = 'sl-settings-collapse-css';
-  st.textContent = `
-    #sl-settings-mini{
-      position:sticky; top:0; z-index:40;
-      display:flex; align-items:center; justify-content:center;
-      gap:10px;
-      height:0; opacity:0; pointer-events:none;
-      background:rgba(12,14,20,.92);
-      backdrop-filter:blur(20px) saturate(1.25);
-      -webkit-backdrop-filter:blur(20px) saturate(1.25);
-      border-bottom:1px solid transparent;
-      padding-top:env(safe-area-inset-top,0px);
-      box-sizing:content-box; overflow:hidden;
-      transform:translateZ(0);
-      transition:none;
-    }
-    #sl-settings-mini.show{ pointer-events:auto; }
-    #sl-settings-mini .sl-set-mini-av{
-      order:0;
-      width:30px; height:30px; border-radius:50%;
-      background:linear-gradient(135deg,#5B8CFF,#7B6CFF);
-      background-size:cover; background-position:center;
-      flex-shrink:0; overflow:hidden;
-      display:flex!important; align-items:center; justify-content:center;
-      opacity:0; transform:scale(.55);
-      color:#fff; font-weight:700; font-size:12px;
-      box-shadow:0 0 0 1.5px rgba(255,255,255,.12);
-    }
-    #sl-settings-mini .sl-set-mini-av img,
-    #sl-settings-mini .sl-set-mini-av svg{
-      width:100%; height:100%; object-fit:cover; border-radius:50%; display:block;
-    }
-    #sl-settings-mini .sl-set-mini-av svg{ width:62%; height:62%; object-fit:contain; }
-    #sl-settings-mini .sl-set-mini-name{
-      order:1;
-      font-size:17px; font-weight:650; color:var(--text);
-      white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:55vw;
-      opacity:0; transform:translateY(6px);
-    }
-    #page-settings .settings-avatar,
-    #page-settings .settings-name,
-    #page-settings .settings-username,
-    #page-settings .settings-phone,
-    #page-settings .settings-hero{
-      will-change:transform,opacity;
-      transition:none;
-    }
-    #sl-set-fly-av, #sl-set-fly-name{ display:none!important; }
-    body.theme-light #sl-settings-mini,
-    body.light-theme #sl-settings-mini{ background:rgba(255,255,255,.94); }
-    #page-settings .max-settings-top{
-      position:sticky; top:0; z-index:45 !important;
-      padding-top:env(safe-area-inset-top,0px);
-    }
-    #page-settings .settings-profile{
-      transition:none;
-    }
-  `;
-  document.head.appendChild(st);
-
-  const lerp=(a,b,t)=>a+(b-a)*t;
-  const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
-  const easeOut=(t)=>1-Math.pow(1-t,3);
-  const easeInOut=(t)=>t<.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2;
-
-  function syncMini(){
-    const nameEl=document.getElementById('settings-display-name');
-    const av=document.getElementById('settings-avatar');
-    const miniName=document.getElementById('sl-set-mini-name');
-    const miniAv=document.getElementById('sl-set-mini-av');
-    if(miniName&&nameEl) miniName.textContent=(nameEl.textContent||'').trim()||'SLine';
-    if(!miniAv||!av) return;
-
-    const img=av.querySelector('img');
-    const svg=av.querySelector('svg');
-    const bg=av.style.backgroundImage||'';
-    const computed=getComputedStyle(av);
-    const compBg=computed.backgroundImage||'';
-
-    miniAv.innerHTML='';
-    miniAv.style.backgroundImage='none';
-    miniAv.style.background=computed.background || 'linear-gradient(135deg,#5B8CFF,#7B6CFF)';
-
-    if(img&&img.src&&!img.src.endsWith('/')){
-      miniAv.style.background='none';
-      miniAv.innerHTML=`<img src="${img.src.replace(/"/g,'')}" alt="" draggable="false">`;
-    } else if(svg){
-      miniAv.appendChild(svg.cloneNode(true));
-      miniAv.style.background=computed.backgroundColor!=='rgba(0, 0, 0, 0)'
-        ? computed.background
-        : 'linear-gradient(135deg,#5B8CFF,#7B6CFF)';
-    } else if((bg&&bg!=='none')||(compBg&&compBg!=='none')){
-      miniAv.style.backgroundImage=bg!=='none'?bg:compBg;
-      miniAv.style.backgroundSize='cover';
-      miniAv.style.backgroundPosition='center';
-    } else {
-      const t=(document.getElementById('settings-avatar-text')||{}).textContent
-        || (nameEl&&nameEl.textContent||'?').trim().slice(0,1);
-      miniAv.textContent=(t||'?').slice(0,2);
-    }
-  }
-
-  function apply(y){
-    // Longer range = smoother MAX-like collapse
-    const RANGE=150;
-    const p=clamp(y/RANGE,0,1);
-    const e=easeInOut(p);
-
-    const av=document.getElementById('settings-avatar');
-    const name=document.getElementById('settings-display-name');
-    const uname=document.getElementById('settings-display-username');
-    const phone=document.getElementById('settings-display-phone');
-    const hero=page.querySelector('.settings-hero');
-    const profile=page.querySelector('.settings-profile');
-
-    // Phone / username fade first (like MAX)
-    const sub=easeOut(clamp(p/0.32,0,1));
-    [uname,phone].forEach(el=>{
-      if(!el) return;
-      el.style.opacity=String(Math.max(0,1-sub));
-      el.style.transform=`translate3d(0,${(-12*sub).toFixed(1)}px,0)`;
-      el.style.visibility=sub>0.95?'hidden':'visible';
-    });
-
-    // MAIN avatar: shrink + rise + fade (morph toward mini bar)
-    const avFade=easeOut(clamp(p/0.78,0,1));
-    if(av){
-      const sc = lerp(1, 0.28, avFade);
-      const rise = -56 * avFade;
-      av.style.opacity=String(Math.max(0,1-avFade*1.05));
-      av.style.transform=`translate3d(0,${rise.toFixed(1)}px,0) scale(${sc.toFixed(3)})`;
-      av.style.visibility=avFade>0.96?'hidden':'visible';
-      av.style.pointerEvents=avFade>0.75?'none':'auto';
-    }
-
-    // Name under avatar: shrink + rise toward mini title
-    const nameFade=easeOut(clamp(p/0.7,0,1));
-    if(name){
-      name.style.opacity=String(Math.max(0,1-nameFade));
-      name.style.transform=`translate3d(0,${(-40*e).toFixed(1)}px,0) scale(${lerp(1,0.68,e).toFixed(3)})`;
-      name.style.visibility=nameFade>0.96?'hidden':'visible';
-    }
-
-    if(hero){
-      hero.style.paddingTop=(12*(1-e)).toFixed(1)+'px';
-      hero.style.paddingBottom=(18*(1-e)).toFixed(1)+'px';
-      hero.style.marginBottom=(-14*e).toFixed(1)+'px';
-    }
-    if(profile){
-      profile.style.paddingBottom=(8*(1-e*0.9)).toFixed(1)+'px';
-    }
-
-    // Mini sticky bar appears as hero collapses (MAX style)
-    const miniP=easeOut(clamp((p-0.22)/0.55,0,1));
-    if(mini){
-      if(miniP>0.02) syncMini();
-      const h=Math.round(lerp(0,48,miniP));
-      mini.style.height=h+'px';
-      mini.style.opacity=String(miniP);
-      mini.style.borderBottomColor=`rgba(120,120,128,${(0.16*miniP).toFixed(2)})`;
-      mini.classList.toggle('show', miniP>0.05);
-      const mav=mini.querySelector('.sl-set-mini-av');
-      const mnm=mini.querySelector('.sl-set-mini-name');
-      const content=easeOut(clamp((miniP-0.05)/0.7,0,1));
-      if(mav){
-        mav.style.opacity=String(content);
-        mav.style.transform=`scale(${lerp(0.55,1,content).toFixed(3)})`;
-      }
-      if(mnm){
-        mnm.style.opacity=String(content);
-        mnm.style.transform=`translateY(${lerp(6,0,content).toFixed(1)}px)`;
-      }
-    }
-
-    // Clean endpoints — no mid-frame ghosts
-    if(p<=0.01){
-      if(av){ av.style.opacity='1'; av.style.transform='none'; av.style.visibility='visible'; av.style.pointerEvents='auto'; }
-      if(name){ name.style.opacity='1'; name.style.transform='none'; name.style.visibility='visible'; }
-      if(uname){ uname.style.opacity='1'; uname.style.transform='none'; uname.style.visibility='visible'; }
-      if(phone){ phone.style.opacity='1'; phone.style.transform='none'; phone.style.visibility='visible'; }
-      if(mini){ mini.style.height='0px'; mini.style.opacity='0'; mini.classList.remove('show'); }
-    }
-    if(p>=0.99){
-      if(av){ av.style.opacity='0'; av.style.visibility='hidden'; }
-      if(name){ name.style.opacity='0'; name.style.visibility='hidden'; }
-      if(uname){ uname.style.opacity='0'; uname.style.visibility='hidden'; }
-      if(phone){ phone.style.opacity='0'; phone.style.visibility='hidden'; }
-      if(mini){
-        mini.style.height='48px'; mini.style.opacity='1';
-        const mav=mini.querySelector('.sl-set-mini-av');
-        const mnm=mini.querySelector('.sl-set-mini-name');
-        if(mav){ mav.style.opacity='1'; mav.style.transform='scale(1)'; }
-        if(mnm){ mnm.style.opacity='1'; mnm.style.transform='none'; }
-      }
-    }
-  }
-
-  if(!page._slCollapseBound){
-    page._slCollapseBound=true;
-    let raf=0, latest=0;
-    page.addEventListener('scroll',()=>{
-      latest=page.scrollTop||0;
-      if(raf) return;
-      raf=requestAnimationFrame(()=>{
-        raf=0;
-        apply(latest);
-      });
-    },{passive:true});
-    page.addEventListener('touchend',()=>{ setTimeout(()=>apply(page.scrollTop||0), 50); },{passive:true});
-  }
-  requestAnimationFrame(()=>{ syncMini(); apply(page.scrollTop||0); });
-  setInterval(()=>{ try{ syncMini(); }catch(e){} }, 2500);
+  // reset any inline styles left on hero elements
+  ['settings-avatar','settings-display-name','settings-display-username','settings-display-phone'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(!el) return;
+    el.style.opacity='';
+    el.style.transform='';
+    el.style.visibility='';
+    el.style.pointerEvents='';
+  });
+  const hero=page.querySelector('.settings-hero');
+  if(hero){ hero.style.paddingTop=''; hero.style.paddingBottom=''; hero.style.marginBottom=''; }
+  const profile=page.querySelector('.settings-profile');
+  if(profile){ profile.style.paddingBottom=''; }
 })();
-
 
 // ========== BETA FEATURES ==========
 const BETA_KEY='sl_beta';
