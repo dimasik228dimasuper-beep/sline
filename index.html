@@ -4416,7 +4416,7 @@ async function handleDeepLink(){
     const uname = m[1].toLowerCase();
     const {data} = await sb.from('profiles').select('*').eq('username', uname).maybeSingle();
     if(data && data.id !== myProfile.id){ ensureInContacts(data); openChat(data); }
-    else if(!data) showToast(currentLang==='en' ? 'User not found' : 'Пользователь не найден');
+    else if(!data) showToast(t('user_not_found'));
   } else if((m = path.match(/\/channel\/@?([a-zA-Z0-9_]+)/i))){
     const uname = m[1].toLowerCase();
     let group=null;
@@ -4449,7 +4449,7 @@ async function handleDeepLink(){
     if(group){
       group = {...group, type:'channel', is_public:true, username: group.username||uname};
       await joinOrOpenGroup(group);
-    } else showToast(currentLang==='en' ? 'Channel not found' : 'Канал не найден');
+    } else showToast(t('channel_not_found'));
   } else if((m = path.match(/\/join\/([a-zA-Z0-9_-]+)/i))){
     const code = m[1];
     let group = null;
@@ -4496,13 +4496,13 @@ async function handleDeepLink(){
     if(group){
       group = {...group, _joinedViaInvite:true};
       await joinOrOpenGroup(group);
-    } else showToast(currentLang==='en' ? 'Invite link invalid' : 'Ссылка-приглашение недействительна');
+    } else showToast(t('invite_invalid'));
   } else if((m = path.match(/\/group\/([a-zA-Z0-9-]+)/i))){
     const gid = m[1];
     let group = (groups||[]).find(g=>g && String(g.id)===String(gid));
     if(!group){ try{ const {data}=await sb.from('groups').select('*').eq('id', gid).maybeSingle(); group=data; }catch(e){} }
     if(group){ group={...group, _joinedViaInvite:true}; await joinOrOpenGroup(group); }
-    else showToast(currentLang==='en' ? 'Group not found' : 'Группа не найдена');
+    else showToast(t('group_not_found'));
   }
   pendingDeepLink='';
   try{ history.replaceState(null,'', location.pathname); }catch(e){}
@@ -4524,12 +4524,12 @@ async function joinOrOpenGroup(group){
         groups.unshift({...group, myRole:'member', is_public: isPub || !!group.is_public});
       }
       if(group.type==='channel'){
-        showToast(currentLang==='en' ? 'Joined the channel' : 'Вы подписались на канал');
+        showToast(t('joined_channel'));
       } else {
-        showToast(currentLang==='en' ? 'Joined the group' : 'Вы вступили в группу');
+        showToast(t('joined_group'));
       }
     } else {
-      showToast(currentLang==='en' ? 'This is a private group — ask an admin to add you' : 'Это приватная группа — попросите админа добавить вас');
+      showToast(t('private_group'));
       return;
     }
   }
@@ -5046,7 +5046,7 @@ function showChatCtx(e, type, data){
         storage.setItem('sl_muted',JSON.stringify(m));
         renderContactsAndGroups();
       } else if(it.dataset.a==='lock'){
-        if(!storage.getItem(PIN_CODE_KEY)){ showToast(currentLang==='en'?'Set a PIN in Settings first':'Сначала установите PIN в Настройках'); return; }
+        if(!storage.getItem(PIN_CODE_KEY)){ showToast(t('set_pin_first')); return; }
         let l=getLocked();
         if(l.includes(data.id)) l=l.filter(id=>id!==data.id); else l.push(data.id);
         setLocked(l); showToast(l.includes(data.id)?'Чат защищён PIN':'Защита снята'); renderContactsAndGroups();
@@ -6319,7 +6319,7 @@ function compressDataUrlImage(dataUrl, maxSide, quality){
 }
 function saveMediaToGallery(msg){
   const url = msg.file_url || msg.media_url;
-  if(!url){ showToast(currentLang==='en'?'Nothing to save':'Нечего сохранять'); return; }
+  if(!url){ showToast(t('nothing_to_save')); return; }
   try{
     let ext = 'bin';
     if(msg.type==='image'||msg.type==='sticker') ext='png';
@@ -6343,7 +6343,7 @@ function saveMediaToGallery(msg){
     document.body.appendChild(a);
     a.click();
     a.remove();
-    showToast(currentLang==='en'?'Saved':'Сохранено');
+    showToast(t('saved'));
   }catch(e){
     try{ window.open(url,'_blank'); }catch(err){}
     showToast(currentLang==='en'?'Open media and long-press to save':'Откройте медиа и сохраните через меню');
@@ -6544,7 +6544,7 @@ function openSendQualityDialog(file){
             <span class="sl-send-q-title">Отправить с сжатием</span>
             <span class="sl-send-q-sub">${isImg ? 'Меньше вес · быстрее' : isVid ? 'Оптимизация для чата' : 'Только для фото/видео'}</span>
           </button>
-          <button type="button" class="sl-send-q-cancel" data-q="cancel">Отмена</button>
+          <button type="button" class="sl-send-q-cancel" data-q="cancel">${typeof t==='function'?t('cancel'):'Отмена'}</button>
         </div>
       </div>`;
     if(!document.getElementById('sl-send-q-css')){
@@ -6637,7 +6637,7 @@ async function sendChatFiles(fileList){
   const files = Array.from(fileList||[]).filter(Boolean);
   if(!files.length) return;
   if(!activePartner && !activeGroup){
-    showToast(currentLang==='en'?'Open a chat first':'Сначала откройте чат');
+    showToast(t('open_chat_first'));
     return;
   }
   for(const f of files){
@@ -6713,7 +6713,7 @@ function hideMsgReactBar(){
 async function reportMessage(msg){
   // hide for reporter
   try{ document.querySelector(`.bubble-row[data-id="${msg.id}"]`)?.remove(); }catch(e){}
-  showToast(currentLang==='en'?'Message reported':'Сообщение скрыто и отправлено на проверку');
+  showToast(t('message_reported'));
   // local report counts (simulates community reports)
   const key='sl_reports';
   let reports={};
@@ -7592,7 +7592,7 @@ async function toggleCircleTorch(){
         showToast(on ? 'Подсветка экрана вкл' : 'Подсветка экрана выкл');
         return;
       }
-      showToast(currentLang==='en'?'Flash not available on this device':'Вспышка недоступна на этом устройстве');
+      showToast(t('flash_na'));
       return;
     }
     circleTorchOn = !circleTorchOn;
@@ -7602,7 +7602,7 @@ async function toggleCircleTorch(){
     showToast(circleTorchOn ? (currentLang==='en'?'Flash on':'Вспышка вкл') : (currentLang==='en'?'Flash off':'Вспышка выкл'));
   }catch(e){
     console.warn(e);
-    showToast(currentLang==='en'?'Cannot toggle flash':'Не удалось включить вспышку');
+    showToast(t('flash_toggle_fail'));
     circleTorchOn=false;
   }
 }
@@ -7931,7 +7931,7 @@ async function loadStories(){
       e.stopPropagation();
       const uids=(el.dataset.uids||'').split(',').filter(Boolean);
       if(!uids.length){
-        try{ showToast(typeof currentLang!=='undefined'&&currentLang==='en'?'No interesting stories yet':'Пока нет интересных историй'); }catch(err){}
+        try{ showToast(typeof currentLang!=='undefined'&&t('no_interesting_stories')); }catch(err){}
         return;
       }
       window._slInterestingQueue=uids.slice();
@@ -8019,7 +8019,7 @@ async function openStoryViewer(userId, name){
       if(url) urls.add(url);
     }
   }
-  if(!stories?.length){ showToast(currentLang==='en'?'No stories':'Нет историй'); return; }
+  if(!stories?.length){ showToast(t('no_stories')); return; }
   let viewer=document.getElementById('story-viewer');
   // recreate if old markup (double progress bars / no safe-area)
   // force rebuild if old single-bar progress
@@ -8527,7 +8527,7 @@ function openMediaCaptionComposer(dataUrl, mediaType, fileName){
       <label style="font-size:13px;color:var(--muted);display:block;margin-bottom:6px">Подпись (необязательно)</label>
       <textarea id="mcm-cap" placeholder="Напишите текст к ${isVid?'видео':'фото'}..." maxlength="2000"></textarea>
       <div class="mcm-actions">
-        <button type="button" id="mcm-cancel" style="background:var(--panel-hover);color:var(--text)">Отмена</button>
+        <button type="button" id="mcm-cancel" style="background:var(--panel-hover);color:var(--text)">${typeof t==='function'?t('cancel'):'Отмена'}</button>
         <button type="button" id="mcm-send" style="background:linear-gradient(135deg,#4C7CF3,#6D5DF6);color:#fff">Отправить</button>
       </div>
     </div>`;
@@ -8548,7 +8548,7 @@ window.openMediaCaptionComposer = openMediaCaptionComposer;
 
 document.getElementById('photo-input').onchange=async function(e){
   const f=e.target.files[0]; if(!f) return; e.target.value='';
-  if(!activePartner && !activeGroup){ showToast(currentLang==='en'?'Open a chat first':'Сначала откройте чат'); return; }
+  if(!activePartner && !activeGroup){ showToast(t('open_chat_first')); return; }
   const type = f.type.startsWith('video/') ? 'video' : 'image';
   try{
     showLoader();
@@ -8576,7 +8576,7 @@ document.getElementById('photo-input').onchange=async function(e){
 };
 document.getElementById('file-input').onchange=async function(e){
   const f=e.target.files[0]; if(!f) return; e.target.value='';
-  if(!activePartner && !activeGroup){ showToast(currentLang==='en'?'Open a chat first':'Сначала откройте чат'); return; }
+  if(!activePartner && !activeGroup){ showToast(t('open_chat_first')); return; }
   try{
     showLoader();
     const prep=await prepareMediaForUpload(f, 'chat');
@@ -8753,7 +8753,7 @@ function openAvatarCrop(dataUrl){
         <button type="button" class="av-zoom-btn" id="av-zoom-in" aria-label="+">+</button>
       </div>
       <div class="av-crop-actions">
-        <button type="button" class="cancel" id="av-cancel">Отмена</button>
+        <button type="button" class="cancel" id="av-cancel">${typeof t==='function'?t('cancel'):'Отмена'}</button>
         <button type="button" class="ok" id="av-ok">Готово</button>
       </div>`;
     document.body.appendChild(ov);
@@ -8983,7 +8983,7 @@ function pickCoverImage(){
         el.classList.add('has-img');
       });
       try{ await sb.from('profiles').update({cover_url:dataUrl}).eq('id',myProfile.id); }catch(err){}
-      showToast(currentLang==='en'?'Cover updated':'Обложка обновлена');
+      showToast(t('cover_updated'));
     };
     r.readAsDataURL(f);
   };
@@ -9351,7 +9351,7 @@ function customConfirm(msg){
   return new Promise(res=>{
     const ov=document.createElement('div'); ov.className='cd-overlay';
     ov.innerHTML=`<div class="cd-box"><div class="cd-msg">${escapeHtml(msg)}</div><div class="cd-actions">
-      <button class="cd-btn secondary" id="cd-no">Отмена</button><button class="cd-btn primary" id="cd-yes">Ок</button></div></div>`;
+      <button class="cd-btn secondary" id="cd-no">${typeof t==='function'?t('cancel'):'Отмена'}</button><button class="cd-btn primary" id="cd-yes">Ок</button></div></div>`;
     document.body.appendChild(ov);
     ov.querySelector('#cd-no').onclick=()=>{ ov.remove(); res(false); };
     ov.querySelector('#cd-yes').onclick=()=>{ ov.remove(); res(true); };
@@ -9363,7 +9363,7 @@ function customPrompt(title, placeholder, value){
     const ov=document.createElement('div'); ov.className='cd-overlay';
     ov.innerHTML=`<div class="cd-box"><div class="cd-msg">${escapeHtml(title)}</div>
       <input class="cd-input" id="cd-in" placeholder="${escapeHtml(placeholder||'')}" value="${escapeHtml(value)}">
-      <div class="cd-actions"><button class="cd-btn secondary" id="cd-cancel">Отмена</button><button class="cd-btn primary" id="cd-ok">Готово</button></div></div>`;
+      <div class="cd-actions"><button class="cd-btn secondary" id="cd-cancel">${typeof t==='function'?t('cancel'):'Отмена'}</button><button class="cd-btn primary" id="cd-ok">Готово</button></div></div>`;
     document.body.appendChild(ov);
     const inp=ov.querySelector('#cd-in'); inp.focus();
     const done=v=>{ ov.remove(); res(v); };
@@ -10362,7 +10362,7 @@ window.openChannelProfile = async function(group){
     ov.innerHTML=`<div class="modal" style="max-width:300px">
       <button type="button" class="btn-secondary" id="cm-copy" style="width:100%;margin-bottom:8px">Скопировать ссылку</button>
       ${isAdmin?`<button type="button" class="btn-secondary" id="cm-admin" style="width:100%;margin-bottom:8px">Настройки админа</button>`:''}
-      <button type="button" class="btn-secondary" id="cm-cancel" style="width:100%">Отмена</button>
+      <button type="button" class="btn-secondary" id="cm-cancel" style="width:100%">${typeof t==='function'?t('cancel'):'Отмена'}</button>
     </div>`;
     document.body.appendChild(ov);
     ov.querySelector('#cm-cancel').onclick=()=>ov.remove();
@@ -10469,7 +10469,7 @@ document.getElementById('group-settings-btn').onclick=async()=>{
   modal.innerHTML=`<div class="modal"><button class="close-x" id="gs-x">×</button>
     <h3>${escapeHtml(activeGroup.name)}</h3>
     <p style="color:var(--muted);font-size:13px;margin-bottom:12px">${activeGroup.type==='channel'?(activeGroup.is_public?'Публичный канал':'Приватный канал'):'Группа'}</p>
-    <button class="btn-secondary" id="gs-copy-link">${currentLang==='en'?'Copy chat link':'Скопировать ссылку'}</button>
+    <button class="btn-secondary" id="gs-copy-link">${t('copy_chat_link')}</button>
     ${isAdmin&&activeGroup.type==='channel'?`<div class="settings-item" id="toggle-comments" style="padding-left:0"><span class="item-text">Комментарии</span><div class="toggle-switch ${activeGroup.comments_enabled?'on':''}" id="comments-tg"></div></div>
     <div class="settings-item" id="toggle-public" style="padding-left:0"><span class="item-text">Публичный канал</span><div class="toggle-switch ${activeGroup.is_public?'on':''}" id="public-tg"></div></div>`:''}
     ${isAdmin?`<div class="settings-item" style="padding-left:0"><span class="item-text">Антиспам (запрещённые слова)</span><div class="toggle-switch ${antispamOn?'on':''}" id="antispam-tg"></div></div>
@@ -10482,7 +10482,7 @@ document.getElementById('group-settings-btn').onclick=async()=>{
     const link = (activeGroup.type==='channel' && activeGroup.is_public && activeGroup.username)
       ? `${location.origin}${location.pathname}#/channel/${activeGroup.username}`
       : `${location.origin}${location.pathname}#/group/${activeGroup.id}`;
-    showInfoDialog(currentLang==='en'?'Chat link':'Ссылка на чат', link);
+    showInfoDialog(t('chat_link'), link);
   };
   modal.querySelector('#toggle-comments')?.addEventListener('click', async()=>{
     const on=!activeGroup.comments_enabled;
@@ -12629,12 +12629,12 @@ window.slDoCreateGroup = async function({name, description, memberIds, avatarDat
       const card=document.createElement('div');
       card.className='sl-ready-card';
       const letter=(name.trim()[0]||'G').toUpperCase();
-      card.innerHTML=`<div class="big-av">${slEsc(letter)}</div><h3>Чат готов</h3><p>Теперь можно пригласить участников и начать общение</p>`;
+      card.innerHTML=`<div class="big-av">${slEsc(letter)}</div><h3>${typeof t==='function'?t('chat_ready'):'Чат готов'}</h3><p>${typeof t==='function'?t('chat_ready_hint'):'Теперь можно пригласить участников и начать общение'}</p>`;
       const list=document.getElementById('messages-list');
       if(list){ list.prepend(card); setTimeout(()=>{ try{card.remove()}catch(e){} }, 8000); }
     }catch(e){}
   }
-  showToast(isChannel ? 'Канал создан' : 'Группа создана');
+  showToast(isChannel ? (typeof t==='function'?t('channel_created'):'Канал создан') : (typeof t==='function'?t('group_created'):'Группа создана'));
   return data;
 };
 
@@ -12680,7 +12680,7 @@ const I18N={
     tt_search:'Поиск', tt_media:'Медиа', tt_invite:'Пригласить', tt_settings:'Настройки', tt_videocall:'Видеозвонок', tt_call:'Звонок',
     tt_attach:'Прикрепить', tt_stickers:'Стикеры', tt_circle:'Кружок / Голос',
     sec_account:'Аккаунт', it_edit_profile:'Изменить профиль', it_favorites:'Избранное', it_devices:'Устройства',
-    it_pinlock:'Защита чатов (PIN)', it_mylink:'Моя ссылка',
+    it_pinlock:'Защита чатов (PIN)', it_mylink:'Моя ссылка', it_mail:'Почта',
     sec_appearance:'Оформление', it_wallpaper:'Настроить обои', it_emojistatus:'Эмодзи статус', it_emojiavatar:'Эмодзи аватар',
     sec_privacy:'Приватность', it_anonymity:'Анонимность', it_notifications:'Уведомления',
     sec_gifts:'Подарки', it_gifts:'Подарки', sec_logout:'Выход', it_logout:'Выйти',
@@ -12688,6 +12688,41 @@ const I18N={
     online:'в сети', offline:'не в сети', typing:'печатает…', notes:'заметки', bot:'бот',
     you_sure_delete_chat:'Удалить чат?', you_sure_delete_msg:'Удалить сообщение?', you_sure_logout:'Выйти из аккаунта?',
     copied:'Скопировано', not_found:'Не найден', added:'Добавлен',
+    language:'Язык', lang_system:'Как в системе (авто)', cancel:'Отмена', save:'Сохранить', delete:'Удалить',
+    forward:'Переслать', forwarded:'Переслано', group:'Группа', channel:'Канал', search:'Поиск…',
+    comment_optional:'Комментарий (необязательно)', open_chat_first:'Сначала откройте чат',
+    nothing_to_save:'Нечего сохранять', saved:'Сохранено', user_not_found:'Пользователь не найден',
+    channel_not_found:'Канал не найден', group_not_found:'Группа не найдена',
+    invite_invalid:'Ссылка-приглашение недействительна', joined_channel:'Вы подписались на канал',
+    joined_group:'Вы вступили в группу', private_group:'Это приватная группа — попросите админа добавить вас',
+    set_pin_first:'Сначала установите PIN в Настройках', wait:'Подождите', upload_failed:'Не удалось загрузить файл',
+    uploading_video:'Загрузка видео…', message_reported:'Сообщение скрыто и отправлено на проверку',
+    flash_na:'Вспышка недоступна на этом устройстве', flash_on:'Вспышка вкл', flash_off:'Вспышка выкл',
+    flash_toggle_fail:'Не удалось включить вспышку', no_interesting_stories:'Пока нет интересных историй',
+    no_stories:'Нет историй', cover_updated:'Обложка обновлена', copy_chat_link:'Скопировать ссылку',
+    chat_link:'Ссылка на чат', need_https:'Нужен HTTPS для уведомлений',
+    notif_unsupported:'Этот браузер не поддерживает уведомления',
+    notif_blocked:'Ранее запрещено — разрешите в настройках сайта браузера',
+    perm_not_granted:'Разрешение не получено', notif_on_body:'Уведомления включены',
+    notif_enabled:'Уведомления включены', error:'Ошибка:', open:'Открыть',
+    new_message:'Новое сообщение', message:'Сообщение', key_copied:'Ключ скопирован',
+    not_found_short:'Не найдено', login_required:'Войдите в аккаунт', sound_on:'Звук включён',
+    deleted:'Удалено', wrong_pin:'Неверный PIN', no_connection:'Нет соединения',
+    circle_play_fail:'Не удалось воспроизвести кружок', user_blocked_10d:'Пользователь заблокирован на 10 дней (50 жалоб)',
+    copy_fail:'Не удалось скопировать', in_favorites:'В Избранных', decrypting:'Расшифровка… (нужен микрофон/AI)',
+    channel_admins_only:'Писать в канал могут только администраторы', published:'Опубликовано',
+    admins_only:'Писать могут только администраторы',
+    no_camera_mic:'Нет доступа к камере/микрофону', camera_switch_fail:'Не удалось переключить камеру',
+    empty_recording:'Пустая запись — попробуйте ещё раз', record_end_fail:'Не удалось завершить запись',
+    login_to_like:'Войдите, чтобы лайкать', like_removed:'Лайк убран', like_saved:'Лайк сохранён',
+    story:'История', choose_image:'Выберите изображение', theme_system:'Тема как в системе',
+    choose_gift:'Выберите подарок', specify_recipient:'Укажите получателя',
+    chat_ready:'Чат готов', chat_ready_hint:'Теперь можно пригласить участников и начать общение',
+    channel_created:'Канал создан', group_created:'Группа создана', invite_member:'Пригласить участника',
+    pin_chat:'Закрепить чат', unpin_chat:'Открепить', mark_unread:'Пометить непрочитанным',
+    note:'Заметка', chat_wallpaper:'Обои чата', secret_chat:'Секретный чат', remove_secret:'Убрать секрет',
+    original_not_found:'Исходное сообщение не найдено', pick_contact_call:'Выберите контакт для звонка',
+    group_calls_soon:'Групповые звонки скоро', chats_title:'Чаты',
   },
   en:{
     tab_chats:'Chats', tab_calls:'Calls', tab_settings:'Settings',
@@ -12703,7 +12738,7 @@ const I18N={
     tt_search:'Search', tt_media:'Media', tt_invite:'Invite', tt_settings:'Settings', tt_videocall:'Video call', tt_call:'Call',
     tt_attach:'Attach', tt_stickers:'Stickers', tt_circle:'Circle / Voice',
     sec_account:'Account', it_edit_profile:'Edit profile', it_favorites:'Favorites', it_devices:'Devices',
-    it_pinlock:'Chat lock (PIN)', it_mylink:'My link',
+    it_pinlock:'Chat lock (PIN)', it_mylink:'My link', it_mail:'Mail',
     sec_appearance:'Appearance', it_wallpaper:'Set wallpaper', it_emojistatus:'Emoji status', it_emojiavatar:'Emoji avatar',
     sec_privacy:'Privacy', it_anonymity:'Anonymity', it_notifications:'Notifications',
     sec_gifts:'Gifts', it_gifts:'Gifts', sec_logout:'Sign out', it_logout:'Log out',
@@ -12711,12 +12746,56 @@ const I18N={
     online:'online', offline:'offline', typing:'typing…', notes:'notes', bot:'bot',
     you_sure_delete_chat:'Delete this chat?', you_sure_delete_msg:'Delete this message?', you_sure_logout:'Sign out of your account?',
     copied:'Copied', not_found:'Not found', added:'Added',
+    language:'Language', lang_system:'System (auto)', cancel:'Cancel', save:'Save', delete:'Delete',
+    forward:'Forward', forwarded:'Forwarded', group:'Group', channel:'Channel', search:'Search…',
+    comment_optional:'Comment (optional)', open_chat_first:'Open a chat first',
+    nothing_to_save:'Nothing to save', saved:'Saved', user_not_found:'User not found',
+    channel_not_found:'Channel not found', group_not_found:'Group not found',
+    invite_invalid:'Invite link invalid', joined_channel:'Joined the channel',
+    joined_group:'Joined the group', private_group:'This is a private group — ask an admin to add you',
+    set_pin_first:'Set a PIN in Settings first', wait:'Wait', upload_failed:'Upload failed',
+    uploading_video:'Uploading video…', message_reported:'Message hidden and reported',
+    flash_na:'Flash not available on this device', flash_on:'Flash on', flash_off:'Flash off',
+    flash_toggle_fail:'Cannot toggle flash', no_interesting_stories:'No interesting stories yet',
+    no_stories:'No stories', cover_updated:'Cover updated', copy_chat_link:'Copy chat link',
+    chat_link:'Chat link', need_https:'Need HTTPS for notifications',
+    notif_unsupported:'Notifications not supported in this browser',
+    notif_blocked:'Permission was blocked earlier — enable in browser site settings',
+    perm_not_granted:'Permission not granted', notif_on_body:'Notifications are on',
+    notif_enabled:'Notifications enabled', error:'Error:', open:'Open',
+    new_message:'New message', message:'Message', key_copied:'Key copied',
+    not_found_short:'Not found', login_required:'Please sign in', sound_on:'Sound on',
+    deleted:'Deleted', wrong_pin:'Wrong PIN', no_connection:'No connection',
+    circle_play_fail:'Could not play circle video', user_blocked_10d:'User blocked for 10 days (50 reports)',
+    copy_fail:'Could not copy', in_favorites:'Saved to Favorites', decrypting:'Decrypting… (needs mic/AI)',
+    channel_admins_only:'Only admins can post in the channel', published:'Published',
+    admins_only:'Only admins can post',
+    no_camera_mic:'No camera/microphone access', camera_switch_fail:'Could not switch camera',
+    empty_recording:'Empty recording — try again', record_end_fail:'Could not finish recording',
+    login_to_like:'Sign in to like', like_removed:'Like removed', like_saved:'Like saved',
+    story:'Story', choose_image:'Choose an image', theme_system:'Theme follows system',
+    choose_gift:'Choose a gift', specify_recipient:'Specify a recipient',
+    chat_ready:'Chat is ready', chat_ready_hint:'You can invite members and start chatting',
+    channel_created:'Channel created', group_created:'Group created', invite_member:'Invite member',
+    pin_chat:'Pin chat', unpin_chat:'Unpin', mark_unread:'Mark as unread',
+    note:'Note', chat_wallpaper:'Chat wallpaper', secret_chat:'Secret chat', remove_secret:'Remove secret',
+    original_not_found:'Original message not found', pick_contact_call:'Pick a contact to call',
+    group_calls_soon:'Group calls coming soon', chats_title:'Chats',
   }
 };
 const LANG_KEY='sl_lang';
 let currentLang='ru';
-function detectLang(){ const saved=storage.getItem(LANG_KEY); if(saved) return saved; const nav=(navigator.language||'ru').slice(0,2); return nav==='en'?'en':'ru'; }
-function t(key){ return (I18N[currentLang]&&I18N[currentLang][key]) || (I18N.ru[key]) || key; }
+function detectLang(){ const saved=storage.getItem(LANG_KEY); if(saved==='en'||saved==='ru') return saved; const nav=(navigator.language||'ru').slice(0,2); return nav==='en'?'en':'ru'; }
+/** Never fall back across languages — prevents EN UI mixing with RU strings */
+function t(key){
+  const pack = I18N[currentLang] || I18N.ru;
+  if(pack && pack[key] != null) return pack[key];
+  // last resort: other language only if current pack truly has nothing (keeps key as-is preferably)
+  return key;
+}
+/** Inline bilingual helper: L('Русский', 'English') */
+function L(ru, en){ return currentLang==='en' ? (en != null ? en : ru) : ru; }
+window.L = L; window.t = t;
 function applyI18n(){
   currentLang=detectLang();
   document.documentElement.lang = currentLang;
@@ -12730,7 +12809,7 @@ function applyI18n(){
     const k=el.dataset.i18nTitle; if(I18N[currentLang]?.[k]) el.setAttribute('title', I18N[currentLang][k]);
   });
   const lbl=document.getElementById('settings-language-label');
-  if(lbl) lbl.textContent = t('it_pinlock')&&currentLang==='en' ? 'Language' : (currentLang==='en'?'Language':'Язык');
+  if(lbl) lbl.textContent = t('language');
   // re-render dynamic bits that carry text baked in at render time
   try{
     const emptyList=document.querySelector('#contacts-list .empty-state');
@@ -12742,8 +12821,8 @@ function applyI18n(){
 function initI18n(){ applyI18n(); }
 document.getElementById('settings-language').onclick=()=>{
   const ov=document.createElement('div'); ov.className='modal-overlay';
-  ov.innerHTML=`<div class="modal"><button class="close-x" id="lg-x">×</button><h3>${currentLang==='en'?'Language':'Язык'}</h3>
-    <div class="settings-item" data-v="" style="padding-left:0">${currentLang==='en'?'System (auto)':'Как в системе (авто)'}</div>
+  ov.innerHTML=`<div class="modal"><button class="close-x" id="lg-x">×</button><h3>${t('language')}</h3>
+    <div class="settings-item" data-v="" style="padding-left:0">${t('lang_system')}</div>
     <div class="settings-item" data-v="ru" style="padding-left:0">Русский</div>
     <div class="settings-item" data-v="en" style="padding-left:0">English</div></div>`;
   document.body.appendChild(ov);
@@ -13026,16 +13105,16 @@ async function initPushSystem(){
 async function requestNotifPermission(){
   try{
     if(!window.isSecureContext && location.protocol!=='https:' && location.hostname!=='localhost'){
-      showToast(currentLang==='en'?'Need HTTPS for notifications':'Нужен HTTPS для уведомлений', true);
+      showToast(t('need_https'), true);
       return false;
     }
     if(!('Notification' in window)){
-      showToast(currentLang==='en'?'Notifications not supported in this browser':'Этот браузер не поддерживает уведомления', true);
+      showToast(t('notif_unsupported'), true);
       return false;
     }
     let perm = Notification.permission;
     if(perm==='denied'){
-      showToast(currentLang==='en'?'Allowed was blocked earlier — enable in browser site settings':'Ранее запрещено — разрешите в настройках сайта браузера', true);
+      showToast(t('notif_blocked'), true);
       return false;
     }
     if(perm!=='granted'){
@@ -13050,7 +13129,7 @@ async function requestNotifPermission(){
     }
     if(perm!=='granted'){
       storage.setItem(NOTIF_PREF_KEY,'0');
-      showToast(currentLang==='en'?'Permission not granted':'Разрешение не получено', true);
+      showToast(t('perm_not_granted'), true);
       return false;
     }
     // Local notifications work even without Web Push
@@ -13059,10 +13138,10 @@ async function requestNotifPermission(){
     try{
       vibratePhone([150,60,150]);
       // force show test without depending on pref checks mid-call
-      const opts={body: currentLang==='en'?'Notifications are on':'Уведомления включены', tag:'sl-test', vibrate:[150,60,150]};
+      const opts={body: t('notif_on_body'), tag:'sl-test', vibrate:[150,60,150]};
       await showLocalNotification('SLine', opts.body||'', opts);
     }catch(e){ console.warn('test notif', e); }
-    showToast(currentLang==='en'?'Notifications enabled':'Уведомления включены');
+    showToast(t('notif_enabled'));
     return true;
   }catch(e){
     console.error(e);
@@ -13147,7 +13226,7 @@ async function showLocalNotification(title, body, opts={}){
     timestamp: Date.now(),
     data: opts.data || { url: location.href.split('#')[0] }
   };
-  try{ options.actions = [{ action:'open', title: (currentLang==='en'?'Open':'Открыть') }]; }catch(e){}
+  try{ options.actions = [{ action:'open', title: (t('open')) }]; }catch(e){}
   // Only attach icon/badge if http(s) — critical for Android (data: icons break Xiaomi)
   if(icon && /^https?:\/\//i.test(icon)){
     options.icon = icon;
@@ -13263,20 +13342,20 @@ function notifyIncomingMessage(msg, opts={}){
   let title, avatar;
   if(msg.group_id){
     const g = (typeof groups!=='undefined' ? groups : []).find(x=>String(x.id)===String(msg.group_id));
-    title = g ? (g.name||'Канал') : (currentLang==='en'?'Channel':'Канал');
+    title = g ? (g.name||'Канал') : (t('channel'));
     avatar = g?.avatar_url;
   } else {
     const sender = (typeof contacts!=='undefined' ? contacts : []).find(c=>String(c.id)===String(msg.sender_id));
-    title = sender ? (sender.first_name||sender.username) : (currentLang==='en'?'New message':'Новое сообщение');
+    title = sender ? (sender.first_name||sender.username) : (t('new_message'));
     avatar = sender?.avatar_url;
   }
   let body;
   if(msg.type==='text' || !msg.type){
     const t = String(msg.content||'');
     body = (typeof window.slE2E?.isEncrypted==='function' && window.slE2E.isEncrypted(t))
-      ? '🔒' : (t.replace(/\s+/g,' ').trim().slice(0,80) || (currentLang==='en'?'Message':'Сообщение'));
+      ? '🔒' : (t.replace(/\s+/g,' ').trim().slice(0,80) || (t('message')));
   } else {
-    body = ({image:'📷 Фото',photo:'📷 Фото',video:'🎬 Видео',voice:'🎤 Голосовое',circle:'⭕ Кружок',file:'📎 Файл',document:'📎 Файл',sticker:'Стикер',gift:'🎁 Подарок',poll:'📊 Опрос'}[msg.type]|| (currentLang==='en'?'Message':'Сообщение'));
+    body = ({image:'📷 Фото',photo:'📷 Фото',video:'🎬 Видео',voice:'🎤 Голосовое',circle:'⭕ Кружок',file:'📎 Файл',document:'📎 Файл',sticker:'Стикер',gift:'🎁 Подарок',poll:'📊 Опрос'}[msg.type]|| (t('message')));
   }
   // In-app banner only when app is visible (avoid double with system notif after offline)
   if(document.visibilityState==='visible' && !opts.catchup){
@@ -13377,7 +13456,7 @@ async function slCatchUpMissedNotifications(){
       } else {
         if(msg.type==='text'||!msg.type){
           const t=String(msg.content||'');
-          body = t.replace(/\s+/g,' ').trim().slice(0,80) || (currentLang==='en'?'Message':'Сообщение');
+          body = t.replace(/\s+/g,' ').trim().slice(0,80) || (t('message'));
         } else {
           body = ({image:'📷',photo:'📷',video:'🎬',voice:'🎤',circle:'⭕',file:'📎'}[msg.type]||'Сообщение');
         }
@@ -14729,7 +14808,7 @@ async function renderSocialStoriesBar(container){
       const p=profs[uid]||{}; const name=p.first_name||p.username||'?';
       html+=`<div class="story-item" data-uid="${uid}" data-name="${escapeHtml(name)}"><div class="story-ring"><div class="avatar" data-av="${uid}" style="width:100%;height:100%;border-radius:50%;background:${p.color||colorFor(uid)}"></div></div><span style="font-size:10px">${escapeHtml(name)}</span></div>`;
     }
-    wrap.innerHTML=html||`<div class="empty-state" style="padding:8px;font-size:12px">${currentLang==='en'?'No stories':'Нет историй'}</div>`;
+    wrap.innerHTML=html||`<div class="empty-state" style="padding:8px;font-size:12px">${t('no_stories')}</div>`;
     if(myProfile){
       const meAv=wrap.querySelector('#soc-story-me');
       if(meAv && (byUser.get(myProfile.id)||[]).length){
@@ -15455,7 +15534,7 @@ function openPhotoEditor(dataUrl){
         <button type="button" data-pe="clear">Сброс</button>
       </div>
       <div class="pe-actions">
-        <button type="button" class="btn-secondary" id="pe-cancel">Отмена</button>
+        <button type="button" class="btn-secondary" id="pe-cancel">${typeof t==='function'?t('cancel'):'Отмена'}</button>
         <button type="button" class="btn-primary" id="pe-send">Отправить</button>
       </div>`;
     document.body.appendChild(ov);
@@ -15553,7 +15632,7 @@ function openPhotoEditor(dataUrl){
 // intercept photo-input for images → editor; videos send as before
 document.getElementById('photo-input').onchange=async function(e){
   const f=e.target.files[0]; if(!f) return; e.target.value='';
-  if(!activePartner && !activeGroup){ showToast(currentLang==='en'?'Open a chat first':'Сначала откройте чат'); return; }
+  if(!activePartner && !activeGroup){ showToast(t('open_chat_first')); return; }
   try{
     if(f.type.startsWith('video/')){
       showLoader();
@@ -15787,7 +15866,7 @@ async function openFullProfile(profileLike){
           <button type="button" class="btn-secondary" id="um-rename" style="width:100%;margin-bottom:8px">Изменить имя</button>
           <button type="button" class="btn-secondary" id="um-block" style="width:100%;margin-bottom:8px;color:var(--danger,#e5484d)">Заблокировать</button>
           <button type="button" class="btn-secondary" id="um-del" style="width:100%;margin-bottom:8px;color:var(--danger,#e5484d)">Удалить</button>
-          <button type="button" class="btn-secondary" id="um-cancel" style="width:100%">Отмена</button>
+          <button type="button" class="btn-secondary" id="um-cancel" style="width:100%">${typeof t==='function'?t('cancel'):'Отмена'}</button>
         </div>`;
         document.body.appendChild(ov);
         // Prevent click-through to sheet / chat under overlay
@@ -17065,11 +17144,11 @@ function scheduleBirthdayAfterAppReady(){
     ov.innerHTML=`<div class="fwd-sheet">
       <h3>Переслать · ${esc(typeLabel)}</h3>
       <div style="padding:0 16px 8px">
-        <input type="search" id="fwd-search" placeholder="Поиск…" style="width:100%;box-sizing:border-box;padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:var(--input-bg,#111);color:var(--text);font-size:14px">
+        <input type="search" id="fwd-search" placeholder="${typeof t==='function'?t('search'):'Поиск…'}" style="width:100%;box-sizing:border-box;padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:var(--input-bg,#111);color:var(--text);font-size:14px">
       </div>
       <div class="fwd-list" id="fwd-list"><div style="padding:20px;color:var(--muted);text-align:center">Загрузка...</div></div>
       <div style="padding:8px 16px 14px">
-        <textarea id="fwd-comment" rows="2" placeholder="Комментарий (необязательно)" style="width:100%;box-sizing:border-box;border-radius:12px;border:1px solid var(--line);background:var(--input-bg,#111);color:var(--text);padding:10px;font-size:14px;resize:vertical"></textarea>
+        <textarea id="fwd-comment" rows="2" placeholder="${typeof t==='function'?t('comment_optional'):'Комментарий (необязательно)'}" style="width:100%;box-sizing:border-box;border-radius:12px;border:1px solid var(--line);background:var(--input-bg,#111);color:var(--text);padding:10px;font-size:14px;resize:vertical"></textarea>
       </div>
     </div>`;
     document.body.appendChild(ov);
@@ -17465,7 +17544,7 @@ function scheduleBirthdayAfterAppReady(){
       bar=document.createElement('div');
       bar.id='msg-select-bar'; bar.className='msg-select-bar';
       bar.innerHTML=`<span id="msg-sel-count" style="flex:1;font-weight:700">1 выбрано</span>
-        <button type="button" data-a="fwd">Переслать</button>
+        <button type="button" data-a="fwd">${typeof t==='function'?t('forward'):'Переслать'}</button>
         <button type="button" class="danger" data-a="del">Удалить</button>
         <button type="button" data-a="cancel">✕</button>`;
       const chat=document.getElementById('chat-active');
@@ -17763,7 +17842,7 @@ function scheduleBirthdayAfterAppReady(){
         <button type="button" class="btn-secondary sched-q" data-m="1440">+1 день</button>
       </div>
       <button class="btn-primary" id="sched-ok" style="width:100%">Запланировать</button>
-      <button class="btn-secondary" id="sched-cancel" style="width:100%;margin-top:8px">Отмена</button>
+      <button class="btn-secondary" id="sched-cancel" style="width:100%;margin-top:8px">${typeof t==='function'?t('cancel'):'Отмена'}</button>
     </div>`;
     document.body.appendChild(ov);
     ov.querySelectorAll('.sched-q').forEach(b=>{
@@ -20718,7 +20797,7 @@ html.sl-tv .composer textarea { min-height: 52px; font-size: 17px; }
   window.slOpenChannelCatalog = async function(){
     const sheet=document.createElement('div'); sheet.className='sl-sheet'; sheet.id='sl-catalog';
     sheet.innerHTML=`<div class="sl-sheet-hdr"><button type="button" class="sl-sheet-back" id="cat-back">‹</button><h2>Каталог каналов</h2><span style="width:40px"></span></div>
-      <div class="sl-sheet-body"><div style="padding:12px 16px"><input class="cd-input" id="cat-q" placeholder="Поиск…" style="width:100%;box-sizing:border-box"></div><div id="cat-list" style="padding-bottom:40px">Загрузка…</div></div>`;
+      <div class="sl-sheet-body"><div style="padding:12px 16px"><input class="cd-input" id="cat-q" placeholder="${typeof t==='function'?t('search'):'Поиск…'}" style="width:100%;box-sizing:border-box"></div><div id="cat-list" style="padding-bottom:40px">Загрузка…</div></div>`;
     document.body.appendChild(sheet);
     sheet.querySelector('#cat-back').onclick=()=>sheet.remove();
     const isPubCh = (g)=>{
@@ -21487,7 +21566,7 @@ html.sl-tv .composer textarea { min-height: 52px; font-size: 17px; }
         div.onclick=()=>{
           menu.style.display='none';
           const ov=document.createElement('div'); ov.className='modal-overlay';
-          ov.innerHTML=`<div class="modal"><h3>Папка</h3>${names.map(n=>`<button class="btn-secondary" data-fn="${esc(n)}" style="width:100%;margin:4px 0">${esc(n)}</button>`).join('')}<button class="btn-secondary" id="fp-x" style="width:100%;margin-top:8px">Отмена</button></div>`;
+          ov.innerHTML=`<div class="modal"><h3>Папка</h3>${names.map(n=>`<button class="btn-secondary" data-fn="${esc(n)}" style="width:100%;margin:4px 0">${esc(n)}</button>`).join('')}<button class="btn-secondary" id="fp-x" style="width:100%;margin-top:8px">${typeof t==='function'?t('cancel'):'Отмена'}</button></div>`;
           document.body.appendChild(ov);
           ov.querySelector('#fp-x').onclick=()=>ov.remove();
           ov.querySelectorAll('[data-fn]').forEach(b=>b.onclick=()=>{
@@ -25812,7 +25891,7 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
     const wrap=document.createElement('div');
     wrap.className='sl-social-search-wrap';
     wrap.innerHTML=`<span class="ico"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg></span>
-      <input class="sl-social-search" id="${overlayId}-search" placeholder="Поиск…" type="search">`;
+      <input class="sl-social-search" id="${overlayId}-search" placeholder="${typeof t==='function'?t('search'):'Поиск…'}" type="search">`;
     // insert after topbar
     top.insertAdjacentElement('afterend', wrap);
     const input=wrap.querySelector('input');
@@ -28245,7 +28324,7 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
               <button type="button" data-a="send">↑ Отправить стикер</button>
               <button type="button" data-a="fav">☆ Добавить в избранные</button>
               <button type="button" data-a="pack">＋ Добавить в набор</button>
-              <button type="button" data-a="cancel" class="muted">Отмена</button>
+              <button type="button" data-a="cancel" class="muted">${typeof t==='function'?t('cancel'):'Отмена'}</button>
             </div>
           </div>`;
         document.body.appendChild(ov);
@@ -29185,7 +29264,7 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
     bar.innerHTML=`
       <span class="tg-vb-dot"></span>
       <span class="tg-vb-time" id="tg-vb-time">0:00,00</span>
-      <button type="button" class="tg-vb-cancel" id="tg-vb-cancel">Отмена</button>
+      <button type="button" class="tg-vb-cancel" id="tg-vb-cancel">${typeof t==='function'?t('cancel'):'Отмена'}</button>
       <button type="button" class="tg-vb-send" id="tg-vb-send">${ARROW}</button>`;
     document.body.appendChild(bar);
     bar.querySelector('#tg-vb-cancel').onclick=()=>cancelRec();
@@ -29338,7 +29417,7 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
         <div class="tg-cl-mid">
           <span class="tg-cl-dot"></span>
           <span id="tg-cl-time">0:00,00</span>
-          <button type="button" class="tg-cl-cancel" id="tg-cl-cancel">Отмена</button>
+          <button type="button" class="tg-cl-cancel" id="tg-cl-cancel">${typeof t==='function'?t('cancel'):'Отмена'}</button>
         </div>
         <button type="button" class="tg-cl-send" id="tg-cl-send">${ARROW}</button>
       </div>`;
@@ -30821,7 +30900,7 @@ document.addEventListener('click', function(e){
         <input id="mu2-album" placeholder="Альбом" style="width:100%;box-sizing:border-box;margin:6px 0 16px;padding:12px;border-radius:12px;border:1px solid var(--line);background:var(--input-bg);color:var(--text);font:inherit">
         <div id="mu2-err" style="color:#e5484d;font-size:13px;min-height:18px;margin-bottom:8px"></div>
         <button type="button" id="mu2-save" style="width:100%;padding:14px;border:none;border-radius:14px;background:linear-gradient(135deg,#4C7CF3,#6D5DF6);color:#fff;font-weight:700;font-size:15px;cursor:pointer">Опубликовать</button>
-        <button type="button" id="mu2-cancel" style="width:100%;margin-top:10px;padding:12px;border-radius:14px;border:1px solid var(--line);background:transparent;color:var(--text);font-weight:600;cursor:pointer">Отмена</button>
+        <button type="button" id="mu2-cancel" style="width:100%;margin-top:10px;padding:12px;border-radius:14px;border:1px solid var(--line);background:transparent;color:var(--text);font-weight:600;cursor:pointer">${typeof t==='function'?t('cancel'):'Отмена'}</button>
       </div>`;
     const fileInp = body.querySelector('#mu2-file');
     fileInp.onchange = ()=>{
@@ -31998,7 +32077,7 @@ window.slGetDisplayName = function(p){
       confirmOv.innerHTML = `
         <div style="width:100%;max-width:400px;padding:12px;padding-bottom:calc(12px + env(safe-area-inset-bottom))">
           <button type="button" id="tgp-do-del" style="width:100%;padding:16px;border:none;border-radius:14px;background:var(--panel,#1A222D);color:#FF6B81;font-weight:700;font-size:16px;margin-bottom:8px;cursor:pointer">Удалить сообщение</button>
-          <button type="button" id="tgp-cancel-del" style="width:100%;padding:16px;border:none;border-radius:14px;background:var(--panel,#1A222D);color:#4C7CF3;font-weight:700;font-size:16px;cursor:pointer">Отмена</button>
+          <button type="button" id="tgp-cancel-del" style="width:100%;padding:16px;border:none;border-radius:14px;background:var(--panel,#1A222D);color:#4C7CF3;font-weight:700;font-size:16px;cursor:pointer">${typeof t==='function'?t('cancel'):'Отмена'}</button>
         </div>`;
       ov.appendChild(confirmOv);
       confirmOv.querySelector('#tgp-cancel-del').onclick = ()=>confirmOv.remove();
@@ -32017,7 +32096,7 @@ window.slGetDisplayName = function(p){
         <div style="width:100%;max-width:400px;padding:12px;padding-bottom:calc(12px + env(safe-area-inset-bottom))">
           <button type="button" data-act="save" style="width:100%;padding:16px;border:none;border-radius:14px 14px 0 0;background:var(--panel,#1A222D);color:#fff;font-size:16px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.08)">Сохранить фото</button>
           <button type="button" data-act="copy" style="width:100%;padding:16px;border:none;border-radius:0;background:var(--panel,#1A222D);color:#fff;font-size:16px;cursor:pointer;border-bottom:1px solid rgba(255,255,255,.08)">Копировать</button>
-          <button type="button" data-act="x" style="width:100%;padding:16px;border:none;border-radius:0 0 14px 14px;background:var(--panel,#1A222D);color:#4C7CF3;font-weight:700;font-size:16px;cursor:pointer;margin-top:8px">Отмена</button>
+          <button type="button" data-act="x" style="width:100%;padding:16px;border:none;border-radius:0 0 14px 14px;background:var(--panel,#1A222D);color:#4C7CF3;font-weight:700;font-size:16px;cursor:pointer;margin-top:8px">${typeof t==='function'?t('cancel'):'Отмена'}</button>
         </div>`;
       ov.appendChild(menu);
       menu.addEventListener('click', async (e)=>{
@@ -32313,7 +32392,7 @@ window.slGetDisplayName = function(p){
         box.innerHTML=`<div style="width:min(320px,92vw);background:#2c2c2e;border-radius:16px;padding:20px 18px 14px;box-shadow:0 12px 40px rgba(0,0,0,.5)">
           <div style="color:#fff;font-size:16px;font-weight:600;text-align:center;margin-bottom:16px;line-height:1.35">Удалить это фото из истории?</div>
           <div style="display:flex;gap:10px">
-            <button type="button" id="pmg-del-cancel" style="flex:1;padding:12px;border:none;border-radius:12px;background:rgba(255,255,255,.12);color:#fff;font-weight:700;font-size:15px;cursor:pointer">Отмена</button>
+            <button type="button" id="pmg-del-cancel" style="flex:1;padding:12px;border:none;border-radius:12px;background:rgba(255,255,255,.12);color:#fff;font-weight:700;font-size:15px;cursor:pointer">${typeof t==='function'?t('cancel'):'Отмена'}</button>
             <button type="button" id="pmg-del-ok" style="flex:1;padding:12px;border:none;border-radius:12px;background:linear-gradient(135deg,#ff453a,#ff6961);color:#fff;font-weight:700;font-size:15px;cursor:pointer">Удалить</button>
           </div>
         </div>`;
@@ -33240,7 +33319,7 @@ window.slGetDisplayName = function(p){
         <div style="display:flex;gap:6px;overflow-x:auto;margin-bottom:12px;padding-bottom:4px">${thumbs}</div>
         <textarea id="al-cap" rows="3" placeholder="Подпись (необязательно)" style="width:100%;box-sizing:border-box;border-radius:12px;border:1px solid var(--line);background:var(--input-bg);color:var(--text);padding:10px;font-size:15px;resize:vertical"></textarea>
         <div style="display:flex;gap:8px;margin-top:12px">
-          <button type="button" class="btn-secondary" id="al-cancel" style="flex:1">Отмена</button>
+          <button type="button" class="btn-secondary" id="al-cancel" style="flex:1">${typeof t==='function'?t('cancel'):'Отмена'}</button>
           <button type="button" class="btn-primary" id="al-send" style="flex:1">Отправить</button>
         </div>
       </div>`;
@@ -33699,20 +33778,20 @@ window.slGetDisplayName = function(p){
     });
     (groups||[]).forEach(g=>{
       if(!g||!g.id) return;
-      rows.push({id:g.id, type:'group', name:g.title||g.name||'Группа', avatar:g.avatar_url, color:g.color});
+      rows.push({id:g.id, type:'group', name:g.title||g.name||(typeof t==='function'?t('group'):'Группа'), avatar:g.avatar_url, color:g.color});
     });
     ov.innerHTML=`<div class="modal">
-      <h3 style="margin:0 0 8px">Переслать</h3>
+      <h3 style="margin:0 0 8px">${typeof t==='function'?t('forward'):'Переслать'}</h3>
       <div style="font-size:13px;color:var(--muted);margin-bottom:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc((msg.content||msg.type||'вложение').toString().slice(0,80))}</div>
-      <input type="search" id="fwd-q" placeholder="Поиск…" style="width:100%;box-sizing:border-box;padding:10px;border-radius:12px;border:1px solid var(--line);background:var(--input-bg);color:var(--text);margin-bottom:8px">
+      <input type="search" id="fwd-q" placeholder="${typeof t==='function'?t('search'):'Поиск…'}" style="width:100%;box-sizing:border-box;padding:10px;border-radius:12px;border:1px solid var(--line);background:var(--input-bg);color:var(--text);margin-bottom:8px">
       <div id="sl-fwd-list">${rows.map(r=>`<div class="fwd-row" data-id="${esc(r.id)}" data-type="${r.type}">
         <div class="av" style="background:${esc(r.color||'#333')}">${r.avatar?`<img src="${esc(r.avatar)}">`:esc((r.name||'?')[0])}</div>
         <div style="min-width:0;flex:1;font-weight:600">${esc(r.name)}</div>
       </div>`).join('')||'<div class="empty-state">Нет чатов</div>'}</div>
-      <textarea id="fwd-comment" rows="2" placeholder="Комментарий (необязательно)" style="width:100%;box-sizing:border-box;border-radius:12px;border:1px solid var(--line);background:var(--input-bg);color:var(--text);padding:10px;font-size:14px;resize:vertical"></textarea>
+      <textarea id="fwd-comment" rows="2" placeholder="${typeof t==='function'?t('comment_optional'):'Комментарий (необязательно)'}" style="width:100%;box-sizing:border-box;border-radius:12px;border:1px solid var(--line);background:var(--input-bg);color:var(--text);padding:10px;font-size:14px;resize:vertical"></textarea>
       <div style="display:flex;gap:8px;margin-top:12px">
-        <button type="button" class="btn-secondary" id="fwd-cancel" style="flex:1">Отмена</button>
-        <button type="button" class="btn-primary" id="fwd-go" style="flex:1">Переслать</button>
+        <button type="button" class="btn-secondary" id="fwd-cancel" style="flex:1">${typeof t==='function'?t('cancel'):'Отмена'}</button>
+        <button type="button" class="btn-primary" id="fwd-go" style="flex:1">${typeof t==='function'?t('forward'):'Переслать'}</button>
       </div>
     </div>`;
     document.body.appendChild(ov);
@@ -33734,7 +33813,7 @@ window.slGetDisplayName = function(p){
     ov.querySelector('#fwd-cancel').onclick=()=>ov.remove();
     ov.addEventListener('click',e=>{ if(e.target===ov) ov.remove(); });
     ov.querySelector('#fwd-go').onclick=async()=>{
-      if(!selected){ toast('Выберите чат'); return; }
+      if(!selected){ toast(typeof t==='function'?t('choose_chat'):'Выберите чат'); return; }
       const comment=(ov.querySelector('#fwd-comment').value||'').trim();
       ov.remove();
       try{
@@ -33754,8 +33833,8 @@ window.slGetDisplayName = function(p){
           const body = t==='text' ? (`↪ ${msg.content||''}`) : (msg.content||'');
           await sendMessage(t, msg.file_url||null, body);
         }
-        toast('Переслано');
-      }catch(e){ console.warn(e); toast('Не удалось переслать'); }
+        toast(typeof t==='function'?t('forwarded'):'Переслано');
+      }catch(e){ console.warn(e); toast(typeof L==='function'?L('Не удалось переслать','Could not forward'):'Не удалось переслать'); }
     };
   }
   window.slForwardWithComment = forwardWithComment;
@@ -33774,11 +33853,11 @@ window.slGetDisplayName = function(p){
       const secret=isSecret(data.id);
       const extra=document.createElement('div');
       extra.innerHTML=`
-        <div class="ctx-item" data-a="pinchat">${pinned?'Открепить':'Закрепить чат'}</div>
-        <div class="ctx-item" data-a="unread">Пометить непрочитанным</div>
-        <div class="ctx-item" data-a="note">Заметка</div>
-        <div class="ctx-item" data-a="wall">Обои чата</div>
-        <div class="ctx-item" data-a="secret">${secret?'Убрать секрет':'Секретный чат'}</div>`;
+        <div class="ctx-item" data-a="pinchat">${pinned?(typeof t==='function'?t('unpin_chat'):'Открепить'):(typeof t==='function'?t('pin_chat'):'Закрепить чат')}</div>
+        <div class="ctx-item" data-a="unread">${typeof t==='function'?t('mark_unread'):'Пометить непрочитанным'}</div>
+        <div class="ctx-item" data-a="note">${typeof t==='function'?t('note'):'Заметка'}</div>
+        <div class="ctx-item" data-a="wall">${typeof t==='function'?t('chat_wallpaper'):'Обои чата'}</div>
+        <div class="ctx-item" data-a="secret">${secret?(typeof t==='function'?t('remove_secret'):'Убрать секрет'):(typeof t==='function'?t('secret_chat'):'Секретный чат')}</div>`;
       // insert at top
       while(extra.firstChild) menu.insertBefore(extra.firstChild, menu.firstChild);
       menu.querySelectorAll('.ctx-item').forEach(it=>{
@@ -34200,7 +34279,7 @@ window.slGetDisplayName = function(p){
     if(!header) return null;
     chip=document.createElement('div');
     chip.id='sl-chats-title-chip';
-    chip.innerHTML=`<div class="chip-av-ring"><div class="chip-av" id="sl-chip-av"></div></div><span class="chip-label">Чаты</span>`;
+    chip.innerHTML=`<div class="chip-av-ring"><div class="chip-av" id="sl-chip-av"></div></div><span class="chip-label">${typeof t==='function'?t('chats_title'):'Чаты'}</span>`;
     header.appendChild(chip);
     return chip;
   }
@@ -34543,7 +34622,7 @@ window.slGetDisplayName = function(p){
           switchPage('chats');
           const si=document.getElementById('search-input');
           if(si){ si.focus(); si.click(); }
-          showToast(currentLang==='en'?'Pick a contact to call':'Выберите контакт для звонка');
+          showToast(t('pick_contact_call'));
         }catch(e){}
       };
     }
@@ -34551,7 +34630,7 @@ window.slGetDisplayName = function(p){
     if(gc && !gc._wired){
       gc._wired=1;
       gc.onclick=()=>{
-        showToast(currentLang==='en'?'Group calls coming soon':'Групповые звонки скоро');
+        showToast(t('group_calls_soon'));
       };
     }
   }
@@ -35429,7 +35508,7 @@ body{
     }
 
     if(!row){
-      try{ showToast(typeof currentLang!=='undefined' && currentLang==='en' ? 'Original message not found' : 'Исходное сообщение не найдено'); }catch(e){}
+      try{ showToast(t('original_not_found')); }catch(e){}
       return;
     }
 
