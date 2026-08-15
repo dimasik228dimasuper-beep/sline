@@ -3302,6 +3302,7 @@ body.theme-light .topbar {
       </div>
       <div class="settings-section">
         <div class="settings-section-title" data-i18n="sec_logout">Выход</div>
+        <div class="settings-item" id="settings-support"><svg viewBox="0 0 24 24"><path d="M3 18v-6a9 9 0 0118 0v6"/><path d="M21 19a2 2 0 01-2 2h-1a2 2 0 01-2-2v-3a2 2 0 012-2h3zM3 19a2 2 0 002 2h1a2 2 0 002-2v-3a2 2 0 00-2-2H3z"/></svg><span class="item-text">Поддержка</span></div>
         <div class="settings-item" id="settings-about"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg><span class="item-text">О проекте</span></div>
         <div class="settings-item danger" id="settings-logout"><svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg><span class="item-text" data-i18n="it_logout">Выйти</span></div>
       </div>
@@ -16358,7 +16359,10 @@ updateCircleIcon();
 // ========== FEATURE PACK: profile / channel comments / calls / support / about / anonymity ==========
 const SUPPORT_ADMIN_EMAILS = ['admin@mail.ru','dimasik.228.dima.super@gmail.com'];
 function isSupportAdmin(){
-  return SUPPORT_ADMIN_EMAILS.includes((myProfile?.email||'').toLowerCase());
+  try{
+    const em = (myProfile?.email||'').toLowerCase().trim();
+    return SUPPORT_ADMIN_EMAILS.includes(em);
+  }catch(e){ return false; }
 }
 const SUPPORT_CONTACT = {
   id: 'support_signal_line',
@@ -16371,54 +16375,268 @@ const SUPPORT_CONTACT = {
   lastMessage: 'Напишите нам — поможем',
   lastAt: new Date().toISOString()
 };
-const SUPPORT_MSG_KEY = 'sl_support_msgs';
+const SUPPORT_MSG_KEY = 'sl_support_msgs_v2';
 const SUPPORT_BAN_KEY = 'sl_support_banned';
 const SUPPORT_RATE_KEY = 'sl_support_rate';
+const SUPPORT_TAG = '[support]';
+const SUPPORT_REPLY_TAG = '[support-reply]';
 
 function getSupportMsgs(){ try{ return JSON.parse(storage.getItem(SUPPORT_MSG_KEY)||'[]'); }catch(e){ return []; } }
-function setSupportMsgs(a){ try{ storage.setItem(SUPPORT_MSG_KEY, JSON.stringify(a.slice(-500))); }catch(e){} }
+function setSupportMsgs(a){ try{ storage.setItem(SUPPORT_MSG_KEY, JSON.stringify((a||[]).slice(-800))); }catch(e){} }
 function getSupportBanned(){ try{ return JSON.parse(storage.getItem(SUPPORT_BAN_KEY)||'[]'); }catch(e){ return []; } }
-function setSupportBanned(a){ storage.setItem(SUPPORT_BAN_KEY, JSON.stringify(a)); }
+function setSupportBanned(a){ try{ storage.setItem(SUPPORT_BAN_KEY, JSON.stringify(a||[])); }catch(e){} }
 
 function ensureSupportContact(){
-  if(!contacts.find(c=>c.id===SUPPORT_CONTACT.id)){
-    contacts.unshift({...SUPPORT_CONTACT});
-  }
-  if(isSupportAdmin()){
-    // virtual inbox for admins
-    if(!contacts.find(c=>c.id==='support_inbox_admin')){
-      contacts.unshift({
-        id:'support_inbox_admin',
-        username:'support_inbox',
-        first_name:'Ответ поддержки',
-        color:'#F0708A',
-        isBot:true,
-        isSupportInbox:true,
-        lastMessage:'Обращения пользователей',
-        lastAt:new Date().toISOString()
-      });
+  try{
+    if(!Array.isArray(contacts)) return;
+    if(!contacts.find(c=>c && c.id===SUPPORT_CONTACT.id)){
+      contacts.unshift({...SUPPORT_CONTACT});
     }
-  }
+    if(isSupportAdmin()){
+      if(!contacts.find(c=>c && c.id==='support_inbox_admin')){
+        contacts.unshift({
+          id:'support_inbox_admin',
+          username:'support_inbox',
+          first_name: (typeof currentLang!=='undefined'&&currentLang==='en') ? 'Support inbox' : 'Ответ поддержки',
+          color:'#F0708A',
+          isBot:true,
+          isSupportInbox:true,
+          lastMessage: (typeof currentLang!=='undefined'&&currentLang==='en') ? 'User tickets' : 'Обращения пользователей',
+          lastAt:new Date().toISOString()
+        });
+      }
+    }
+  }catch(e){}
 }
 
 // wrap loadChats / render to inject support
-const _renderCG = typeof renderContactsAndGroups==='function' ? renderContactsAndGroups : null;
-if(_renderCG){
-  renderContactsAndGroups = function(){
-    ensureSupportContact();
-    return _renderCG.apply(this, arguments);
-  };
-}
+(function wrapSupportRender(){
+  try{
+    if(typeof renderContactsAndGroups!=='function' || renderContactsAndGroups._supportWrapped) return;
+    const _renderCG = renderContactsAndGroups;
+    window.renderContactsAndGroups = renderContactsAndGroups = function(){
+      ensureSupportContact();
+      return _renderCG.apply(this, arguments);
+    };
+    renderContactsAndGroups._supportWrapped = true;
+  }catch(e){}
+})();
 
-// Rate limit for support: 1 msg / 10s
 function canSendSupport(){
   const last = parseInt(storage.getItem(SUPPORT_RATE_KEY)||'0',10)||0;
-  const left = 10000 - (Date.now()-last);
+  const left = 8000 - (Date.now()-last);
   if(left>0){
-    showToast((currentLang==='en'?'Wait ':'Подождите ')+Math.ceil(left/1000)+'с');
+    try{ showToast(((typeof currentLang!=='undefined'&&currentLang==='en')?'Wait ':'Подождите ')+Math.ceil(left/1000)+'с'); }catch(e){}
     return false;
   }
   return true;
+}
+
+/** Resolve admin profile UUIDs by email (for real DB delivery) */
+async function getSupportAdminIds(){
+  if(!sb) return [];
+  try{
+    const {data, error} = await sb.from('profiles').select('id,email,first_name,username').in('email', SUPPORT_ADMIN_EMAILS);
+    if(error){ console.warn('support admin lookup', error); return []; }
+    return (data||[]).filter(p=>p && p.id);
+  }catch(e){ console.warn(e); return []; }
+}
+
+function cacheSupportLocal(entry){
+  const msgs = getSupportMsgs();
+  // dedupe by id
+  if(entry.id && msgs.some(m=>String(m.id)===String(entry.id))) return;
+  msgs.push(entry);
+  setSupportMsgs(msgs);
+}
+
+async function pushSupportToServer(text, fromUser){
+  // Deliver as real DM to each admin so it survives devices / reloads
+  const admins = await getSupportAdminIds();
+  if(!admins.length){
+    console.warn('[SL support] no admin profiles found for', SUPPORT_ADMIN_EMAILS);
+    return { ok:false, reason:'no_admins' };
+  }
+  const body = SUPPORT_TAG + ' ' + text;
+  let anyOk = false;
+  for(const adm of admins){
+    try{
+      const payload = {
+        sender_id: myProfile.id,
+        receiver_id: adm.id,
+        content: body,
+        type: 'text'
+      };
+      const {data, error} = await sb.from('messages').insert(payload).select('id,created_at').single();
+      if(error){ console.warn('support insert', error); continue; }
+      anyOk = true;
+      cacheSupportLocal({
+        id: data?.id || ('s_'+Date.now()),
+        userId: myProfile.id,
+        userName: myProfile.first_name||myProfile.username||'',
+        userEmail: myProfile.email||'',
+        from: 'user',
+        text: text,
+        at: data?.created_at ? new Date(data.created_at).getTime() : Date.now(),
+        server: true
+      });
+    }catch(e){ console.warn(e); }
+  }
+  // also notify via broadcast (online admins)
+  try{
+    const ch = sb.channel('support-admins');
+    await new Promise(res=>{
+      const t = setTimeout(res, 2500);
+      ch.subscribe(st=>{
+        if(st==='SUBSCRIBED'){
+          ch.send({type:'broadcast', event:'ticket', payload:{
+            userId: myProfile.id,
+            userName: myProfile.first_name||myProfile.username||'',
+            userEmail: myProfile.email||'',
+            text
+          }});
+          clearTimeout(t); res();
+        }
+      });
+    });
+    setTimeout(()=>{ try{ sb.removeChannel(ch); }catch(e){} }, 1500);
+  }catch(e){}
+  // web push to admins if available
+  try{
+    if(typeof sendWebPushToUser==='function'){
+      for(const adm of admins){
+        sendWebPushToUser(adm.id, 'SLine Support', (myProfile.first_name||myProfile.username||'User')+': '+text.slice(0,80), {tag:'sl-support'});
+      }
+    }
+  }catch(e){}
+  return { ok: anyOk };
+}
+
+async function adminReplySupport(userId, text){
+  if(!userId || !text) return false;
+  const body = SUPPORT_REPLY_TAG + ' ' + text;
+  try{
+    const {data, error} = await sb.from('messages').insert({
+      sender_id: myProfile.id,
+      receiver_id: userId,
+      content: body,
+      type: 'text'
+    }).select('id,created_at').single();
+    if(error){ console.warn(error); showToast('Не удалось отправить'); return false; }
+    cacheSupportLocal({
+      id: data?.id || ('s_'+Date.now()),
+      userId: userId,
+      from: 'admin',
+      text: text,
+      at: data?.created_at ? new Date(data.created_at).getTime() : Date.now(),
+      server: true
+    });
+    // realtime to user channel
+    try{
+      const ch = sb.channel('support-'+userId);
+      await new Promise(res=>{
+        const t=setTimeout(res, 2000);
+        ch.subscribe(st=>{
+          if(st==='SUBSCRIBED'){
+            ch.send({type:'broadcast', event:'reply', payload:{text, from: myProfile.id}});
+            clearTimeout(t); res();
+          }
+        });
+      });
+      setTimeout(()=>{ try{ sb.removeChannel(ch); }catch(e){} }, 1200);
+    }catch(e){}
+    try{
+      if(typeof sendWebPushToUser==='function'){
+        sendWebPushToUser(userId, 'Поддержка SLine', text.slice(0,100), {tag:'sl-support-reply'});
+      }
+    }catch(e){}
+    return true;
+  }catch(e){ console.warn(e); return false; }
+}
+
+/** Load thread for current user from local + server DMs with support tags */
+async function loadSupportThreadFromServer(userId){
+  if(!sb || !userId) return;
+  try{
+    const admins = await getSupportAdminIds();
+    const adminIds = admins.map(a=>a.id);
+    // messages I sent with [support] or received with [support-reply]
+    let rows = [];
+    try{
+      const {data} = await sb.from('messages')
+        .select('id,sender_id,receiver_id,content,created_at,type')
+        .is('group_id', null)
+        .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`)
+        .order('created_at', {ascending:true})
+        .limit(200);
+      rows = data||[];
+    }catch(e){ console.warn(e); }
+    const local = getSupportMsgs().filter(m=>m.userId===userId);
+    const seen = new Set(local.map(m=>String(m.id)));
+    rows.forEach(m=>{
+      const c = String(m.content||'');
+      const isUserTicket = c.startsWith(SUPPORT_TAG) && String(m.sender_id)===String(userId);
+      const isAdminReply = c.startsWith(SUPPORT_REPLY_TAG) && String(m.receiver_id)===String(userId);
+      if(!isUserTicket && !isAdminReply) return;
+      if(seen.has(String(m.id))) return;
+      const text = c.replace(SUPPORT_TAG,'').replace(SUPPORT_REPLY_TAG,'').trim();
+      local.push({
+        id: m.id,
+        userId: userId,
+        from: isUserTicket ? 'user' : 'admin',
+        text,
+        at: new Date(m.created_at).getTime(),
+        server: true
+      });
+      seen.add(String(m.id));
+    });
+    local.sort((a,b)=>(a.at||0)-(b.at||0));
+    // merge into storage for this user
+    const all = getSupportMsgs().filter(m=>m.userId!==userId).concat(local);
+    setSupportMsgs(all);
+  }catch(e){ console.warn('loadSupportThreadFromServer', e); }
+}
+
+async function loadSupportAdminInboxFromServer(){
+  if(!sb || !myProfile?.id) return;
+  try{
+    const {data} = await sb.from('messages')
+      .select('id,sender_id,receiver_id,content,created_at')
+      .eq('receiver_id', myProfile.id)
+      .is('group_id', null)
+      .order('created_at', {ascending:false})
+      .limit(150);
+    const rows = (data||[]).filter(m=>String(m.content||'').startsWith(SUPPORT_TAG));
+    // enrich names
+    const uids = [...new Set(rows.map(r=>r.sender_id))];
+    let profiles = [];
+    if(uids.length){
+      try{
+        const {data:prs} = await sb.from('profiles').select('id,first_name,username,email').in('id', uids);
+        profiles = prs||[];
+      }catch(e){}
+    }
+    const byId = Object.fromEntries(profiles.map(p=>[p.id,p]));
+    const local = getSupportMsgs();
+    const seen = new Set(local.map(m=>String(m.id)));
+    rows.forEach(m=>{
+      if(seen.has(String(m.id))) return;
+      const p = byId[m.sender_id]||{};
+      const text = String(m.content||'').replace(SUPPORT_TAG,'').trim();
+      local.push({
+        id: m.id,
+        userId: m.sender_id,
+        userName: p.first_name||p.username||m.sender_id,
+        userEmail: p.email||'',
+        from: 'user',
+        text,
+        at: new Date(m.created_at).getTime(),
+        server: true
+      });
+      seen.add(String(m.id));
+    });
+    setSupportMsgs(local);
+  }catch(e){ console.warn('loadSupportAdminInboxFromServer', e); }
 }
 
 // Intercept openChat for support
@@ -16430,35 +16648,43 @@ openChat = async function(partner){
     document.getElementById('sidebar')?.classList.add('hidden');
     document.getElementById('no-chat-state').style.display='none';
     document.getElementById('chat-active').style.display='flex';
-    document.getElementById('chat-partner-name').textContent='Поддержка SLine';
-    document.getElementById('chat-partner-status').textContent=currentLang==='en'?'Support team':'Служба поддержки';
-    document.getElementById('chat-partner-status').className='chat-status';
-    const av=document.getElementById('chat-partner-avatar');
+    document.getElementById('chat-partner-name').textContent = (typeof currentLang!=='undefined'&&currentLang==='en')?'SLine Support':'Поддержка SLine';
+    const st=document.getElementById('chat-partner-status');
+    if(st){ st.textContent=(typeof currentLang!=='undefined'&&currentLang==='en')?'Usually replies within a day':'Обычно отвечаем в течение дня'; st.className='chat-status'; }
+    const av=document.getElementById('partner-avatar')||document.getElementById('chat-partner-avatar');
     if(av){
       av.style.background='linear-gradient(135deg,#4C7CF3,#6B8CFF)';
       av.style.backgroundImage='';
       av.classList.add('support-avatar');
       av.innerHTML=`<svg viewBox="0 0 100 100" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" style="width:72%;height:72%"><path d="M28 52c0-18 10-32 22-32s22 14 22 32"/><path d="M24 54v8c0 4 3 7 7 7h4V47h-4c-4 0-7 3-7 7z"/><path d="M76 54v8c0 4-3 7-7 7h-4V47h4c4 0 7 3 7 7z"/><path d="M32 58c2 14 9 22 18 22s16-8 18-22"/><path d="M68 66c4 2 8 5 8 10 0 4-3 7-7 7H58"/><circle cx="66" cy="82" r="3.5" fill="#fff" stroke="none"/></svg>`;
-      av.style.display='flex';
-      av.style.alignItems='center';
-      av.style.justifyContent='center';
-      av.style.color='#fff';
+      av.style.display='flex'; av.style.alignItems='center'; av.style.justifyContent='center';
     }
     document.getElementById('composer').style.display='flex';
     document.getElementById('comment-bar')?.classList.remove('show');
+    // hide call buttons for support
+    try{
+      document.getElementById('call-btn')&&(document.getElementById('call-btn').style.display='none');
+      document.getElementById('video-call-btn')&&(document.getElementById('video-call-btn').style.display='none');
+    }catch(e){}
     renderSupportThread(myProfile.id);
+    loadSupportThreadFromServer(myProfile.id).then(()=>renderSupportThread(myProfile.id));
     return;
   }
   if(partner?.isSupportInbox){
+    if(!isSupportAdmin()){
+      showToast((typeof currentLang!=='undefined'&&currentLang==='en')?'Admins only':'Только для администраторов');
+      return;
+    }
     activePartner={...partner}; activeGroup=null;
     document.body.classList.add('in-chat');
     document.getElementById('sidebar')?.classList.add('hidden');
     document.getElementById('no-chat-state').style.display='none';
     document.getElementById('chat-active').style.display='flex';
-    document.getElementById('chat-partner-name').textContent='Ответ поддержки';
-    document.getElementById('chat-partner-status').textContent='Admin inbox';
+    document.getElementById('chat-partner-name').textContent=(typeof currentLang!=='undefined'&&currentLang==='en')?'Support inbox':'Ответ поддержки';
+    document.getElementById('chat-partner-status').textContent='Admin';
     document.getElementById('composer').style.display='none';
     renderSupportAdminInbox();
+    loadSupportAdminInboxFromServer().then(()=>renderSupportAdminInbox());
     return;
   }
   return _openChatSupport.apply(this, arguments);
@@ -16468,69 +16694,88 @@ function renderSupportThread(userId){
   const list=document.getElementById('messages-list'); if(!list) return;
   list.innerHTML='';
   const banned=getSupportBanned();
-  if(banned.includes(userId)){
-    list.innerHTML=`<div class="empty-state">${currentLang==='en'?'You are banned from support':'Вам запрещено писать в поддержку'}</div>`;
+  if(banned.includes(userId) || banned.includes(String(userId))){
+    list.innerHTML=`<div class="empty-state">${(typeof currentLang!=='undefined'&&currentLang==='en')?'You are banned from support':'Вам запрещено писать в поддержку'}</div>`;
     document.getElementById('composer').style.display='none';
     return;
   }
-  const msgs=getSupportMsgs().filter(m=>m.userId===userId);
+  const msgs=getSupportMsgs().filter(m=>String(m.userId)===String(userId)).slice().sort((a,b)=>(a.at||0)-(b.at||0));
   if(!msgs.length){
-    list.innerHTML=`<div class="empty-state">${currentLang==='en'?'Describe your issue':'Опишите проблему — мы ответим'}</div>`;
+    list.innerHTML=`<div class="empty-state" style="padding:24px;text-align:center;color:var(--muted);line-height:1.5">
+      <div style="font-size:32px;margin-bottom:8px">🎧</div>
+      <div style="font-weight:700;color:var(--text);margin-bottom:6px">${(typeof currentLang!=='undefined'&&currentLang==='en')?'SLine Support':'Поддержка SLine'}</div>
+      <div>${(typeof currentLang!=='undefined'&&currentLang==='en')?'Describe your issue — we will reply here.':'Опишите проблему — ответим в этом чате.'}</div>
+      <div style="font-size:12px;margin-top:10px;opacity:.8">${(typeof currentLang!=='undefined'&&currentLang==='en')?'Do not send passwords or bank codes.':'Не присылайте пароли и коды из SMS.'}</div>
+    </div>`;
   }
   msgs.forEach(m=>{
     const mine=m.from==='user';
     const row=document.createElement('div');
     row.className='bubble-row '+(mine?'me':'them');
-    row.innerHTML=`<div class="bubble ${mine?'me':'them'}">${escapeHtml(m.text)}<span class="bubble-time">${new Date(m.at).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</span></div>`;
+    row.dataset.id=m.id;
+    const who = mine ? '' : `<div style="font-size:11px;color:var(--mint);margin-bottom:2px">${(typeof currentLang!=='undefined'&&currentLang==='en')?'Support':'Поддержка'}</div>`;
+    row.innerHTML=`<div class="bubble ${mine?'me':'them'}">${who}${escapeHtml(m.text||'')}<span class="bubble-time">${new Date(m.at||Date.now()).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</span></div>`;
     list.appendChild(row);
   });
-  scrollToBottom();
+  try{ scrollToBottom(true); }catch(e){ try{ scrollToBottom(); }catch(e2){} }
 }
 
 function renderSupportAdminInbox(){
   const list=document.getElementById('messages-list'); if(!list) return;
   list.innerHTML='';
-  const msgs=getSupportMsgs().filter(m=>m.from==='user').slice().reverse();
-  // group by user latest
   const byUser=new Map();
   getSupportMsgs().forEach(m=>{
+    if(!m || !m.userId) return;
     if(!byUser.has(m.userId)) byUser.set(m.userId, []);
     byUser.get(m.userId).push(m);
   });
   if(!byUser.size){
-    list.innerHTML=`<div class="empty-state">Нет обращений</div>`;
+    list.innerHTML=`<div class="empty-state">${(typeof currentLang!=='undefined'&&currentLang==='en')?'No tickets yet':'Нет обращений'}</div>`;
     return;
   }
-  for(const [uid, arr] of byUser){
+  // sort users by last message time
+  const entries=[...byUser.entries()].sort((a,b)=>{
+    const la=a[1][a[1].length-1]?.at||0;
+    const lb=b[1][b[1].length-1]?.at||0;
+    return lb-la;
+  });
+  for(const [uid, arr] of entries){
+    arr.sort((a,b)=>(a.at||0)-(b.at||0));
     const last=arr[arr.length-1];
+    const userMsgs=arr.filter(x=>x.from==='user');
+    const lastUser=userMsgs[userMsgs.length-1]||last;
     const row=document.createElement('div');
     row.className='bubble-row them';
-    row.innerHTML=`<div class="bubble them">
-      <div style="font-size:11px;color:var(--mint);margin-bottom:4px">${escapeHtml(last.userName||uid)}</div>
-      ${escapeHtml(last.text)}
-      <span class="bubble-time">${new Date(last.at).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</span>
+    row.innerHTML=`<div class="bubble them" style="max-width:95%">
+      <div style="font-size:12px;color:var(--mint);margin-bottom:4px;font-weight:700">${escapeHtml(last.userName||lastUser.userName||uid)}</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:6px">${escapeHtml(last.userEmail||lastUser.userEmail||'')}</div>
+      <div style="margin-bottom:8px">${escapeHtml(lastUser.text||'')}</div>
+      <span class="bubble-time">${new Date(lastUser.at||Date.now()).toLocaleString()}</span>
       <div class="support-admin-btns">
-        <button type="button" data-reply="${uid}">Ответить</button>
-        <button type="button" class="danger" data-ban="${uid}">Запретить сюда писать</button>
+        <button type="button" data-open-thread="${uid}">${(typeof currentLang!=='undefined'&&currentLang==='en')?'Open thread':'Переписка'}</button>
+        <button type="button" data-reply="${uid}">${(typeof currentLang!=='undefined'&&currentLang==='en')?'Reply':'Ответить'}</button>
+        <button type="button" class="danger" data-ban="${uid}">${(typeof currentLang!=='undefined'&&currentLang==='en')?'Ban':'Запретить писать'}</button>
       </div>
     </div>`;
     list.appendChild(row);
   }
-  list.querySelectorAll('[data-reply]').forEach(btn=>{
+  list.querySelectorAll('[data-open-thread]').forEach(btn=>{
     btn.onclick=()=>{
+      const uid=btn.dataset.openThread;
+      openSupportAdminThread(uid);
+    };
+  });
+  list.querySelectorAll('[data-reply]').forEach(btn=>{
+    btn.onclick=async ()=>{
       const uid=btn.dataset.reply;
-      const text=prompt('Ответ пользователю:');
-      if(!text) return;
-      const msgs=getSupportMsgs();
-      msgs.push({id:'s_'+Date.now(), userId:uid, userName:byUser.get(uid)?.[0]?.userName||'', from:'admin', text, at:Date.now()});
-      setSupportMsgs(msgs);
-      // notify via broadcast
+      let text='';
       try{
-        const ch=sb.channel('support-'+uid);
-        ch.subscribe(st=>{ if(st==='SUBSCRIBED'){ ch.send({type:'broadcast',event:'reply',payload:{text}}); setTimeout(()=>sb.removeChannel(ch),2000);} });
-      }catch(e){}
-      showToast('Ответ отправлен');
-      renderSupportAdminInbox();
+        if(typeof customPrompt==='function') text = await customPrompt((typeof currentLang!=='undefined'&&currentLang==='en')?'Reply to user':'Ответ пользователю','');
+        else text = prompt((typeof currentLang!=='undefined'&&currentLang==='en')?'Reply:':'Ответ:')||'';
+      }catch(e){ text=prompt('Ответ:')||''; }
+      if(!text || !String(text).trim()) return;
+      const ok = await adminReplySupport(uid, String(text).trim());
+      if(ok){ showToast((typeof currentLang!=='undefined'&&currentLang==='en')?'Reply sent':'Ответ отправлен'); renderSupportAdminInbox(); }
     };
   });
   list.querySelectorAll('[data-ban]').forEach(btn=>{
@@ -16539,74 +16784,200 @@ function renderSupportAdminInbox(){
       const bans=getSupportBanned();
       if(!bans.includes(uid)) bans.push(uid);
       setSupportBanned(bans);
-      showToast('Пользователю запрещено писать');
+      // also cache on server-ish via local; real ban list is local to admin devices — broadcast
+      try{
+        const ch=sb.channel('support-ban');
+        ch.subscribe(st=>{ if(st==='SUBSCRIBED'){ ch.send({type:'broadcast',event:'ban',payload:{userId:uid}}); setTimeout(()=>sb.removeChannel(ch),1500);} });
+      }catch(e){}
+      showToast((typeof currentLang!=='undefined'&&currentLang==='en')?'User banned from support':'Пользователю запрещено писать');
+      renderSupportAdminInbox();
     };
   });
+}
+
+function openSupportAdminThread(uid){
+  const list=document.getElementById('messages-list'); if(!list) return;
+  const msgs=getSupportMsgs().filter(m=>String(m.userId)===String(uid)).sort((a,b)=>(a.at||0)-(b.at||0));
+  const name = msgs.find(m=>m.userName)?.userName || uid;
+  document.getElementById('chat-partner-name').textContent = name;
+  document.getElementById('chat-partner-status').textContent = 'ticket';
+  document.getElementById('composer').style.display='flex';
+  list.innerHTML='';
+  msgs.forEach(m=>{
+    const mine=m.from==='admin'; // admin sees own replies on the right
+    const row=document.createElement('div');
+    row.className='bubble-row '+(mine?'me':'them');
+    row.innerHTML=`<div class="bubble ${mine?'me':'them'}">${escapeHtml(m.text||'')}<span class="bubble-time">${new Date(m.at||Date.now()).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</span></div>`;
+    list.appendChild(row);
+  });
+  // temporary send handler for admin reply in-thread
+  window._slSupportReplyUid = uid;
+  try{ scrollToBottom(true); }catch(e){}
 }
 
 // Hook sendMessage for support
 const _sendSupport = sendMessage;
 sendMessage = async function(type='text', fileUrl=null, content=null){
+  // Admin replying inside a ticket thread
+  if(activePartner?.isSupportInbox && window._slSupportReplyUid){
+    const text=(content ?? (document.getElementById('message-input')?.value || '')).trim();
+    if(!text) return;
+    document.getElementById('message-input').value='';
+    document.getElementById('send-btn')?.classList.remove('visible');
+    const ok = await adminReplySupport(window._slSupportReplyUid, text);
+    if(ok){
+      openSupportAdminThread(window._slSupportReplyUid);
+      showToast((typeof currentLang!=='undefined'&&currentLang==='en')?'Sent':'Отправлено');
+    }
+    return;
+  }
   if(activePartner?.isSupport || activePartner?.id===SUPPORT_CONTACT.id){
-    if(getSupportBanned().includes(myProfile.id)){
-      showToast('Вам запрещено писать в поддержку'); return;
+    if(getSupportBanned().includes(myProfile?.id) || getSupportBanned().includes(String(myProfile?.id))){
+      showToast((typeof currentLang!=='undefined'&&currentLang==='en')?'You are banned from support':'Вам запрещено писать в поддержку'); return;
     }
     if(!canSendSupport()) return;
     const text=(content ?? (document.getElementById('message-input')?.value || '')).trim();
     if(!text && type==='text') return;
+    if(type!=='text' && !text){
+      showToast((typeof currentLang!=='undefined'&&currentLang==='en')?'Support accepts text only for now':'В поддержку пока только текст');
+      return;
+    }
     document.getElementById('message-input').value='';
     document.getElementById('send-btn')?.classList.remove('visible');
+    try{ document.getElementById('composer')?.classList.remove('has-text'); }catch(e){}
     storage.setItem(SUPPORT_RATE_KEY, String(Date.now()));
-    const msgs=getSupportMsgs();
-    msgs.push({
-      id:'s_'+Date.now(),
+    // optimistic local
+    cacheSupportLocal({
+      id:'local_'+Date.now(),
       userId: myProfile.id,
       userName: myProfile.first_name||myProfile.username||'',
       userEmail: myProfile.email||'',
       from:'user',
-      text: text||('[media] '+type),
-      at: Date.now()
+      text: text,
+      at: Date.now(),
+      server: false
     });
-    setSupportMsgs(msgs);
-    // broadcast to admins
-    try{
-      SUPPORT_ADMIN_EMAILS.forEach(()=>{});
-      const ch=sb.channel('support-admins');
-      ch.subscribe(st=>{ if(st==='SUBSCRIBED'){ ch.send({type:'broadcast',event:'ticket',payload:{userId:myProfile.id,text}}); setTimeout(()=>sb.removeChannel(ch),2000);} });
-    }catch(e){}
     renderSupportThread(myProfile.id);
-    showToast(currentLang==='en'?'Sent to support':'Отправлено в поддержку');
+    const res = await pushSupportToServer(text, true);
+    if(res && res.ok){
+      showToast((typeof currentLang!=='undefined'&&currentLang==='en')?'Sent to support':'Отправлено в поддержку');
+    } else if(res && res.reason==='no_admins'){
+      showToast((typeof currentLang!=='undefined'&&currentLang==='en')
+        ?'Saved locally — admin accounts not found on server'
+        :'Сохранено локально — аккаунты админов не найдены на сервере');
+    } else {
+      showToast((typeof currentLang!=='undefined'&&currentLang==='en')
+        ?'Saved — will sync when possible'
+        :'Сохранено — доставим при возможности');
+    }
+    // auto ack
+    setTimeout(()=>{
+      const msgs=getSupportMsgs();
+      const hasAck = msgs.some(m=>m.from==='admin' && m.userId===myProfile.id && /принят|received|получили/i.test(m.text||''));
+      if(!hasAck){
+        cacheSupportLocal({
+          id:'ack_'+Date.now(),
+          userId: myProfile.id,
+          from:'admin',
+          text: (typeof currentLang!=='undefined'&&currentLang==='en')
+            ? 'Thanks! Your message was received. An agent will reply here.'
+            : 'Спасибо! Обращение получено. Ответим в этом чате.',
+          at: Date.now()+1
+        });
+        if(activePartner?.isSupport) renderSupportThread(myProfile.id);
+      }
+    }, 600);
     return;
   }
   return _sendSupport.apply(this, arguments);
 };
 
-// Listen for support replies when in support chat
+// Listen for support replies when in support chat + admin tickets
 (function setupSupportRealtime(){
-  const trySub=()=>{
+  let userCh=null, adminCh=null;
+  const subUser=()=>{
     if(!myProfile||!sb) return;
     try{
-      const ch=sb.channel('support-'+myProfile.id)
+      if(userCh){ try{ sb.removeChannel(userCh); }catch(e){} }
+      userCh = sb.channel('support-'+myProfile.id)
         .on('broadcast',{event:'reply'},({payload})=>{
           if(!payload?.text) return;
-          const msgs=getSupportMsgs();
-          msgs.push({id:'s_'+Date.now(), userId:myProfile.id, from:'admin', text:payload.text, at:Date.now()});
-          setSupportMsgs(msgs);
+          cacheSupportLocal({id:'s_'+Date.now(), userId:myProfile.id, from:'admin', text:payload.text, at:Date.now()});
           if(activePartner?.isSupport) renderSupportThread(myProfile.id);
-          showToast(currentLang==='en'?'Support replied':'Ответ поддержки');
-        }).subscribe();
-      window._slSupportCh=ch;
+          showToast((typeof currentLang!=='undefined'&&currentLang==='en')?'Support replied':'Ответ поддержки');
+        })
+        .on('broadcast',{event:'ban'},({payload})=>{
+          if(payload?.userId && String(payload.userId)===String(myProfile.id)){
+            const bans=getSupportBanned();
+            if(!bans.includes(myProfile.id)) bans.push(myProfile.id);
+            setSupportBanned(bans);
+          }
+        })
+        .subscribe();
+      window._slSupportCh=userCh;
+    }catch(e){}
+    // Also poll server messages occasionally while support chat open
+    try{
+      if(window._slSupportPoll) clearInterval(window._slSupportPoll);
+      window._slSupportPoll = setInterval(()=>{
+        if(activePartner?.isSupport && myProfile?.id){
+          loadSupportThreadFromServer(myProfile.id).then(()=>{
+            if(activePartner?.isSupport) renderSupportThread(myProfile.id);
+          });
+        }
+        if(activePartner?.isSupportInbox && isSupportAdmin()){
+          loadSupportAdminInboxFromServer().then(()=>{
+            if(activePartner?.isSupportInbox && !window._slSupportReplyUid) renderSupportAdminInbox();
+          });
+        }
+      }, 12000);
     }catch(e){}
   };
-  const _oa=onAuthenticated;
-  onAuthenticated=async function(user){
-    await _oa(user);
-    ensureSupportContact();
-    trySub();
+  const subAdmin=()=>{
+    if(!myProfile||!sb||!isSupportAdmin()) return;
+    try{
+      if(adminCh){ try{ sb.removeChannel(adminCh); }catch(e){} }
+      adminCh = sb.channel('support-admins')
+        .on('broadcast',{event:'ticket'},({payload})=>{
+          if(!payload?.userId) return;
+          cacheSupportLocal({
+            id:'t_'+Date.now(),
+            userId: payload.userId,
+            userName: payload.userName||'',
+            userEmail: payload.userEmail||'',
+            from:'user',
+            text: payload.text||'',
+            at: Date.now()
+          });
+          if(activePartner?.isSupportInbox && !window._slSupportReplyUid) renderSupportAdminInbox();
+          showToast((typeof currentLang!=='undefined'&&currentLang==='en')?'New support ticket':'Новое обращение в поддержку');
+        })
+        .subscribe();
+    }catch(e){}
   };
+  const bootSubs=()=>{ subUser(); subAdmin(); ensureSupportContact(); };
+  try{
+    if(typeof onAuthenticated==='function'){
+      const _oa=onAuthenticated;
+      onAuthenticated=async function(user){
+        await _oa(user);
+        bootSubs();
+      };
+    }
+  }catch(e){}
+  setTimeout(bootSubs, 1500);
+  setTimeout(bootSubs, 4000);
 })();
 
 // ========== About ==========
+
+document.getElementById('settings-support')?.addEventListener('click', ()=>{
+  try{
+    ensureSupportContact();
+    if(typeof openChat==='function') openChat({...SUPPORT_CONTACT});
+    else if(typeof switchPage==='function'){ switchPage('chats'); setTimeout(()=>openChat({...SUPPORT_CONTACT}), 100); }
+  }catch(e){ console.warn(e); }
+});
 document.getElementById('settings-about')?.addEventListener('click', ()=>{
   if(typeof window.openAboutProject==='function') window.openAboutProject();
 });
