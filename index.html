@@ -26124,7 +26124,7 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
     row.innerHTML=`<svg viewBox="0 0 24 24"><path d="M12 2a10 10 0 00-9.95 9h3.1A7 7 0 1112 19v3A10 10 0 0012 2z"/><circle cx="9" cy="10" r="1.2" fill="currentColor" stroke="none"/><circle cx="15" cy="10" r="1.2" fill="currentColor" stroke="none"/><path d="M9 14h6"/></svg>
       <span class="item-text">ИИ чат</span>`;
     const about=document.getElementById('settings-about');
-    if(about) host.insertBefore(row, about);
+    if(about && about.parentNode===host) host.insertBefore(row, about);
     else host.appendChild(row);
     row.onclick=()=>window.slOpenAIChat();
   }, 1000);
@@ -26239,7 +26239,7 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
     row.innerHTML=`<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
       <span class="item-text">Экранное время</span>`;
     const ai=document.getElementById('settings-ai-chat');
-    if(ai) host.insertBefore(row, ai);
+    if(ai && ai.parentNode===host) host.insertBefore(row, ai);
     else host.appendChild(row);
     row.onclick=()=>window.slOpenScreenTime();
   }, 1100);
@@ -35777,8 +35777,10 @@ body{
             }catch(e){}
           };
           var plus = actions.querySelector('#plus-menu, #plus-btn');
-          if(plus) actions.insertBefore(cam, plus);
-          else actions.appendChild(cam);
+          try{
+            if(plus && plus.parentNode === actions) actions.insertBefore(cam, plus);
+            else actions.appendChild(cam);
+          }catch(err){ try{ actions.appendChild(cam); }catch(e2){} }
         }
         cam.style.display = '';
       } else if(cam){
