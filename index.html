@@ -2544,6 +2544,10 @@ html.theme-light #app-boot,html.light-theme #app-boot{background:#F4F6F9!importa
 body:not(.sl-content-ready) #app-screen:empty,
 body:not(.sl-content-ready) #app-screen:not(:has(*)){background:#0F1419}
 </style>
+<style>
+/* hide leftover TG more / three-dot buttons user asked to remove */
+#chat-more-btn, #chats-select-btn, button#chats-select-btn { display:none!important; visibility:hidden!important; pointer-events:none!important; width:0!important; height:0!important; overflow:hidden!important; margin:0!important; padding:0!important; border:none!important; }
+</style>
 </head>
 <body>
 <script>(function(){try{document.documentElement.classList.remove('skin-green','skin-wa','skin-tg','skin-max','skin-sline');localStorage.removeItem('sl_ui_skin');}catch(e){}})();</script>
@@ -2554,6 +2558,52 @@ body:not(.sl-content-ready) #app-screen:not(:has(*)){background:#0F1419}
   <div class="dot" style="width:12px;height:12px;border-radius:50%;background:#4C7CF3"></div>
   <div class="boot-msg" style="font:600 14px/1.3 system-ui,-apple-system,sans-serif;color:#8B9BB4">SLine</div>
 </div>
+
+<script>
+/* CRITICAL iOS recovery — runs immediately */
+(function(){
+  function showSomething(){
+    try{
+      document.documentElement.classList.remove('sl-booting');
+      document.documentElement.classList.add('sl-ready');
+      var boot = document.getElementById('app-boot');
+      if(boot) boot.style.display = 'none';
+      var auth = document.getElementById('auth-screen');
+      var app = document.getElementById('app-screen');
+      var logged = false;
+      try {
+        for (var i = 0; i < localStorage.length; i++) {
+          var k = localStorage.key(i) || '';
+          if (k.indexOf('auth-token') !== -1 || k.indexOf('sb-') === 0 || k === 'sl_logged_in') {
+            if (k === 'sl_logged_in' && localStorage.getItem(k) !== '1') continue;
+            logged = true; break;
+          }
+        }
+      } catch(e){}
+      if (logged && app) {
+        if (auth) auth.style.setProperty('display','none','important');
+        app.style.setProperty('display','flex','important');
+        app.style.setProperty('visibility','visible','important');
+        app.style.setProperty('opacity','1','important');
+        app.style.setProperty('min-height','100dvh','important');
+        document.body.style.background = '#0F1419';
+      } else if (auth) {
+        auth.style.setProperty('display','flex','important');
+        auth.style.setProperty('visibility','visible','important');
+        auth.style.setProperty('opacity','1','important');
+        auth.style.setProperty('min-height','100dvh','important');
+        if (app) app.style.setProperty('display','none','important');
+        document.body.style.background = '#0F1419';
+      }
+    }catch(e){}
+  }
+  setTimeout(showSomething, 2000);
+  setTimeout(showSomething, 4000);
+  setTimeout(showSomething, 7000);
+  window.addEventListener('error', function(){ setTimeout(showSomething, 100); });
+})();
+</script>
+
 <script>
 (function(){
   try{
@@ -3156,7 +3206,7 @@ body.theme-light .topbar {
               <div><div class="me-name" id="me-name-chats"></div><div class="me-tag" id="me-status-chats">в сети</div></div>
             </div>
             <div class="max-chats-actions sidebar-actions">
-              <button type="button" class="max-hdr-btn" id="chats-select-btn" title="Ещё" aria-label="Ещё">…</button>
+              <button type="button" class="max-hdr-btn" id="chats-select-btn" title="Ещё" aria-label="Ещё" style="display:none!important" hidden>…</button>
               <div class="plus-menu" id="plus-menu">
                 <button type="button" class="max-hdr-btn plus" id="plus-btn" title="Создать" aria-label="Создать">+</button>
                 <div class="plus-dropdown" id="plus-dropdown">
@@ -38172,574 +38222,7 @@ body{
 </script>
 
 
-<script>
-/* ============================================================
-   SLine — Telegram placement parity (features live WHERE TG puts them)
-   NOT a settings dump. Entry points:
-   • Long-press Send → Schedule (already)
-   • Msg long-press → Translate / Reply privately
-   • Profile sheet → Secret chat
-   • Chat header menu → Auto-delete / Export / Slow mode
-   • Attach → Location → Live for N min
-   • Settings → Privacy → Passcode (existing pin)
-   ============================================================ */
-(function(){
-  'use strict';
-  if(window._slTgPlaces) return;
-  window._slTgPlaces = 1;
-  const LS = window.storage || localStorage;
 
-  function toast(m){ try{ showToast(m); }catch(e){ console.log(m); } }
-  function peerKey(){
-    if(window.activeGroup) return 'g:'+activeGroup.id;
-    if(window.activePartner) return 'u:'+activePartner.id;
-    return null;
-  }
-
-  /* ---------- CSS ---------- */
-  const css = document.createElement('style');
-  css.textContent = `
-    .tg-sheet-bg{position:fixed;inset:0;z-index:14000;background:rgba(0,0,0,.45);display:flex;align-items:flex-end;justify-content:center}
-    .tg-sheet{width:100%;max-width:480px;background:var(--panel,#1c1c1e);border-radius:16px 16px 0 0;padding:8px 0 calc(12px + env(safe-area-inset-bottom));color:var(--text)}
-    .tg-sheet .tg-row{display:flex;align-items:center;gap:14px;padding:14px 20px;font-size:16px;cursor:pointer}
-    .tg-sheet .tg-row:active{background:rgba(127,127,127,.15)}
-    .tg-sheet .tg-row.danger{color:#e53935}
-    .tg-sheet .tg-handle{width:36px;height:4px;border-radius:2px;background:rgba(127,127,127,.4);margin:6px auto 10px}
-    .tg-sheet .tg-title{padding:4px 20px 10px;font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
-    .secret-chat-banner{background:linear-gradient(90deg,#1a3a2a,#0d2818);color:#7dcea0;font-size:12px;padding:6px 12px;text-align:center;border-bottom:1px solid rgba(125,206,160,.2)}
-    .bubble-row[data-ttl] .bubble::after{content:attr(data-ttl-label);font-size:10px;opacity:.65;margin-left:6px}
-    #chat-partner-status.secret-status{color:#7dcea0!important}
-  `;
-  document.head.appendChild(css);
-
-  function openSheet(title, rows){
-    document.querySelector('.tg-sheet-bg')?.remove();
-    const bg=document.createElement('div');
-    bg.className='tg-sheet-bg';
-    bg.innerHTML=`<div class="tg-sheet"><div class="tg-handle"></div>${title?`<div class="tg-title">${title}</div>`:''}${rows.map((r,i)=>`<div class="tg-row${r.danger?' danger':''}" data-i="${i}">${r.icon||''}<span style="flex:1">${r.label}</span>${r.right||''}</div>`).join('')}</div>`;
-    document.body.appendChild(bg);
-    bg.onclick=e=>{ if(e.target===bg) bg.remove(); };
-    bg.querySelectorAll('.tg-row').forEach(el=>{
-      el.onclick=()=>{ const r=rows[+el.dataset.i]; bg.remove(); try{ r.fn&&r.fn(); }catch(err){ console.warn(err); } };
-    });
-    return bg;
-  }
-
-  /* ---------- 1) Message menu: Translate + Reply privately ---------- */
-  function patchMsgMenu(){
-    // Hook showCtxMenu / openCtx if items built as string — inject via MutationObserver on ctx menus
-    const obs = new MutationObserver(muts=>{
-      muts.forEach(m=>{
-        m.addedNodes.forEach(n=>{
-          if(!n.querySelector) return;
-          const menu = n.classList?.contains('msg-ctx-menu') ? n : n.querySelector?.('.msg-ctx-menu, .ctx-menu, #msg-ctx');
-          // also look for overlays with ctx-item
-          const itemsRoot = n.querySelector?.('.ctx-item') ? n : (n.classList?.contains && [...(n.querySelectorAll?.('.ctx-item')||[])].length ? n : null);
-          if(!itemsRoot && !menu) {
-            // try any element with data-a=reply
-            if(n.querySelector && n.querySelector('[data-a="reply"]') && !n.querySelector('[data-a="translate"]')){
-              injectMsgExtras(n);
-            }
-            return;
-          }
-          const root = menu || itemsRoot || n;
-          if(root && root.querySelector && root.querySelector('[data-a="reply"]') && !root.querySelector('[data-a="translate"]')){
-            injectMsgExtras(root);
-          }
-        });
-      });
-    });
-    obs.observe(document.body, {childList:true, subtree:true});
-  }
-
-  function injectMsgExtras(root){
-    try{
-      const reply = root.querySelector('[data-a="reply"]');
-      if(!reply || root.querySelector('[data-a="translate"]')) return;
-      // Translate — after copy
-      const tr=document.createElement('div');
-      tr.className='ctx-item';
-      tr.dataset.a='translate';
-      tr.innerHTML=`<span class="ico"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 8l6 6M4 14l6-6 2-3M2 5h12M7 2v3M12 22l4-10 4 10M15.5 18h5"/></svg></span> Перевести`;
-      const copy=root.querySelector('[data-a="copy"]');
-      (copy||reply).insertAdjacentElement('afterend', tr);
-      tr.onclick=async(e)=>{
-        e.stopPropagation();
-        const msgId = root.dataset.mid || window._slCtxMsg?.id;
-        const msg = window._slCtxMsg || findMsgById(msgId);
-        const text = (msg?.content||'').replace(/^↪[^\n]*\n/,'').replace(/^🔒e2e:[^\n]*\n?/,'');
-        document.querySelectorAll('.msg-ctx-menu, .modal-overlay, .ctx-backdrop').forEach(el=>{ try{ if(el.classList.contains('modal-overlay')||el.classList.contains('msg-ctx-menu')) el.remove(); }catch(e){} });
-        await translateMessage(text, msg);
-      };
-      // Reply privately — only in groups
-      if(window.activeGroup){
-        const rp=document.createElement('div');
-        rp.className='ctx-item';
-        rp.dataset.a='reply_priv';
-        rp.innerHTML=`<span class="ico"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg></span> Ответить в личку`;
-        tr.insertAdjacentElement('afterend', rp);
-        rp.onclick=async(e)=>{
-          e.stopPropagation();
-          const msg = window._slCtxMsg;
-          document.querySelectorAll('.msg-ctx-menu, .modal-overlay').forEach(el=>{ try{ el.remove(); }catch(e){} });
-          if(!msg) return;
-          const sid = msg.sender_id;
-          if(!sid || sid===myProfile?.id){ toast('Некому отвечать'); return; }
-          let peer = (window.contacts||[]).find(c=>c.id===sid);
-          if(!peer){
-            try{
-              const {data}=await sb.from('profiles').select('*').eq('id',sid).maybeSingle();
-              peer=data;
-            }catch(e){}
-          }
-          if(!peer){ toast('Пользователь не найден'); return; }
-          const quote = String(msg.content||'').slice(0,120);
-          try{ await openChat(peer); }catch(e){}
-          setTimeout(()=>{
-            const inp=document.getElementById('message-input');
-            if(inp){ inp.value='↪ '+quote+'\n'; inp.focus(); inp.dispatchEvent(new Event('input')); }
-          }, 300);
-        };
-      }
-    }catch(e){ console.warn('injectMsgExtras', e); }
-  }
-
-  function findMsgById(id){
-    if(!id) return null;
-    try{
-      const row=document.querySelector(`.bubble-row[data-id="${id}"]`);
-      if(row && row._msg) return row._msg;
-    }catch(e){}
-    return window._slCtxMsg||null;
-  }
-
-  async function translateMessage(text, msg){
-    if(!text || !text.trim()){ toast('Нет текста'); return; }
-    toast('Перевод…');
-    try{
-      // MyMemory free API (no key) — TG-like quick translate
-      const lang = (typeof currentLang!=='undefined' && currentLang==='en') ? 'en' : 'ru';
-      const src = lang==='ru' ? 'en|ru' : 'ru|en';
-      // auto detect: if mostly cyrillic → to EN else to RU
-      const cyr = (text.match(/[а-яёА-ЯЁ]/g)||[]).length;
-      const pair = cyr > text.length/4 ? 'ru|en' : 'en|ru';
-      const url = 'https://api.mymemory.translated.net/get?q='+encodeURIComponent(text.slice(0,500))+'&langpair='+pair;
-      const r = await fetch(url);
-      const j = await r.json();
-      const out = j?.responseData?.translatedText || '';
-      if(!out){ toast('Не удалось перевести'); return; }
-      openSheet('Перевод', [
-        {label: out, fn:()=>{ try{ navigator.clipboard.writeText(out); toast('Скопировано'); }catch(e){} }},
-        {label: 'Вставить в поле ввода', fn:()=>{
-          const inp=document.getElementById('message-input');
-          if(inp){ inp.value=(inp.value?inp.value+' ':'')+out; inp.dispatchEvent(new Event('input')); }
-        }},
-        {label: 'Закрыть', fn:()=>{}}
-      ]);
-    }catch(e){
-      toast('Перевод недоступен офлайн');
-    }
-  }
-
-  // Remember msg when context menu opens
-  document.addEventListener('pointerdown', e=>{
-    const row = e.target.closest?.('.bubble-row');
-    if(row){
-      try{
-        window._slCtxMsg = {
-          id: row.dataset.id,
-          content: row.querySelector('.bubble')?.innerText || '',
-          sender_id: row.dataset.sender || row.getAttribute('data-sender-id'),
-          type: row.dataset.type
-        };
-        // better content from text node
-        const bt = row.querySelector('.bubble');
-        if(bt){
-          const clone=bt.cloneNode(true);
-          clone.querySelectorAll('.bubble-time,.reaction-bar,.msg-status').forEach(x=>x.remove());
-          window._slCtxMsg.content = clone.textContent.trim();
-        }
-        if(row.dataset.sender) window._slCtxMsg.sender_id = row.dataset.sender;
-      }catch(err){}
-    }
-  }, true);
-
-  /* ---------- 2) Profile: «Секретный чат» as in TG ---------- */
-  function ensureSecretOnProfile(){
-    const obs = new MutationObserver(()=>{
-      document.querySelectorAll('.profile-sheet, .profile-sheet-body, #profile-sheet').forEach(sheet=>{
-        if(sheet.querySelector('[data-tg-secret]')) return;
-        // find actions grid
-        let actions = sheet.querySelector('.profile-sheet-actions, .ps-actions, .profile-actions');
-        if(!actions){
-          // inject under hero
-          const body = sheet.querySelector('.profile-sheet-body, .profile-body') || sheet;
-          actions = document.createElement('div');
-          actions.className='profile-sheet-actions';
-          actions.style.cssText='display:grid;grid-template-columns:1fr;gap:0;margin:8px 16px;border-radius:12px;overflow:hidden;background:var(--panel-hover,rgba(127,127,127,.08))';
-          body.insertBefore(actions, body.firstChild?.nextSibling || null);
-        }
-        const btn=document.createElement('button');
-        btn.type='button';
-        btn.dataset.tgSecret='1';
-        btn.className='ps-action';
-        btn.style.cssText='display:flex;align-items:center;justify-content:center;gap:8px;padding:14px;border:none;background:transparent;color:var(--accent-a,#4C7CF3);font-size:15px;font-weight:600;cursor:pointer;width:100%';
-        btn.innerHTML=`🔒 Секретный чат`;
-        btn.onclick=async(e)=>{
-          e.stopPropagation();
-          const pid = sheet.dataset.uid || sheet.dataset.id || window._slProfileId;
-          let partner = (window.contacts||[]).find(c=>c.id===pid);
-          if(!partner && pid){
-            try{ const {data}=await sb.from('profiles').select('*').eq('id',pid).maybeSingle(); partner=data; }catch(e){}
-          }
-          if(!partner && window.activePartner) partner=activePartner;
-          if(!partner){ toast('Откройте профиль пользователя'); return; }
-          if(typeof window.slStartSecretChat==='function'){
-            await window.slStartSecretChat(partner);
-          } else {
-            partner = Object.assign({}, partner, {isSecret:true});
-            LS.setItem('sl_secret_'+partner.id,'1');
-            try{ await openChat(partner); }catch(e){}
-            toast('Секретный чат');
-          }
-          try{ sheet.remove(); document.querySelector('.profile-sheet')?.remove(); }catch(e){}
-        };
-        actions.appendChild(btn);
-      });
-    });
-    obs.observe(document.body, {childList:true, subtree:true});
-  }
-
-  /* ---------- 3) Chat menu (⋮ via long-press title / search area): Auto-delete, Export, Slow mode ---------- */
-  function bindChatMenu(){
-    const title = document.getElementById('chat-partner-name');
-    const header = document.querySelector('.chat-header');
-    if(!header || header.dataset.tgMenu==='1') return;
-    header.dataset.tgMenu='1';
-    // TG: menu is often in the three-dot — we add long-press on header or extra button
-    let more = header.querySelector('#chat-more-btn');
-    if(!more){
-      const actions = header.querySelector('.chat-actions');
-      if(actions){
-        more = document.createElement('button');
-        more.className='icon-btn';
-        more.id='chat-more-btn';
-        more.title='Ещё';
-        more.innerHTML=`<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><circle cx="12" cy="5" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="12" cy="19" r="1.8"/></svg>`;
-        actions.insertBefore(more, actions.firstChild);
-      }
-    }
-    if(!more) return;
-    more.onclick=(e)=>{
-      e.preventDefault(); e.stopPropagation();
-      openChatMoreMenu();
-    };
-  }
-
-  function openChatMoreMenu(){
-    const rows = [];
-    rows.push({label:'🔍 Поиск', fn:()=>document.getElementById('chat-search-btn')?.click()});
-    rows.push({label:'🖼 Обои чата', fn:()=>{ try{ document.getElementById('sl-wall-btn')?.click(); }catch(e){ toast('Обои: через меню контакта'); } }});
-    rows.push({label:'⏱ Автоудаление сообщений', fn:()=>openAutoDeletePicker()});
-    rows.push({label:'📤 Экспорт истории чата', fn:()=>exportChatHistory()});
-    if(window.activeGroup){
-      rows.push({label:'🐌 Медленный режим', fn:()=>openSlowModePicker()});
-      rows.push({label:'💬 Темы (форум)', fn:()=>openTopicsStub()});
-    }
-    if(window.activePartner && !window.activeGroup){
-      const sec = activePartner.isSecret || LS.getItem('sl_secret_'+activePartner.id)==='1';
-      rows.push({label: sec ? '🔓 Выключить секретный чат' : '🔒 Секретный чат', fn:async()=>{
-        if(sec){
-          activePartner.isSecret=false;
-          LS.removeItem('sl_secret_'+activePartner.id);
-          document.querySelector('.secret-chat-banner')?.remove();
-          toast('Секретный режим выключен');
-        } else if(typeof slStartSecretChat==='function'){
-          await slStartSecretChat(activePartner);
-        } else {
-          activePartner.isSecret=true;
-          LS.setItem('sl_secret_'+activePartner.id,'1');
-          toast('Секретный чат');
-          paintSecretBanner();
-        }
-      }});
-    }
-    rows.push({label:'🔔 Без звука', fn:()=>{
-      const k = peerKey();
-      if(!k) return;
-      const m = JSON.parse(LS.getItem('sl_muted')||'{}');
-      m[k] = !m[k];
-      LS.setItem('sl_muted', JSON.stringify(m));
-      toast(m[k]?'Чат без звука':'Уведомления включены');
-    }});
-    openSheet('Чат', rows);
-  }
-
-  function openAutoDeletePicker(){
-    const k = peerKey();
-    if(!k){ toast('Откройте чат'); return; }
-    const cur = JSON.parse(LS.getItem('sl_autodelete')||'{}')[k]||0;
-    openSheet('Автоудаление сообщений', [
-      {label:'Выкл.', right: cur===0?'✓':'', fn:()=>setAutoDelete(k,0)},
-      {label:'24 часа', right: cur===86400?'✓':'', fn:()=>setAutoDelete(k,86400)},
-      {label:'7 дней', right: cur===604800?'✓':'', fn:()=>setAutoDelete(k,604800)},
-      {label:'1 месяц', right: cur===2592000?'✓':'', fn:()=>setAutoDelete(k,2592000)},
-    ]);
-  }
-  function setAutoDelete(k, sec){
-    const m=JSON.parse(LS.getItem('sl_autodelete')||'{}');
-    if(sec) m[k]=sec; else delete m[k];
-    LS.setItem('sl_autodelete', JSON.stringify(m));
-    toast(sec?('Автоудаление: '+fmtSec(sec)):'Автоудаление выключено');
-  }
-  function fmtSec(s){
-    if(s>=2592000) return '1 месяц';
-    if(s>=604800) return '7 дней';
-    if(s>=86400) return '24 часа';
-    return s+'с';
-  }
-
-  // Apply TTL on send
-  if(typeof sendMessage==='function' && !window._slAutoDelSend){
-    window._slAutoDelSend=1;
-    const _sm = sendMessage;
-    sendMessage = async function(type, fileUrl, content){
-      const r = await _sm.apply(this, arguments);
-      try{
-        const k=peerKey();
-        const ttl = k && JSON.parse(LS.getItem('sl_autodelete')||'{}')[k];
-        if(ttl){
-          // mark latest bubble
-          const rows=[...document.querySelectorAll('#messages-list .bubble-row')];
-          const last=rows[rows.length-1];
-          if(last){
-            last.dataset.ttl = String(Date.now()+ttl*1000);
-            last.dataset.ttlLabel = '⏱';
-          }
-        }
-      }catch(e){}
-      return r;
-    };
-  }
-  // Sweep expired
-  setInterval(()=>{
-    const now=Date.now();
-    document.querySelectorAll('#messages-list .bubble-row[data-ttl]').forEach(row=>{
-      if(+row.dataset.ttl < now){
-        const id=row.dataset.id;
-        row.remove();
-        if(id && !String(id).startsWith('local_') && window.sb){
-          try{ sb.from('messages').delete().eq('id', id); }catch(e){}
-        }
-      }
-    });
-  }, 20000);
-
-  async function exportChatHistory(){
-    toast('Готовим экспорт…');
-    try{
-      let q = sb.from('messages').select('*').order('created_at',{ascending:true}).limit(2000);
-      if(activeGroup) q=q.eq('group_id', activeGroup.id);
-      else if(activePartner) q=q.or(`and(sender_id.eq.${myProfile.id},receiver_id.eq.${activePartner.id}),and(sender_id.eq.${activePartner.id},receiver_id.eq.${myProfile.id})`).is('group_id',null);
-      else { toast('Нет чата'); return; }
-      const {data,error}=await q;
-      if(error) throw error;
-      const name = (activePartner?.username||activePartner?.first_name||activeGroup?.title||'chat').replace(/\W+/g,'_');
-      const rows = (data||[]).map(m=>{
-        const mine = m.sender_id===myProfile?.id;
-        const body = String(m.content||m.type||'').replace(/&/g,'&amp;').replace(/</g,'&lt;');
-        return '<div class="m'+(mine?' me':'')+'">'+body+'<div class="meta">'+(m.created_at||'')+'</div></div>';
-      }).join('');
-      // Build HTML without raw closing tags that break the outer document parser
-      const html = [
-        '<!DOCTYPE html><html><head><meta charset="utf-8"><title>SLine - '+name+'</title>',
-        '<style>body{font-family:system-ui;background:#0e1621;color:#e8eef7;padding:20px;max-width:720px;margin:0 auto}',
-        '.m{margin:8px 0;padding:10px 14px;border-radius:12px;background:#182533;max-width:85%}',
-        '.me{margin-left:auto;background:#2b5278}.meta{font-size:11px;opacity:.6;margin-top:4px}</style>',
-        '</he'+'ad><bo'+'dy>',
-        '<h1>История: '+name+'</h1>',
-        '<p style="opacity:.6">Экспорт SLine · '+new Date().toLocaleString()+'</p>',
-        rows,
-        '</bod'+'y></ht'+'ml>'
-      ].join('');
-      const blob=new Blob([html],{type:'text/html'});
-      const a=document.createElement('a');
-      a.href=URL.createObjectURL(blob);
-      a.download='sline_'+name+'_'+Date.now()+'.html';
-      a.click();
-      toast('Экспорт скачан');
-    }catch(e){
-      console.warn(e);
-      toast('Не удалось экспортировать');
-    }
-  }
-
-  function openSlowModePicker(){
-    if(!activeGroup) return;
-    const id=activeGroup.id;
-    const cur=+(JSON.parse(LS.getItem('sl_slowmode')||'{}')[id]||0);
-    openSheet('Медленный режим', [
-      {label:'Выкл.', right:cur===0?'✓':'', fn:()=>setSlow(id,0)},
-      {label:'10 секунд', right:cur===10?'✓':'', fn:()=>setSlow(id,10)},
-      {label:'30 секунд', right:cur===30?'✓':'', fn:()=>setSlow(id,30)},
-      {label:'1 минута', right:cur===60?'✓':'', fn:()=>setSlow(id,60)},
-      {label:'5 минут', right:cur===300?'✓':'', fn:()=>setSlow(id,300)},
-      {label:'15 минут', right:cur===900?'✓':'', fn:()=>setSlow(id,900)},
-    ]);
-  }
-  function setSlow(id, sec){
-    const m=JSON.parse(LS.getItem('sl_slowmode')||'{}');
-    if(sec) m[id]=sec; else delete m[id];
-    LS.setItem('sl_slowmode', JSON.stringify(m));
-    toast(sec?('Slow mode: '+sec+'с'):'Slow mode выкл.');
-  }
-  // Enforce slow mode on send
-  if(typeof sendMessage==='function' && !window._slSlowSend){
-    window._slSlowSend=1;
-    const _sm2 = sendMessage;
-    sendMessage = async function(){
-      if(activeGroup){
-        const sec = +(JSON.parse(LS.getItem('sl_slowmode')||'{}')[activeGroup.id]||0);
-        if(sec){
-          const last = +(LS.getItem('sl_slow_last_'+activeGroup.id)||0);
-          const left = sec*1000 - (Date.now()-last);
-          if(left>0){
-            toast('Медленный режим: подождите '+Math.ceil(left/1000)+'с');
-            return;
-          }
-          LS.setItem('sl_slow_last_'+activeGroup.id, String(Date.now()));
-        }
-      }
-      return _sm2.apply(this, arguments);
-    };
-  }
-
-  function openTopicsStub(){
-    openSheet('Темы группы', [
-      {label:'# Общее', fn:()=>toast('Тема: Общее')},
-      {label:'# Новости', fn:()=>toast('Тема: Новости')},
-      {label:'# Оффтоп', fn:()=>toast('Тема: Оффтоп')},
-      {label:'＋ Новая тема', fn:()=>{
-        const name=prompt('Название темы');
-        if(name) toast('Тема «'+name+'» создана (локально)');
-      }},
-    ]);
-  }
-
-  /* ---------- 4) Attach → Location → Live ---------- */
-  function patchLocation(){
-    if(typeof window.openLocation==='function' && !window.openLocation._live){
-      const orig = window.openLocation;
-      window.openLocation = function(){
-        openSheet('Геолокация', [
-          {label:'📍 Отправить текущую геопозицию', fn:()=>sendStaticLocation()},
-          {label:'🛰 Транслировать 15 минут', fn:()=>startLiveLocation(15)},
-          {label:'🛰 Транслировать 1 час', fn:()=>startLiveLocation(60)},
-          {label:'🛰 Транслировать 8 часов', fn:()=>startLiveLocation(480)},
-        ]);
-      };
-      window.openLocation._live=1;
-    }
-    // also patch attach menu map if openLocation is internal
-    const _oa = window.slOpenAttachMenu;
-  }
-
-  async function sendStaticLocation(){
-    if(!navigator.geolocation){ toast('Геолокация недоступна'); return; }
-    toast('Определяем…');
-    navigator.geolocation.getCurrentPosition(async pos=>{
-      const {latitude:lat, longitude:lng}=pos.coords;
-      const maps=`https://maps.google.com/?q=${lat},${lng}`;
-      const text=`📍 ${lat.toFixed(5)}, ${lng.toFixed(5)}\n${maps}`;
-      if(typeof sendMessage==='function') await sendMessage('text', null, text);
-      else toast(text);
-    }, ()=>toast('Нет доступа к геолокации'), {enableHighAccuracy:true, timeout:10000});
-  }
-
-  let _liveWatch=null;
-  function startLiveLocation(minutes){
-    if(!navigator.geolocation){ toast('Геолокация недоступна'); return; }
-    if(_liveWatch){ try{ navigator.geolocation.clearWatch(_liveWatch); }catch(e){} }
-    const until = Date.now()+minutes*60*1000;
-    toast('Трансляция геопозиции '+minutes+' мин');
-    let lastSent=0;
-    _liveWatch = navigator.geolocation.watchPosition(async pos=>{
-      if(Date.now()>until){
-        navigator.geolocation.clearWatch(_liveWatch); _liveWatch=null;
-        toast('Трансляция завершена');
-        return;
-      }
-      if(Date.now()-lastSent < 30000) return; // every 30s
-      lastSent=Date.now();
-      const {latitude:lat, longitude:lng}=pos.coords;
-      const left=Math.round((until-Date.now())/60000);
-      const text=`🛰 Live: ${lat.toFixed(5)}, ${lng.toFixed(5)} (ещё ~${left} мин)\nhttps://maps.google.com/?q=${lat},${lng}`;
-      try{
-        if(myProfile && (activePartner||activeGroup)){
-          const payload={sender_id:myProfile.id, content:text, type:'text'};
-          if(activeGroup){ payload.group_id=activeGroup.id; payload.receiver_id=null; }
-          else { payload.receiver_id=activePartner.id; payload.group_id=null; }
-          await sb.from('messages').insert(payload);
-        }
-      }catch(e){}
-    }, ()=>toast('Нет доступа к геолокации'), {enableHighAccuracy:true, maximumAge:10000});
-  }
-
-  /* ---------- 5) Secret banner in chat ---------- */
-  function paintSecretBanner(){
-    document.querySelector('.secret-chat-banner')?.remove();
-    const isSec = activePartner && (activePartner.isSecret || LS.getItem('sl_secret_'+activePartner.id)==='1');
-    if(!isSec) return;
-    const msgs = document.getElementById('messages-list');
-    if(!msgs) return;
-    const ban=document.createElement('div');
-    ban.className='secret-chat-banner';
-    ban.textContent='🔒 Секретный чат · сообщения с защитой';
-    msgs.parentElement?.insertBefore(ban, msgs);
-    const st=document.getElementById('chat-partner-status');
-    if(st){ st.classList.add('secret-status'); }
-  }
-
-  /* ---------- 6) Schedule icon hint on send (TG long-press) ---------- */
-  function enhanceScheduleHint(){
-    const btn=document.getElementById('send-btn');
-    if(!btn || btn.dataset.schedHint) return;
-    btn.dataset.schedHint='1';
-    btn.title='Отправить · зажмите для отложенной';
-  }
-
-  /* boot — deferred, never block first paint */
-  function boot(){
-    try{ enhanceScheduleHint(); }catch(e){}
-    try{ bindChatMenu(); }catch(e){}
-    try{ patchLocation(); }catch(e){}
-    try{ paintSecretBanner(); }catch(e){}
-  }
-  function bootHeavy(){
-    try{ patchMsgMenu(); }catch(e){}
-    try{ ensureSecretOnProfile(); }catch(e){}
-  }
-  if(document.readyState==='complete'){ setTimeout(boot, 0); setTimeout(bootHeavy, 1500); }
-  else {
-    window.addEventListener('load', function(){ setTimeout(boot, 0); setTimeout(bootHeavy, 1500); });
-    setTimeout(boot, 800);
-  }
-  setInterval(function(){ try{ bindChatMenu(); enhanceScheduleHint(); paintSecretBanner(); }catch(e){} }, 4000);
-
-  // When openChat fires, refresh
-  if(typeof openChat==='function' && !openChat._tgPlaces){
-    const o=openChat;
-    window.openChat=openChat=function(){
-      const r=o.apply(this,arguments);
-      setTimeout(()=>{ bindChatMenu(); paintSecretBanner(); }, 100);
-      return r;
-    };
-    openChat._tgPlaces=1;
-  }
-
-  console.log('[SL] TG placement parity ready');
-})();
-</script>
 
 </body>
 </html>
