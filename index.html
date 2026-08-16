@@ -37268,6 +37268,42 @@ body{
 (function(){
   if(window._slBootV7) return;
   window._slBootV7 = 1;
+  // iPhone white-screen killer
+  function killWhiteScreen(){
+    try{
+      document.documentElement.classList.remove('sl-booting');
+      document.documentElement.classList.add('sl-ready');
+      var auth = document.getElementById('auth-screen');
+      var app = document.getElementById('app-screen');
+      var boot = document.getElementById('app-boot');
+      if(boot) boot.style.display = 'none';
+      var logged = false;
+      try{
+        logged = localStorage.getItem('sl_logged_in')==='1' ||
+          Object.keys(localStorage||{}).some(function(k){
+            return k.indexOf('auth-token')!==-1 || k.indexOf('sb-')===0 || k.indexOf('supabase')!==-1;
+          });
+      }catch(e){}
+      if(logged && app){
+        if(auth) auth.style.cssText = 'display:none!important';
+        app.style.cssText = 'display:flex!important;min-height:100dvh;visibility:visible!important;opacity:1!important;background:#0F1419';
+        document.body.style.background = '#0F1419';
+      } else if(auth){
+        auth.style.cssText = 'display:flex!important;min-height:100dvh;visibility:visible!important;opacity:1!important';
+        if(app) app.style.display = 'none';
+        document.body.style.background = '#0F1419';
+      } else {
+        // last resort: show any main UI
+        document.body.style.background = '#0F1419';
+        document.body.style.color = '#E8EEF8';
+        if(app) app.style.cssText = 'display:flex!important;visibility:visible;opacity:1;background:#0F1419';
+      }
+    }catch(e){}
+  }
+  setTimeout(killWhiteScreen, 2500);
+  setTimeout(killWhiteScreen, 5000);
+  setTimeout(killWhiteScreen, 9000);
+
   var hidden = false;
 
   function hasContent(){
@@ -38509,21 +38545,27 @@ body{
       const {data,error}=await q;
       if(error) throw error;
       const name = (activePartner?.username||activePartner?.first_name||activeGroup?.title||'chat').replace(/\W+/g,'_');
-      const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>SLine — ${name}</title>
-        <style>body{font-family:system-ui;background:#0e1621;color:#e8eef7;padding:20px;max-width:720px;margin:0 auto}
-        .m{margin:8px 0;padding:10px 14px;border-radius:12px;background:#182533;max-width:85%}
-        .me{margin-left:auto;background:#2b5278}.meta{font-size:11px;opacity:.6;margin-top:4px}</style></head><body>
-        <h1>История: ${name}</h1>
-        <p style="opacity:.6">Экспорт SLine · ${new Date().toLocaleString()}</p>
-        ${(data||[]).map(m=>{
-          const mine=m.sender_id===myProfile?.id;
-          return `<div class="m${mine?' me':''}">${(m.content||m.type||'').replace(/</g,'&lt;')}<div class="meta">${m.created_at||''}</div></div>`;
-        }).join('')}
-        </'+'body></'+'html>`;
+      const rows = (data||[]).map(m=>{
+        const mine = m.sender_id===myProfile?.id;
+        const body = String(m.content||m.type||'').replace(/&/g,'&amp;').replace(/</g,'&lt;');
+        return '<div class="m'+(mine?' me':'')+'">'+body+'<div class="meta">'+(m.created_at||'')+'</div></div>';
+      }).join('');
+      // Build HTML without raw closing tags that break the outer document parser
+      const html = [
+        '<!DOCTYPE html><html><head><meta charset="utf-8"><title>SLine - '+name+'</title>',
+        '<style>body{font-family:system-ui;background:#0e1621;color:#e8eef7;padding:20px;max-width:720px;margin:0 auto}',
+        '.m{margin:8px 0;padding:10px 14px;border-radius:12px;background:#182533;max-width:85%}',
+        '.me{margin-left:auto;background:#2b5278}.meta{font-size:11px;opacity:.6;margin-top:4px}</style>',
+        '</he'+'ad><bo'+'dy>',
+        '<h1>История: '+name+'</h1>',
+        '<p style="opacity:.6">Экспорт SLine · '+new Date().toLocaleString()+'</p>',
+        rows,
+        '</bod'+'y></ht'+'ml>'
+      ].join('');
       const blob=new Blob([html],{type:'text/html'});
       const a=document.createElement('a');
       a.href=URL.createObjectURL(blob);
-      a.download=`sline_${name}_${Date.now()}.html`;
+      a.download='sline_'+name+'_'+Date.now()+'.html';
       a.click();
       toast('Экспорт скачан');
     }catch(e){
@@ -38666,17 +38708,23 @@ body{
     btn.title='Отправить · зажмите для отложенной';
   }
 
-  /* boot */
+  /* boot — deferred, never block first paint */
   function boot(){
-    patchMsgMenu();
-    ensureSecretOnProfile();
-    bindChatMenu();
-    patchLocation();
-    enhanceScheduleHint();
-    paintSecretBanner();
+    try{ enhanceScheduleHint(); }catch(e){}
+    try{ bindChatMenu(); }catch(e){}
+    try{ patchLocation(); }catch(e){}
+    try{ paintSecretBanner(); }catch(e){}
   }
-  boot();
-  setInterval(()=>{ bindChatMenu(); enhanceScheduleHint(); paintSecretBanner(); }, 2000);
+  function bootHeavy(){
+    try{ patchMsgMenu(); }catch(e){}
+    try{ ensureSecretOnProfile(); }catch(e){}
+  }
+  if(document.readyState==='complete'){ setTimeout(boot, 0); setTimeout(bootHeavy, 1500); }
+  else {
+    window.addEventListener('load', function(){ setTimeout(boot, 0); setTimeout(bootHeavy, 1500); });
+    setTimeout(boot, 800);
+  }
+  setInterval(function(){ try{ bindChatMenu(); enhanceScheduleHint(); paintSecretBanner(); }catch(e){} }, 4000);
 
   // When openChat fires, refresh
   if(typeof openChat==='function' && !openChat._tgPlaces){
