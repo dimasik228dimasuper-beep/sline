@@ -2407,6 +2407,14 @@ body.theme-light .circle-record-overlay,
 body.light-theme .circle-record-overlay {
   background: #1a1a22 !important;
 }
+
+/* AR fullscreen camera — never show native video chrome */
+#sl-cam-full-ar video { opacity:0 !important; pointer-events:none !important; }
+#sl-cam-full-ar .sl-cam-masks { z-index:30; pointer-events:auto; }
+#sl-cam-full-ar .sl-cam-mask { pointer-events:auto; touch-action:manipulation; }
+#sl-cam-full-ar .sl-cam-controls { z-index:30; pointer-events:auto; }
+#sl-cam-full-ar .sl-cam-rec, #sl-cam-full-ar .icon-btn { pointer-events:auto !important; touch-action:manipulation; }
+
 </style>
 
 <style id="sl-tablet-portrait-single">
@@ -6801,9 +6809,14 @@ function showMsgCtx(e, msg){
   // Reaction-only bar disabled — full context menu only
 
   // Menu items
+  try{ window._slCtxMsg = msg; }catch(e){}
   let items=`<div class="ctx-item" data-a="reply"><span class="ico"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 17H4a2 2 0 01-2-2V5a2 2 0 012-2h12a2 2 0 012 2v4"/><path d="M9 14l-5 3 5 3v-6z"/><path d="M22 11l-5-3v2h-4v2h4v2l5-3z"/></svg></span> Ответить</div>
     <div class="ctx-item" data-a="forward"><span class="ico"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 17h5a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v4"/><path d="M15 14l5 3-5 3v-6z"/><path d="M2 11l5-3v2h4v2H7v2l-5-3z"/></svg></span> Переслать</div>
-    <div class="ctx-item" data-a="copy"><span class="ico"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></span> Копировать</div>`;
+    <div class="ctx-item" data-a="copy"><span class="ico"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></span> Копировать</div>
+    <div class="ctx-item" data-a="translate"><span class="ico"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 8l6 6M4 14l6-6 2-3M2 5h12M7 2v3M12 22l4-10 4 10M15.5 18h5"/></svg></span> Перевести</div>`;
+  if(typeof activeGroup!=='undefined' && activeGroup){
+    items+=`<div class="ctx-item" data-a="reply_priv"><span class="ico"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg></span> Ответить в личку</div>`;
+  }
   if(mine&&msg.type==='text') items+=`<div class="ctx-item" data-a="edit"><span class="ico"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg></span> Изменить</div>`;
   items+=`<div class="ctx-item" data-a="info"><span class="ico"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg></span> Данные</div>
     <div class="ctx-item" data-a="star"><span class="ico"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.1 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.8 21l1.2-6.8-5-4.9 6.9-1z"/></svg></span> В Избранные</div>`;
@@ -6933,6 +6946,39 @@ function showMsgCtx(e, msg){
         showToast('Удалено');
       }
       else if(a==='report'){ reportMessage(msg); }
+      else if(a==='translate'){
+        const raw=(msg.content||'').replace(/^↪[^\n]*\n/,'').trim();
+        try{
+          if(typeof translateMessage==='function') translateMessage(raw, msg);
+          else {
+            (async()=>{
+              showToast('Перевод…');
+              const cyr=(raw.match(/[а-яёА-ЯЁ]/g)||[]).length;
+              const pair=cyr>raw.length/4?'ru|en':'en|ru';
+              const r=await fetch('https://api.mymemory.translated.net/get?q='+encodeURIComponent(raw.slice(0,500))+'&langpair='+pair);
+              const j=await r.json();
+              const out=j?.responseData?.translatedText||'';
+              if(out) showToast(out.slice(0,120));
+              else showToast('Не удалось перевести');
+            })().catch(()=>showToast('Перевод недоступен'));
+          }
+        }catch(e){ showToast('Перевод недоступен'); }
+      }
+      else if(a==='reply_priv'){
+        (async()=>{
+          const sid=msg.sender_id;
+          if(!sid||sid===myProfile?.id){ showToast('Некому отвечать'); return; }
+          let peer=(window.contacts||[]).find(c=>c.id===sid);
+          if(!peer){ try{ const {data}=await sb.from('profiles').select('*').eq('id',sid).maybeSingle(); peer=data; }catch(e){} }
+          if(!peer){ showToast('Пользователь не найден'); return; }
+          const quote=String(msg.content||'').slice(0,120);
+          try{ await openChat(peer); }catch(e){}
+          setTimeout(()=>{
+            const inp=document.getElementById('message-input');
+            if(inp){ inp.value='↪ '+quote+'\n'; inp.focus(); inp.dispatchEvent(new Event('input')); }
+          }, 350);
+        })();
+      }
       else if(a==='star'){
         const fav=JSON.parse(storage.getItem('sl_fav_msgs')||'[]');
         fav.unshift({id:msg.id, content:msg.content, type:msg.type, file_url:msg.file_url, at:Date.now()});
@@ -8615,19 +8661,160 @@ window.SL_BADGES = {
   leaf: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11 20A7 7 0 019.2 6.2C13 4 20 4 20 4s0 7-2.2 10.8A7 7 0 0111 20z"/><path d="M11 20c0-5 3-8 9-10"/></svg>'
 };
 window.slBadgeHtml = function(id, color){
-  if(!id || id==='none' || !window.SL_BADGES[id]) return '';
+  if(!id || id==='none' || !window.SL_BADGES || !window.SL_BADGES[id]) return '';
   const col = color || 'var(--accent-a,#4C7CF3)';
-  return '<span class="sl-name-badge" style="color:'+col+'" title="Значок">'+window.SL_BADGES[id]+'</span>';
+  return '<span class="sl-name-badge" data-badge="'+id+'" style="color:'+col+'" title="Значок">'+window.SL_BADGES[id]+'</span>';
 };
+/** Resolve badge key from profile (server fields first, local only for self). */
 window.slGetBadge = function(p){
   if(!p) return 'none';
-  if(p.badge_id) return p.badge_id;
-  try{ return localStorage.getItem('sl_badge_'+(p.id||'')) || (p.id===myProfile?.id ? localStorage.getItem('sl_my_badge') : null) || 'none'; }catch(e){ return 'none'; }
+  const pick = (v)=>{
+    if(v==null || v==='') return null;
+    v=String(v).trim();
+    if(!v || v==='none') return null;
+    if(window.SL_BADGES && window.SL_BADGES[v]) return v;
+    return null;
+  };
+  let b = pick(p.badge_id) || pick(p.badge) || pick(p.name_badge);
+  // music_lib may hold {badge:'bolt'} when badge_id column is missing
+  try{
+    let ml = p.music_lib;
+    if(typeof ml==='string'){ try{ ml=JSON.parse(ml); }catch(e){ ml=null; } }
+    if(ml && typeof ml==='object') b = b || pick(ml.badge) || pick(ml.badge_id);
+  }catch(e){}
+  // memory cache filled from server fetches
+  try{
+    if(!b && p.id && window._slBadgeCache && window._slBadgeCache[p.id])
+      b = pick(window._slBadgeCache[p.id]);
+  }catch(e){}
+  if(b) return b;
+  // localStorage ONLY for own profile (others must not rely on this device)
+  try{
+    if(p.id && myProfile && String(p.id)===String(myProfile.id)){
+      const local = localStorage.getItem('sl_my_badge') || localStorage.getItem('sl_badge_'+p.id);
+      return pick(local) || 'none';
+    }
+  }catch(e){}
+  return 'none';
 };
 window.slGetMusic = function(p){
   if(!p) return '';
   if(p.favorite_music) return p.favorite_music;
+  try{
+    let ml=p.music_lib;
+    if(typeof ml==='string'){ try{ ml=JSON.parse(ml); }catch(e){ ml=null; } }
+    if(ml && ml.favorite) return ml.favorite;
+  }catch(e){}
   try{ return localStorage.getItem('sl_music_'+(p.id||'')) || (p.id===myProfile?.id ? localStorage.getItem('sl_my_music') : '') || ''; }catch(e){ return ''; }
+};
+window._slBadgeCache = window._slBadgeCache || {};
+/** Persist badge so OTHER users can see it (not only localStorage). */
+window.slPersistBadge = async function(badge, extras){
+  if(!myProfile || !myProfile.id) return false;
+  badge = (!badge || badge==='none') ? 'none' : String(badge);
+  myProfile.badge_id = badge;
+  try{
+    localStorage.setItem('sl_my_badge', badge);
+    localStorage.setItem('sl_badge_'+myProfile.id, badge);
+  }catch(e){}
+  window._slBadgeCache[myProfile.id] = badge;
+  if(!sb) return false;
+  const music = (extras && extras.music!=null) ? extras.music : (typeof slGetMusic==='function'?slGetMusic(myProfile):'');
+  const payloadBase = Object.assign({}, extras||{});
+  delete payloadBase.music;
+  // 1) ideal columns
+  try{
+    const body = Object.assign({badge_id: badge, favorite_music: music||null}, payloadBase);
+    const {error} = await sb.from('profiles').update(body).eq('id', myProfile.id);
+    if(!error){
+      myProfile.badge_id = badge;
+      return true;
+    }
+  }catch(e){}
+  // 2) alternate column names
+  for(const col of ['badge','name_badge']){
+    try{
+      const body = Object.assign({[col]: badge, favorite_music: music||null}, payloadBase);
+      const {error} = await sb.from('profiles').update(body).eq('id', myProfile.id);
+      if(!error){
+        myProfile[col]=badge;
+        myProfile.badge_id=badge;
+        return true;
+      }
+    }catch(e){}
+  }
+  // 3) fallback: music_lib JSON (column often exists for music feature)
+  try{
+    let prev = myProfile.music_lib;
+    if(typeof prev==='string'){ try{ prev=JSON.parse(prev); }catch(e){ prev={}; } }
+    if(!prev || typeof prev!=='object') prev={};
+    const meta = Object.assign({}, prev, { badge: badge, badge_id: badge, favorite: music||prev.favorite||'', at: Date.now() });
+    const body = Object.assign({ music_lib: meta, favorite_music: music||null }, payloadBase);
+    const {error} = await sb.from('profiles').update(body).eq('id', myProfile.id);
+    if(!error){
+      myProfile.music_lib = meta;
+      myProfile.badge_id = badge;
+      return true;
+    }
+  }catch(e){ console.warn('badge persist music_lib', e); }
+  // 4) last resort: only names (badge stays local — warn)
+  try{
+    if(payloadBase.first_name!=null || payloadBase.last_name!=null || payloadBase.bio!=null){
+      await sb.from('profiles').update(payloadBase).eq('id', myProfile.id);
+    }
+  }catch(e){}
+  console.warn('[SL] badge saved only locally — no writable server field');
+  return false;
+};
+/** Enrich profile objects from server rows so badges show for others. */
+window.slApplyProfileBadgeFields = function(p){
+  if(!p || !p.id) return p;
+  try{
+    let ml=p.music_lib;
+    if(typeof ml==='string'){ try{ ml=JSON.parse(ml); p.music_lib=ml; }catch(e){} }
+    const b = p.badge_id || p.badge || p.name_badge || (ml && (ml.badge||ml.badge_id));
+    if(b && b!=='none'){
+      p.badge_id = b;
+      window._slBadgeCache[p.id] = b;
+      try{ localStorage.setItem('sl_badge_'+p.id, b); }catch(e){}
+    }
+  }catch(e){}
+  return p;
+};
+/** Batch-fetch badges for contact ids missing server badge. */
+window.slHydrateBadges = async function(ids){
+  if(!sb || !ids || !ids.length) return;
+  const need = [...new Set(ids.map(String))].filter(id=>{
+    if(!id || id==='support_signal_line') return false;
+    if(window._slBadgeCache[id]) return false;
+    return true;
+  }).slice(0, 80);
+  if(!need.length) return;
+  try{
+    const {data, error} = await sb.from('profiles')
+      .select('id,badge_id,badge,name_badge,music_lib,favorite_music,emoji_status,color')
+      .in('id', need);
+    if(error){
+      // narrow select may fail if columns missing — try *
+      const r2 = await sb.from('profiles').select('*').in('id', need);
+      (r2.data||[]).forEach(p=>{
+        slApplyProfileBadgeFields(p);
+        // merge into contacts
+        try{
+          const c = (contacts||[]).find(x=>x && String(x.id)===String(p.id));
+          if(c){ if(p.badge_id) c.badge_id=p.badge_id; if(p.music_lib) c.music_lib=p.music_lib; if(p.color) c.color=p.color; }
+        }catch(e){}
+      });
+      return;
+    }
+    (data||[]).forEach(p=>{
+      slApplyProfileBadgeFields(p);
+      try{
+        const c = (contacts||[]).find(x=>x && String(x.id)===String(p.id));
+        if(c){ if(p.badge_id) c.badge_id=p.badge_id; if(p.music_lib) c.music_lib=p.music_lib; }
+      }catch(e){}
+    });
+  }catch(e){ console.warn('slHydrateBadges', e); }
 };
 
 document.getElementById('settings-edit-profile').onclick=()=>{
@@ -8704,8 +8891,14 @@ document.getElementById('settings-edit-profile').onclick=()=>{
     try{ localStorage.setItem('sl_my_music', music); localStorage.setItem('sl_music_'+myProfile.id, music); }catch(e){}
     try{ localStorage.setItem('sl_my_bio', bio); }catch(e){}
     Object.assign(myProfile,{first_name:first,last_name:last,bio,badge_id:badge,favorite_music:music});
+    try{ localStorage.setItem('sl_my_music', music); localStorage.setItem('sl_music_'+myProfile.id, music); }catch(e){}
     try{
-      await sb.from('profiles').update({first_name:first,last_name:last,bio,badge_id:badge,favorite_music:music}).eq('id',myProfile.id);
+      const ok = await slPersistBadge(badge, {first_name:first, last_name:last, bio, music});
+      if(!ok){
+        // still try names at least
+        try{ await sb.from('profiles').update({first_name:first,last_name:last,bio}).eq('id',myProfile.id); }catch(e2){}
+        showToast('Имя сохранено; значок может быть только у вас — обновите схему profiles');
+      }
     }catch(e){
       try{ await sb.from('profiles').update({first_name:first,last_name:last}).eq('id',myProfile.id); }catch(e2){}
     }
@@ -14946,9 +15139,9 @@ function renderCreatePost(body, kind){
       </div>
       <input type="file" class="hidden-input" id="cp-file" accept="${kind==='video'?'video/*':'image/*,video/*'}">
       <div id="cp-preview" style="margin-top:10px"></div>
-      ${kind==='video'?`<div id="cp-masks-wrap" style="display:none;margin-top:12px">
-        <div style="font-size:13px;font-weight:600;margin-bottom:8px">Маски (30)</div>
-        <div id="cp-masks" style="display:flex;flex-wrap:wrap;gap:6px;max-height:120px;overflow-y:auto"></div>
+      ${kind==='video'?`<div id="cp-masks-wrap" style="display:none;margin-top:12px;position:relative;z-index:30;pointer-events:auto">
+        <div style="font-size:13px;font-weight:600;margin-bottom:8px">AR-маски (открой рот)</div>
+        <div id="cp-masks" style="display:flex;flex-wrap:wrap;gap:6px;max-height:140px;overflow-y:auto;pointer-events:auto;-webkit-overflow-scrolling:touch"></div>
       </div>`:''}
     </div>
     <div class="field"><label>${currentLang==='en'?'Caption':'Подпись'}</label><input class="cd-input" id="cp-caption"></div>
@@ -14958,74 +15151,769 @@ function renderCreatePost(body, kind){
   let mediaData=null, mediaType=kind==='video'?'video':'image', mediaFile=null, mediaObjectUrl=null;
   body.querySelector('#cp-pick').onclick=()=>body.querySelector('#cp-file').click();
 
-  // --- On-site camera record + 30 face masks (Signal Video) ---
+  // --- On-site camera record + REAL AR face masks (landmarks + mouth) ---
   let cpCamStream=null, cpRecorder=null, cpChunks=[], cpMaskId=0, cpCamFacing='user';
+  let cpFaceLoop=0, cpLastFace=null, cpFaceReady=false, cpLandmarker=null, cpFaceDetector=null;
   const MASKS = [
-    {id:0, label:'Нет', emoji:''},
-    {id:1, label:'Кот', emoji:'🐱'}, {id:2, label:'Собака', emoji:'🐶'}, {id:3, label:'Лис', emoji:'🦊'},
-    {id:4, label:'Panda', emoji:'🐼'}, {id:5, label:'Лев', emoji:'🦁'}, {id:6, label:'Тигр', emoji:'🐯'},
-    {id:7, label:'Единорог', emoji:'🦄'}, {id:8, label:'Инопланетянин', emoji:'👽'}, {id:9, label:'Робот', emoji:'🤖'},
-    {id:10, label:'Очки', emoji:'🕶️'}, {id:11, label:'Сердце', emoji:'😍'}, {id:12, label:'Огонь', emoji:'🔥'},
-    {id:13, label:'Корона', emoji:'👑'}, {id:14, label:'Звезда', emoji:'🌟'}, {id:15, label:'Радуга', emoji:'🌈'},
-    {id:16, label:'Череп', emoji:'💀'}, {id:17, label:'Клоун', emoji:'🤡'}, {id:18, label:'Призрак', emoji:'👻'},
-    {id:19, label:'Тыква', emoji:'🎃'}, {id:20, label:'Ниндзя', emoji:'🥷'}, {id:21, label:'Супергерой', emoji:'🦸'},
-    {id:22, label:'Волшебник', emoji:'🧙'}, {id:23, label:'Фея', emoji:'🧚'}, {id:24, label:'Вампир', emoji:'🧛'},
-    {id:25, label:'Зомби', emoji:'🧟'}, {id:26, label:'Медведь', emoji:'🐻'}, {id:27, label:'Лягушка', emoji:'🐸'},
-    {id:28, label:'Осьминог', emoji:'🐙'}, {id:29, label:'Сердечки', emoji:'💕'}, {id:30, label:'Бриллиант', emoji:'💎'}
+    {id:0,  label:'Нет',       kind:'none'},
+    {id:1,  label:'Кот',       kind:'cat',     colors:{fur:'#F5A623', ear:'#E8912D', inner:'#FFB6C1', nose:'#E85D75'}},
+    {id:2,  label:'Собака',    kind:'dog',     colors:{fur:'#C4A574', ear:'#A67C52', nose:'#2B2B2B', tongue:'#FF6B8A'}},
+    {id:3,  label:'Лис',       kind:'fox',     colors:{fur:'#E87A3A', ear:'#C45A22', inner:'#FFF3E0', nose:'#1A1A1A'}},
+    {id:4,  label:'Панда',     kind:'panda',   colors:{fur:'#FFFFFF', patch:'#1A1A1A', nose:'#1A1A1A'}},
+    {id:5,  label:'Лев',       kind:'lion',    colors:{fur:'#E8B84A', mane:'#C4782A', nose:'#5C3317'}},
+    {id:6,  label:'Тигр',      kind:'tiger',   colors:{fur:'#F0A020', stripe:'#1A1A1A', nose:'#2B2B2B'}},
+    {id:7,  label:'Единорог',  kind:'unicorn', colors:{fur:'#FFE4F3', horn:'#B794F6', mane:'#F687B3'}},
+    {id:8,  label:'Инопланетянин', kind:'alien', colors:{skin:'#7CFC00', eye:'#111', antenna:'#9ACD32'}},
+    {id:9,  label:'Робот',     kind:'robot',   colors:{metal:'#9AA4B2', glow:'#4C7CF3', eye:'#3EE0C6'}},
+    {id:10, label:'Очки',      kind:'glasses', colors:{frame:'#1A1A1A', lens:'rgba(40,60,90,.25)'}},
+    {id:11, label:'Влюблённый', kind:'hearts', colors:{heart:'#FF4D6D'}},
+    {id:12, label:'Огонь',     kind:'fire',    colors:{c1:'#FF6B00', c2:'#FFD60A'}},
+    {id:13, label:'Корона',    kind:'crown',   colors:{gold:'#FFD700', gem:'#4C7CF3'}},
+    {id:14, label:'Звезда',    kind:'star',    colors:{fill:'#FFD60A'}},
+    {id:15, label:'Радуга',    kind:'rainbow', colors:{}},
+    {id:16, label:'Череп',     kind:'skull',   colors:{bone:'#F5F5F5', hole:'#1A1A1A'}},
+    {id:17, label:'Клоун',     kind:'clown',   colors:{nose:'#FF3B3B', hair:'#FF6B00'}},
+    {id:18, label:'Призрак',   kind:'ghost',   colors:{body:'rgba(255,255,255,.85)'}},
+    {id:19, label:'Тыква',     kind:'pumpkin', colors:{skin:'#FF8C00', cut:'#1A1A1A'}},
+    {id:20, label:'Ниндзя',    kind:'ninja',   colors:{mask:'#1A1A1A'}},
+    {id:21, label:'Супергерой',kind:'hero',    colors:{mask:'#1E3A8A', eye:'#FFF'}},
+    {id:22, label:'Волшебник', kind:'wizard',  colors:{hat:'#4C1D95', star:'#FFD60A'}},
+    {id:23, label:'Фея',       kind:'fairy',   colors:{wing:'rgba(180,140,255,.45)', glow:'#E879F9'}},
+    {id:24, label:'Вампир',    kind:'vampire', colors:{skin:'#F5E6D3', lip:'#8B0000'}},
+    {id:25, label:'Зомби',     kind:'zombie',  colors:{skin:'#9BBB6E', scar:'#5C3317'}},
+    {id:26, label:'Медведь',   kind:'bear',    colors:{fur:'#8B5A2B', snout:'#D2B48C', nose:'#1A1A1A'}},
+    {id:27, label:'Лягушка',   kind:'frog',    colors:{skin:'#5CB85C', belly:'#C5E17A'}},
+    {id:28, label:'Осьминог',  kind:'octopus', colors:{skin:'#E85D75'}},
+    {id:29, label:'Сердечки',  kind:'hearts2', colors:{heart:'#FF4D6D'}},
+    {id:30, label:'Бриллиант', kind:'diamond', colors:{gem:'#7DD3FC'}}
   ];
+
   function stopCpCam(){
+    try{ cancelAnimationFrame(cpFaceLoop); }catch(e){}
+    cpFaceLoop=0; cpLastFace=null;
     try{ cpRecorder?.stop(); }catch(e){}
     try{ cpCamStream?.getTracks().forEach(t=>t.stop()); }catch(e){}
     cpCamStream=null; cpRecorder=null;
   }
+
+  async function ensureFaceTracker(){
+    if(cpLandmarker) return true;
+    try{
+      const mod = await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/+esm');
+      const vision = await mod.FilesetResolver.forVisionTasks(
+        'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm'
+      );
+      cpLandmarker = await mod.FaceLandmarker.createFromOptions(vision, {
+        baseOptions: {
+          modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task',
+          delegate: 'GPU'
+        },
+        runningMode: 'VIDEO',
+        numFaces: 1,
+        outputFaceBlendshapes: true
+      });
+      cpFaceReady = true;
+      console.log('[SL] FaceLandmarker ready (AR masks)');
+      return true;
+    }catch(e){
+      console.warn('[SL] MediaPipe failed', e);
+      try{
+        if(window.FaceDetector){
+          cpFaceDetector = new FaceDetector({fastMode:true, maxDetectedFaces:1});
+          cpFaceReady = true;
+        }
+      }catch(e2){}
+      return !!cpFaceDetector;
+    }
+  }
+
+  /** Full face state from landmarks (normalized 0..1 in video space) */
+  function detectFaceFull(video){
+    if(!video || video.readyState < 2) return null;
+    const vw = video.videoWidth||0, vh = video.videoHeight||0;
+    if(vw<16||vh<16) return null;
+    const now = performance.now();
+
+    if(cpLandmarker){
+      try{
+        const res = cpLandmarker.detectForVideo(video, now);
+        const faces = res?.faceLandmarks || [];
+        if(!faces.length) return null;
+        const lm = faces[0];
+        const P = (i)=>{
+          const p = lm[i]; if(!p) return {x:0.5,y:0.5};
+          return {x:p.x, y:p.y, z:p.z||0};
+        };
+        // key points
+        const nose = P(1), chin = P(152), forehead = P(10);
+        const leOuter = P(33), reOuter = P(263);
+        const leInner = P(133), reInner = P(362);
+        const mouthL = P(61), mouthR = P(291);
+        const upperLip = P(13), lowerLip = P(14);
+        const upperLipTop = P(12), lowerLipBot = P(15);
+        const leftCheek = P(234), rightCheek = P(454);
+        const leftTemple = P(127), rightTemple = P(356);
+        const leftBrow = P(70), rightBrow = P(300);
+
+        const xs = lm.map(p=>p.x), ys = lm.map(p=>p.y);
+        const minX = Math.min(...xs), maxX = Math.max(...xs);
+        const minY = Math.min(...ys), maxY = Math.max(...ys);
+        const faceW = Math.max(0.05, maxX-minX);
+        const faceH = Math.max(0.05, maxY-minY);
+
+        // mouth openness 0..1
+        const mouthGap = Math.hypot(upperLip.x-lowerLip.x, upperLip.y-lowerLip.y);
+        const mouthOpen = Math.min(1, Math.max(0, (mouthGap / faceH - 0.02) / 0.12));
+
+        // blendshapes if available
+        let jawOpen = mouthOpen;
+        try{
+          const bs = res.faceBlendshapes?.[0]?.categories || [];
+          const jaw = bs.find(c=>c.categoryName==='jawOpen');
+          if(jaw) jawOpen = Math.max(mouthOpen, jaw.score||0);
+        }catch(e){}
+
+        return {
+          lm, minX, maxX, minY, maxY, faceW, faceH,
+          cx: (minX+maxX)/2, cy: (minY+maxY)/2,
+          nose, chin, forehead, leOuter, reOuter, leInner, reInner,
+          mouthL, mouthR, upperLip, lowerLip, upperLipTop, lowerLipBot,
+          leftCheek, rightCheek, leftTemple, rightTemple, leftBrow, rightBrow,
+          mouthOpen: jawOpen,
+          eyeY: (leOuter.y+reOuter.y)/2,
+          conf: 1
+        };
+      }catch(e){ return null; }
+    }
+
+    if(cpFaceDetector){
+      try{
+        cpFaceDetector.detect(video).then(faces=>{
+          if(!faces||!faces[0]) return;
+          const b=faces[0].boundingBox;
+          const cx=(b.x+b.width/2)/vw, cy=(b.y+b.height/2)/vh;
+          const w=b.width/vw, h=b.height/vh;
+          cpLastFace = {
+            cx, cy, faceW:w, faceH:h, minX:cx-w/2, maxX:cx+w/2, minY:cy-h/2, maxY:cy+h/2,
+            nose:{x:cx,y:cy}, chin:{x:cx,y:cy+h*0.45}, forehead:{x:cx,y:cy-h*0.4},
+            leOuter:{x:cx-w*0.25,y:cy-h*0.05}, reOuter:{x:cx+w*0.25,y:cy-h*0.05},
+            mouthL:{x:cx-w*0.15,y:cy+h*0.2}, mouthR:{x:cx+w*0.15,y:cy+h*0.2},
+            upperLip:{x:cx,y:cy+h*0.15}, lowerLip:{x:cx,y:cy+h*0.28},
+            mouthOpen: 0.15, eyeY: cy-h*0.05, conf:0.5, lm:null
+          };
+        }).catch(()=>{});
+      }catch(e){}
+      return cpLastFace;
+    }
+    return null;
+  }
+
+  function smoothFace(prev, next){
+    if(!next) return prev;
+    if(!prev) return next;
+    const a = 0.55;
+    const lerp = (A,B)=> A==null?B: (B==null?A: A*(1-a)+B*a);
+    const lp = (A,B)=> (!B)?A: (!A?B:{x:lerp(A.x,B.x), y:lerp(A.y,B.y), z:lerp(A.z||0,B.z||0)});
+    const out = Object.assign({}, next);
+    out.cx=lerp(prev.cx,next.cx); out.cy=lerp(prev.cy,next.cy);
+    out.faceW=lerp(prev.faceW,next.faceW); out.faceH=lerp(prev.faceH,next.faceH);
+    out.mouthOpen=lerp(prev.mouthOpen||0, next.mouthOpen||0);
+    ['nose','chin','forehead','leOuter','reOuter','mouthL','mouthR','upperLip','lowerLip','leftCheek','rightCheek','leftTemple','rightTemple'].forEach(k=>{
+      out[k]=lp(prev[k], next[k]);
+    });
+    out.lm = next.lm; // keep latest full mesh
+    return out;
+  }
+
+  function toXY(p, W, H, mirror){
+    if(!p) return [W/2, H/2];
+    let x = p.x * W;
+    if(mirror) x = W - x;
+    return [x, p.y * H];
+  }
+
+  function drawEar(ctx, x, y, ang, size, outer, inner, flip){
+    ctx.save();
+    ctx.translate(x,y);
+    ctx.rotate(ang);
+    if(flip) ctx.scale(-1,1);
+    ctx.beginPath();
+    ctx.moveTo(0,0);
+    ctx.lineTo(-size*0.45, -size*1.15);
+    ctx.lineTo(size*0.45, -size*1.15);
+    ctx.closePath();
+    ctx.fillStyle=outer; ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(0, -size*0.15);
+    ctx.lineTo(-size*0.22, -size*0.95);
+    ctx.lineTo(size*0.22, -size*0.95);
+    ctx.closePath();
+    ctx.fillStyle=inner||'#FFB6C1'; ctx.fill();
+    ctx.restore();
+  }
+
+  function drawMouthOpening(ctx, face, W, H, mirror, lipColor, tongueColor){
+    const open = Math.max(0, Math.min(1, face.mouthOpen||0));
+    const [lx, ly] = toXY(face.mouthL, W, H, mirror);
+    const [rx, ry] = toXY(face.mouthR, W, H, mirror);
+    const [ux, uy] = toXY(face.upperLip, W, H, mirror);
+    const [dx, dy] = toXY(face.lowerLip, W, H, mirror);
+    const mx = (lx+rx)/2, my = (ly+ry)/2;
+    const mw = Math.hypot(rx-lx, ry-ly) || (face.faceW*W*0.35);
+    const mh = Math.max(2, open * face.faceH * H * 0.55);
+
+    // cavity
+    ctx.beginPath();
+    ctx.ellipse(mx, my + mh*0.15, mw*0.48, Math.max(3, mh*0.55), 0, 0, Math.PI*2);
+    ctx.fillStyle = '#2A0A0A';
+    ctx.fill();
+
+    // tongue when open
+    if(open > 0.25 && tongueColor){
+      ctx.beginPath();
+      ctx.ellipse(mx, my + mh*0.35, mw*0.28, mh*0.35, 0, 0, Math.PI*2);
+      ctx.fillStyle = tongueColor;
+      ctx.fill();
+    }
+
+    // lips
+    ctx.beginPath();
+    ctx.moveTo(lx, ly);
+    ctx.quadraticCurveTo(mx, uy - mh*0.15, rx, ry);
+    ctx.quadraticCurveTo(mx, dy + mh*0.55, lx, ly);
+    ctx.closePath();
+    ctx.strokeStyle = lipColor || 'rgba(0,0,0,.55)';
+    ctx.lineWidth = Math.max(3, face.faceW*W*0.04);
+    ctx.stroke();
+  }
+
+  /** Draw full AR mask onto ctx. Coordinates in canvas pixels. mirror=true for selfie canvas. */
+  function drawARMask(ctx, W, H, face, mirror){
+    const m = MASKS.find(x=>x.id===cpMaskId);
+    if(!m || m.kind==='none' || !face) return;
+    const C = m.colors || {};
+    const fw = face.faceW * W;
+    const fh = face.faceH * H;
+    const [nx, ny] = toXY(face.nose, W, H, mirror);
+    const [fx, fy] = toXY(face.forehead, W, H, mirror);
+    const [cx, cy] = toXY({x:face.cx, y:face.cy}, W, H, mirror);
+    const [lex, ley] = toXY(face.leOuter, W, H, mirror);
+    const [rex, rey] = toXY(face.reOuter, W, H, mirror);
+    const [chinX, chinY] = toXY(face.chin, W, H, mirror);
+    const [ltx, lty] = toXY(face.leftTemple||face.leOuter, W, H, mirror);
+    const [rtx, rty] = toXY(face.rightTemple||face.reOuter, W, H, mirror);
+
+    const earSize = fw * 0.72;
+    const browY = Math.min(ley, rey) - fh*0.15;
+
+    ctx.save();
+    ctx.lineJoin='round'; ctx.lineCap='round';
+
+    // ---- ears helpers ----
+    const leftEarX = ltx, leftEarY = Math.min(lty, browY);
+    const rightEarX = rtx, rightEarY = Math.min(rty, browY);
+    const angL = -0.35, angR = 0.35;
+
+    switch(m.kind){
+      case 'cat':
+      case 'fox':
+      case 'tiger':
+      case 'lion':
+      case 'bear':
+      case 'dog':
+      case 'panda':
+      case 'frog': {
+        const fur = C.fur || C.skin || '#F5A623';
+        const earCol = C.ear || fur;
+        const inner = C.inner || '#FFB6C1';
+        // ears
+        if(m.kind!=='frog'){
+          drawEar(ctx, leftEarX, leftEarY, angL, earSize, earCol, inner, false);
+          drawEar(ctx, rightEarX, rightEarY, angR, earSize, earCol, inner, true);
+        }
+        // lion mane
+        if(m.kind==='lion'){
+          ctx.beginPath();
+          for(let i=0;i<16;i++){
+            const a = (i/16)*Math.PI*2;
+            const r = fw*0.75 + (i%2)*fw*0.12;
+            const x = cx + Math.cos(a)*r;
+            const y = cy + Math.sin(a)*r*0.95;
+            if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+          }
+          ctx.closePath();
+          ctx.fillStyle = C.mane||'#C4782A';
+          ctx.globalAlpha=0.85; ctx.fill(); ctx.globalAlpha=1;
+        }
+        // tiger stripes
+        if(m.kind==='tiger'){
+          ctx.strokeStyle=C.stripe||'#111'; ctx.lineWidth=fw*0.04;
+          for(let i=-2;i<=2;i++){
+            ctx.beginPath();
+            ctx.moveTo(cx+i*fw*0.12, cy-fh*0.35);
+            ctx.quadraticCurveTo(cx+i*fw*0.18, cy, cx+i*fw*0.1, cy+fh*0.3);
+            ctx.stroke();
+          }
+        }
+        // panda patches
+        if(m.kind==='panda'){
+          ctx.fillStyle=C.patch||'#111';
+          ctx.beginPath(); ctx.ellipse(lex, ley, fw*0.18, fh*0.14, -0.2, 0, Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.ellipse(rex, rey, fw*0.18, fh*0.14, 0.2, 0, Math.PI*2); ctx.fill();
+        }
+        // frog eyes bulbs
+        if(m.kind==='frog'){
+          ctx.fillStyle=C.skin||'#5CB85C';
+          ctx.beginPath(); ctx.ellipse(lex, ley-fh*0.12, fw*0.16, fh*0.14, 0, 0, Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.ellipse(rex, rey-fh*0.12, fw*0.16, fh*0.14, 0, 0, Math.PI*2); ctx.fill();
+          ctx.fillStyle='#111';
+          ctx.beginPath(); ctx.arc(lex, ley-fh*0.1, fw*0.06, 0, Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.arc(rex, rey-fh*0.1, fw*0.06, 0, Math.PI*2); ctx.fill();
+        }
+        // nose
+        ctx.beginPath();
+        if(m.kind==='dog'||m.kind==='bear'){
+          ctx.ellipse(nx, ny+fh*0.02, fw*0.1, fh*0.07, 0, 0, Math.PI*2);
+        } else {
+          ctx.moveTo(nx, ny-fh*0.02);
+          ctx.lineTo(nx-fw*0.08, ny+fh*0.06);
+          ctx.lineTo(nx+fw*0.08, ny+fh*0.06);
+          ctx.closePath();
+        }
+        ctx.fillStyle = C.nose || '#E85D75';
+        ctx.fill();
+        // whiskers (cat/fox)
+        if(m.kind==='cat'||m.kind==='fox'){
+          ctx.strokeStyle='rgba(30,30,30,.65)'; ctx.lineWidth=1.5;
+          for(let i=0;i<3;i++){
+            const oy = ny + i*fh*0.04;
+            ctx.beginPath(); ctx.moveTo(nx-fw*0.05, oy); ctx.lineTo(nx-fw*0.42, oy-fh*0.04+i*0.02*fh); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(nx+fw*0.05, oy); ctx.lineTo(nx+fw*0.42, oy-fh*0.04+i*0.02*fh); ctx.stroke();
+          }
+        }
+        // snout for dog/bear
+        if(m.kind==='dog'||m.kind==='bear'){
+          ctx.beginPath();
+          ctx.ellipse(nx, ny+fh*0.08, fw*0.22, fh*0.14, 0, 0, Math.PI*2);
+          ctx.fillStyle = C.snout || 'rgba(255,255,255,.35)';
+          ctx.fill();
+        }
+        drawMouthOpening(ctx, face, W, H, mirror, C.nose||'#333', C.tongue||'#FF6B8A');
+        break;
+      }
+      case 'unicorn': {
+        drawEar(ctx, leftEarX, leftEarY, angL, earSize*0.9, C.fur||'#FFE4F3', '#FFD6EC', false);
+        drawEar(ctx, rightEarX, rightEarY, angR, earSize*0.9, C.fur||'#FFE4F3', '#FFD6EC', true);
+        // horn
+        ctx.beginPath();
+        ctx.moveTo(fx, fy - fh*0.05);
+        ctx.lineTo(fx - fw*0.06, fy - fh*0.55);
+        ctx.lineTo(fx + fw*0.06, fy - fh*0.55);
+        ctx.closePath();
+        const g = ctx.createLinearGradient(fx, fy, fx, fy-fh*0.55);
+        g.addColorStop(0, C.horn||'#B794F6'); g.addColorStop(1, '#FFF');
+        ctx.fillStyle=g; ctx.fill();
+        drawMouthOpening(ctx, face, W, H, mirror, '#E879F9', '#FF9ECF');
+        break;
+      }
+      case 'alien': {
+        // big head oval
+        ctx.beginPath();
+        ctx.ellipse(cx, cy-fh*0.05, fw*0.62, fh*0.7, 0, 0, Math.PI*2);
+        ctx.fillStyle=C.skin||'#7CFC00'; ctx.globalAlpha=0.55; ctx.fill(); ctx.globalAlpha=1;
+        // huge eyes
+        ctx.fillStyle=C.eye||'#111';
+        ctx.beginPath(); ctx.ellipse(lex, ley, fw*0.16, fh*0.2, -0.2, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.ellipse(rex, rey, fw*0.16, fh*0.2, 0.2, 0, Math.PI*2); ctx.fill();
+        // antennas
+        ctx.strokeStyle=C.antenna||'#9ACD32'; ctx.lineWidth=3;
+        ctx.beginPath(); ctx.moveTo(leftEarX, leftEarY); ctx.lineTo(leftEarX-fw*0.05, leftEarY-fh*0.4); ctx.stroke();
+        ctx.beginPath(); ctx.arc(leftEarX-fw*0.05, leftEarY-fh*0.4, fw*0.05, 0, Math.PI*2); ctx.fillStyle=C.skin; ctx.fill();
+        ctx.beginPath(); ctx.moveTo(rightEarX, rightEarY); ctx.lineTo(rightEarX+fw*0.05, rightEarY-fh*0.4); ctx.stroke();
+        ctx.beginPath(); ctx.arc(rightEarX+fw*0.05, rightEarY-fh*0.4, fw*0.05, 0, Math.PI*2); ctx.fill();
+        drawMouthOpening(ctx, face, W, H, mirror, '#1A1A1A', '#5CB85C');
+        break;
+      }
+      case 'robot': {
+        ctx.strokeStyle=C.metal||'#9AA4B2'; ctx.lineWidth=fw*0.04;
+        ctx.strokeRect(cx-fw*0.55, cy-fh*0.55, fw*1.1, fh*1.1);
+        ctx.fillStyle=C.eye||'#3EE0C6';
+        ctx.fillRect(lex-fw*0.1, ley-fh*0.06, fw*0.2, fh*0.1);
+        ctx.fillRect(rex-fw*0.1, rey-fh*0.06, fw*0.2, fh*0.1);
+        // LED mouth reacts to open
+        const open = face.mouthOpen||0;
+        ctx.fillStyle=C.glow||'#4C7CF3';
+        const bars = 5;
+        for(let i=0;i<bars;i++){
+          const bh = fh*0.04 + open*fh*0.18*(0.5+0.5*Math.sin(i));
+          ctx.fillRect(cx - fw*0.25 + i*(fw*0.12), cy+fh*0.22 - bh/2, fw*0.08, bh);
+        }
+        break;
+      }
+      case 'glasses': {
+        ctx.strokeStyle=C.frame||'#111'; ctx.lineWidth=Math.max(3, fw*0.045);
+        ctx.fillStyle=C.lens||'rgba(40,60,90,.25)';
+        const r = fw*0.2;
+        ctx.beginPath(); ctx.arc(lex, ley, r, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+        ctx.beginPath(); ctx.arc(rex, rey, r, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(lex+r, ley); ctx.lineTo(rex-r, rey); ctx.stroke();
+        break;
+      }
+      case 'crown': {
+        const top = fy - fh*0.35;
+        ctx.beginPath();
+        ctx.moveTo(cx-fw*0.45, fy);
+        ctx.lineTo(cx-fw*0.35, top);
+        ctx.lineTo(cx-fw*0.15, fy-fh*0.12);
+        ctx.lineTo(cx, top-fh*0.08);
+        ctx.lineTo(cx+fw*0.15, fy-fh*0.12);
+        ctx.lineTo(cx+fw*0.35, top);
+        ctx.lineTo(cx+fw*0.45, fy);
+        ctx.closePath();
+        ctx.fillStyle=C.gold||'#FFD700'; ctx.fill();
+        ctx.fillStyle=C.gem||'#4C7CF3';
+        ctx.beginPath(); ctx.arc(cx, top+fh*0.08, fw*0.06, 0, Math.PI*2); ctx.fill();
+        break;
+      }
+      case 'skull': {
+        ctx.fillStyle=C.bone||'#F5F5F5';
+        ctx.beginPath(); ctx.ellipse(cx, cy-fh*0.05, fw*0.5, fh*0.55, 0, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle=C.hole||'#111';
+        ctx.beginPath(); ctx.ellipse(lex, ley, fw*0.12, fh*0.14, 0, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.ellipse(rex, rey, fw*0.12, fh*0.14, 0, 0, Math.PI*2); ctx.fill();
+        drawMouthOpening(ctx, face, W, H, mirror, '#333', null);
+        // teeth
+        const open=face.mouthOpen||0;
+        if(open>0.1){
+          ctx.fillStyle='#FFF';
+          const [mlx,mly]=toXY(face.mouthL,W,H,mirror);
+          const [mrx,mry]=toXY(face.mouthR,W,H,mirror);
+          for(let i=0;i<6;i++){
+            const t=i/5;
+            const x=mlx+(mrx-mlx)*t;
+            ctx.fillRect(x-fw*0.02, mly+fh*0.02, fw*0.035, fh*0.06+open*fh*0.08);
+          }
+        }
+        break;
+      }
+      case 'clown': {
+        ctx.fillStyle=C.nose||'#FF3B3B';
+        ctx.beginPath(); ctx.arc(nx, ny, fw*0.12, 0, Math.PI*2); ctx.fill();
+        ctx.strokeStyle=C.hair||'#FF6B00'; ctx.lineWidth=fw*0.08;
+        ctx.beginPath(); ctx.arc(cx, cy-fh*0.1, fw*0.55, Math.PI*1.1, Math.PI*1.9); ctx.stroke();
+        drawMouthOpening(ctx, face, W, H, mirror, '#C41E3A', '#FF6B8A');
+        break;
+      }
+      case 'ninja':
+      case 'hero': {
+        ctx.fillStyle=C.mask||'#1A1A1A';
+        ctx.beginPath();
+        ctx.moveTo(ltx, lty);
+        ctx.lineTo(rtx, rty);
+        ctx.lineTo(rex, rey+fh*0.2);
+        ctx.lineTo(lex, ley+fh*0.2);
+        ctx.closePath();
+        ctx.globalAlpha=0.88; ctx.fill(); ctx.globalAlpha=1;
+        // eye slits
+        ctx.fillStyle=C.eye||'#FFF';
+        ctx.beginPath(); ctx.ellipse(lex, ley, fw*0.1, fh*0.04, 0, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.ellipse(rex, rey, fw*0.1, fh*0.04, 0, 0, Math.PI*2); ctx.fill();
+        break;
+      }
+      case 'vampire': {
+        drawMouthOpening(ctx, face, W, H, mirror, C.lip||'#8B0000', '#5C0000');
+        // fangs
+        const open=face.mouthOpen||0;
+        if(open>0.08){
+          const [mlx,mly]=toXY(face.mouthL,W,H,mirror);
+          const [mrx]=toXY(face.mouthR,W,H,mirror);
+          const [ux,uy]=toXY(face.upperLip,W,H,mirror);
+          ctx.fillStyle='#FFF';
+          ctx.beginPath(); ctx.moveTo(ux-fw*0.08, uy); ctx.lineTo(ux-fw*0.05, uy+fh*0.12+open*fh*0.1); ctx.lineTo(ux-fw*0.02, uy); ctx.fill();
+          ctx.beginPath(); ctx.moveTo(ux+fw*0.02, uy); ctx.lineTo(ux+fw*0.05, uy+fh*0.12+open*fh*0.1); ctx.lineTo(ux+fw*0.08, uy); ctx.fill();
+        }
+        break;
+      }
+      case 'zombie': {
+        ctx.fillStyle=C.skin||'#9BBB6E';
+        ctx.globalAlpha=0.35;
+        ctx.beginPath(); ctx.ellipse(cx, cy, fw*0.55, fh*0.65, 0, 0, Math.PI*2); ctx.fill();
+        ctx.globalAlpha=1;
+        ctx.strokeStyle=C.scar||'#5C3317'; ctx.lineWidth=2;
+        ctx.beginPath(); ctx.moveTo(cx-fw*0.2, cy-fh*0.1); ctx.lineTo(cx+fw*0.15, cy+fh*0.05); ctx.stroke();
+        drawMouthOpening(ctx, face, W, H, mirror, '#3D5C2E', '#6B8E4E');
+        break;
+      }
+      case 'ghost': {
+        ctx.fillStyle=C.body||'rgba(255,255,255,.85)';
+        ctx.beginPath();
+        ctx.arc(cx, cy-fh*0.1, fw*0.5, Math.PI, 0);
+        ctx.lineTo(cx+fw*0.5, cy+fh*0.45);
+        for(let i=4;i>=0;i--){
+          const x = cx - fw*0.5 + (i/4)*fw;
+          const y = cy+fh*0.45 + ((i%2)?fh*0.1:-fh*0.05);
+          ctx.lineTo(x,y);
+        }
+        ctx.closePath(); ctx.fill();
+        ctx.fillStyle='#111';
+        ctx.beginPath(); ctx.arc(lex, ley, fw*0.07, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(rex, rey, fw*0.07, 0, Math.PI*2); ctx.fill();
+        drawMouthOpening(ctx, face, W, H, mirror, '#333', null);
+        break;
+      }
+      case 'pumpkin': {
+        ctx.fillStyle=C.skin||'#FF8C00';
+        ctx.beginPath(); ctx.ellipse(cx, cy, fw*0.55, fh*0.6, 0, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle=C.cut||'#1A1A1A';
+        // eyes triangles
+        ctx.beginPath(); ctx.moveTo(lex, ley-fh*0.1); ctx.lineTo(lex-fw*0.1, ley+fh*0.08); ctx.lineTo(lex+fw*0.1, ley+fh*0.08); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(rex, rey-fh*0.1); ctx.lineTo(rex-fw*0.1, rey+fh*0.08); ctx.lineTo(rex+fw*0.1, rey+fh*0.08); ctx.fill();
+        drawMouthOpening(ctx, face, W, H, mirror, '#1A1A1A', '#3D1A00');
+        break;
+      }
+      case 'wizard': {
+        ctx.fillStyle=C.hat||'#4C1D95';
+        ctx.beginPath();
+        ctx.moveTo(cx-fw*0.55, fy);
+        ctx.lineTo(cx, fy-fh*0.85);
+        ctx.lineTo(cx+fw*0.55, fy);
+        ctx.closePath(); ctx.fill();
+        ctx.fillStyle=C.star||'#FFD60A';
+        ctx.beginPath();
+        for(let i=0;i<5;i++){
+          const a=-Math.PI/2+i*Math.PI*2/5;
+          const r=i%2?fw*0.04:fw*0.1;
+          const x=cx+Math.cos(a)*r, y=fy-fh*0.45+Math.sin(a)*r;
+          if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+        }
+        ctx.closePath(); ctx.fill();
+        break;
+      }
+      case 'fairy': {
+        ctx.fillStyle=C.wing||'rgba(180,140,255,.45)';
+        ctx.beginPath(); ctx.ellipse(ltx-fw*0.25, cy, fw*0.28, fh*0.4, -0.4, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.ellipse(rtx+fw*0.25, cy, fw*0.28, fh*0.4, 0.4, 0, Math.PI*2); ctx.fill();
+        drawMouthOpening(ctx, face, W, H, mirror, '#E879F9', '#FBBFDF');
+        break;
+      }
+      case 'octopus': {
+        ctx.fillStyle=C.skin||'#E85D75';
+        for(let i=0;i<6;i++){
+          const t=i/5;
+          const x=cx-fw*0.4+t*fw*0.8;
+          ctx.beginPath();
+          ctx.moveTo(x, chinY);
+          ctx.quadraticCurveTo(x+(i%2?fw*0.08:-fw*0.08), chinY+fh*0.35, x, chinY+fh*0.5);
+          ctx.lineWidth=fw*0.08; ctx.strokeStyle=C.skin; ctx.stroke();
+        }
+        drawMouthOpening(ctx, face, W, H, mirror, '#8B0000', '#FF6B8A');
+        break;
+      }
+      case 'fire':
+      case 'star':
+      case 'rainbow':
+      case 'hearts':
+      case 'hearts2':
+      case 'diamond': {
+        // floating props above head, still AR-anchored
+        const items = m.kind==='rainbow' ? ['🔴','🟠','🟡','🟢','🔵','🟣'] :
+          m.kind==='fire' ? ['🔥','🔥','🔥'] :
+          m.kind==='star' ? ['⭐','✨','⭐'] :
+          m.kind==='diamond' ? ['💎','💎'] :
+          ['💕','❤️','💖'];
+        const open = face.mouthOpen||0;
+        items.forEach((em,i)=>{
+          const t = (i/(items.length-1||1)) - 0.5;
+          const x = cx + t * fw * 0.9;
+          const y = fy - fh*0.35 - Math.sin(performance.now()/300+i)*fh*0.05 - open*fh*0.08;
+          ctx.font = `${Math.round(fw*0.28)}px serif`;
+          ctx.textAlign='center'; ctx.textBaseline='middle';
+          ctx.fillText(em, x, y);
+        });
+        if(m.kind==='hearts'||m.kind==='hearts2'){
+          drawMouthOpening(ctx, face, W, H, mirror, '#FF4D6D', '#FF8FAB');
+        }
+        break;
+      }
+      default:
+        drawMouthOpening(ctx, face, W, H, mirror, '#333', '#FF6B8A');
+    }
+    ctx.restore();
+  }
+
+  function paintPreviewCanvas(live, canvas, stage){
+    if(!live || !canvas) return;
+    const W = canvas.width, H = canvas.height;
+    const ctx = canvas.getContext('2d');
+    if(!ctx) return;
+    // cover-fit draw video
+    const vw = live.videoWidth||W, vh = live.videoHeight||H;
+    const scale = Math.max(W/vw, H/vh);
+    const dw = vw*scale, dh = vh*scale;
+    const ox = (W-dw)/2, oy = (H-dh)/2;
+    ctx.save();
+    if(cpCamFacing==='user'){
+      ctx.translate(W,0); ctx.scale(-1,1);
+    }
+    ctx.drawImage(live, ox, oy, dw, dh);
+    ctx.restore();
+    // face in normalized video space; for user mirror, flip x when drawing mask
+    const face = cpLastFace;
+    const mirror = (cpCamFacing==='user');
+    drawARMask(ctx, W, H, face, mirror);
+  }
+
+  function startFaceFollow(live, stage, viewCanvas){
+    cancelAnimationFrame(cpFaceLoop);
+    let frames=0;
+    const tick = ()=>{
+      cpFaceLoop = requestAnimationFrame(tick);
+      frames++;
+      if(!live || live.readyState < 2) return;
+      // detect every frame for responsive mouth
+      if(frames % 1 === 0){
+        const f = detectFaceFull(live);
+        if(f) cpLastFace = smoothFace(cpLastFace, f);
+      }
+      if(!viewCanvas || !stage) return;
+      const rw = Math.max(2, stage.clientWidth||360);
+      const rh = Math.max(2, stage.clientHeight||640);
+      if(viewCanvas.width !== rw || viewCanvas.height !== rh){
+        viewCanvas.width = rw;
+        viewCanvas.height = rh;
+      }
+      const ctx = viewCanvas.getContext('2d', {alpha:false});
+      const W = viewCanvas.width, H = viewCanvas.height;
+      // clear
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0,0,W,H);
+      // draw camera with object-fit:cover + selfie mirror
+      const vw = live.videoWidth||W, vh = live.videoHeight||H;
+      const scale = Math.max(W/vw, H/vh);
+      const dw = vw*scale, dh = vh*scale;
+      const ox = (W-dw)/2, oy = (H-dh)/2;
+      ctx.save();
+      if(cpCamFacing==='user'){
+        ctx.translate(W, 0);
+        ctx.scale(-1, 1);
+        ctx.drawImage(live, ox, oy, dw, dh);
+      } else {
+        ctx.drawImage(live, ox, oy, dw, dh);
+      }
+      ctx.restore();
+      // Map landmarks (video space 0..1) → cover-fitted canvas.
+      // After selfie mirror of the image, landmark x must be flipped.
+      const face = cpLastFace;
+      if(face){
+        // Landmarks are relative to full video frame; with cover, video is scaled by `scale` and offset ox,oy
+        // In unmirrored canvas: X = ox + p.x*vw*scale, Y = oy + p.y*vh*scale
+        // We already mirrored the bitmap for user camera, so for drawing mask in the mirrored visual space:
+        // use mirrored x: W - (ox + p.x*vw*scale) when user facing — equivalent to drawing with mirror flag
+        // on a coordinate system matching the mirrored pixels.
+        const mapped = mapFaceToCanvas(face, W, H, vw, vh, ox, oy, scale, cpCamFacing==='user');
+        drawARMask(ctx, W, H, mapped, false); // already mapped into canvas px via fake norm
+      }
+      const hint = stage.querySelector('#cp-face-hint');
+      if(hint && frames === 15){
+        hint.textContent = cpLastFace ? 'AR · открой рот' : 'Ищем лицо…';
+        setTimeout(()=>{ try{ hint.style.opacity='0'; }catch(e){} }, 2200);
+      }
+    };
+    cpFaceLoop = requestAnimationFrame(tick);
+  }
+
+  /** Convert normalized face → face with x/y already in canvas pixel space stored as x=px/W (norm of canvas) */
+  function mapFaceToCanvas(face, W, H, vw, vh, ox, oy, scale, mirror){
+    const mapP = (p)=>{
+      if(!p) return null;
+      let x = ox + p.x * vw * scale;
+      let y = oy + p.y * vh * scale;
+      if(mirror) x = W - x;
+      return {x: x/W, y: y/H, z: p.z||0};
+    };
+    const out = Object.assign({}, face);
+    ['nose','chin','forehead','leOuter','reOuter','leInner','reInner','mouthL','mouthR','upperLip','lowerLip','upperLipTop','lowerLipBot','leftCheek','rightCheek','leftTemple','rightTemple','leftBrow','rightBrow'].forEach(k=>{
+      if(face[k]) out[k] = mapP(face[k]);
+    });
+    // bbox
+    let cx = ox + face.cx * vw * scale;
+    if(mirror) cx = W - cx;
+    out.cx = cx/W;
+    out.cy = (oy + face.cy * vh * scale)/H;
+    out.faceW = face.faceW * (vw*scale) / W;
+    out.faceH = face.faceH * (vh*scale) / H;
+    out.minX = out.cx - out.faceW/2;
+    out.maxX = out.cx + out.faceW/2;
+    out.minY = out.cy - out.faceH/2;
+    out.maxY = out.cy + out.faceH/2;
+    out.mouthOpen = face.mouthOpen;
+    out.lm = null; // don't use raw lm after mapping
+    return out;
+  }
+
   function renderMaskBar(){
     const box=body.querySelector('#cp-masks');
     const wrap=body.querySelector('#cp-masks-wrap');
     if(!box||!wrap) return;
     wrap.style.display='block';
-    box.innerHTML=MASKS.map(m=>`<button type="button" data-mid="${m.id}" class="btn-secondary" style="padding:6px 8px;font-size:18px;min-width:44px;${cpMaskId===m.id?'outline:2px solid var(--accent-a)':''}">${m.emoji||'∅'}</button>`).join('');
+    box.innerHTML=MASKS.map(m=>{
+      const icons = {none:'∅',cat:'🐱',dog:'🐶',fox:'🦊',panda:'🐼',lion:'🦁',tiger:'🐯',unicorn:'🦄',alien:'👽',robot:'🤖',glasses:'🕶️',hearts:'😍',fire:'🔥',crown:'👑',star:'🌟',rainbow:'🌈',skull:'💀',clown:'🤡',ghost:'👻',pumpkin:'🎃',ninja:'🥷',hero:'🦸',wizard:'🧙',fairy:'🧚',vampire:'🧛',zombie:'🧟',bear:'🐻',frog:'🐸',octopus:'🐙',hearts2:'💕',diamond:'💎'};
+      const ico = icons[m.kind]||'•';
+      return `<button type="button" data-mid="${m.id}" title="${m.label}" class="btn-secondary" style="padding:6px 8px;font-size:18px;min-width:44px;${cpMaskId===m.id?'outline:2px solid var(--accent-a)':''}">${ico}</button>`;
+    }).join('');
     box.querySelectorAll('[data-mid]').forEach(b=>{
-      b.onclick=()=>{
-        cpMaskId=+b.dataset.mid;
-        renderMaskBar();
-        const ov=body.querySelector('#cp-mask-overlay');
-        if(ov){
-          const m=MASKS.find(x=>x.id===cpMaskId);
-          ov.textContent=m&&m.emoji?m.emoji:'';
-          ov.style.display=m&&m.emoji?'block':'none'; ov.style.fontSize='84px';
-        }
-      };
+      b.onclick=()=>{ cpMaskId=+b.dataset.mid; renderMaskBar(); };
     });
   }
+
   body.querySelector('#cp-cam')?.addEventListener('click', async ()=>{
     const prev=body.querySelector('#cp-preview');
-    if(cpCamStream){
-      // already open — ignore
-      return;
-    }
+    if(cpCamStream) return;
     try{
       cpCamStream = await navigator.mediaDevices.getUserMedia({
         video:{ facingMode:{ideal:cpCamFacing}, width:{ideal:720}, height:{ideal:1280} },
         audio:true
       });
     }catch(e){ showToast('Нет доступа к камере'); return; }
+
+    // Single visible canvas = preview. Hidden video only for detect + frames.
     prev.innerHTML=`
-      <div id="cp-stage" style="position:relative;border-radius:14px;overflow:hidden;background:#000;aspect-ratio:9/16;max-height:420px;margin:0 auto">
-        <video id="cp-live" autoplay muted playsinline style="width:100%;height:100%;object-fit:cover;display:block"></video>
+      <div id="cp-stage" style="position:relative;border-radius:14px;overflow:hidden;background:#000;aspect-ratio:9/16;max-height:min(70vh,520px);width:100%;max-width:360px;margin:0 auto;touch-action:manipulation">
+        <video id="cp-live" autoplay muted playsinline webkit-playsinline x5-playsinline
+          style="position:absolute;width:720px;height:1280px;opacity:0;pointer-events:none;left:-10000px;top:0;max-width:none"></video>
+        <canvas id="cp-view" style="display:block;width:100%;height:100%;background:#000;pointer-events:none"></canvas>
         <canvas id="cp-canvas" style="display:none"></canvas>
-        <div id="cp-mask-overlay" style="position:absolute;left:50%;top:28%;transform:translate(-50%,-50%);font-size:72px;pointer-events:none;filter:drop-shadow(0 4px 12px rgba(0,0,0,.45));display:none;line-height:1"></div>
-        <div style="position:absolute;left:0;right:0;bottom:10px;display:flex;justify-content:center;gap:10px;z-index:2">
-          <button type="button" class="btn-secondary" id="cp-flip" style="padding:8px 12px">🔄</button>
-          <button type="button" class="btn-primary" id="cp-rec" style="padding:10px 18px">● Запись</button>
-          <button type="button" class="btn-secondary" id="cp-stopcam" style="padding:8px 12px">✕</button>
+        <div id="cp-face-hint" style="position:absolute;left:12px;top:12px;z-index:4;font-size:11px;color:#fff;background:rgba(0,0,0,.5);padding:4px 8px;border-radius:8px;pointer-events:none">Загрузка AR…</div>
+        <div id="cp-cam-controls" style="position:absolute;left:0;right:0;bottom:10px;display:flex;justify-content:center;gap:10px;z-index:20;pointer-events:auto">
+          <button type="button" class="btn-secondary" id="cp-flip" style="padding:10px 14px;pointer-events:auto;touch-action:manipulation">🔄</button>
+          <button type="button" class="btn-primary" id="cp-rec" style="padding:12px 20px;pointer-events:auto;touch-action:manipulation">● Запись</button>
+          <button type="button" class="btn-secondary" id="cp-stopcam" style="padding:10px 14px;pointer-events:auto;touch-action:manipulation">✕</button>
         </div>
       </div>`;
     const live=body.querySelector('#cp-live');
+    const stage=body.querySelector('#cp-stage');
+    const view=body.querySelector('#cp-view');
+    live.setAttribute('playsinline','');
+    live.setAttribute('webkit-playsinline','');
+    live.muted = true;
+    live.playsInline = true;
     live.srcObject=cpCamStream;
-    live.play().catch(()=>{});
+    // prevent any native fullscreen / PiP
+    live.addEventListener('webkitbeginfullscreen', e=>e.preventDefault());
+    live.addEventListener('fullscreenchange', ()=>{ try{ document.exitFullscreen?.(); }catch(e){} });
+    const tryPlay = ()=> live.play().catch(()=>{});
+    tryPlay();
+    live.addEventListener('loadedmetadata', tryPlay);
     renderMaskBar();
+    ensureFaceTracker().then(ok=>{
+      const hint=body.querySelector('#cp-face-hint');
+      if(hint) hint.textContent = ok ? 'AR · открой рот' : 'Упрощённый режим';
+    });
+    startFaceFollow(live, stage, view);
+
     body.querySelector('#cp-flip').onclick=async()=>{
       cpCamFacing = cpCamFacing==='user'?'environment':'user';
+      cpLastFace=null;
       try{
         cpCamStream.getTracks().forEach(t=>t.stop());
         cpCamStream = await navigator.mediaDevices.getUserMedia({
@@ -15033,7 +15921,7 @@ function renderCreatePost(body, kind){
           audio:true
         });
         live.srcObject=cpCamStream;
-        live.play().catch(()=>{});
+        tryPlay();
       }catch(e){ showToast('Не удалось переключить камеру'); }
     };
     body.querySelector('#cp-stopcam').onclick=()=>{
@@ -15042,197 +15930,220 @@ function renderCreatePost(body, kind){
       const wrap=body.querySelector('#cp-masks-wrap');
       if(wrap) wrap.style.display='none';
     };
+
     let recording=false;
     body.querySelector('#cp-rec').onclick=async()=>{
       const btn=body.querySelector('#cp-rec');
       if(!recording){
-        // Record canvas with mask overlay composite
-        const canvas=body.querySelector('#cp-canvas');
-        const stage=body.querySelector('#cp-stage');
+        // Record the same pixels user sees: clone frames from view canvas
+        const recCanvas=body.querySelector('#cp-canvas');
         const w=720, h=1280;
-        canvas.width=w; canvas.height=h;
-        const ctx=canvas.getContext('2d');
-        const draw=()=>{
+        recCanvas.width=w; recCanvas.height=h;
+        const rctx=recCanvas.getContext('2d',{alpha:false});
+        recording=true;
+
+        // Build stream: prefer recCanvas, copy from view each frame
+        const pump=()=>{
           if(!recording) return;
           try{
-            ctx.save();
-            if(cpCamFacing==='user'){ ctx.translate(w,0); ctx.scale(-1,1); }
-            ctx.drawImage(live, 0, 0, w, h);
-            ctx.restore();
-            const m=MASKS.find(x=>x.id===cpMaskId);
-            if(m && m.emoji){
-              ctx.font='120px serif';
-              ctx.textAlign='center';
-              ctx.textBaseline='middle';
-              ctx.fillText(m.emoji, w/2, h*0.28);
+            // redraw face detect
+            const f=detectFaceFull(live);
+            if(f) cpLastFace=smoothFace(cpLastFace,f);
+            // paint recording canvas same pipeline as preview
+            rctx.fillStyle='#000'; rctx.fillRect(0,0,w,h);
+            const vw=live.videoWidth||w, vh=live.videoHeight||h;
+            const scale=Math.max(w/vw,h/vh);
+            const dw=vw*scale, dh=vh*scale;
+            const ox=(w-dw)/2, oy=(h-dh)/2;
+            rctx.save();
+            if(cpCamFacing==='user'){ rctx.translate(w,0); rctx.scale(-1,1); rctx.drawImage(live,ox,oy,dw,dh); }
+            else rctx.drawImage(live,ox,oy,dw,dh);
+            rctx.restore();
+            if(cpLastFace){
+              const mapped=mapFaceToCanvas(cpLastFace,w,h,vw,vh,ox,oy,scale,cpCamFacing==='user');
+              drawARMask(rctx,w,h,mapped,false);
             }
           }catch(e){}
-          requestAnimationFrame(draw);
+          requestAnimationFrame(pump);
         };
-        // Prefer canvas stream for mask burn-in; fallback to camera stream
+        requestAnimationFrame(pump);
+
         let recStream;
         try{
-          recStream = canvas.captureStream(30);
-          // add audio from cam
+          recStream = recCanvas.captureStream(30);
           const at=cpCamStream.getAudioTracks()[0];
-          if(at) recStream.addTrack(at);
-        }catch(e){ recStream=cpCamStream; }
+          if(at){
+            try{ recStream.addTrack(at); }catch(e){
+              // some browsers need new MediaStream
+              recStream = new MediaStream([recStream.getVideoTracks()[0], at]);
+            }
+          }
+        }catch(e){
+          showToast('Запись canvas недоступна — пишем камеру без маски');
+          recStream=cpCamStream;
+        }
         cpChunks=[];
         let mime='video/webm;codecs=vp9,opus';
+        if(!MediaRecorder.isTypeSupported(mime)) mime='video/webm;codecs=vp8,opus';
         if(!MediaRecorder.isTypeSupported(mime)) mime='video/webm';
-        try{ cpRecorder=new MediaRecorder(recStream,{mimeType:mime,videoBitsPerSecond:2500000}); }
-        catch(e){ cpRecorder=new MediaRecorder(recStream); }
+        if(!MediaRecorder.isTypeSupported(mime)) mime='video/mp4';
+        try{ cpRecorder=new MediaRecorder(recStream,{mimeType:mime, videoBitsPerSecond:3500000}); }
+        catch(e){ try{ cpRecorder=new MediaRecorder(recStream); }catch(e2){ showToast('MediaRecorder недоступен'); recording=false; return; } }
         cpRecorder.ondataavailable=e=>{ if(e.data&&e.data.size) cpChunks.push(e.data); };
         cpRecorder.onstop=()=>{
           recording=false;
           btn.textContent='● Запись';
-          const blob=new Blob(cpChunks,{type:'video/webm'});
-          if(blob.size<500){ showToast('Пустая запись'); return; }
+          const type = (cpRecorder&&cpRecorder.mimeType)||'video/webm';
+          const blob=new Blob(cpChunks,{type});
+          if(blob.size<800){ showToast('Пустая запись'); return; }
           try{ if(mediaObjectUrl) URL.revokeObjectURL(mediaObjectUrl); }catch(e){}
           mediaObjectUrl=URL.createObjectURL(blob);
           mediaData=mediaObjectUrl;
           mediaType='video';
-          mediaFile=new File([blob],'signal-video.webm',{type:'video/webm'});
-          // keep preview as recorded video
+          mediaFile=new File([blob],'sline-video.webm',{type:blob.type||'video/webm'});
           stopCpCam();
-          prev.innerHTML=`<video src="${mediaObjectUrl}" style="max-width:100%;border-radius:12px;max-height:420px" controls playsinline></video>`;
-          showToast('Видео готово — можно публиковать');
+          // Inline preview WITHOUT opening system/fullscreen player
+          prev.innerHTML = `
+            <div style="position:relative;border-radius:12px;overflow:hidden;background:#000;max-width:100%">
+              <video id="cp-result" src="${mediaObjectUrl}"
+                playsinline webkit-playsinline x5-playsinline
+                muted
+                controlslist="nodownload nofullscreen noremoteplayback"
+                disablepictureinpicture
+                style="width:100%;max-height:420px;display:block;border-radius:12px;background:#000"></video>
+              <div style="display:flex;gap:8px;justify-content:center;padding:8px;position:relative;z-index:30;pointer-events:auto">
+                <button type="button" class="btn-secondary" id="cp-res-play" style="pointer-events:auto;touch-action:manipulation">▶ Смотреть</button>
+                <button type="button" class="btn-secondary" id="cp-res-again" style="pointer-events:auto;touch-action:manipulation">📷 Ещё раз</button>
+              </div>
+            </div>`;
+          const rv = prev.querySelector('#cp-result');
+          rv.addEventListener('webkitbeginfullscreen', e=>{ e.preventDefault(); });
+          prev.querySelector('#cp-res-play').onclick=()=>{
+            rv.muted=false;
+            if(rv.paused) rv.play().catch(()=>{}); else rv.pause();
+          };
+          prev.querySelector('#cp-res-again').onclick=()=>{
+            prev.innerHTML='';
+            body.querySelector('#cp-cam')?.click();
+          };
+          showToast('Видео готово');
         };
-        recording=true;
+        try{ cpRecorder.start(250); }catch(e){ cpRecorder.start(); }
         btn.textContent='■ Стоп';
-        cpRecorder.start(200);
-        draw();
-        // auto stop 60s
-        setTimeout(()=>{ if(recording && cpRecorder && cpRecorder.state==='recording') cpRecorder.stop(); }, 60000);
+        showToast('Запись…');
       } else {
-        try{ cpRecorder.stop(); }catch(e){}
+        try{ if(cpRecorder && cpRecorder.state!=='inactive') cpRecorder.stop(); }catch(e){}
       }
     };
   });
 
-  body.querySelector('#cp-file').onchange=e=>{
-    const f=e.target.files[0]; if(!f) return;
-    mediaFile=f;
-    mediaType = f.type.startsWith('video/')?'video':'image';
-    const prev=body.querySelector('#cp-preview');
-    if(mediaType==='video'){
-      try{ if(mediaObjectUrl) URL.revokeObjectURL(mediaObjectUrl); }catch(err){}
-      mediaObjectUrl=URL.createObjectURL(f);
-      mediaData=mediaObjectUrl;
-      prev.innerHTML=`<video src="${mediaObjectUrl}" style="max-width:100%;border-radius:12px" controls></video>`;
+
+  // file picker
+  body.querySelector('#cp-file').onchange = async (e)=>{
+    const f = e.target.files && e.target.files[0];
+    if(!f) return;
+    stopCpCam();
+    try{ if(mediaObjectUrl) URL.revokeObjectURL(mediaObjectUrl); }catch(err){}
+    mediaObjectUrl = URL.createObjectURL(f);
+    mediaFile = f;
+    mediaData = mediaObjectUrl;
+    if(/^video\//.test(f.type) || kind==='video'){
+      mediaType = 'video';
+      body.querySelector('#cp-preview').innerHTML = `<video src="${mediaObjectUrl}" style="max-width:100%;border-radius:12px;max-height:420px" controls playsinline></video>`;
     } else {
-      const r=new FileReader();
-      r.onload=ev=>{
-        mediaData=ev.target.result;
-        prev.innerHTML=`<img src="${mediaData}" style="max-width:100%;border-radius:12px">`;
-      };
-      r.readAsDataURL(f);
+      mediaType = 'image';
+      body.querySelector('#cp-preview').innerHTML = `<img src="${mediaObjectUrl}" style="max-width:100%;border-radius:12px;max-height:420px">`;
     }
   };
-  body.querySelector('#cp-publish').onclick=async()=>{
-    if(!canPublish()) return;
-    if(!mediaData){ showToast(currentLang==='en'?'Choose a file first':'Сначала выберите файл'); return; }
-    const btn=body.querySelector('#cp-publish');
-    if(btn.disabled) return;
-    setBtnLoading(btn,true);
+
+  body.querySelector('#cp-publish').onclick = async ()=>{
+    if(!mediaData && !mediaFile){
+      showToast(currentLang==='en'?'Add media first':'Сначала добавьте медиа');
+      return;
+    }
+    const caption = (body.querySelector('#cp-caption')?.value||'').trim();
+    const hashtags = (body.querySelector('#cp-hashtags')?.value||'').trim();
+    const btn = body.querySelector('#cp-publish');
+    const prevText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = currentLang==='en'?'Publishing…':'Публикация…';
     try{
-      const caption=body.querySelector('#cp-caption').value.trim();
-      const hashtags=kind==='video'?body.querySelector('#cp-hashtags')?.value.trim()||'':'';
-      let outData=mediaData;
-      if(mediaType==='image' && typeof mediaData==='string' && mediaData.startsWith('data:image')){
-        try{ outData = await compressDataUrlImage(mediaData, 1280, 0.72); }catch(e){}
+      let publicUrl = null;
+      const file = mediaFile || null;
+      if(file && typeof uploadFileToStorage==='function'){
+        const folder = kind==='video' ? 'posts' : 'posts';
+        const up = await uploadFileToStorage(file, folder);
+        if(up && up.url) publicUrl = up.url;
+        else if(up && up.publicUrl) publicUrl = up.publicUrl;
       }
-      if(mediaType==='video' && mediaFile){
-        const prep=await prepareMediaForUpload(mediaFile, 'post');
-        if(!prep.ok){ showToast(prep.error||'Ошибка'); setBtnLoading(btn,false); return; }
-        outData=prep.dataUrl;
-      } else if(mediaType==='video' && typeof outData==='string' && outData.startsWith('data:') && outData.length > 4*1024*1024){
-        // try to re-upload is not possible without File — warn only
-        showToast(currentLang==='en'?'Large video: prefer re-selecting the file':'Большое видео лучше выбрать файлом заново');
+      if(!publicUrl && mediaData && String(mediaData).startsWith('data:')){
+        publicUrl = mediaData;
       }
-      const postId = (crypto.randomUUID && crypto.randomUUID()) || ('local_'+Date.now());
-      const localPost = {
-        id: postId,
+      if(!publicUrl && mediaObjectUrl){
+        // blob URL won't work for others — try upload from blob
+        try{
+          const blob = await fetch(mediaObjectUrl).then(r=>r.blob());
+          const f2 = new File([blob], kind==='video'?'svideo.webm':'spost.jpg', {type: blob.type||'video/webm'});
+          if(typeof uploadFileToStorage==='function'){
+            const up = await uploadFileToStorage(f2, 'posts');
+            publicUrl = up?.url || up?.publicUrl || null;
+          }
+        }catch(err){ console.warn(err); }
+      }
+      if(!publicUrl){
+        // last resort local-only
+        publicUrl = mediaObjectUrl || mediaData;
+      }
+      const post = {
+        id: 'local_'+Date.now(),
         user_id: myProfile.id,
-        kind,
-        media_url: outData,
-        media_type: mediaType,
+        kind: kind==='video' ? 'video' : 'post',
+        media_url: publicUrl,
+        media_type: mediaType|| (kind==='video'?'video':'image'),
         caption,
         hashtags,
         created_at: new Date().toISOString(),
-        from_story: false
+        author: myProfile
       };
-      try{ saveLocalSocialPost(localPost); }catch(e){}
-      let error = null;
       try{
-        const r = await withTable(sb.from('posts').insert({user_id:myProfile.id, kind, media_url:outData, media_type:mediaType, caption, hashtags}).select().single(), 'posts');
-        error = r.error;
-        if(r.data && r.data.id){
-          try{
-            // replace local id with server id
-            const arr = getLocalSocialPosts().filter(p=>String(p.id)!==String(postId));
-            arr.unshift({...localPost, ...r.data});
-            setLocalSocialPosts(arr);
-          }catch(e){}
+        const {data, error} = await withTable(
+          sb.from('posts').insert({
+            user_id: myProfile.id,
+            kind: post.kind,
+            media_url: publicUrl,
+            media_type: post.media_type,
+            caption,
+            hashtags
+          }).select().single(),
+          'posts'
+        );
+        if(!error && data){
+          Object.assign(post, data);
+          post.author = myProfile;
         }
-      }catch(e){ error = e; }
-      // Always show as published if we have media locally
-      markPublished();
-      showToast(error ? (currentLang==='en'?'Saved on device':'Сохранено на устройстве') : (currentLang==='en'?'Published!':'Опубликовано!'));
-      if(kind==='video') switchVideoTab('feed'); else switchPostsTab('feed');
-    }catch(e){
-      setBtnLoading(btn,false);
-      showToast(friendlyError(e));
+      }catch(err){ console.warn(err); }
+      try{ saveLocalSocialPost(post); }catch(err){}
+      showToast(currentLang==='en'?'Published':'Опубликовано');
+      if(kind==='video'){
+        try{ switchVideoTab('feed'); }catch(e){}
+      } else {
+        try{ switchPostsTab('feed'); }catch(e){}
+      }
+    }catch(err){
+      console.warn(err);
+      showToast(currentLang==='en'?'Publish failed':'Не удалось опубликовать');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = prevText;
     }
   };
 }
-async function renderSocialProfile(body, userId, kind){
-  let profile = userId===myProfile.id ? myProfile : null;
-  if(!profile){ const {data}=await sb.from('profiles').select('*').eq('id',userId).maybeSingle(); profile=data; }
-  if(!profile){ body.innerHTML=`<div class="empty-state">${currentLang==='en'?'Not found':'Не найден'}</div>`; return; }
-  await loadFollowing();
-  const isMe = userId===myProfile.id;
-  const name=profile.first_name?`${profile.first_name} ${profile.last_name||''}`:profile.username;
-  const postsList = await fetchPosts(kind, userId);
-  const {data:followers} = await withTable(sb.from('follows').select('follower_id').eq('following_id',userId), 'follows');
-  const {data:followingRows} = await withTable(sb.from('follows').select('following_id').eq('follower_id',userId), 'follows');
-  body.innerHTML = `
-    <div class="profile-header">
-      <div class="avatar" id="sp-avatar" style="width:84px;height:84px;font-size:30px"></div>
-      <div style="font-weight:800;font-size:17px">${escapeHtml(name)}${verifiedBadgeIf(profile.email)}${(typeof slBadgeHtml==='function'?slBadgeHtml(typeof slGetBadge==='function'?slGetBadge(profile):profile.badge_id, profile.color):'')}</div>
-      <div style="color:var(--muted);font-size:13px">@${escapeHtml(profile.username||'')}</div>
-      <div class="profile-stats">
-        <div class="profile-stat"><b>${postsList.length}</b><span>${currentLang==='en'?'posts':'постов'}</span></div>
-        <div class="profile-stat"><b>${(followers||[]).length}</b><span>${currentLang==='en'?'followers':'подписчики'}</span></div>
-        <div class="profile-stat"><b>${(followingRows||[]).length}</b><span>${currentLang==='en'?'following':'подписки'}</span></div>
-      </div>
-      ${!profile.hide_email && profile.email ? `<div style="font-size:12px;color:var(--muted)">${escapeHtml(profile.email)}</div>`:''}
-      ${!profile.hide_phone && profile.phone ? `<div style="font-size:12px;color:var(--muted)">${escapeHtml(profile.phone)}</div>`:''}
-      ${!isMe ? `<button class="follow-btn ${followingSet.has(userId)?'following':''}" id="sp-follow">${followingSet.has(userId)?(currentLang==='en'?'Following':'Вы подписаны'):(currentLang==='en'?'Follow':'Подписаться')}</button>`:''}
-    </div>
-    <div class="profile-grid" id="sp-grid"></div>`;
-  renderAvatarInto(document.getElementById('sp-avatar'), profile.avatar_url, (name||'?')[0].toUpperCase(), profile.color||colorFor(profile.id));
-  document.getElementById('sp-follow')?.addEventListener('click', function(){ toggleFollow(userId, this); });
-  const grid=document.getElementById('sp-grid');
-  grid.innerHTML = postsList.map(p=>p.media_type==='video'
-    ? `<video class="g-item" src="${p.media_url}" muted></video>`
-    : `<img class="g-item" src="${p.media_url}">`).join('') || `<div class="empty-state">${currentLang==='en'?'No posts yet':'Пока нет постов'}</div>`;
-}
-async function openAuthorOverlay(userId, kind){
-  const bodyId = kind==='video' ? 'video-body' : 'posts-body';
-  const body=document.getElementById(bodyId);
-  body.innerHTML=loaderHTML();
-  await renderSocialProfile(body, userId, kind);
-  const back=document.createElement('div');
-  back.style.cssText='padding:10px 14px;color:var(--accent-a);cursor:pointer;font-size:13px;font-weight:700';
-  back.textContent='← '+(currentLang==='en'?'Back to feed':'Назад к ленте');
-  back.onclick=()=> kind==='video' ? switchVideoTab('feed') : switchPostsTab('feed');
-  body.prepend(back);
-}
+
 async function renderVideoFeed(body){
   await loadFollowing();
   const list = await fetchPosts('video');
-  body.innerHTML = '';
+  body.innerHTML='';
+
   // NO stories/statuses in SVideo — only the video feed
   if(!list.length){
     const empty=document.createElement('div');
@@ -26349,35 +27260,280 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
 
     // Override create video shoot if present
     window.slOpenVideoCamera = async function(){
-      let stream=null;
-      let recorder=null;
-      let chunks=[];
-      let recording=false;
-      let mask='none';
+      // Fullscreen SVideo shoot: canvas preview (no system play button), AR face masks
+      let stream=null, recorder=null, chunks=[], recording=false, facing='user';
+      let maskId=0, raf=0, landmarker=null, lastFace=null, viewW=0, viewH=0;
+
+      const MASKS = [
+        {id:0, kind:'none', icon:'✖️'},
+        {id:1, kind:'glasses', icon:'😎'},
+        {id:2, kind:'cat', icon:'🐱'},
+        {id:3, kind:'fox', icon:'🦊'},
+        {id:4, kind:'ghost', icon:'👻'},
+        {id:5, kind:'hat', icon:'🎩'},
+        {id:6, kind:'star', icon:'🌟'},
+        {id:7, kind:'dog', icon:'🐶'},
+        {id:8, kind:'crown', icon:'👑'},
+        {id:9, kind:'alien', icon:'👽'}
+      ];
+
       const ov=document.createElement('div');
       ov.className='sl-cam-full';
+      ov.id='sl-cam-full-ar';
       ov.innerHTML=`
-        <div style="position:relative;flex:1;display:flex">
-          <video id="sl-cam-vid" autoplay playsinline muted class="no-mirror"></video>
-          <div class="sl-mask-overlay" id="sl-mask-ov" style="display:none"></div>
+        <div class="sl-cam-stage" style="position:relative;flex:1;min-height:0;background:#000;overflow:hidden">
+          <video id="sl-cam-vid" autoplay playsinline muted webkit-playsinline
+            style="position:absolute;width:720px;height:1280px;opacity:0;pointer-events:none;left:-9999px"></video>
+          <canvas id="sl-cam-view" style="position:absolute;inset:0;width:100%;height:100%;display:block;pointer-events:none;background:#000"></canvas>
+          <div id="sl-cam-hint" style="position:absolute;left:12px;top:calc(12px + env(safe-area-inset-top));z-index:6;font-size:12px;color:#fff;background:rgba(0,0,0,.45);padding:6px 10px;border-radius:10px;pointer-events:none">Камера…</div>
         </div>
-        <div class="sl-cam-masks" id="sl-masks">
-          <div class="sl-cam-mask on" data-m="none">✖️</div>
-          <div class="sl-cam-mask" data-m="😎">😎</div>
-          <div class="sl-cam-mask" data-m="🐱">🐱</div>
-          <div class="sl-cam-mask" data-m="🦊">🦊</div>
-          <div class="sl-cam-mask" data-m="👻">👻</div>
-          <div class="sl-cam-mask" data-m="🎩">🎩</div>
-          <div class="sl-cam-mask" data-m="🌟">🌟</div>
-        </div>
-        <div class="sl-cam-controls">
-          <button type="button" class="icon-btn" id="sl-cam-close" style="width:48px;height:48px;color:#fff;border-color:rgba(255,255,255,.3)">✕</button>
-          <button type="button" class="sl-cam-rec" id="sl-cam-rec" title="Снять"></button>
-          <button type="button" class="icon-btn" id="sl-cam-flip" style="width:48px;height:48px;color:#fff;border-color:rgba(255,255,255,.3)">⟲</button>
+        <div class="sl-cam-masks" id="sl-masks" style="position:relative;z-index:30;pointer-events:auto;flex-shrink:0"></div>
+        <div class="sl-cam-controls" style="position:relative;z-index:30;pointer-events:auto;flex-shrink:0">
+          <button type="button" class="icon-btn" id="sl-cam-close" style="width:48px;height:48px;color:#fff;border-color:rgba(255,255,255,.3);pointer-events:auto;touch-action:manipulation">✕</button>
+          <button type="button" class="sl-cam-rec" id="sl-cam-rec" title="Снять" style="pointer-events:auto;touch-action:manipulation"></button>
+          <button type="button" class="icon-btn" id="sl-cam-flip" style="width:48px;height:48px;color:#fff;border-color:rgba(255,255,255,.3);pointer-events:auto;touch-action:manipulation">⟲</button>
         </div>`;
       document.body.appendChild(ov);
+
       const vid=ov.querySelector('#sl-cam-vid');
-      let facing='user';
+      const view=ov.querySelector('#sl-cam-view');
+      const stage=ov.querySelector('.sl-cam-stage');
+      const hint=ov.querySelector('#sl-cam-hint');
+      const masksEl=ov.querySelector('#sl-masks');
+
+      masksEl.innerHTML = MASKS.map(m=>
+        `<div class="sl-cam-mask${m.id===0?' on':''}" data-id="${m.id}" style="pointer-events:auto;touch-action:manipulation">${m.icon}</div>`
+      ).join('');
+
+      function cleanup(){
+        try{ cancelAnimationFrame(raf); }catch(e){}
+        raf=0;
+        try{ recorder?.state!=='inactive' && recorder.stop(); }catch(e){}
+        try{ stream?.getTracks().forEach(t=>t.stop()); }catch(e){}
+        stream=null; lastFace=null;
+        try{ ov.remove(); }catch(e){}
+      }
+
+      async function ensureLandmarker(){
+        if(landmarker) return true;
+        try{
+          const mod = await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/+esm');
+          const vision = await mod.FilesetResolver.forVisionTasks(
+            'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm'
+          );
+          landmarker = await mod.FaceLandmarker.createFromOptions(vision, {
+            baseOptions: {
+              modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task',
+              delegate: 'GPU'
+            },
+            runningMode: 'VIDEO',
+            numFaces: 1,
+            outputFaceBlendshapes: true
+          });
+          return true;
+        }catch(e){ console.warn('landmarker', e); return false; }
+      }
+
+      function detect(video){
+        if(!landmarker || !video || video.readyState<2) return null;
+        try{
+          const res = landmarker.detectForVideo(video, performance.now());
+          const faces = res?.faceLandmarks||[];
+          if(!faces.length) return null;
+          const lm = faces[0];
+          const P=i=>({x:lm[i].x, y:lm[i].y});
+          const xs=lm.map(p=>p.x), ys=lm.map(p=>p.y);
+          const minX=Math.min(...xs), maxX=Math.max(...xs);
+          const minY=Math.min(...ys), maxY=Math.max(...ys);
+          const faceW=maxX-minX, faceH=maxY-minY;
+          const upper=P(13), lower=P(14);
+          const gap=Math.hypot(upper.x-lower.x, upper.y-lower.y);
+          let mouthOpen=Math.min(1, Math.max(0, (gap/faceH-0.02)/0.12));
+          try{
+            const jaw=(res.faceBlendshapes?.[0]?.categories||[]).find(c=>c.categoryName==='jawOpen');
+            if(jaw) mouthOpen=Math.max(mouthOpen, jaw.score||0);
+          }catch(e){}
+          return {
+            cx:(minX+maxX)/2, cy:(minY+maxY)/2, faceW, faceH,
+            nose:P(1), chin:P(152), forehead:P(10),
+            le:P(33), re:P(263), mouthL:P(61), mouthR:P(291),
+            upper, lower, mouthOpen
+          };
+        }catch(e){ return null; }
+      }
+
+      function smooth(prev, next){
+        if(!next) return prev;
+        if(!prev) return next;
+        const a=0.5, L=(A,B)=>A*(1-a)+B*a;
+        const lp=(A,B)=>({x:L(A.x,B.x), y:L(A.y,B.y)});
+        return {
+          cx:L(prev.cx,next.cx), cy:L(prev.cy,next.cy),
+          faceW:L(prev.faceW,next.faceW), faceH:L(prev.faceH,next.faceH),
+          mouthOpen:L(prev.mouthOpen||0, next.mouthOpen||0),
+          nose:lp(prev.nose,next.nose), chin:lp(prev.chin,next.chin),
+          forehead:lp(prev.forehead,next.forehead),
+          le:lp(prev.le,next.le), re:lp(prev.re,next.re),
+          mouthL:lp(prev.mouthL,next.mouthL), mouthR:lp(prev.mouthR,next.mouthR),
+          upper:lp(prev.upper,next.upper), lower:lp(prev.lower,next.lower)
+        };
+      }
+
+      function mapFace(face, W, H, vw, vh, ox, oy, scale, mirror){
+        const mp=p=>{
+          let x=ox+p.x*vw*scale, y=oy+p.y*vh*scale;
+          if(mirror) x=W-x;
+          return {x:x/W, y:y/H};
+        };
+        let cx=ox+face.cx*vw*scale; if(mirror) cx=W-cx;
+        return {
+          cx:cx/W, cy:(oy+face.cy*vh*scale)/H,
+          faceW:face.faceW*(vw*scale)/W, faceH:face.faceH*(vh*scale)/H,
+          mouthOpen:face.mouthOpen,
+          nose:mp(face.nose), chin:mp(face.chin), forehead:mp(face.forehead),
+          le:mp(face.le), re:mp(face.re),
+          mouthL:mp(face.mouthL), mouthR:mp(face.mouthR),
+          upper:mp(face.upper), lower:mp(face.lower)
+        };
+      }
+
+      function xy(p,W,H){ return [p.x*W, p.y*H]; }
+
+      function drawMask(ctx, W, H, face, kind){
+        if(!face || kind==='none') return;
+        const fw=face.faceW*W, fh=face.faceH*H;
+        const [nx,ny]=xy(face.nose,W,H);
+        const [fx,fy]=xy(face.forehead,W,H);
+        const [cx,cy]=[face.cx*W, face.cy*H];
+        const [lex,ley]=xy(face.le,W,H);
+        const [rex,rey]=xy(face.re,W,H);
+        const open=Math.max(0, Math.min(1, face.mouthOpen||0));
+
+        function mouth(lip, tongue){
+          const [lx,ly]=xy(face.mouthL,W,H);
+          const [rx,ry]=xy(face.mouthR,W,H);
+          const [ux,uy]=xy(face.upper,W,H);
+          const [dx,dy]=xy(face.lower,W,H);
+          const mx=(lx+rx)/2, my=(ly+ry)/2;
+          const mw=Math.hypot(rx-lx, ry-ly)||fw*0.35;
+          const mh=Math.max(2, open*fh*0.55);
+          ctx.beginPath();
+          ctx.ellipse(mx, my+mh*0.15, mw*0.48, Math.max(3, mh*0.55), 0, 0, Math.PI*2);
+          ctx.fillStyle='#2A0A0A'; ctx.fill();
+          if(open>0.25 && tongue){
+            ctx.beginPath();
+            ctx.ellipse(mx, my+mh*0.35, mw*0.28, mh*0.35, 0, 0, Math.PI*2);
+            ctx.fillStyle=tongue; ctx.fill();
+          }
+          ctx.beginPath();
+          ctx.moveTo(lx,ly);
+          ctx.quadraticCurveTo(mx, uy-mh*0.15, rx, ry);
+          ctx.quadraticCurveTo(mx, dy+mh*0.55, lx, ly);
+          ctx.strokeStyle=lip||'#333';
+          ctx.lineWidth=Math.max(3, fw*0.04);
+          ctx.stroke();
+        }
+        function ear(x,y,ang,sz,outer,inner,flip){
+          ctx.save(); ctx.translate(x,y); ctx.rotate(ang); if(flip) ctx.scale(-1,1);
+          ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(-sz*0.45,-sz*1.2); ctx.lineTo(sz*0.45,-sz*1.2); ctx.closePath();
+          ctx.fillStyle=outer; ctx.fill();
+          ctx.beginPath(); ctx.moveTo(0,-sz*0.15); ctx.lineTo(-sz*0.22,-sz*0.95); ctx.lineTo(sz*0.22,-sz*0.95); ctx.closePath();
+          ctx.fillStyle=inner; ctx.fill();
+          ctx.restore();
+        }
+
+        ctx.save();
+        if(kind==='cat' || kind==='fox' || kind==='dog'){
+          const fur = kind==='fox'?'#E87A3A':(kind==='dog'?'#C4A574':'#F5A623');
+          const earC = kind==='fox'?'#C45A22':fur;
+          const sz=fw*0.72;
+          ear(lex-fw*0.05, Math.min(ley,fy)-fh*0.05, -0.35, sz, earC, '#FFB6C1', false);
+          ear(rex+fw*0.05, Math.min(rey,fy)-fh*0.05, 0.35, sz, earC, '#FFB6C1', true);
+          ctx.beginPath();
+          ctx.moveTo(nx, ny-fh*0.02); ctx.lineTo(nx-fw*0.08, ny+fh*0.06); ctx.lineTo(nx+fw*0.08, ny+fh*0.06);
+          ctx.closePath(); ctx.fillStyle='#E85D75'; ctx.fill();
+          if(kind==='cat'||kind==='fox'){
+            ctx.strokeStyle='rgba(30,30,30,.7)'; ctx.lineWidth=2;
+            for(let i=0;i<3;i++){
+              const oy=ny+i*fh*0.04;
+              ctx.beginPath(); ctx.moveTo(nx-fw*0.05,oy); ctx.lineTo(nx-fw*0.42,oy-fh*0.03); ctx.stroke();
+              ctx.beginPath(); ctx.moveTo(nx+fw*0.05,oy); ctx.lineTo(nx+fw*0.42,oy-fh*0.03); ctx.stroke();
+            }
+          }
+          mouth('#333', '#FF6B8A');
+        } else if(kind==='glasses'){
+          ctx.strokeStyle='#111'; ctx.lineWidth=Math.max(4, fw*0.05);
+          ctx.fillStyle='rgba(20,30,50,.3)';
+          const r=fw*0.22;
+          ctx.beginPath(); ctx.arc(lex, ley, r, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+          ctx.beginPath(); ctx.arc(rex, rey, r, 0, Math.PI*2); ctx.fill(); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(lex+r, ley); ctx.lineTo(rex-r, rey); ctx.stroke();
+        } else if(kind==='ghost'){
+          ctx.fillStyle='rgba(255,255,255,.88)';
+          ctx.beginPath(); ctx.arc(cx, cy-fh*0.1, fw*0.5, Math.PI, 0);
+          ctx.lineTo(cx+fw*0.5, cy+fh*0.45);
+          for(let i=4;i>=0;i--){ const x=cx-fw*0.5+(i/4)*fw; const y=cy+fh*0.45+((i%2)?fh*0.1:-fh*0.05); ctx.lineTo(x,y); }
+          ctx.closePath(); ctx.fill();
+          ctx.fillStyle='#111';
+          ctx.beginPath(); ctx.arc(lex, ley, fw*0.07, 0, Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.arc(rex, rey, fw*0.07, 0, Math.PI*2); ctx.fill();
+          mouth('#333', null);
+        } else if(kind==='hat'){
+          ctx.fillStyle='#1A1A1A';
+          ctx.fillRect(cx-fw*0.55, fy-fh*0.08, fw*1.1, fh*0.1);
+          ctx.fillRect(cx-fw*0.28, fy-fh*0.55, fw*0.56, fh*0.5);
+        } else if(kind==='crown'){
+          const top=fy-fh*0.35;
+          ctx.beginPath();
+          ctx.moveTo(cx-fw*0.45,fy); ctx.lineTo(cx-fw*0.35,top); ctx.lineTo(cx-fw*0.15,fy-fh*0.12);
+          ctx.lineTo(cx, top-fh*0.08); ctx.lineTo(cx+fw*0.15,fy-fh*0.12); ctx.lineTo(cx+fw*0.35,top); ctx.lineTo(cx+fw*0.45,fy);
+          ctx.closePath(); ctx.fillStyle='#FFD700'; ctx.fill();
+        } else if(kind==='alien'){
+          ctx.fillStyle='rgba(124,252,0,.5)';
+          ctx.beginPath(); ctx.ellipse(cx, cy-fh*0.05, fw*0.62, fh*0.7, 0, 0, Math.PI*2); ctx.fill();
+          ctx.fillStyle='#111';
+          ctx.beginPath(); ctx.ellipse(lex, ley, fw*0.16, fh*0.2, -0.2, 0, Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.ellipse(rex, rey, fw*0.16, fh*0.2, 0.2, 0, Math.PI*2); ctx.fill();
+          mouth('#1A1A1A', '#5CB85C');
+        } else if(kind==='star'){
+          ctx.font=`${Math.round(fw*0.35)}px serif`;
+          ctx.textAlign='center'; ctx.textBaseline='middle';
+          ctx.fillText('🌟', cx, fy-fh*0.35-open*fh*0.05);
+        }
+        ctx.restore();
+      }
+
+      function paintTo(canvas){
+        if(!vid.videoWidth) return;
+        const W=canvas.width, H=canvas.height;
+        const ctx=canvas.getContext('2d',{alpha:false});
+        ctx.fillStyle='#000'; ctx.fillRect(0,0,W,H);
+        const vw=vid.videoWidth, vh=vid.videoHeight;
+        const scale=Math.max(W/vw, H/vh);
+        const dw=vw*scale, dh=vh*scale;
+        const ox=(W-dw)/2, oy=(H-dh)/2;
+        const mirror = facing==='user';
+        ctx.save();
+        if(mirror){ ctx.translate(W,0); ctx.scale(-1,1); }
+        ctx.drawImage(vid, ox, oy, dw, dh);
+        ctx.restore();
+        const f=detect(vid);
+        if(f) lastFace=smooth(lastFace, f);
+        if(lastFace){
+          const mapped=mapFace(lastFace, W, H, vw, vh, ox, oy, scale, mirror);
+          const kind=MASKS.find(m=>m.id===maskId)?.kind||'none';
+          drawMask(ctx, W, H, mapped, kind);
+        }
+      }
+
+      function loop(){
+        raf=requestAnimationFrame(loop);
+        const rw=Math.max(2, stage.clientWidth||window.innerWidth);
+        const rh=Math.max(2, stage.clientHeight||window.innerHeight);
+        if(view.width!==rw || view.height!==rh){ view.width=rw; view.height=rh; }
+        paintTo(view);
+      }
+
       async function startCam(){
         try{ stream?.getTracks().forEach(t=>t.stop()); }catch(e){}
         stream=await navigator.mediaDevices.getUserMedia({
@@ -26385,79 +27541,129 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
           audio:true
         });
         vid.srcObject=stream;
-        vid.classList.remove('mirrored');
-        vid.style.transform='none';
+        vid.muted=true; vid.playsInline=true;
+        vid.setAttribute('playsinline',''); vid.setAttribute('webkit-playsinline','');
+        // Never show native controls / play button
+        vid.removeAttribute('controls');
+        vid.controls=false;
         await vid.play().catch(()=>{});
       }
-      await startCam();
-      ov.querySelectorAll('.sl-cam-mask').forEach(m=>{
-        m.onclick=()=>{
-          ov.querySelectorAll('.sl-cam-mask').forEach(x=>x.classList.remove('on'));
+
+      try{
+        await startCam();
+        hint.textContent='Загрузка AR…';
+        const ok=await ensureLandmarker();
+        hint.textContent = ok ? 'AR-маска · открой рот' : 'Без трекера';
+        setTimeout(()=>{ try{ hint.style.opacity='0'; }catch(e){} }, 2500);
+        loop();
+      }catch(e){
+        hint.textContent='Нет доступа к камере';
+        showToast('Нет доступа к камере');
+      }
+
+      masksEl.querySelectorAll('.sl-cam-mask').forEach(m=>{
+        m.onclick=(e)=>{
+          e.preventDefault(); e.stopPropagation();
+          masksEl.querySelectorAll('.sl-cam-mask').forEach(x=>x.classList.remove('on'));
           m.classList.add('on');
-          mask=m.dataset.m;
-          const mov=ov.querySelector('#sl-mask-ov');
-          if(mask==='none'){ mov.style.display='none'; }
-          else { mov.style.display='flex'; mov.textContent=mask; }
+          maskId=+m.dataset.id;
         };
       });
-      ov.querySelector('#sl-cam-close').onclick=()=>{
-        try{ stream?.getTracks().forEach(t=>t.stop()); }catch(e){}
-        ov.remove();
+
+      ov.querySelector('#sl-cam-close').onclick=(e)=>{
+        e.preventDefault(); cleanup();
       };
-      ov.querySelector('#sl-cam-flip').onclick=async ()=>{
-        facing = facing==='user' ? 'environment' : 'user';
-        await startCam();
+
+      ov.querySelector('#sl-cam-flip').onclick=async (e)=>{
+        e.preventDefault();
+        facing = facing==='user'?'environment':'user';
+        lastFace=null;
+        try{ await startCam(); }catch(err){ showToast('Не удалось переключить'); }
       };
-      ov.querySelector('#sl-cam-rec').onclick=()=>{
+
+      ov.querySelector('#sl-cam-rec').onclick=async (e)=>{
+        e.preventDefault(); e.stopPropagation();
         const btn=ov.querySelector('#sl-cam-rec');
         if(!recording){
-          chunks=[];
-          // High quality, minimal compression
-          const mime = MediaRecorder.isTypeSupported('video/webm;codecs=vp9,opus')
-            ? 'video/webm;codecs=vp9,opus'
-            : (MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus') ? 'video/webm;codecs=vp8,opus' : 'video/webm');
-          try{
-            recorder=new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 8_000_000, audioBitsPerSecond: 128_000 });
-          }catch(e){
-            recorder=new MediaRecorder(stream);
-          }
-          recorder.ondataavailable=e=>{ if(e.data && e.data.size) chunks.push(e.data); };
-          recorder.onstop=async ()=>{
-            const blob=new Blob(chunks, {type: recorder.mimeType||'video/webm'});
-            try{ stream?.getTracks().forEach(t=>t.stop()); }catch(e){}
-            ov.remove();
-            // hand off to create post if available
-            const url=URL.createObjectURL(blob);
-            toast('Видео готово');
-            try{
-              if(typeof window.slOnVideoRecorded==='function') window.slOnVideoRecorded(blob, url);
-              else {
-                // try open create tab
-                try{ openVideoOverlay?.(); switchVideoTab?.('create'); }catch(e){}
-                setTimeout(()=>{
-                  const input=document.querySelector('#video-overlay input[type=file]');
-                  if(input){
-                    const file=new File([blob], 'video.webm', {type:blob.type});
-                    const dt=new DataTransfer();
-                    dt.items.add(file);
-                    input.files=dt.files;
-                    input.dispatchEvent(new Event('change', {bubbles:true}));
-                  }
-                }, 400);
-              }
-            }catch(e){ console.warn(e); }
+          // Record same pipeline at 720x1280
+          const rec=document.createElement('canvas');
+          rec.width=720; rec.height=1280;
+          const pump=()=>{
+            if(!recording) return;
+            paintTo(rec);
+            requestAnimationFrame(pump);
           };
-          recorder.start(200);
           recording=true;
           btn.classList.add('recording');
-          toast('Запись…');
+          requestAnimationFrame(pump);
+          let recStream;
+          try{
+            recStream=rec.captureStream(30);
+            const at=stream?.getAudioTracks()?.[0];
+            if(at){
+              try{ recStream.addTrack(at); }
+              catch(err){ recStream=new MediaStream([recStream.getVideoTracks()[0], at]); }
+            }
+          }catch(err){
+            showToast('Запись с маской недоступна');
+            recStream=stream;
+          }
+          chunks=[];
+          let mime='video/webm;codecs=vp9,opus';
+          if(!MediaRecorder.isTypeSupported(mime)) mime='video/webm';
+          if(!MediaRecorder.isTypeSupported(mime)) mime='video/mp4';
+          try{ recorder=new MediaRecorder(recStream,{mimeType:mime, videoBitsPerSecond:3500000}); }
+          catch(err){ recorder=new MediaRecorder(recStream); }
+          recorder.ondataavailable=ev=>{ if(ev.data&&ev.data.size) chunks.push(ev.data); };
+          recorder.onstop=()=>{
+            recording=false;
+            btn.classList.remove('recording');
+            const blob=new Blob(chunks,{type:recorder.mimeType||'video/webm'});
+            if(blob.size<800){ showToast('Пустая запись'); return; }
+            const url=URL.createObjectURL(blob);
+            // Hand off to create form if present — without native fullscreen player
+            try{
+              const input=document.querySelector('#video-overlay input[type=file], #cp-file');
+              if(input){
+                const file=new File([blob],'sline-ar.webm',{type:blob.type});
+                const dt=new DataTransfer(); dt.items.add(file);
+                input.files=dt.files;
+                input.dispatchEvent(new Event('change',{bubbles:true}));
+              }
+            }catch(err){}
+            // Inline result (no system player)
+            const result=document.createElement('div');
+            result.style.cssText='position:fixed;inset:0;z-index:26000;background:#000;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:20px';
+            result.innerHTML=`
+              <video playsinline webkit-playsinline controlslist="nodownload nofullscreen noremoteplayback" disablepictureinpicture
+                style="max-width:100%;max-height:70vh;border-radius:12px;background:#000" src="${url}"></video>
+              <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center">
+                <button type="button" class="btn-primary" id="sl-ar-use" style="width:auto;padding:12px 20px">Использовать</button>
+                <button type="button" class="btn-secondary" id="sl-ar-retry" style="width:auto;padding:12px 20px">Ещё раз</button>
+                <button type="button" class="btn-secondary" id="sl-ar-close" style="width:auto;padding:12px 20px">Закрыть</button>
+              </div>`;
+            document.body.appendChild(result);
+            const rv=result.querySelector('video');
+            rv.controls=false;
+            result.querySelector('#sl-ar-use').onclick=()=>{
+              try{
+                window._slLastRecordedVideo={blob,url,file:new File([blob],'sline-ar.webm',{type:blob.type})};
+              }catch(err){}
+              result.remove(); cleanup();
+              showToast('Видео готово');
+            };
+            result.querySelector('#sl-ar-retry').onclick=()=>{ result.remove(); /* stay in cam */ };
+            result.querySelector('#sl-ar-close').onclick=()=>{ result.remove(); cleanup(); };
+            showToast('Запись готова');
+          };
+          try{ recorder.start(250); }catch(err){ recorder.start(); }
+          showToast('Запись…');
         } else {
-          try{ recorder.stop(); }catch(e){}
-          recording=false;
-          btn.classList.remove('recording');
+          try{ if(recorder && recorder.state!=='inactive') recorder.stop(); }catch(err){}
         }
       };
     };
+
 
     // Hook «Снять» buttons in video create UI
     document.addEventListener('click', (e)=>{
@@ -36823,6 +38029,667 @@ body{
   setTimeout(boot, 1500);
   setTimeout(boot, 3000);
   console.log('[SL] UX polish pack ready (search, reply bar, drafts, unread sep)');
+})();
+</script>
+
+
+<script>
+/* Badge sync: hydrate others' badges from profiles */
+(function(){
+  function mergeProfile(p){
+    try{ if(typeof slApplyProfileBadgeFields==='function') slApplyProfileBadgeFields(p); }catch(e){}
+  }
+  // When myProfile loads, pull badge from server
+  async function syncMyBadgeFromServer(){
+    if(!sb || !myProfile?.id) return;
+    try{
+      const {data} = await sb.from('profiles').select('*').eq('id', myProfile.id).maybeSingle();
+      if(data){
+        mergeProfile(data);
+        if(data.badge_id) myProfile.badge_id = data.badge_id;
+        else if(data.badge) myProfile.badge_id = data.badge;
+        else if(data.music_lib){
+          let ml=data.music_lib; if(typeof ml==='string') try{ml=JSON.parse(ml)}catch(e){ml=null}
+          if(ml && (ml.badge||ml.badge_id)) myProfile.badge_id = ml.badge||ml.badge_id;
+        }
+        if(myProfile.badge_id){
+          try{
+            localStorage.setItem('sl_my_badge', myProfile.badge_id);
+            localStorage.setItem('sl_badge_'+myProfile.id, myProfile.badge_id);
+          }catch(e){}
+        }
+        if(typeof updateAllUIs==='function') updateAllUIs();
+      }
+    }catch(e){}
+  }
+  // After contacts render, fetch missing badges and re-render names
+  async function hydrateVisible(){
+    try{
+      const ids = (contacts||[]).map(c=>c&&c.id).filter(Boolean);
+      if(typeof slHydrateBadges==='function') await slHydrateBadges(ids);
+      // refresh badge HTML in list without full re-fetch
+      document.querySelectorAll('#contacts-list .contact, #contacts-list .sw-front').forEach(row=>{
+        const id = row.dataset?.cid || row.dataset?.id || row.closest('[data-cid]')?.dataset?.cid;
+        if(!id) return;
+        const c = (contacts||[]).find(x=>x && String(x.id)===String(id));
+        if(!c) return;
+        const nameEl = row.querySelector('.contact-name');
+        if(!nameEl) return;
+        // remove old badge, append current
+        nameEl.querySelectorAll('.sl-name-badge').forEach(n=>n.remove());
+        const b = typeof slGetBadge==='function' ? slGetBadge(c) : c.badge_id;
+        if(b && b!=='none' && typeof slBadgeHtml==='function'){
+          nameEl.insertAdjacentHTML('beforeend', slBadgeHtml(b, c.color));
+        }
+      });
+      // partner header
+      if(activePartner && !activePartner.isSupport){
+        const el = document.getElementById('chat-partner-name');
+        if(el){
+          el.querySelectorAll('.sl-name-badge').forEach(n=>n.remove());
+          const b = typeof slGetBadge==='function' ? slGetBadge(activePartner) : activePartner.badge_id;
+          if(b && b!=='none' && typeof slBadgeHtml==='function'){
+            el.insertAdjacentHTML('beforeend', slBadgeHtml(b, activePartner.color));
+          }
+        }
+      }
+    }catch(e){}
+  }
+  // Patch renderContactsAndGroups
+  function patchRender(){
+    if(typeof renderContactsAndGroups!=='function' || renderContactsAndGroups._badgeHydra) return;
+    const orig = renderContactsAndGroups;
+    window.renderContactsAndGroups = renderContactsAndGroups = function(){
+      const r = orig.apply(this, arguments);
+      setTimeout(hydrateVisible, 30);
+      setTimeout(hydrateVisible, 400);
+      return r;
+    };
+    renderContactsAndGroups._badgeHydra = true;
+  }
+  // Enrich profiles when loadChats pulls them
+  function patchLoadChats(){
+    if(typeof loadChats!=='function' || loadChats._badgeHydra) return;
+    const orig = loadChats;
+    window.loadChats = loadChats = async function(){
+      const r = await orig.apply(this, arguments);
+      try{
+        (contacts||[]).forEach(mergeProfile);
+        setTimeout(hydrateVisible, 50);
+      }catch(e){}
+      return r;
+    };
+    loadChats._badgeHydra = true;
+  }
+  function boot(){
+    patchRender();
+    patchLoadChats();
+    syncMyBadgeFromServer();
+    setTimeout(hydrateVisible, 800);
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', boot);
+  else boot();
+  setTimeout(boot, 1200);
+  setTimeout(syncMyBadgeFromServer, 2000);
+  console.log('[SL] badge sync for other users ready');
+})();
+</script>
+
+
+<script>
+/* ============================================================
+   SLine — Telegram placement parity (features live WHERE TG puts them)
+   NOT a settings dump. Entry points:
+   • Long-press Send → Schedule (already)
+   • Msg long-press → Translate / Reply privately
+   • Profile sheet → Secret chat
+   • Chat header menu → Auto-delete / Export / Slow mode
+   • Attach → Location → Live for N min
+   • Settings → Privacy → Passcode (existing pin)
+   ============================================================ */
+(function(){
+  'use strict';
+  if(window._slTgPlaces) return;
+  window._slTgPlaces = 1;
+  const LS = window.storage || localStorage;
+
+  function toast(m){ try{ showToast(m); }catch(e){ console.log(m); } }
+  function peerKey(){
+    if(window.activeGroup) return 'g:'+activeGroup.id;
+    if(window.activePartner) return 'u:'+activePartner.id;
+    return null;
+  }
+
+  /* ---------- CSS ---------- */
+  const css = document.createElement('style');
+  css.textContent = `
+    .tg-sheet-bg{position:fixed;inset:0;z-index:14000;background:rgba(0,0,0,.45);display:flex;align-items:flex-end;justify-content:center}
+    .tg-sheet{width:100%;max-width:480px;background:var(--panel,#1c1c1e);border-radius:16px 16px 0 0;padding:8px 0 calc(12px + env(safe-area-inset-bottom));color:var(--text)}
+    .tg-sheet .tg-row{display:flex;align-items:center;gap:14px;padding:14px 20px;font-size:16px;cursor:pointer}
+    .tg-sheet .tg-row:active{background:rgba(127,127,127,.15)}
+    .tg-sheet .tg-row.danger{color:#e53935}
+    .tg-sheet .tg-handle{width:36px;height:4px;border-radius:2px;background:rgba(127,127,127,.4);margin:6px auto 10px}
+    .tg-sheet .tg-title{padding:4px 20px 10px;font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+    .secret-chat-banner{background:linear-gradient(90deg,#1a3a2a,#0d2818);color:#7dcea0;font-size:12px;padding:6px 12px;text-align:center;border-bottom:1px solid rgba(125,206,160,.2)}
+    .bubble-row[data-ttl] .bubble::after{content:attr(data-ttl-label);font-size:10px;opacity:.65;margin-left:6px}
+    #chat-partner-status.secret-status{color:#7dcea0!important}
+  `;
+  document.head.appendChild(css);
+
+  function openSheet(title, rows){
+    document.querySelector('.tg-sheet-bg')?.remove();
+    const bg=document.createElement('div');
+    bg.className='tg-sheet-bg';
+    bg.innerHTML=`<div class="tg-sheet"><div class="tg-handle"></div>${title?`<div class="tg-title">${title}</div>`:''}${rows.map((r,i)=>`<div class="tg-row${r.danger?' danger':''}" data-i="${i}">${r.icon||''}<span style="flex:1">${r.label}</span>${r.right||''}</div>`).join('')}</div>`;
+    document.body.appendChild(bg);
+    bg.onclick=e=>{ if(e.target===bg) bg.remove(); };
+    bg.querySelectorAll('.tg-row').forEach(el=>{
+      el.onclick=()=>{ const r=rows[+el.dataset.i]; bg.remove(); try{ r.fn&&r.fn(); }catch(err){ console.warn(err); } };
+    });
+    return bg;
+  }
+
+  /* ---------- 1) Message menu: Translate + Reply privately ---------- */
+  function patchMsgMenu(){
+    // Hook showCtxMenu / openCtx if items built as string — inject via MutationObserver on ctx menus
+    const obs = new MutationObserver(muts=>{
+      muts.forEach(m=>{
+        m.addedNodes.forEach(n=>{
+          if(!n.querySelector) return;
+          const menu = n.classList?.contains('msg-ctx-menu') ? n : n.querySelector?.('.msg-ctx-menu, .ctx-menu, #msg-ctx');
+          // also look for overlays with ctx-item
+          const itemsRoot = n.querySelector?.('.ctx-item') ? n : (n.classList?.contains && [...(n.querySelectorAll?.('.ctx-item')||[])].length ? n : null);
+          if(!itemsRoot && !menu) {
+            // try any element with data-a=reply
+            if(n.querySelector && n.querySelector('[data-a="reply"]') && !n.querySelector('[data-a="translate"]')){
+              injectMsgExtras(n);
+            }
+            return;
+          }
+          const root = menu || itemsRoot || n;
+          if(root && root.querySelector && root.querySelector('[data-a="reply"]') && !root.querySelector('[data-a="translate"]')){
+            injectMsgExtras(root);
+          }
+        });
+      });
+    });
+    obs.observe(document.body, {childList:true, subtree:true});
+  }
+
+  function injectMsgExtras(root){
+    try{
+      const reply = root.querySelector('[data-a="reply"]');
+      if(!reply || root.querySelector('[data-a="translate"]')) return;
+      // Translate — after copy
+      const tr=document.createElement('div');
+      tr.className='ctx-item';
+      tr.dataset.a='translate';
+      tr.innerHTML=`<span class="ico"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 8l6 6M4 14l6-6 2-3M2 5h12M7 2v3M12 22l4-10 4 10M15.5 18h5"/></svg></span> Перевести`;
+      const copy=root.querySelector('[data-a="copy"]');
+      (copy||reply).insertAdjacentElement('afterend', tr);
+      tr.onclick=async(e)=>{
+        e.stopPropagation();
+        const msgId = root.dataset.mid || window._slCtxMsg?.id;
+        const msg = window._slCtxMsg || findMsgById(msgId);
+        const text = (msg?.content||'').replace(/^↪[^\n]*\n/,'').replace(/^🔒e2e:[^\n]*\n?/,'');
+        document.querySelectorAll('.msg-ctx-menu, .modal-overlay, .ctx-backdrop').forEach(el=>{ try{ if(el.classList.contains('modal-overlay')||el.classList.contains('msg-ctx-menu')) el.remove(); }catch(e){} });
+        await translateMessage(text, msg);
+      };
+      // Reply privately — only in groups
+      if(window.activeGroup){
+        const rp=document.createElement('div');
+        rp.className='ctx-item';
+        rp.dataset.a='reply_priv';
+        rp.innerHTML=`<span class="ico"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg></span> Ответить в личку`;
+        tr.insertAdjacentElement('afterend', rp);
+        rp.onclick=async(e)=>{
+          e.stopPropagation();
+          const msg = window._slCtxMsg;
+          document.querySelectorAll('.msg-ctx-menu, .modal-overlay').forEach(el=>{ try{ el.remove(); }catch(e){} });
+          if(!msg) return;
+          const sid = msg.sender_id;
+          if(!sid || sid===myProfile?.id){ toast('Некому отвечать'); return; }
+          let peer = (window.contacts||[]).find(c=>c.id===sid);
+          if(!peer){
+            try{
+              const {data}=await sb.from('profiles').select('*').eq('id',sid).maybeSingle();
+              peer=data;
+            }catch(e){}
+          }
+          if(!peer){ toast('Пользователь не найден'); return; }
+          const quote = String(msg.content||'').slice(0,120);
+          try{ await openChat(peer); }catch(e){}
+          setTimeout(()=>{
+            const inp=document.getElementById('message-input');
+            if(inp){ inp.value='↪ '+quote+'\n'; inp.focus(); inp.dispatchEvent(new Event('input')); }
+          }, 300);
+        };
+      }
+    }catch(e){ console.warn('injectMsgExtras', e); }
+  }
+
+  function findMsgById(id){
+    if(!id) return null;
+    try{
+      const row=document.querySelector(`.bubble-row[data-id="${id}"]`);
+      if(row && row._msg) return row._msg;
+    }catch(e){}
+    return window._slCtxMsg||null;
+  }
+
+  async function translateMessage(text, msg){
+    if(!text || !text.trim()){ toast('Нет текста'); return; }
+    toast('Перевод…');
+    try{
+      // MyMemory free API (no key) — TG-like quick translate
+      const lang = (typeof currentLang!=='undefined' && currentLang==='en') ? 'en' : 'ru';
+      const src = lang==='ru' ? 'en|ru' : 'ru|en';
+      // auto detect: if mostly cyrillic → to EN else to RU
+      const cyr = (text.match(/[а-яёА-ЯЁ]/g)||[]).length;
+      const pair = cyr > text.length/4 ? 'ru|en' : 'en|ru';
+      const url = 'https://api.mymemory.translated.net/get?q='+encodeURIComponent(text.slice(0,500))+'&langpair='+pair;
+      const r = await fetch(url);
+      const j = await r.json();
+      const out = j?.responseData?.translatedText || '';
+      if(!out){ toast('Не удалось перевести'); return; }
+      openSheet('Перевод', [
+        {label: out, fn:()=>{ try{ navigator.clipboard.writeText(out); toast('Скопировано'); }catch(e){} }},
+        {label: 'Вставить в поле ввода', fn:()=>{
+          const inp=document.getElementById('message-input');
+          if(inp){ inp.value=(inp.value?inp.value+' ':'')+out; inp.dispatchEvent(new Event('input')); }
+        }},
+        {label: 'Закрыть', fn:()=>{}}
+      ]);
+    }catch(e){
+      toast('Перевод недоступен офлайн');
+    }
+  }
+
+  // Remember msg when context menu opens
+  document.addEventListener('pointerdown', e=>{
+    const row = e.target.closest?.('.bubble-row');
+    if(row){
+      try{
+        window._slCtxMsg = {
+          id: row.dataset.id,
+          content: row.querySelector('.bubble')?.innerText || '',
+          sender_id: row.dataset.sender || row.getAttribute('data-sender-id'),
+          type: row.dataset.type
+        };
+        // better content from text node
+        const bt = row.querySelector('.bubble');
+        if(bt){
+          const clone=bt.cloneNode(true);
+          clone.querySelectorAll('.bubble-time,.reaction-bar,.msg-status').forEach(x=>x.remove());
+          window._slCtxMsg.content = clone.textContent.trim();
+        }
+        if(row.dataset.sender) window._slCtxMsg.sender_id = row.dataset.sender;
+      }catch(err){}
+    }
+  }, true);
+
+  /* ---------- 2) Profile: «Секретный чат» as in TG ---------- */
+  function ensureSecretOnProfile(){
+    const obs = new MutationObserver(()=>{
+      document.querySelectorAll('.profile-sheet, .profile-sheet-body, #profile-sheet').forEach(sheet=>{
+        if(sheet.querySelector('[data-tg-secret]')) return;
+        // find actions grid
+        let actions = sheet.querySelector('.profile-sheet-actions, .ps-actions, .profile-actions');
+        if(!actions){
+          // inject under hero
+          const body = sheet.querySelector('.profile-sheet-body, .profile-body') || sheet;
+          actions = document.createElement('div');
+          actions.className='profile-sheet-actions';
+          actions.style.cssText='display:grid;grid-template-columns:1fr;gap:0;margin:8px 16px;border-radius:12px;overflow:hidden;background:var(--panel-hover,rgba(127,127,127,.08))';
+          body.insertBefore(actions, body.firstChild?.nextSibling || null);
+        }
+        const btn=document.createElement('button');
+        btn.type='button';
+        btn.dataset.tgSecret='1';
+        btn.className='ps-action';
+        btn.style.cssText='display:flex;align-items:center;justify-content:center;gap:8px;padding:14px;border:none;background:transparent;color:var(--accent-a,#4C7CF3);font-size:15px;font-weight:600;cursor:pointer;width:100%';
+        btn.innerHTML=`🔒 Секретный чат`;
+        btn.onclick=async(e)=>{
+          e.stopPropagation();
+          const pid = sheet.dataset.uid || sheet.dataset.id || window._slProfileId;
+          let partner = (window.contacts||[]).find(c=>c.id===pid);
+          if(!partner && pid){
+            try{ const {data}=await sb.from('profiles').select('*').eq('id',pid).maybeSingle(); partner=data; }catch(e){}
+          }
+          if(!partner && window.activePartner) partner=activePartner;
+          if(!partner){ toast('Откройте профиль пользователя'); return; }
+          if(typeof window.slStartSecretChat==='function'){
+            await window.slStartSecretChat(partner);
+          } else {
+            partner = Object.assign({}, partner, {isSecret:true});
+            LS.setItem('sl_secret_'+partner.id,'1');
+            try{ await openChat(partner); }catch(e){}
+            toast('Секретный чат');
+          }
+          try{ sheet.remove(); document.querySelector('.profile-sheet')?.remove(); }catch(e){}
+        };
+        actions.appendChild(btn);
+      });
+    });
+    obs.observe(document.body, {childList:true, subtree:true});
+  }
+
+  /* ---------- 3) Chat menu (⋮ via long-press title / search area): Auto-delete, Export, Slow mode ---------- */
+  function bindChatMenu(){
+    const title = document.getElementById('chat-partner-name');
+    const header = document.querySelector('.chat-header');
+    if(!header || header.dataset.tgMenu==='1') return;
+    header.dataset.tgMenu='1';
+    // TG: menu is often in the three-dot — we add long-press on header or extra button
+    let more = header.querySelector('#chat-more-btn');
+    if(!more){
+      const actions = header.querySelector('.chat-actions');
+      if(actions){
+        more = document.createElement('button');
+        more.className='icon-btn';
+        more.id='chat-more-btn';
+        more.title='Ещё';
+        more.innerHTML=`<svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><circle cx="12" cy="5" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="12" cy="19" r="1.8"/></svg>`;
+        actions.insertBefore(more, actions.firstChild);
+      }
+    }
+    if(!more) return;
+    more.onclick=(e)=>{
+      e.preventDefault(); e.stopPropagation();
+      openChatMoreMenu();
+    };
+  }
+
+  function openChatMoreMenu(){
+    const rows = [];
+    rows.push({label:'🔍 Поиск', fn:()=>document.getElementById('chat-search-btn')?.click()});
+    rows.push({label:'🖼 Обои чата', fn:()=>{ try{ document.getElementById('sl-wall-btn')?.click(); }catch(e){ toast('Обои: через меню контакта'); } }});
+    rows.push({label:'⏱ Автоудаление сообщений', fn:()=>openAutoDeletePicker()});
+    rows.push({label:'📤 Экспорт истории чата', fn:()=>exportChatHistory()});
+    if(window.activeGroup){
+      rows.push({label:'🐌 Медленный режим', fn:()=>openSlowModePicker()});
+      rows.push({label:'💬 Темы (форум)', fn:()=>openTopicsStub()});
+    }
+    if(window.activePartner && !window.activeGroup){
+      const sec = activePartner.isSecret || LS.getItem('sl_secret_'+activePartner.id)==='1';
+      rows.push({label: sec ? '🔓 Выключить секретный чат' : '🔒 Секретный чат', fn:async()=>{
+        if(sec){
+          activePartner.isSecret=false;
+          LS.removeItem('sl_secret_'+activePartner.id);
+          document.querySelector('.secret-chat-banner')?.remove();
+          toast('Секретный режим выключен');
+        } else if(typeof slStartSecretChat==='function'){
+          await slStartSecretChat(activePartner);
+        } else {
+          activePartner.isSecret=true;
+          LS.setItem('sl_secret_'+activePartner.id,'1');
+          toast('Секретный чат');
+          paintSecretBanner();
+        }
+      }});
+    }
+    rows.push({label:'🔔 Без звука', fn:()=>{
+      const k = peerKey();
+      if(!k) return;
+      const m = JSON.parse(LS.getItem('sl_muted')||'{}');
+      m[k] = !m[k];
+      LS.setItem('sl_muted', JSON.stringify(m));
+      toast(m[k]?'Чат без звука':'Уведомления включены');
+    }});
+    openSheet('Чат', rows);
+  }
+
+  function openAutoDeletePicker(){
+    const k = peerKey();
+    if(!k){ toast('Откройте чат'); return; }
+    const cur = JSON.parse(LS.getItem('sl_autodelete')||'{}')[k]||0;
+    openSheet('Автоудаление сообщений', [
+      {label:'Выкл.', right: cur===0?'✓':'', fn:()=>setAutoDelete(k,0)},
+      {label:'24 часа', right: cur===86400?'✓':'', fn:()=>setAutoDelete(k,86400)},
+      {label:'7 дней', right: cur===604800?'✓':'', fn:()=>setAutoDelete(k,604800)},
+      {label:'1 месяц', right: cur===2592000?'✓':'', fn:()=>setAutoDelete(k,2592000)},
+    ]);
+  }
+  function setAutoDelete(k, sec){
+    const m=JSON.parse(LS.getItem('sl_autodelete')||'{}');
+    if(sec) m[k]=sec; else delete m[k];
+    LS.setItem('sl_autodelete', JSON.stringify(m));
+    toast(sec?('Автоудаление: '+fmtSec(sec)):'Автоудаление выключено');
+  }
+  function fmtSec(s){
+    if(s>=2592000) return '1 месяц';
+    if(s>=604800) return '7 дней';
+    if(s>=86400) return '24 часа';
+    return s+'с';
+  }
+
+  // Apply TTL on send
+  if(typeof sendMessage==='function' && !window._slAutoDelSend){
+    window._slAutoDelSend=1;
+    const _sm = sendMessage;
+    sendMessage = async function(type, fileUrl, content){
+      const r = await _sm.apply(this, arguments);
+      try{
+        const k=peerKey();
+        const ttl = k && JSON.parse(LS.getItem('sl_autodelete')||'{}')[k];
+        if(ttl){
+          // mark latest bubble
+          const rows=[...document.querySelectorAll('#messages-list .bubble-row')];
+          const last=rows[rows.length-1];
+          if(last){
+            last.dataset.ttl = String(Date.now()+ttl*1000);
+            last.dataset.ttlLabel = '⏱';
+          }
+        }
+      }catch(e){}
+      return r;
+    };
+  }
+  // Sweep expired
+  setInterval(()=>{
+    const now=Date.now();
+    document.querySelectorAll('#messages-list .bubble-row[data-ttl]').forEach(row=>{
+      if(+row.dataset.ttl < now){
+        const id=row.dataset.id;
+        row.remove();
+        if(id && !String(id).startsWith('local_') && window.sb){
+          try{ sb.from('messages').delete().eq('id', id); }catch(e){}
+        }
+      }
+    });
+  }, 20000);
+
+  async function exportChatHistory(){
+    toast('Готовим экспорт…');
+    try{
+      let q = sb.from('messages').select('*').order('created_at',{ascending:true}).limit(2000);
+      if(activeGroup) q=q.eq('group_id', activeGroup.id);
+      else if(activePartner) q=q.or(`and(sender_id.eq.${myProfile.id},receiver_id.eq.${activePartner.id}),and(sender_id.eq.${activePartner.id},receiver_id.eq.${myProfile.id})`).is('group_id',null);
+      else { toast('Нет чата'); return; }
+      const {data,error}=await q;
+      if(error) throw error;
+      const name = (activePartner?.username||activePartner?.first_name||activeGroup?.title||'chat').replace(/\W+/g,'_');
+      const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>SLine — ${name}</title>
+        <style>body{font-family:system-ui;background:#0e1621;color:#e8eef7;padding:20px;max-width:720px;margin:0 auto}
+        .m{margin:8px 0;padding:10px 14px;border-radius:12px;background:#182533;max-width:85%}
+        .me{margin-left:auto;background:#2b5278}.meta{font-size:11px;opacity:.6;margin-top:4px}</style></head><body>
+        <h1>История: ${name}</h1>
+        <p style="opacity:.6">Экспорт SLine · ${new Date().toLocaleString()}</p>
+        ${(data||[]).map(m=>{
+          const mine=m.sender_id===myProfile?.id;
+          return `<div class="m${mine?' me':''}">${(m.content||m.type||'').replace(/</g,'&lt;')}<div class="meta">${m.created_at||''}</div></div>`;
+        }).join('')}
+        </body></html>`;
+      const blob=new Blob([html],{type:'text/html'});
+      const a=document.createElement('a');
+      a.href=URL.createObjectURL(blob);
+      a.download=`sline_${name}_${Date.now()}.html`;
+      a.click();
+      toast('Экспорт скачан');
+    }catch(e){
+      console.warn(e);
+      toast('Не удалось экспортировать');
+    }
+  }
+
+  function openSlowModePicker(){
+    if(!activeGroup) return;
+    const id=activeGroup.id;
+    const cur=+(JSON.parse(LS.getItem('sl_slowmode')||'{}')[id]||0);
+    openSheet('Медленный режим', [
+      {label:'Выкл.', right:cur===0?'✓':'', fn:()=>setSlow(id,0)},
+      {label:'10 секунд', right:cur===10?'✓':'', fn:()=>setSlow(id,10)},
+      {label:'30 секунд', right:cur===30?'✓':'', fn:()=>setSlow(id,30)},
+      {label:'1 минута', right:cur===60?'✓':'', fn:()=>setSlow(id,60)},
+      {label:'5 минут', right:cur===300?'✓':'', fn:()=>setSlow(id,300)},
+      {label:'15 минут', right:cur===900?'✓':'', fn:()=>setSlow(id,900)},
+    ]);
+  }
+  function setSlow(id, sec){
+    const m=JSON.parse(LS.getItem('sl_slowmode')||'{}');
+    if(sec) m[id]=sec; else delete m[id];
+    LS.setItem('sl_slowmode', JSON.stringify(m));
+    toast(sec?('Slow mode: '+sec+'с'):'Slow mode выкл.');
+  }
+  // Enforce slow mode on send
+  if(typeof sendMessage==='function' && !window._slSlowSend){
+    window._slSlowSend=1;
+    const _sm2 = sendMessage;
+    sendMessage = async function(){
+      if(activeGroup){
+        const sec = +(JSON.parse(LS.getItem('sl_slowmode')||'{}')[activeGroup.id]||0);
+        if(sec){
+          const last = +(LS.getItem('sl_slow_last_'+activeGroup.id)||0);
+          const left = sec*1000 - (Date.now()-last);
+          if(left>0){
+            toast('Медленный режим: подождите '+Math.ceil(left/1000)+'с');
+            return;
+          }
+          LS.setItem('sl_slow_last_'+activeGroup.id, String(Date.now()));
+        }
+      }
+      return _sm2.apply(this, arguments);
+    };
+  }
+
+  function openTopicsStub(){
+    openSheet('Темы группы', [
+      {label:'# Общее', fn:()=>toast('Тема: Общее')},
+      {label:'# Новости', fn:()=>toast('Тема: Новости')},
+      {label:'# Оффтоп', fn:()=>toast('Тема: Оффтоп')},
+      {label:'＋ Новая тема', fn:()=>{
+        const name=prompt('Название темы');
+        if(name) toast('Тема «'+name+'» создана (локально)');
+      }},
+    ]);
+  }
+
+  /* ---------- 4) Attach → Location → Live ---------- */
+  function patchLocation(){
+    if(typeof window.openLocation==='function' && !window.openLocation._live){
+      const orig = window.openLocation;
+      window.openLocation = function(){
+        openSheet('Геолокация', [
+          {label:'📍 Отправить текущую геопозицию', fn:()=>sendStaticLocation()},
+          {label:'🛰 Транслировать 15 минут', fn:()=>startLiveLocation(15)},
+          {label:'🛰 Транслировать 1 час', fn:()=>startLiveLocation(60)},
+          {label:'🛰 Транслировать 8 часов', fn:()=>startLiveLocation(480)},
+        ]);
+      };
+      window.openLocation._live=1;
+    }
+    // also patch attach menu map if openLocation is internal
+    const _oa = window.slOpenAttachMenu;
+  }
+
+  async function sendStaticLocation(){
+    if(!navigator.geolocation){ toast('Геолокация недоступна'); return; }
+    toast('Определяем…');
+    navigator.geolocation.getCurrentPosition(async pos=>{
+      const {latitude:lat, longitude:lng}=pos.coords;
+      const maps=`https://maps.google.com/?q=${lat},${lng}`;
+      const text=`📍 ${lat.toFixed(5)}, ${lng.toFixed(5)}\n${maps}`;
+      if(typeof sendMessage==='function') await sendMessage('text', null, text);
+      else toast(text);
+    }, ()=>toast('Нет доступа к геолокации'), {enableHighAccuracy:true, timeout:10000});
+  }
+
+  let _liveWatch=null;
+  function startLiveLocation(minutes){
+    if(!navigator.geolocation){ toast('Геолокация недоступна'); return; }
+    if(_liveWatch){ try{ navigator.geolocation.clearWatch(_liveWatch); }catch(e){} }
+    const until = Date.now()+minutes*60*1000;
+    toast('Трансляция геопозиции '+minutes+' мин');
+    let lastSent=0;
+    _liveWatch = navigator.geolocation.watchPosition(async pos=>{
+      if(Date.now()>until){
+        navigator.geolocation.clearWatch(_liveWatch); _liveWatch=null;
+        toast('Трансляция завершена');
+        return;
+      }
+      if(Date.now()-lastSent < 30000) return; // every 30s
+      lastSent=Date.now();
+      const {latitude:lat, longitude:lng}=pos.coords;
+      const left=Math.round((until-Date.now())/60000);
+      const text=`🛰 Live: ${lat.toFixed(5)}, ${lng.toFixed(5)} (ещё ~${left} мин)\nhttps://maps.google.com/?q=${lat},${lng}`;
+      try{
+        if(myProfile && (activePartner||activeGroup)){
+          const payload={sender_id:myProfile.id, content:text, type:'text'};
+          if(activeGroup){ payload.group_id=activeGroup.id; payload.receiver_id=null; }
+          else { payload.receiver_id=activePartner.id; payload.group_id=null; }
+          await sb.from('messages').insert(payload);
+        }
+      }catch(e){}
+    }, ()=>toast('Нет доступа к геолокации'), {enableHighAccuracy:true, maximumAge:10000});
+  }
+
+  /* ---------- 5) Secret banner in chat ---------- */
+  function paintSecretBanner(){
+    document.querySelector('.secret-chat-banner')?.remove();
+    const isSec = activePartner && (activePartner.isSecret || LS.getItem('sl_secret_'+activePartner.id)==='1');
+    if(!isSec) return;
+    const msgs = document.getElementById('messages-list');
+    if(!msgs) return;
+    const ban=document.createElement('div');
+    ban.className='secret-chat-banner';
+    ban.textContent='🔒 Секретный чат · сообщения с защитой';
+    msgs.parentElement?.insertBefore(ban, msgs);
+    const st=document.getElementById('chat-partner-status');
+    if(st){ st.classList.add('secret-status'); }
+  }
+
+  /* ---------- 6) Schedule icon hint on send (TG long-press) ---------- */
+  function enhanceScheduleHint(){
+    const btn=document.getElementById('send-btn');
+    if(!btn || btn.dataset.schedHint) return;
+    btn.dataset.schedHint='1';
+    btn.title='Отправить · зажмите для отложенной';
+  }
+
+  /* boot */
+  function boot(){
+    patchMsgMenu();
+    ensureSecretOnProfile();
+    bindChatMenu();
+    patchLocation();
+    enhanceScheduleHint();
+    paintSecretBanner();
+  }
+  boot();
+  setInterval(()=>{ bindChatMenu(); enhanceScheduleHint(); paintSecretBanner(); }, 2000);
+
+  // When openChat fires, refresh
+  if(typeof openChat==='function' && !openChat._tgPlaces){
+    const o=openChat;
+    window.openChat=openChat=function(){
+      const r=o.apply(this,arguments);
+      setTimeout(()=>{ bindChatMenu(); paintSecretBanner(); }, 100);
+      return r;
+    };
+    openChat._tgPlaces=1;
+  }
+
+  console.log('[SL] TG placement parity ready');
 })();
 </script>
 
