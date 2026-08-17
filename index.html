@@ -3392,10 +3392,23 @@ body.theme-light .topbar {
     <div class="social-title">SVideo</div>
   </div>
   <div class="social-body" id="video-body" style="position:relative;padding:0"></div>
-  <div class="social-tabs">
-    <div class="social-tab active" data-vtab="feed"><svg viewBox="0 0 24 24"><path d="M3 12l9-9 9 9M5 10v10h14V10"/></svg>Лента</div>
-    <div class="social-tab" data-vtab="create"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Загрузить</div>
-    <div class="social-tab" data-vtab="me"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-7 8-7s8 3 8 7"/></svg>Мой аккаунт</div>
+  <div class="social-tabs sv-tt-tabs" id="svideo-tabs">
+    <div class="social-tab active" data-vtab="feed" title="Главная">
+      <svg viewBox="0 0 24 24" width="26" height="26" fill="currentColor"><path d="M12 3l9 7v11a1 1 0 01-1 1h-5v-7H9v7H4a1 1 0 01-1-1V10l9-7z"/></svg>
+    </div>
+    <div class="social-tab" data-vtab="discover" title="Обзор">
+      <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><polygon points="16.2,7.8 10,10 7.8,16.2 14,14" fill="currentColor" stroke="none"/></svg>
+    </div>
+    <div class="social-tab sv-tt-plus" data-vtab="create" title="Создать">
+      <span class="sv-plus-btn">+</span>
+    </div>
+    <div class="social-tab" data-vtab="inbox" title="Входящие">
+      <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+      <span class="sv-inbox-badge" id="sv-inbox-badge" style="display:none">0</span>
+    </div>
+    <div class="social-tab" data-vtab="me" title="Профиль">
+      <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-7 8-7s8 3 8 7"/></svg>
+    </div>
   </div>
 </div>
 <div id="ctx-menu" class="ctx-menu"></div>
@@ -15000,7 +15013,17 @@ async function switchVideoTab(tabName){
         body.innerHTML='<div class="empty-state">Видео загружается долго или лента пуста. Проверьте интернет.</div>';
     }
   }
-  else if(tabName==='create'){ renderCreatePost(body,'video'); }
+  else if(tabName==='discover'){
+    body.innerHTML='<div style="padding:16px"><div style="font-weight:800;font-size:20px;margin-bottom:12px">Обзор</div><div class="empty-state">Тренды и поиск появятся здесь. Смотрите рекомендации во вкладке Главная.</div></div>';
+  }
+  else if(tabName==='create'){
+    if(typeof window.slSVideoCreateMenu==='function') window.slSVideoCreateMenu(body);
+    else renderCreatePost(body,'video');
+  }
+  else if(tabName==='inbox'){
+    if(typeof window.slSVideoFriendsInbox==='function') window.slSVideoFriendsInbox(body);
+    else body.innerHTML='<div class="empty-state">Входящие</div>';
+  }
   else if(tabName==='me'){ body.innerHTML=loaderHTML(); await renderSocialProfile(body, myProfile.id, 'video'); }
 }
 
@@ -27324,7 +27347,97 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
         {id:6, kind:'star', icon:'🌟'},
         {id:7, kind:'dog', icon:'🐶'},
         {id:8, kind:'crown', icon:'👑'},
-        {id:9, kind:'alien', icon:'👽'}
+        {id:9, kind:'alien', icon:'👽'},
+        {id:10, kind:'emoji', icon:'😂'},
+        {id:11, kind:'emoji', icon:'🤣'},
+        {id:12, kind:'emoji', icon:'😍'},
+        {id:13, kind:'emoji', icon:'🥰'},
+        {id:14, kind:'emoji', icon:'😘'},
+        {id:15, kind:'emoji', icon:'😜'},
+        {id:16, kind:'emoji', icon:'🤪'},
+        {id:17, kind:'emoji', icon:'🥺'},
+        {id:18, kind:'emoji', icon:'😭'},
+        {id:19, kind:'emoji', icon:'😤'},
+        {id:20, kind:'emoji', icon:'🤯'},
+        {id:21, kind:'emoji', icon:'🥳'},
+        {id:22, kind:'emoji', icon:'🤠'},
+        {id:23, kind:'emoji', icon:'😈'},
+        {id:24, kind:'emoji', icon:'👿'},
+        {id:25, kind:'emoji', icon:'💀'},
+        {id:26, kind:'emoji', icon:'☠️'},
+        {id:27, kind:'emoji', icon:'💩'},
+        {id:28, kind:'emoji', icon:'🤡'},
+        {id:29, kind:'emoji', icon:'👹'},
+        {id:30, kind:'emoji', icon:'👺'},
+        {id:31, kind:'emoji', icon:'🤖'},
+        {id:32, kind:'emoji', icon:'🎃'},
+        {id:33, kind:'emoji', icon:'😺'},
+        {id:34, kind:'emoji', icon:'😻'},
+        {id:35, kind:'emoji', icon:'🙈'},
+        {id:36, kind:'emoji', icon:'🙉'},
+        {id:37, kind:'emoji', icon:'🙊'},
+        {id:38, kind:'emoji', icon:'🐵'},
+        {id:39, kind:'emoji', icon:'🦁'},
+        {id:40, kind:'emoji', icon:'🐯'},
+        {id:41, kind:'emoji', icon:'🐻'},
+        {id:42, kind:'emoji', icon:'🐼'},
+        {id:43, kind:'emoji', icon:'🐨'},
+        {id:44, kind:'emoji', icon:'🐸'},
+        {id:45, kind:'emoji', icon:'🐷'},
+        {id:46, kind:'emoji', icon:'🐮'},
+        {id:47, kind:'emoji', icon:'🐔'},
+        {id:48, kind:'emoji', icon:'🦄'},
+        {id:49, kind:'emoji', icon:'🐲'},
+        {id:50, kind:'emoji', icon:'🔥'},
+        {id:51, kind:'emoji', icon:'❄️'},
+        {id:52, kind:'emoji', icon:'🌈'},
+        {id:53, kind:'emoji', icon:'⚡'},
+        {id:54, kind:'emoji', icon:'💫'},
+        {id:55, kind:'emoji', icon:'✨'},
+        {id:56, kind:'emoji', icon:'💎'},
+        {id:57, kind:'emoji', icon:'💍'},
+        {id:58, kind:'emoji', icon:'🎀'},
+        {id:59, kind:'emoji', icon:'🎈'},
+        {id:60, kind:'emoji', icon:'🎭'},
+        {id:61, kind:'emoji', icon:'🎪'},
+        {id:62, kind:'emoji', icon:'🎨'},
+        {id:63, kind:'emoji', icon:'🎬'},
+        {id:64, kind:'emoji', icon:'🎤'},
+        {id:65, kind:'emoji', icon:'🎧'},
+        {id:66, kind:'emoji', icon:'🎸'},
+        {id:67, kind:'emoji', icon:'🎮'},
+        {id:68, kind:'emoji', icon:'🕹️'},
+        {id:69, kind:'emoji', icon:'🎯'},
+        {id:70, kind:'emoji', icon:'🏆'},
+        {id:71, kind:'emoji', icon:'🥇'},
+        {id:72, kind:'emoji', icon:'⚽'},
+        {id:73, kind:'emoji', icon:'🏀'},
+        {id:74, kind:'emoji', icon:'🚀'},
+        {id:75, kind:'emoji', icon:'🛸'},
+        {id:76, kind:'emoji', icon:'🌙'},
+        {id:77, kind:'emoji', icon:'☀️'},
+        {id:78, kind:'emoji', icon:'⭐'},
+        {id:79, kind:'emoji', icon:'🌍'},
+        {id:80, kind:'emoji', icon:'🍕'},
+        {id:81, kind:'emoji', icon:'🍔'},
+        {id:82, kind:'emoji', icon:'🍟'},
+        {id:83, kind:'emoji', icon:'🍩'},
+        {id:84, kind:'emoji', icon:'🍦'},
+        {id:85, kind:'emoji', icon:'🍓'},
+        {id:86, kind:'emoji', icon:'🍉'},
+        {id:87, kind:'emoji', icon:'🍒'},
+        {id:88, kind:'emoji', icon:'🍇'},
+        {id:89, kind:'emoji', icon:'🥑'},
+        {id:90, kind:'emoji', icon:'🌸'},
+        {id:91, kind:'emoji', icon:'🌺'},
+        {id:92, kind:'emoji', icon:'🌻'},
+        {id:93, kind:'emoji', icon:'🌹'},
+        {id:94, kind:'emoji', icon:'🍀'},
+        {id:95, kind:'emoji', icon:'🦋'},
+        {id:96, kind:'emoji', icon:'🐝'},
+        {id:97, kind:'emoji', icon:'🐬'},
+        {id:98, kind:'emoji', icon:'🐳'},
+        {id:99, kind:'emoji', icon:'🦈'},
       ];
 
       const ov=document.createElement('div');
@@ -27458,6 +27571,7 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
         const [lex,ley]=xy(face.le,W,H);
         const [rex,rey]=xy(face.re,W,H);
         const open=Math.max(0, Math.min(1, face.mouthOpen||0));
+        const t = performance.now()/1000;
 
         function mouth(lip, tongue){
           const [lx,ly]=xy(face.mouthL,W,H);
@@ -27491,6 +27605,21 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
           ctx.fillStyle=inner; ctx.fill();
           ctx.restore();
         }
+        function glow(x,y,r,c){
+          const g=ctx.createRadialGradient(x,y,0,x,y,r);
+          g.addColorStop(0,c); g.addColorStop(1,'rgba(0,0,0,0)');
+          ctx.fillStyle=g; ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill();
+        }
+        function sticker(icon, scale){
+          const sz=Math.round(Math.max(48, fw*(scale||1.05)));
+          ctx.font=sz+'px serif';
+          ctx.textAlign='center'; ctx.textBaseline='middle';
+          ctx.fillText(icon, cx, cy-fh*0.04);
+          if(open>0.25){
+            ctx.font=Math.round(sz*0.3)+'px serif';
+            ctx.fillText('👄', cx, cy+fh*0.3);
+          }
+        }
 
         ctx.save();
         if(kind==='cat' || kind==='fox' || kind==='dog'){
@@ -27513,42 +27642,96 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
           mouth('#333', '#FF6B8A');
         } else if(kind==='glasses'){
           ctx.strokeStyle='#111'; ctx.lineWidth=Math.max(4, fw*0.05);
-          ctx.fillStyle='rgba(20,30,50,.3)';
+          ctx.fillStyle='rgba(20,30,50,.35)';
           const r=fw*0.22;
           ctx.beginPath(); ctx.arc(lex, ley, r, 0, Math.PI*2); ctx.fill(); ctx.stroke();
           ctx.beginPath(); ctx.arc(rex, rey, r, 0, Math.PI*2); ctx.fill(); ctx.stroke();
           ctx.beginPath(); ctx.moveTo(lex+r, ley); ctx.lineTo(rex-r, rey); ctx.stroke();
+          // lens shine
+          ctx.strokeStyle='rgba(255,255,255,.35)'; ctx.lineWidth=2;
+          ctx.beginPath(); ctx.arc(lex-r*0.2, ley-r*0.2, r*0.35, -0.8, 0.4); ctx.stroke();
         } else if(kind==='ghost'){
-          ctx.fillStyle='rgba(255,255,255,.88)';
+          ctx.fillStyle='rgba(255,255,255,.9)';
           ctx.beginPath(); ctx.arc(cx, cy-fh*0.1, fw*0.5, Math.PI, 0);
           ctx.lineTo(cx+fw*0.5, cy+fh*0.45);
-          for(let i=4;i>=0;i--){ const x=cx-fw*0.5+(i/4)*fw; const y=cy+fh*0.45+((i%2)?fh*0.1:-fh*0.05); ctx.lineTo(x,y); }
+          for(let i=4;i>=0;i--){
+            const x=cx-fw*0.5 + (fw/4)*i;
+            ctx.quadraticCurveTo(x+fw*0.06, cy+fh*0.55, x+fw*0.12, cy+fh*0.45);
+          }
           ctx.closePath(); ctx.fill();
-          ctx.fillStyle='#111';
-          ctx.beginPath(); ctx.arc(lex, ley, fw*0.07, 0, Math.PI*2); ctx.fill();
-          ctx.beginPath(); ctx.arc(rex, rey, fw*0.07, 0, Math.PI*2); ctx.fill();
+          ctx.fillStyle='#222';
+          ctx.beginPath(); ctx.ellipse(lex, ley, fw*0.08, fh*0.1, 0, 0, Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.ellipse(rex, rey, fw*0.08, fh*0.1, 0, 0, Math.PI*2); ctx.fill();
           mouth('#333', null);
         } else if(kind==='hat'){
-          ctx.fillStyle='#1A1A1A';
-          ctx.fillRect(cx-fw*0.55, fy-fh*0.08, fw*1.1, fh*0.1);
+          ctx.fillStyle='#1a1a1a';
+          ctx.fillRect(cx-fw*0.55, fy-fh*0.08, fw*1.1, fh*0.08);
           ctx.fillRect(cx-fw*0.28, fy-fh*0.55, fw*0.56, fh*0.5);
+          ctx.fillStyle='#c9a227';
+          ctx.fillRect(cx-fw*0.28, fy-fh*0.2, fw*0.56, fh*0.06);
         } else if(kind==='crown'){
-          const top=fy-fh*0.35;
+          const top=fy-fh*0.45;
+          ctx.fillStyle='#FFD700';
           ctx.beginPath();
-          ctx.moveTo(cx-fw*0.45,fy); ctx.lineTo(cx-fw*0.35,top); ctx.lineTo(cx-fw*0.15,fy-fh*0.12);
-          ctx.lineTo(cx, top-fh*0.08); ctx.lineTo(cx+fw*0.15,fy-fh*0.12); ctx.lineTo(cx+fw*0.35,top); ctx.lineTo(cx+fw*0.45,fy);
-          ctx.closePath(); ctx.fillStyle='#FFD700'; ctx.fill();
+          ctx.moveTo(cx-fw*0.4, fy);
+          ctx.lineTo(cx-fw*0.35, top); ctx.lineTo(cx-fw*0.15, fy-fh*0.15);
+          ctx.lineTo(cx, top-fh*0.08); ctx.lineTo(cx+fw*0.15, fy-fh*0.15);
+          ctx.lineTo(cx+fw*0.35, top); ctx.lineTo(cx+fw*0.4, fy);
+          ctx.closePath(); ctx.fill();
+          ctx.fillStyle='#4C7CF3';
+          [[cx,top-fh*0.02],[cx-fw*0.25,fy-fh*0.2],[cx+fw*0.25,fy-fh*0.2]].forEach(([x,y])=>{
+            ctx.beginPath(); ctx.arc(x,y,fw*0.05,0,Math.PI*2); ctx.fill();
+          });
         } else if(kind==='alien'){
-          ctx.fillStyle='rgba(124,252,0,.5)';
+          ctx.fillStyle='rgba(124,252,0,.55)';
           ctx.beginPath(); ctx.ellipse(cx, cy-fh*0.05, fw*0.62, fh*0.7, 0, 0, Math.PI*2); ctx.fill();
           ctx.fillStyle='#111';
           ctx.beginPath(); ctx.ellipse(lex, ley, fw*0.16, fh*0.2, -0.2, 0, Math.PI*2); ctx.fill();
           ctx.beginPath(); ctx.ellipse(rex, rey, fw*0.16, fh*0.2, 0.2, 0, Math.PI*2); ctx.fill();
+          // antennae
+          ctx.strokeStyle='#9ACD32'; ctx.lineWidth=3;
+          ctx.beginPath(); ctx.moveTo(cx-fw*0.15, fy); ctx.lineTo(cx-fw*0.25, fy-fh*0.4); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(cx+fw*0.15, fy); ctx.lineTo(cx+fw*0.25, fy-fh*0.4); ctx.stroke();
+          ctx.fillStyle='#7CFC00';
+          ctx.beginPath(); ctx.arc(cx-fw*0.25, fy-fh*0.4, fw*0.06, 0, Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.arc(cx+fw*0.25, fy-fh*0.4, fw*0.06, 0, Math.PI*2); ctx.fill();
           mouth('#1A1A1A', '#5CB85C');
         } else if(kind==='star'){
-          ctx.font=`${Math.round(fw*0.35)}px serif`;
+          ctx.font=`${Math.round(fw*0.4)}px serif`;
           ctx.textAlign='center'; ctx.textBaseline='middle';
           ctx.fillText('🌟', cx, fy-fh*0.35-open*fh*0.05);
+          glow(cx, fy-fh*0.35, fw*0.5, 'rgba(255,214,10,.25)');
+        } else {
+          // Strong TikTok-like emoji overlay with particles / glow
+          let icon='✨';
+          try{
+            const m=MASKS.find(x=>x.id===maskId)||MASKS.find(x=>x.kind===kind);
+            if(m&&m.icon) icon=m.icon;
+          }catch(e){}
+          // soft glow behind face
+          glow(cx, cy, fw*0.85, 'rgba(254,44,85,.18)');
+          const sz=Math.round(Math.max(56, fw*1.15));
+          // subtle bob
+          const bob=Math.sin(t*4)*fh*0.02;
+          ctx.font=sz+'px serif';
+          ctx.textAlign='center'; ctx.textBaseline='middle';
+          ctx.fillText(icon, cx, cy-fh*0.02+bob);
+          // orbit particles
+          for(let i=0;i<6;i++){
+            const a=t*1.8 + i*(Math.PI*2/6);
+            const r=fw*0.7;
+            const px=cx+Math.cos(a)*r;
+            const py=cy+Math.sin(a)*r*0.55;
+            ctx.globalAlpha=0.55+0.35*Math.sin(t*3+i);
+            ctx.font=Math.round(sz*0.28)+'px serif';
+            ctx.fillText(['✨','💫','⭐','❤️','🔥','💎'][i%6], px, py);
+          }
+          ctx.globalAlpha=1;
+          // mouth sync
+          if(open>0.2){
+            ctx.font=Math.round(sz*0.35)+'px serif';
+            ctx.fillText(open>0.55?'😮':'👄', cx, cy+fh*0.32);
+          }
         }
         ctx.restore();
       }
@@ -27659,6 +27842,40 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
             recStream=stream;
           }
           chunks=[];
+          // Mix selected MP3 into recording via AudioContext
+          let musicNodes=null;
+          try{
+            if(window._slSVideoMusic){
+              const AC=window.AudioContext||window.webkitAudioContext;
+              if(AC){
+                const actx=new AC();
+                const dest=actx.createMediaStreamDestination();
+                // mic from camera stream
+                const micTracks=stream.getAudioTracks();
+                if(micTracks.length){
+                  const micSrc=actx.createMediaStreamSource(new MediaStream([micTracks[0]]));
+                  const micGain=actx.createGain(); micGain.gain.value=0.9;
+                  micSrc.connect(micGain); micGain.connect(dest);
+                }
+                const musicUrl=URL.createObjectURL(window._slSVideoMusic);
+                const audioEl=new Audio(musicUrl);
+                audioEl.loop=true; audioEl.crossOrigin='anonymous';
+                const musSrc=actx.createMediaElementSource(audioEl);
+                const musGain=actx.createGain(); musGain.gain.value=0.55;
+                musSrc.connect(musGain); musGain.connect(dest);
+                audioEl.play().catch(()=>{});
+                // replace audio track on recStream
+                const vt=recStream.getVideoTracks()[0];
+                const at=dest.stream.getAudioTracks()[0];
+                if(vt && at){
+                  recStream=new MediaStream([vt, at]);
+                }
+                musicNodes={actx, audioEl, musicUrl};
+                window._slSVideoMusicNodes=musicNodes;
+              }
+            }
+          }catch(musErr){ console.warn('music mix', musErr); }
+
           let mime='video/webm;codecs=vp9,opus';
           if(!MediaRecorder.isTypeSupported(mime)) mime='video/webm';
           if(!MediaRecorder.isTypeSupported(mime)) mime='video/mp4';
@@ -27668,6 +27885,17 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
           recorder.onstop=()=>{
             recording=false;
             btn.classList.remove('recording');
+            try{ if(window._slSVideoRecTimer){ clearTimeout(window._slSVideoRecTimer); window._slSVideoRecTimer=null; } }catch(e){}
+            // stop music mix
+            try{
+              const n=window._slSVideoMusicNodes||musicNodes;
+              if(n){
+                try{ n.audioEl.pause(); }catch(e){}
+                try{ n.actx.close(); }catch(e){}
+                try{ URL.revokeObjectURL(n.musicUrl); }catch(e){}
+                window._slSVideoMusicNodes=null;
+              }
+            }catch(e){}
             const blob=new Blob(chunks,{type:recorder.mimeType||'video/webm'});
             if(blob.size<800){ showToast('Пустая запись'); return; }
             const url=URL.createObjectURL(blob);
@@ -27707,7 +27935,15 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
             showToast('Запись готова');
           };
           try{ recorder.start(250); }catch(err){ recorder.start(); }
-          showToast('Запись…');
+          // auto-stop by duration (15s / 60s / 10min)
+          try{
+            const maxMs = (window._slSVideoMaxSec||60)*1000;
+            if(window._slSVideoRecTimer) clearTimeout(window._slSVideoRecTimer);
+            window._slSVideoRecTimer=setTimeout(()=>{
+              try{ if(recorder && recorder.state==='recording') recorder.stop(); }catch(e){}
+            }, maxMs);
+          }catch(e){}
+          showToast('Запись…'+(window._slSVideoMusic?' ♪':''));
         } else {
           try{ if(recorder && recorder.state!=='inactive') recorder.stop(); }catch(err){}
         }
@@ -38223,6 +38459,286 @@ body{
 
 
 
+
+
+<style>
+/* SVideo TikTok-like bottom bar */
+#video-overlay .sv-tt-tabs{
+  display:flex; align-items:center; justify-content:space-around;
+  background:#000; border-top:1px solid rgba(255,255,255,.08);
+  padding:6px 4px calc(6px + env(safe-area-inset-bottom,0px));
+  min-height:56px;
+}
+#video-overlay .sv-tt-tabs .social-tab{
+  flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center;
+  color:rgba(255,255,255,.55); font-size:0; gap:0; padding:6px 0; position:relative;
+  background:transparent; border:none;
+}
+#video-overlay .sv-tt-tabs .social-tab.active{ color:#fff; }
+#video-overlay .sv-tt-tabs .sv-plus-btn{
+  width:48px; height:30px; border-radius:10px; background:#fff; color:#000;
+  display:flex; align-items:center; justify-content:center; font-size:28px; font-weight:300;
+  line-height:1; box-shadow:0 0 0 3px #000, -4px 0 0 1px #25F4EE, 4px 0 0 1px #FE2C55;
+}
+#video-overlay .sv-tt-tabs .sv-inbox-badge{
+  position:absolute; top:2px; right:18%; min-width:16px; height:16px; padding:0 4px;
+  border-radius:8px; background:#FE2C55; color:#fff; font-size:10px; font-weight:700;
+  display:flex; align-items:center; justify-content:center;
+}
+#video-overlay .social-topbar{ background:#000; color:#fff; border:none; }
+#video-overlay .social-body{ background:#000; color:#fff; }
+
+.sl-cam-durs{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);z-index:40;display:flex;gap:8px;pointer-events:auto}
+.sl-cam-durs span{padding:6px 12px;border-radius:16px;background:rgba(0,0,0,.45);color:rgba(255,255,255,.7);font-size:12px;font-weight:600;cursor:pointer}
+.sl-cam-durs span.on{background:#FE2C55;color:#fff}
+.sl-cam-music-btn{backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);font-weight:600}
+
+.sv-create-sheet{position:fixed;inset:0;z-index:20050;background:rgba(0,0,0,.55);display:flex;align-items:flex-end;justify-content:center}
+.sv-create-panel{width:100%;max-width:480px;background:#111;border-radius:18px 18px 0 0;padding:12px 16px calc(16px + env(safe-area-inset-bottom));color:#fff}
+.sv-create-row{display:flex;align-items:center;gap:14px;padding:16px 8px;border-radius:12px;cursor:pointer}
+.sv-create-row:active{background:rgba(255,255,255,.08)}
+.sv-create-ico{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px;background:#222}
+.sl-cam-music-btn{position:absolute;top:calc(12px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);z-index:40;
+  background:rgba(0,0,0,.45);color:#fff;border:none;border-radius:20px;padding:8px 14px;font-size:13px;pointer-events:auto}
+</style>
+<script>
+(function(){
+  if(window._slSVideoTT) return;
+  window._slSVideoTT = 1;
+  const LS = window.storage || localStorage;
+
+  /* ---- Friends = mutual follow ---- */
+  function followsKey(){ return 'sl_follows_'+(window.myProfile&&myProfile.id||'x'); }
+  function getFollows(){
+    try{ return JSON.parse(LS.getItem(followsKey())||'{}'); }catch(e){ return {}; }
+  }
+  function setFollow(uid, on){
+    const m=getFollows();
+    if(on) m[String(uid)]=1; else delete m[String(uid)];
+    LS.setItem(followsKey(), JSON.stringify(m));
+  }
+  function iFollow(uid){ return !!getFollows()[String(uid)]; }
+  async function theyFollowMe(uid){
+    // local mirror: others' follows stored when they follow us on this device is limited;
+    // also check profiles.following if column exists
+    try{
+      if(window.sb && uid){
+        const {data}=await sb.from('profiles').select('following').eq('id', uid).maybeSingle();
+        const list = data && data.following;
+        if(Array.isArray(list) && myProfile && list.map(String).includes(String(myProfile.id))) return true;
+      }
+    }catch(e){}
+    try{
+      const mir = JSON.parse(LS.getItem('sl_followers_'+(myProfile&&myProfile.id||''))||'{}');
+      return !!mir[String(uid)];
+    }catch(e){}
+    return false;
+  }
+  window.slIsFriend = async function(uid){
+    if(!uid || !myProfile) return false;
+    if(!iFollow(uid)) return false;
+    return await theyFollowMe(uid);
+  };
+  window.slToggleFollow = function(uid){
+    const on = !iFollow(uid);
+    setFollow(uid, on);
+    // notify local followers map of target (for same-device demo)
+    try{
+      const k='sl_followers_'+uid;
+      const m=JSON.parse(LS.getItem(k)||'{}');
+      if(on) m[String(myProfile.id)]=1; else delete m[String(myProfile.id)];
+      LS.setItem(k, JSON.stringify(m));
+    }catch(e){}
+    return on;
+  };
+
+  /* ---- Create menu (TikTok-like) ---- */
+  window.slSVideoCreateMenu = function(body){
+    if(body){
+      body.innerHTML = `
+        <div style="padding:20px 16px;color:#fff">
+          <div style="font-size:22px;font-weight:800;margin-bottom:16px">Создать</div>
+          <div class="sv-create-row" id="sv-cam"><div class="sv-create-ico">📷</div><div><div style="font-weight:700">Камера</div><div style="font-size:12px;opacity:.6">Снять клип с масками</div></div></div>
+          <div class="sv-create-row" id="sv-up"><div class="sv-create-ico">🎬</div><div><div style="font-weight:700">Новое видео</div><div style="font-size:12px;opacity:.6">Загрузить с устройства</div></div></div>
+          <div class="sv-create-row" id="sv-txt"><div class="sv-create-ico">Aa</div><div><div style="font-weight:700">Текст</div><div style="font-size:12px;opacity:.6">Создать изображение из текста</div></div></div>
+          <div class="sv-create-row" id="sv-tpl"><div class="sv-create-ico">✨</div><div><div style="font-weight:700">Шаблоны</div><div style="font-size:12px;opacity:.6">Творчество и эффекты</div></div></div>
+        </div>`;
+      body.querySelector('#sv-cam').onclick=()=>{ if(typeof slOpenVideoCamera==='function') slOpenVideoCamera(); };
+      body.querySelector('#sv-up').onclick=()=>{
+        const inp=document.createElement('input');
+        inp.type='file'; inp.accept='video/*,audio/mpeg,audio/mp3,audio/*';
+        inp.onchange=()=>{
+          const f=inp.files&&inp.files[0];
+          if(!f) return;
+          if(f.type.startsWith('audio')){
+            window._slSVideoMusic = f;
+            showToast('Музыка: '+f.name);
+            if(typeof slOpenVideoCamera==='function') slOpenVideoCamera();
+          } else {
+            try{
+              window._slLastRecordedVideo={file:f, url:URL.createObjectURL(f)};
+              showToast('Видео выбрано');
+              if(typeof renderCreatePost==='function') renderCreatePost(body,'video');
+            }catch(e){ showToast('Не удалось'); }
+          }
+        };
+        inp.click();
+      };
+      body.querySelector('#sv-txt').onclick=()=>{
+        body.innerHTML=`<div style="padding:20px;color:#fff">
+          <div style="font-size:18px;font-weight:800;margin-bottom:12px">Создайте изображение из текста</div>
+          <textarea id="sv-txt-in" rows="5" placeholder="Поделитесь своими мыслями…" style="width:100%;padding:14px;border-radius:14px;border:1px solid #333;background:#1a1a1a;color:#fff;font-size:16px;box-sizing:border-box"></textarea>
+          <button class="btn-primary" id="sv-txt-go" style="width:100%;margin-top:12px;padding:14px;border:none;border-radius:24px;background:#FE2C55;color:#fff;font-weight:700">Далее</button>
+        </div>`;
+        body.querySelector('#sv-txt-go').onclick=()=>{
+          const t=(body.querySelector('#sv-txt-in').value||'').trim();
+          if(!t){ showToast('Введите текст'); return; }
+          // simple canvas card
+          const c=document.createElement('canvas'); c.width=720; c.height=1280;
+          const ctx=c.getContext('2d');
+          const g=ctx.createLinearGradient(0,0,720,1280);
+          g.addColorStop(0,'#1a1a2e'); g.addColorStop(1,'#FE2C55');
+          ctx.fillStyle=g; ctx.fillRect(0,0,720,1280);
+          ctx.fillStyle='#fff'; ctx.font='bold 42px system-ui'; ctx.textAlign='center';
+          wrapText(ctx, t, 360, 560, 600, 52);
+          c.toBlob(blob=>{
+            if(!blob) return;
+            const file=new File([blob],'sv-text.png',{type:'image/png'});
+            window._slLastRecordedVideo={file, url:URL.createObjectURL(blob)};
+            showToast('Готово — опубликуйте из профиля');
+          },'image/png');
+        };
+      };
+      body.querySelector('#sv-tpl').onclick=()=>{
+        body.innerHTML=`<div style="padding:20px;color:#fff"><div style="font-size:20px;font-weight:800;margin-bottom:8px">CREATE</div>
+          <div style="opacity:.7;margin-bottom:16px">Шаблоны и автомонтаж</div>
+          <div class="sv-create-row" id="sv-tpl-new"><div class="sv-create-ico">+</div><div style="font-weight:700">Новое видео</div></div>
+          <div style="opacity:.5;font-size:13px;margin-top:20px">Скоро: вирусные шаблоны и ИИ</div></div>`;
+        body.querySelector('#sv-tpl-new').onclick=()=>{ if(typeof slOpenVideoCamera==='function') slOpenVideoCamera(); };
+      };
+      return;
+    }
+  };
+  function wrapText(ctx, text, x, y, maxW, lh){
+    const words=text.split(/\\s+/); let line='', yy=y;
+    for(const w of words){
+      const test=line?line+' '+w:w;
+      if(ctx.measureText(test).width>maxW && line){ ctx.fillText(line,x,yy); line=w; yy+=lh; }
+      else line=test;
+    }
+    if(line) ctx.fillText(line,x,yy);
+  }
+
+  /* ---- Friends inbox ---- */
+  window.slSVideoFriendsInbox = async function(body){
+    body.innerHTML='<div style="padding:16px;color:#fff"><div style="font-weight:800;font-size:20px;margin-bottom:12px">Входящие</div><div id="sv-friends-list">Загрузка…</div></div>';
+    const box=body.querySelector('#sv-friends-list');
+    const follows=Object.keys(getFollows());
+    if(!follows.length){
+      box.innerHTML='<div class="empty-state" style="color:#aaa">Подпишитесь друг на друга — и сможете писать здесь.</div>';
+      return;
+    }
+    const friends=[];
+    for(const uid of follows){
+      if(await window.slIsFriend(uid)) friends.push(uid);
+    }
+    if(!friends.length){
+      box.innerHTML='<div class="empty-state" style="color:#aaa">Пока нет взаимных подписок (друзей).</div>';
+      return;
+    }
+    let html='';
+    for(const uid of friends){
+      let name=uid.slice(0,8);
+      let peer=null;
+      try{
+        if(window.sb){
+          const {data}=await sb.from('profiles').select('id,username,first_name,avatar_url').eq('id',uid).maybeSingle();
+          peer=data; if(data) name=data.first_name||data.username||name;
+        }
+      }catch(e){}
+      html+=`<div class="sv-create-row" data-uid="${uid}" style="border-bottom:1px solid #222">
+        <div class="sv-create-ico">💬</div>
+        <div style="flex:1"><div style="font-weight:700">${name}</div><div style="font-size:12px;opacity:.55">Друг · написать</div></div>
+      </div>`;
+    }
+    box.innerHTML=html;
+    box.querySelectorAll('[data-uid]').forEach(row=>{
+      row.onclick=async()=>{
+        const uid=row.dataset.uid;
+        let peer=(window.contacts||[]).find(c=>c.id===uid);
+        if(!peer && window.sb){
+          try{ const {data}=await sb.from('profiles').select('*').eq('id',uid).maybeSingle(); peer=data; }catch(e){}
+        }
+        if(!peer){ peer={id:uid, username:uid.slice(0,6)}; }
+        // close video overlay and open chat
+        try{ document.getElementById('video-overlay')?.classList.remove('open','show'); document.getElementById('video-overlay').style.display='none'; }catch(e){}
+        if(typeof openChat==='function') openChat(peer);
+        else showToast('Чат с '+ (peer.username||uid));
+      };
+    });
+  };
+
+  /* ---- Music button + duration chips on camera ---- */
+  const _open = window.slOpenVideoCamera;
+  if(typeof _open==='function'){
+    window.slOpenVideoCamera = async function(){
+      const r = await _open.apply(this, arguments);
+      setTimeout(()=>{
+        const ov=document.getElementById('sl-cam-full-ar');
+        if(!ov) return;
+        if(!ov.querySelector('.sl-cam-music-btn')){
+          const btn=document.createElement('button');
+          btn.type='button';
+          btn.className='sl-cam-music-btn';
+          btn.textContent = window._slSVideoMusic ? ('♪ '+(window._slSVideoMusic.name||'трек').slice(0,18)) : '♪ Добавить музыку';
+          btn.onclick=(e)=>{
+            e.preventDefault(); e.stopPropagation();
+            const inp=document.createElement('input');
+            inp.type='file'; inp.accept='audio/mpeg,audio/mp3,audio/*,.mp3';
+            inp.onchange=()=>{
+              const f=inp.files&&inp.files[0];
+              if(!f) return;
+              window._slSVideoMusic=f;
+              btn.textContent='♪ '+(f.name||'трек').slice(0,18);
+              showToast('Музыка будет в записи');
+              try{
+                if(window._slSVideoMusicAudio){ try{ window._slSVideoMusicAudio.pause(); }catch(x){} }
+                const a=new Audio(URL.createObjectURL(f));
+                a.volume=0.45; a.loop=true; a.play().catch(()=>{});
+                window._slSVideoMusicAudio=a;
+              }catch(err){}
+            };
+            inp.click();
+          };
+          const stage=ov.querySelector('.sl-cam-stage')||ov;
+          stage.appendChild(btn);
+        }
+        if(!ov.querySelector('.sl-cam-durs')){
+          const bar=document.createElement('div');
+          bar.className='sl-cam-durs';
+          bar.innerHTML='<span data-d="15" class="on">15 с</span><span data-d="60">60 с</span><span data-d="600">10 мин</span>';
+          bar.querySelectorAll('span').forEach(s=>{
+            s.onclick=(e)=>{ e.stopPropagation(); bar.querySelectorAll('span').forEach(x=>x.classList.remove('on')); s.classList.add('on'); window._slSVideoMaxSec=+s.dataset.d||60; showToast('Лимит '+s.textContent); };
+          });
+          window._slSVideoMaxSec=15;
+          const stage=ov.querySelector('.sl-cam-stage')||ov;
+          stage.appendChild(bar);
+        }
+      }, 400);
+      return r;
+    };
+  }
+
+  // Make mask strip scrollable for 100 masks
+  const st=document.createElement('style');
+  st.textContent=`#sl-masks,.sl-cam-masks{display:flex!important;gap:10px;overflow-x:auto;padding:10px 12px;max-width:100%;-webkit-overflow-scrolling:touch}
+  .sl-cam-mask{flex:0 0 auto;width:52px;height:52px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:28px;background:rgba(255,255,255,.12);border:2px solid transparent}
+  .sl-cam-mask.on{border-color:#FE2C55;background:rgba(254,44,85,.25)}`;
+  document.head.appendChild(st);
+
+  console.log('[SL] SVideo TikTok UI + 100 masks + music + friends inbox');
+})();
+</script>
 
 </body>
 </html>
