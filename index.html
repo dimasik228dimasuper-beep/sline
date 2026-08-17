@@ -1,66 +1,71 @@
 <!DOCTYPE html>
-<html lang="ru" class="theme-dark night-mode" style="background:#0F1419!important;color-scheme:dark">
+<html lang="ru">
 <head>
-<meta charset="UTF-8" />
-<style>
-html,body{background:#0F1419!important;color:#F4F7FB!important;margin:0!important;min-height:100%!important;min-height:100dvh!important}
-html{color-scheme:dark!important}
-body{background:#0F1419!important}
+<meta name="color-scheme" content="dark" />
+<style id="sl-no-white-v13">
+html,body{background:#0F1419!important;color:#F4F7FB!important;color-scheme:dark!important;margin:0!important;min-height:100%!important;min-height:100dvh!important}
+html:not(.sl-ready) body,
+html:not(.sl-ready) #auth-screen,
+html:not(.sl-ready) #app-screen,
+html:not(.sl-ready) #app-boot{background:#0F1419!important;color:#F4F7FB!important}
+html:not(.sl-ready).theme-light,
+html:not(.sl-ready).light-theme,
+html:not(.sl-ready).theme-light body,
+html:not(.sl-ready).light-theme body,
+html:not(.sl-ready) body.theme-light,
+html:not(.sl-ready) body.light-theme{background:#0F1419!important;color:#F4F7FB!important}
 #app-boot{background:#0B1120!important;color:#E8EEF8!important}
-#auth-screen{background:#0F1419!important;min-height:100dvh}
-#app-screen{background:#0F1419!important}
-/* never pure white */
-@media (prefers-color-scheme: light){
-  html,body,#auth-screen,#app-screen,#app-boot{background:#0F1419!important;color:#F4F7FB!important}
-}
+#sl-hard-boot{position:fixed;inset:0;z-index:2147483646;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:#0F1419;color:#E8EEF8;font-family:system-ui,-apple-system,sans-serif;pointer-events:none}
+#sl-hard-boot .sl-hb-dot{width:12px;height:12px;border-radius:50%;background:#4C7CF3;animation:slHbPulse .9s ease-in-out infinite alternate}
+@keyframes slHbPulse{from{opacity:.35;transform:scale(.85)}to{opacity:1;transform:scale(1)}}
+html.sl-ready #sl-hard-boot{display:none!important}
 </style>
 <script>
 (function(){
   try{
-    // Boot ALWAYS dark to avoid pure-white flash on iOS light system theme.
-    // User theme is applied only after app is ready.
-    document.documentElement.classList.add('theme-dark','night-mode');
-    document.documentElement.classList.remove('theme-light','light-theme');
-    document.documentElement.style.background = '#0F1419';
-    document.documentElement.style.colorScheme = 'dark';
-    window.__slLight = false;
-    window.__slApplyThemeLater = function(){
-      try{
-        var t = localStorage.getItem('sl_theme');
-        var light;
-        if(!t || t==='auto' || t==='system'){
-          light = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
-        } else {
-          light = t==='light';
-        }
-        // On auth screen stay dark; only switch light inside app if chosen
-        var auth=document.getElementById('auth-screen');
-        var authOn = auth && getComputedStyle(auth).display!=='none';
-        if(authOn) light = false;
-        window.__slLight = !!light;
-        document.documentElement.classList.toggle('theme-light', !!light);
-        document.documentElement.classList.toggle('light-theme', !!light);
-        document.documentElement.classList.toggle('theme-dark', !light);
-        document.documentElement.classList.toggle('night-mode', !light);
-        if(document.body){
-          document.body.classList.toggle('theme-light', !!light);
-          document.body.classList.toggle('light-theme', !!light);
-          document.body.classList.toggle('theme-dark', !light);
-          document.body.classList.toggle('night-mode', !light);
-        }
-        document.documentElement.style.colorScheme = light ? 'light' : 'dark';
-        document.documentElement.style.background = light ? '#F4F6F9' : '#0F1419';
-        var m = document.querySelector('meta[name="theme-color"]');
-        if(m) m.setAttribute('content', light ? '#F4F6F9' : '#0F1419');
-      }catch(e){}
-    };
+    var D='#0F1419';
+    var root=document.documentElement;
+    root.style.background=D;
+    root.style.colorScheme='dark';
+    root.classList.remove('theme-light','light-theme');
+    root.classList.add('theme-dark','night-mode');
+    var t=null;
+    try{ t=localStorage.getItem('sl_theme'); }catch(e){}
+    var preferLight=false;
+    if(t==='light') preferLight=true;
+    else if(!t||t==='auto'||t==='system'){
+      try{ preferLight=!!(window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches); }catch(e){}
+    }
+    window.__slPreferLight=preferLight;
+    window.__slLight=false;
+  }catch(e){}
+})();
+</script>
+
+<meta charset="UTF-8" />
+<script>
+(function(){
+  try{
+    var t = localStorage.getItem('sl_theme');
+    var light;
+    if(!t || t==='auto' || t==='system'){
+      light = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
+    } else {
+      light = t==='light';
+    }
+    window.__slLight = !!light;
+    var cls = light ? 'theme-light light-theme' : 'theme-dark night-mode';
+    document.documentElement.className = (document.documentElement.className||'').replace(/\b(theme-light|light-theme|theme-dark|night-mode)\b/g,'') + ' ' + cls;
+    document.documentElement.style.colorScheme = light ? 'light' : 'dark';
+    var m = document.querySelector('meta[name="theme-color"]');
+    if(m) m.setAttribute('content', light ? '#F4F6F9' : '#0F1419');
     function applyBody(){
       try{
         if(!document.body) return;
-        document.body.classList.add('theme-dark','night-mode');
-        document.body.classList.remove('theme-light','light-theme');
-        document.body.style.background = '#0F1419';
-        document.body.style.color = '#F4F7FB';
+        document.body.classList.toggle('theme-light', !!light);
+        document.body.classList.toggle('light-theme', !!light);
+        document.body.classList.toggle('theme-dark', !light);
+        document.body.classList.toggle('night-mode', !light);
       }catch(e){}
     }
     if(document.body) applyBody();
@@ -69,7 +74,7 @@ body{background:#0F1419!important}
 })();
 </script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-<meta name="theme-color" content="#0F1419" />
+<meta name="theme-color" content="#4C7CF3" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <meta name="apple-mobile-web-app-title" content="SLine" />
@@ -2613,47 +2618,14 @@ body:not(.sl-content-ready) #app-screen:not(:has(*)){background:#0F1419}
   background: var(--bg, #0F1419) !important;
 }
 /* When auth is visible, kill bottom tabs / app shell underneath */
-
-/* ===== Stability: logged-in UI must win ===== */
-html.sl-force-app #auth-screen,
-html.sl-force-app.sl-on-auth #auth-screen,
-body.sl-force-app #auth-screen{
-  display: none !important;
-  visibility: hidden !important;
-  pointer-events: none !important;
-}
-html.sl-force-app #app-screen,
-html.sl-force-app.sl-on-auth #app-screen{
-  display: flex !important;
-  visibility: visible !important;
-  opacity: 1 !important;
-  pointer-events: auto !important;
-}
-@media (max-width: 1024px){
-  html.sl-force-app .bottom-tabs,
-  html.sl-force-app.sl-on-auth .bottom-tabs,
-  body.sl-force-app .bottom-tabs,
-  html.sl-force-app body:not(.in-chat) .bottom-tabs{
-    display: flex !important;
-    visibility: visible !important;
-    pointer-events: auto !important;
-    height: auto !important;
-    opacity: 1 !important;
-  }
-}
-html.sl-force-app .nav-rail{
-  /* desktop only via existing media */
-}
-
+body:has(#auth-screen:not([style*="display: none"])) .bottom-tabs,
+body:has(#auth-screen:not([style*="display: none"])) #app-screen,
 html.sl-force-auth .bottom-tabs,
 html.sl-force-auth #app-screen,
-html.sl-on-auth .bottom-tabs{
+html:not(.sl-force-app) #auth-screen:not([hidden]) ~ #app-screen .bottom-tabs{
   display: none !important;
   visibility: hidden !important;
   pointer-events: none !important;
-}
-html.sl-force-auth #app-screen{
-  display: none !important;
 }
 /* Safer class toggles (no :has dependency only) */
 html.sl-on-auth #app-screen,
@@ -2741,247 +2713,90 @@ body.theme-light #auth-screen .auth-card{
 <script>
 (function(){
   if(window._slAuthFS) return; window._slAuthFS=1;
-  function showTabs(){
-    try{
-      document.querySelectorAll('.bottom-tabs').forEach(el=>{
-        el.style.removeProperty('display');
-        el.style.removeProperty('visibility');
-        el.style.removeProperty('pointer-events');
-        el.style.removeProperty('height');
-        el.style.removeProperty('opacity');
-      });
-    }catch(e){}
-  }
   function syncAuthChrome(){
     try{
-      var html=document.documentElement;
-      var body=document.body;
-      // Logged-in wins forever
-      if(html.classList.contains('sl-force-app') || window._slAppReady){
-        html.classList.remove('sl-on-auth','sl-force-auth','sl-booting');
-        if(body) body.classList.remove('sl-on-auth');
-        var auth=document.getElementById('auth-screen');
-        var app=document.getElementById('app-screen');
-        if(auth){ auth.style.setProperty('display','none','important'); }
-        if(app){
-          app.style.setProperty('display','flex','important');
-          app.style.setProperty('visibility','visible','important');
-        }
-        if(body && !body.classList.contains('in-chat')) showTabs();
-        return;
-      }
-      var auth=document.getElementById('auth-screen');
+      const auth=document.getElementById('auth-screen');
+      const app=document.getElementById('app-screen');
       if(!auth) return;
-      var cs=getComputedStyle(auth);
-      var authOn = cs.display!=='none' && cs.visibility!=='hidden';
-      var on = authOn || html.classList.contains('sl-force-auth');
-      html.classList.toggle('sl-on-auth', !!on);
-      if(body) body.classList.toggle('sl-on-auth', !!on);
+      const cs=getComputedStyle(auth);
+      const authOn = cs.display!=='none' && cs.visibility!=='hidden' && auth.offsetParent!==null;
+      // also if app is hidden explicitly
+      const appHidden = app && (getComputedStyle(app).display==='none');
+      const on = authOn || document.documentElement.classList.contains('sl-force-auth');
+      document.documentElement.classList.toggle('sl-on-auth', !!on && !document.documentElement.classList.contains('sl-force-app'));
+      document.body.classList.toggle('sl-on-auth', !!on && !document.documentElement.classList.contains('sl-force-app'));
       if(on){
-        document.querySelectorAll('.bottom-tabs').forEach(function(el){ el.style.display='none'; });
-      } else {
-        showTabs();
+        document.querySelectorAll('.bottom-tabs').forEach(el=>{ el.style.display='none'; });
       }
     }catch(e){}
   }
-  // lighter polling; stop fighting after ready
-  var n=0;
-  var t=setInterval(function(){
-    syncAuthChrome();
-    n++;
-    if(window._slAppReady || n>40) clearInterval(t);
-  }, 400);
+  setInterval(syncAuthChrome, 500);
   document.addEventListener('DOMContentLoaded', syncAuthChrome);
   setTimeout(syncAuthChrome, 0);
-  setTimeout(syncAuthChrome, 500);
+  setTimeout(syncAuthChrome, 300);
+  setTimeout(syncAuthChrome, 1000);
+  // after login success app shows — class removed by force-app
+  const _obs=new MutationObserver(syncAuthChrome);
+  try{ _obs.observe(document.documentElement,{attributes:true,attributeFilter:['class','style']}); }catch(e){}
+  try{ document.getElementById('auth-screen')&&_obs.observe(document.getElementById('auth-screen'),{attributes:true,attributeFilter:['style','class','hidden']}); }catch(e){}
 })();
 </script>
 
-<style>
-/* Session present: login stays in DOM but invisible; app shell instant */
-html.sl-force-app #auth-screen{
-  display:none !important;
-  visibility:hidden !important;
-  pointer-events:none !important;
-  position:fixed !important;
-  left:-9999px !important;
-  width:1px !important;
-  height:1px !important;
-  overflow:hidden !important;
-}
-html.sl-force-app #app-screen{
-  display:flex !important;
-  visibility:visible !important;
-  opacity:1 !important;
-  pointer-events:auto !important;
-  min-height:100dvh !important;
-  background:#0F1419 !important;
-}
-@media (max-width:1024px){
-  html.sl-force-app .bottom-tabs{
-    display:flex !important;
-    visibility:visible !important;
-    pointer-events:auto !important;
-    opacity:1 !important;
-  }
-}
-html.sl-force-app #app-boot{display:none !important;}
-</style>
 </head>
-<body class="theme-dark night-mode" style="background:#0F1419;color:#F4F7FB;margin:0;min-height:100dvh">
+<body>
+<div id="sl-hard-boot" aria-hidden="true"><div class="sl-hb-dot"></div><div style="font:600 13px/1.3 system-ui,-apple-system,sans-serif;color:#8B9BB4">SLine</div></div>
+
 <script>(function(){try{document.documentElement.classList.remove('skin-green','skin-wa','skin-tg','skin-max','skin-sline');localStorage.removeItem('sl_ui_skin');}catch(e){}})();</script>
 
 
 
-<div id="app-boot" style="position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:#0B1120;z-index:500;color:#E8EEF8;font-family:system-ui,-apple-system,sans-serif;pointer-events:none">
+<div id="app-boot" style="position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:#0B1120;z-index:2147483000;color:#E8EEF8;font-family:system-ui,-apple-system,sans-serif">
   <div class="dot" style="width:12px;height:12px;border-radius:50%;background:#4C7CF3"></div>
   <div class="boot-msg" style="font:600 14px/1.3 system-ui,-apple-system,sans-serif;color:#8B9BB4">SLine</div>
 </div>
 
 <script>
-/* CRITICAL recovery v10 — iOS: never blank white; keep auth until app has content */
+/* CRITICAL iOS recovery — runs immediately */
 (function(){
-  function hasSession(){
+  function showSomething(){
     try{
-      if(window._slAppReady) return true;
-      if(localStorage.getItem('sl_logged_in')==='1') return true;
-      if(localStorage.getItem('sl-auth-token')) return true;
-    }catch(e){}
-    return false;
-  }
-  function appHasContent(){
-    try{
-      var app=document.getElementById('app-screen');
-      if(!app) return false;
-      var st=window.getComputedStyle(app);
-      if(st.display==='none'||st.visibility==='hidden') return false;
-      // real UI: contacts, bottom tabs, settings item, or any chat row
-      var node=app.querySelector('.bottom-tabs, #contacts-list .contact, #contacts-list .sw-clip, .settings-item, .max-chats-title, #page-chats .sidebar');
-      if(!node) return false;
-      var r=node.getBoundingClientRect();
-      return r.width>20 && r.height>20;
-    }catch(e){ return false; }
-  }
-  function showAuth(){
-    try{
-      document.documentElement.style.background='#0F1419';
-      document.documentElement.classList.remove('sl-force-app');
-      document.documentElement.classList.add('sl-ready','sl-force-auth');
-      if(document.body){
-        document.body.style.background='#0F1419';
-        document.body.style.color='#F4F7FB';
-      }
-      var boot=document.getElementById('app-boot');
-      if(boot){ boot.style.display='none'; }
-      var auth=document.getElementById('auth-screen');
-      var app=document.getElementById('app-screen');
-      if(auth){
-        auth.style.setProperty('display','flex','important');
-        auth.style.setProperty('visibility','visible','important');
-        auth.style.setProperty('opacity','1','important');
-        auth.style.setProperty('background','#0F1419','important');
-      }
-      if(app){
-        app.style.setProperty('display','none','important');
-      }
-    }catch(e){}
-  }
-  function showApp(){
-    try{
-      document.documentElement.style.background='#0F1419';
-      document.documentElement.classList.add('sl-force-app','sl-ready');
-      document.documentElement.classList.remove('sl-force-auth','sl-on-auth','sl-booting');
-      if(document.body){
-        document.body.style.background='#0F1419';
-        document.body.classList.remove('sl-on-auth');
-      }
-      var boot=document.getElementById('app-boot');
-      if(boot){ boot.style.display='none'; try{boot.remove()}catch(e){} }
-      var auth=document.getElementById('auth-screen');
-      var app=document.getElementById('app-screen');
-      if(auth){ auth.style.setProperty('display','none','important'); }
-      if(app){
+      document.documentElement.classList.remove('sl-booting');
+      document.documentElement.classList.add('sl-ready');
+      var boot = document.getElementById('app-boot');
+      if(boot) boot.style.display = 'none';
+      var auth = document.getElementById('auth-screen');
+      var app = document.getElementById('app-screen');
+      var logged = false;
+      try {
+        for (var i = 0; i < localStorage.length; i++) {
+          var k = localStorage.key(i) || '';
+          if (k.indexOf('auth-token') !== -1 || k.indexOf('sb-') === 0 || k === 'sl_logged_in') {
+            if (k === 'sl_logged_in' && localStorage.getItem(k) !== '1') continue;
+            logged = true; break;
+          }
+        }
+      } catch(e){}
+      if (logged && app) {
+        if (auth) auth.style.setProperty('display','none','important');
         app.style.setProperty('display','flex','important');
         app.style.setProperty('visibility','visible','important');
         app.style.setProperty('opacity','1','important');
-        app.style.setProperty('background','#0F1419','important');
+        app.style.setProperty('min-height','100dvh','important');
+        document.body.style.background = '#0F1419';
+      } else if (auth) {
+        auth.style.setProperty('display','flex','important');
+        auth.style.setProperty('visibility','visible','important');
+        auth.style.setProperty('opacity','1','important');
+        auth.style.setProperty('min-height','100dvh','important');
+        if (app) app.style.setProperty('display','none','important');
+        document.body.style.background = '#0F1419';
       }
-      document.querySelectorAll('.bottom-tabs').forEach(function(el){
-        el.style.removeProperty('display');
-        el.style.display='flex';
-        el.style.visibility='visible';
-      });
     }catch(e){}
   }
-  function paint(){
-    try{
-      // Always dark first — kill iOS light flash
-      document.documentElement.style.background='#0F1419';
-      document.documentElement.style.colorScheme='dark';
-      if(document.body){
-        document.body.style.background='#0F1419';
-        document.body.style.color='#F4F7FB';
-      }
-      if(window._slAppReady && appHasContent()){
-        showApp();
-        return;
-      }
-      if(hasSession()){
-        // only switch to app if something is actually painted
-        if(appHasContent()) showApp();
-        else {
-          // keep dark boot or auth, not white void
-          var boot=document.getElementById('app-boot');
-          var auth=document.getElementById('auth-screen');
-          if(boot){
-            boot.style.display='flex';
-            boot.style.background='#0B1120';
-            boot.style.zIndex='2147483000';
-          } else if(auth){
-            showAuth();
-          }
-        }
-      } else {
-        showAuth();
-      }
-    }catch(e){
-      try{ showAuth(); }catch(e2){}
-    }
-  }
-  paint();
-  setTimeout(paint, 300);
-  setTimeout(paint, 1000);
-  setTimeout(function(){
-    // hard safety: if still no content after 3s → auth screen (never blank white)
-    if(!appHasContent()){
-      var boot=document.getElementById('app-boot');
-      if(boot) boot.style.display='none';
-      if(hasSession() && window.myProfile){
-        showApp();
-        // still empty chats is ok — UI chrome must show
-        var app=document.getElementById('app-screen');
-        if(app){
-          app.style.setProperty('display','flex','important');
-          var pc=document.getElementById('page-chats');
-          if(pc){ pc.classList.add('active'); pc.style.display='flex'; pc.style.visibility='visible'; }
-        }
-      } else {
-        showAuth();
-      }
-    }
-  }, 3000);
-  setTimeout(function(){
-    if(!appHasContent()){
-      var auth=document.getElementById('auth-screen');
-      var app=document.getElementById('app-screen');
-      // last resort: show whatever exists with dark bg
-      document.documentElement.style.background='#0F1419';
-      if(document.body) document.body.style.background='#0F1419';
-      if(auth && (!app || getComputedStyle(app).display==='none')) showAuth();
-      else showApp();
-    }
-  }, 6000);
-  window._slCriticalPaint = paint;
+  setTimeout(showSomething, 2000);
+  setTimeout(showSomething, 4000);
+  setTimeout(showSomething, 7000);
+  window.addEventListener('error', function(){ setTimeout(showSomething, 100); });
 })();
 </script>
 
@@ -3028,38 +2843,32 @@ window.addEventListener('unhandledrejection', function(ev){
     }
   }catch(e){}
 });
-/* Boot: if session on device — hide login (keep in DOM), show app shell instantly */
+/* Boot: skip login flash if session already stored */
 (function(){
   try{
-    var hasToken = false;
-    try{
-      var keys = Object.keys(localStorage||{});
-      for(var i=0;i<keys.length;i++){
-        var k = keys[i];
-        if(k.indexOf('auth-token')===-1 && k.indexOf('supabase.auth')===-1 && k.indexOf('sb-')!==0) continue;
-        try{
-          var v = localStorage.getItem(k);
-          if(!v || v.length<20) continue;
-          if(v.indexOf('access_token')!==-1 || v.indexOf('"user"')!==-1){ hasToken=true; break; }
-        }catch(e){}
-      }
-    }catch(e){}
-    var logged = false;
-    try{ logged = localStorage.getItem('sl_logged_in')==='1'; }catch(e){}
-    if(logged || hasToken){
-      document.documentElement.classList.add('sl-force-app','sl-ready');
-      document.documentElement.classList.remove('sl-force-auth','sl-on-auth','sl-booting');
-      // mark so recovery scripts do not flash login
-      window._slSessionHint = 1;
+    var keys = Object.keys(localStorage||{});
+    var has = keys.some(function(k){
+      if(k.indexOf('auth-token')===-1 && k.indexOf('supabase.auth')===-1) return false;
+      try{
+        var v = localStorage.getItem(k);
+        if(!v) return false;
+        var j = JSON.parse(v);
+        var tok = j.access_token || (j.currentSession && j.currentSession.access_token) || (j.user && j.access_token);
+        return !!(tok || j.user || j.currentSession);
+      }catch(e){ return v && v.length>20; }
+    });
+    if(has || localStorage.getItem('sl_logged_in')==='1'){
+      document.documentElement.classList.add('sl-booting');
     }
   }catch(e){}
 })();
 </script>
 <style>
-html.sl-booting #auth-screen{display:flex!important}
-html.sl-booting #app-screen{display:none!important}
+html.sl-booting #auth-screen{display:none!important}
+html.sl-booting #app-screen{display:flex!important}
 html.sl-booting::before{
-  content:none!important;display:none!important;
+  content:'';position:fixed;inset:0;z-index:99999;background:#0B1120;
+  /* subtle loading without text */
 }
 body.sl-ready html.sl-booting::before,
 html.sl-ready.sl-booting::before{display:none}
@@ -3436,7 +3245,7 @@ body.theme-light .topbar {
 
 </style>
 
-<div id="auth-screen" style="display:flex;min-height:100dvh;background:#0F1419;color:#F4F7FB">
+<div id="auth-screen">
   <div class="auth-card">
     <div class="brand"><div class="brand-mark" aria-label="SLine"></div><div class="brand-name">SLine</div></div>
     <div class="auth-sub" id="auth-sub-text">Современный мессенджер</div>
@@ -3564,51 +3373,6 @@ body.theme-light .topbar {
 
 
 
-
-<script>
-/* Instant paint: session → app shell; else → login */
-(function(){
-  try{
-    document.documentElement.style.background='#0F1419';
-    if(document.body) document.body.style.background='#0F1419';
-    var boot=document.getElementById('app-boot');
-    if(boot) boot.style.display='none';
-    var logged = !!(window._slSessionHint) || document.documentElement.classList.contains('sl-force-app');
-    try{ if(localStorage.getItem('sl_logged_in')==='1') logged=true; }catch(e){}
-    var auth=document.getElementById('auth-screen');
-    var app=document.getElementById('app-screen');
-    if(logged){
-      document.documentElement.classList.add('sl-force-app','sl-ready');
-      document.documentElement.classList.remove('sl-booting','sl-on-auth','sl-force-auth');
-      if(document.body) document.body.classList.remove('sl-on-auth');
-      if(auth){
-        // keep in DOM, user must not see it
-        auth.style.setProperty('display','none','important');
-        auth.style.setProperty('visibility','hidden','important');
-      }
-      if(app){
-        app.style.setProperty('display','flex','important');
-        app.style.setProperty('visibility','visible','important');
-        app.style.setProperty('opacity','1','important');
-        app.style.setProperty('background','#0F1419','important');
-      }
-      document.querySelectorAll('.bottom-tabs').forEach(function(el){
-        el.style.removeProperty('display');
-        el.style.removeProperty('visibility');
-      });
-      return;
-    }
-    if(auth){
-      auth.style.setProperty('display','flex','important');
-      auth.style.setProperty('visibility','visible','important');
-      auth.style.setProperty('opacity','1','important');
-      auth.style.setProperty('background','#0F1419','important');
-    }
-    if(app) app.style.setProperty('display','none','important');
-  }catch(e){}
-})();
-</script>
-
 <div id="app-screen">
   <nav class="nav-rail" id="nav-rail" aria-label="Main">
     <div class="nav-logo">S</div>
@@ -3658,7 +3422,7 @@ body.theme-light .topbar {
               <input type="text" id="search-input" placeholder="Люди, чаты и сообщения" data-i18n-placeholder="ph_search">
             </div>
             <div class="folder-tabs max-folder-tabs" id="folder-tabs"></div>
-            <div class="contacts" id="contacts-list"><div class="sl-loader-inline" data-i18n="loading" id="contacts-boot-spinner"><div class="sl-spinner"></div></div></div>
+            <div class="contacts" id="contacts-list"><div class="sl-loader-inline" data-i18n="loading"><div class="sl-spinner"></div></div></div>
           </div>
         </div>
         <div class="chat-pane" id="chat-pane">
@@ -3904,9 +3668,7 @@ let sb = null;
         sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     } catch(e2){ console.warn('supabase init', e2); }
   }
-  try{ window.sb = sb; }catch(e){}
 })();
-try{ if(typeof sb!=='undefined') window.sb = sb; }catch(e){}
 
 
 // Silence generic "Script error." and log real details when available
@@ -4402,14 +4164,7 @@ async function doLogin(){
       // force UI into app even if some load hung
       try{
         document.documentElement.classList.remove('sl-booting','sl-on-auth','sl-force-auth');
-        document.documentElement.classList.add('sl-ready','sl-force-app'); try{ window._slAppReady=1; }catch(e){}
-        try{
-          document.documentElement.classList.remove('sl-on-auth','sl-force-auth','sl-booting');
-          document.body && document.body.classList.remove('sl-on-auth');
-          var _a=document.getElementById('auth-screen'); if(_a) _a.style.setProperty('display','none','important');
-          var _p=document.getElementById('app-screen'); if(_p){ _p.style.setProperty('display','flex','important'); _p.style.setProperty('visibility','visible','important'); }
-          document.querySelectorAll('.bottom-tabs').forEach(function(el){ el.style.removeProperty('display'); el.style.removeProperty('visibility'); });
-        }catch(e){}
+        document.documentElement.classList.add('sl-ready','sl-force-app');
         document.body.classList.remove('sl-on-auth');
         const _a=document.getElementById('auth-screen');
         const _app=document.getElementById('app-screen');
@@ -5113,26 +4868,10 @@ async function joinOrOpenGroup(group){
 
 // ========== DATA ==========
 async function loadChats(){
-  const list=document.getElementById('contacts-list'); if(!list) return;
-  // Instant: paint from cache first (no spinner if we have data)
+  const list=document.getElementById('contacts-list'); if(!list||!myProfile) return;
+  list.innerHTML=loaderHTML();
   try{
-    if((!contacts||!contacts.length) && typeof slLoadContactsCache==='function'){
-      slLoadContactsCache();
-      if(contacts && contacts.length) renderContactsAndGroups();
-    }
-  }catch(e){}
-  if(!myProfile){
-    // still show cache / empty, don't hang forever
-    if(!list.querySelector('.contact,.sw-clip,.empty-state')) list.innerHTML=loaderHTML();
-    return;
-  }
-  // Only show spinner if list is empty
-  if(!list.querySelector('.contact,.sw-clip')) list.innerHTML=loaderHTML();
-  try{
-    const {data}=await Promise.race([
-      sb.from('messages').select('sender_id,receiver_id,content,created_at,group_id').or(`sender_id.eq.${myProfile.id},receiver_id.eq.${myProfile.id}`).is('group_id',null).order('created_at',{ascending:false}).limit(300),
-      new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')), 8000))
-    ]);
+    const {data}=await sb.from('messages').select('sender_id,receiver_id,content,created_at,group_id').or(`sender_id.eq.${myProfile.id},receiver_id.eq.${myProfile.id}`).is('group_id',null).order('created_at',{ascending:false}).limit(300);
     const map=new Map();
     for(const m of(data||[])){
       const pid=m.sender_id===myProfile.id?m.receiver_id:m.sender_id;
@@ -5142,49 +4881,13 @@ async function loadChats(){
     if(!map.has(myProfile.id)) map.set(myProfile.id,{lastMessage:'Заметки',lastAt:new Date(0).toISOString()});
     const ids=[...map.keys()];
     let profiles=[];
-    if(ids.length){
-      try{
-        const {data:prs}=await Promise.race([
-          sb.from('profiles').select('*').in('id',ids),
-          new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')), 6000))
-        ]);
-        profiles=prs||[];
-      }catch(e){ profiles=[]; }
-    }
+    if(ids.length){ const {data:prs}=await sb.from('profiles').select('*').in('id',ids); profiles=prs||[]; }
     contacts=profiles.map(p=>({...p,lastMessage:map.get(p.id)?.lastMessage||'',lastAt:map.get(p.id)?.lastAt}));
-    // keep favorites/self
-    if(!contacts.some(c=>c && c.id===myProfile.id)){
-      contacts.unshift({...myProfile, lastMessage:'Заметки', lastAt:new Date(0).toISOString()});
-    }
-    try{ if(typeof slSaveContactsCache==='function') slSaveContactsCache(); }catch(e){}
     renderContactsAndGroups();
-  }catch(e){
-    console.warn('loadChats', e);
-    // keep cache on screen; only show error if completely empty
-    if(!list.querySelector('.contact,.sw-clip')){
-      try{ if(typeof slLoadContactsCache==='function') slLoadContactsCache(); }catch(e2){}
-      if(contacts && contacts.length) renderContactsAndGroups();
-      else list.innerHTML='<div class="empty-state">'+((typeof t==='function'?t('no_chats'):'Нет чатов'))+'</div>';
-    }
-  }
+  }catch(e){ list.innerHTML='<div class="empty-state">Ошибка</div>'; }
 }
 async function loadGroups(){
-  try{
-    if((!groups||!groups.length) && typeof slLoadGroupsCache==='function'){
-      slLoadGroupsCache();
-      if(groups && groups.length) renderContactsAndGroups();
-    }
-  }catch(e){}
-  try{
-    if(!myProfile){ renderContactsAndGroups(); return; }
-    const res = await Promise.race([
-      sb.from('group_members').select('group_id,role,groups(*)').eq('user_id',myProfile.id),
-      new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')), 8000))
-    ]);
-    const data = res && res.data;
-    groups=(data||[]).map(m=>({...m.groups,myRole:m.role})).filter(g=>g?.id);
-    try{ if(typeof slSaveGroupsCache==='function') slSaveGroupsCache(); }catch(e){}
-  }catch(e){ if(!groups||!groups.length) groups=[]; }
+  try{ const {data}=await sb.from('group_members').select('group_id,role,groups(*)').eq('user_id',myProfile.id); groups=(data||[]).map(m=>({...m.groups,myRole:m.role})).filter(g=>g?.id); }catch(e){ groups=[]; }
   // Locally hidden (deleted from list)
   try{
     const hid=new Set(JSON.parse(localStorage.getItem('sl_hidden_chats')||'[]').map(String));
@@ -9911,7 +9614,7 @@ function clearDraft(){
 }
 
 
-document.getElementById('settings-logout').onclick=async()=>{ if(await customConfirm(t('you_sure_logout'))){ try{ storage.removeItem('sl_logged_in'); try{ window._slAppReady=0; document.documentElement.classList.remove('sl-force-app'); }catch(e){} await sb.auth.signOut(); }catch(e){} location.reload(); } };
+document.getElementById('settings-logout').onclick=async()=>{ if(await customConfirm(t('you_sure_logout'))){ try{ storage.removeItem('sl_logged_in'); await sb.auth.signOut(); }catch(e){} location.reload(); } };
 
 // ========== REALTIME ==========
 
@@ -39600,922 +39303,234 @@ body{
 </script>
 
 
-
 <script>
-/* ========== FULL REVIVE v9: session + profile + chats + buttons ========== */
+/* ANTI WHITE/BLACK STUCK v13 */
 (function(){
-  if (window._slReviveV9) return;
-  window._slReviveV9 = 1;
-
-  const LS = window.storage || localStorage;
-
-  function killBoot(){
+  if(window._slWhiteWatch13) return;
+  window._slWhiteWatch13=1;
+  var D='#0F1419';
+  function paintDark(){
     try{
-      var boot = document.getElementById('app-boot');
-      if (boot) { boot.style.display='none'; try{boot.remove()}catch(e){} }
-      var loader = document.getElementById('sl-loader');
-      if (loader) { loader.classList.remove('show'); loader.style.display='none'; }
-      document.documentElement.classList.remove('sl-booting');
-      document.documentElement.classList.add('sl-ready','sl-force-app');
-    }catch(e){}
-  }
-
-  /* ---- cache ---- */
-  window.slSaveContactsCache = function(){
-    try{
-      if(!Array.isArray(window.contacts)||!contacts.length) return;
-      LS.setItem('sl_cache_contacts', JSON.stringify(contacts.slice(0,200).map(c=>({
-        id:c.id,username:c.username,first_name:c.first_name,last_name:c.last_name,
-        avatar_url:c.avatar_url,color:c.color,email:c.email,phone:c.phone,
-        lastMessage:c.lastMessage,lastAt:c.lastAt,badge_id:c.badge_id,isBot:c.isBot
-      }))));
-    }catch(e){}
-  };
-  window.slLoadContactsCache = function(){
-    try{
-      var arr=JSON.parse(LS.getItem('sl_cache_contacts')||'null');
-      if(!Array.isArray(arr)||!arr.length) return false;
-      if(!Array.isArray(window.contacts)||!contacts.length) window.contacts=arr;
-      return true;
-    }catch(e){return false}
-  };
-  window.slSaveGroupsCache = function(){
-    try{
-      if(!Array.isArray(window.groups)||!groups.length) return;
-      LS.setItem('sl_cache_groups', JSON.stringify(groups.slice(0,100)));
-    }catch(e){}
-  };
-  window.slLoadGroupsCache = function(){
-    try{
-      var arr=JSON.parse(LS.getItem('sl_cache_groups')||'null');
-      if(!Array.isArray(arr)||!arr.length) return false;
-      if(!Array.isArray(window.groups)||!groups.length) window.groups=arr;
-      return true;
-    }catch(e){return false}
-  };
-  window.slSaveProfileCache = function(p){
-    try{
-      p=p||window.myProfile; if(!p||!p.id) return;
-      LS.setItem('sl_cache_profile', JSON.stringify(p));
-    }catch(e){}
-  };
-  window.slLoadProfileCache = function(){
-    try{
-      var p=JSON.parse(LS.getItem('sl_cache_profile')||'null');
-      if(!p||!p.id) return null;
-      if(!window.myProfile) window.myProfile=p;
-      else {
-        // fill missing fields
-        Object.keys(p).forEach(function(k){
-          if(myProfile[k]==null || myProfile[k]==='') myProfile[k]=p[k];
-        });
+      var r=document.documentElement,b=document.body;
+      r.style.setProperty('background',D,'important');
+      r.style.colorScheme='dark';
+      if(b){ b.style.setProperty('background',D,'important'); b.style.setProperty('color','#F4F7FB','important'); }
+      if(!r.classList.contains('sl-ready')){
+        r.classList.remove('theme-light','light-theme');
+        r.classList.add('theme-dark','night-mode');
+        if(b){ b.classList.remove('theme-light','light-theme'); b.classList.add('theme-dark','night-mode'); }
       }
-      return p;
-    }catch(e){return null}
-  };
-
-  function paintProfile(){
-    try{
-      var p = window.myProfile;
-      if(!p) return;
-      var name = p.first_name ? (p.first_name+' '+(p.last_name||'')).trim() : (p.username||'');
-      var ch = (p.username||p.first_name||'?')[0].toUpperCase();
-      var col = p.color || '#4C7CF3';
-      var nameEl = document.getElementById('settings-display-name');
-      if(nameEl && !nameEl.textContent.trim()) nameEl.textContent = name || ('@'+(p.username||''));
-      var unEl = document.getElementById('settings-display-username');
-      if(unEl && !unEl.textContent.trim()) unEl.textContent = '@'+(p.username||'');
-      var avText = document.getElementById('settings-avatar-text');
-      if(avText) avText.textContent = ch;
-      if(typeof renderAvatarInto==='function'){
-        renderAvatarInto(document.getElementById('settings-avatar'), p.avatar_url, ch, col);
-        renderAvatarInto(document.getElementById('me-avatar-chats'), p.avatar_url, ch, col);
-      } else {
-        // fallback: background image / letter
-        var sav = document.getElementById('settings-avatar');
-        if(sav){
-          if(p.avatar_url){
-            sav.style.backgroundImage = 'url('+p.avatar_url+')';
-            sav.style.backgroundSize = 'cover';
-            sav.classList.add('has-photo');
-            sav.innerHTML = '';
-          } else {
-            sav.style.background = col;
-            sav.textContent = ch;
-          }
-        }
-      }
-      if(typeof updateAllUIs==='function'){
-        try{ updateAllUIs(); }catch(e){}
-      }
-    }catch(e){}
-  }
-
-  function paintChats(){
-    try{
-      slLoadContactsCache();
-      slLoadGroupsCache();
-      if(typeof injectNewsChannelLocal==='function') injectNewsChannelLocal();
-      if(typeof renderContactsAndGroups==='function') renderContactsAndGroups();
-      var list = document.getElementById('contacts-list');
-      if(list && !list.querySelector('.contact,.sw-clip')){
-        // ensure at least news / empty state — never spinner
-        if(typeof injectNewsChannelLocal==='function'){
-          injectNewsChannelLocal();
-          if(typeof renderContactsAndGroups==='function') renderContactsAndGroups();
-        }
-        if(list.querySelector('.sl-spinner,.sl-loader-inline')){
-          list.innerHTML = '<div class="empty-state">Нет чатов</div>';
-        }
-      }
-    }catch(e){}
-  }
-
-  /* ---- rebind settings items so they never silent-fail ---- */
-  function bindSettings(){
-    function bind(id, fn){
-      var el = document.getElementById(id);
-      if(!el || el._slReviveBound) return;
-      el._slReviveBound = 1;
-      el.addEventListener('click', function(e){
-        e.preventDefault();
-        e.stopPropagation();
-        try{
-          if(!window.myProfile){
-            slLoadProfileCache();
-            if(!window.myProfile && typeof showToast==='function'){
-              showToast('Профиль ещё загружается…');
-            }
-          }
-          // call original onclick if any
-          if(typeof el.onclick==='function' && el.onclick !== arguments.callee){
-            try{ el.onclick(e); return; }catch(err){}
-          }
-          fn && fn(e);
-        }catch(err){ console.warn('settings click', id, err); }
-      }, true);
-    }
-    // Only ensure clickability; originals stay
-    ['settings-edit-profile','settings-favorites','settings-devices','settings-mail',
-     'settings-pin-lock','settings-passkey','settings-2fa','settings-my-link',
-     'settings-change-theme','settings-wallpaper','settings-emoji-status',
-     'settings-emoji-avatar','settings-logout'].forEach(function(id){
-      var el=document.getElementById(id);
-      if(!el || el._slReviveBound) return;
-      el._slReviveBound = 1;
-      el.style.pointerEvents = 'auto';
-      el.style.cursor = 'pointer';
-      // if original required myProfile and returned — retry after short load
-      el.addEventListener('click', function(){
-        if(!window.myProfile){
-          slLoadProfileCache();
-          paintProfile();
-        }
-      }, true);
-    });
-    // Fix edit-profile silent return when !myProfile
-    var edit = document.getElementById('settings-edit-profile');
-    if(edit && !edit._slEditFix){
-      edit._slEditFix = 1;
-      edit.addEventListener('click', async function(e){
-        if(window.myProfile) return; // original will handle
-        e.stopImmediatePropagation();
-        slLoadProfileCache();
-        if(!window.myProfile){
-          await reviveSession(true);
-        }
-        if(window.myProfile){
-          // re-trigger
-          setTimeout(function(){ try{ edit.onclick && edit.onclick(); }catch(err){} }, 50);
-        } else if(typeof showToast==='function'){
-          showToast('Не удалось загрузить профиль. Проверьте интернет.');
-        }
-      }, true);
-    }
-  }
-
-  function bindTabs(){
-    try{
-      if(typeof window.switchPage!=='function'){
-        window.switchPage = function(page){
-          document.querySelectorAll('.app-page').forEach(function(p){ p.classList.remove('active'); });
-          var el=document.getElementById('page-'+page);
-          if(el){ el.classList.add('active'); el.style.display='flex'; el.style.visibility='visible'; }
-          document.querySelectorAll('.bottom-tab').forEach(function(t){
-            t.classList.toggle('active', t.getAttribute('data-tab')===page);
-          });
-          if(page==='chats') paintChats();
-          if(page==='settings') paintProfile();
-        };
-      }
-      document.querySelectorAll('.bottom-tab').forEach(function(t){
-        if(t._slReviveTab) return;
-        t._slReviveTab = 1;
-        t.addEventListener('click', function(ev){
-          ev.preventDefault();
-          var tab = t.getAttribute('data-tab')||'chats';
-          if(typeof switchPage==='function') switchPage(tab);
-        }, true);
+      ['app-boot','auth-screen','app-screen'].forEach(function(id){
+        var el=document.getElementById(id);
+        if(el) el.style.setProperty('background',id==='app-boot'?'#0B1120':D,'important');
       });
     }catch(e){}
   }
-
-  function showApp(){
-    killBoot();
-    document.documentElement.style.background='#0F1419';
-    if(document.body){ document.body.style.background='#0F1419'; document.body.style.color='#F4F7FB'; }
-    var auth=document.getElementById('auth-screen');
-    var app=document.getElementById('app-screen');
-    if(auth){ auth.style.setProperty('display','none','important'); }
-    if(app){
-      app.style.setProperty('display','flex','important');
-      app.style.setProperty('visibility','visible','important');
-      app.style.setProperty('background','#0F1419','important');
-      app.style.opacity='1';
-      app.style.pointerEvents='auto';
-    }
-    document.querySelectorAll('.bottom-tabs').forEach(function(el){
-      el.style.display='flex';
-      el.style.pointerEvents='auto';
-      el.style.visibility='visible';
-    });
-    // ensure a page is visible
-    var active=document.querySelector('.app-page.active');
-    if(!active){
-      var pc=document.getElementById('page-chats');
-      if(pc){ pc.classList.add('active'); pc.style.display='flex'; pc.style.visibility='visible'; pc.style.pointerEvents='auto'; }
-    } else {
-      active.style.display='flex';
-      active.style.visibility='visible';
-      active.style.pointerEvents='auto';
-    }
-  }
-
-  async function reviveSession(forceNet){
+  function vis(el){
+    if(!el) return false;
     try{
-      // 1) cache first
-      slLoadProfileCache();
-      paintProfile();
-      paintChats();
-
-      var client = window.sb || (typeof sb!=='undefined' ? sb : null);
-      if(!client){
-        // try re-init
-        try{
-          if(window.supabase && window.supabase.createClient){
-            client = window.supabase.createClient(
-              'https://eshbyibuzvoztrsunvul.supabase.co',
-              'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVzaGJ5aWJ1enZvenRyc3VudnVsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU0MDk5MzUsImV4cCI6MjEwMDk4NTkzNX0.WVOd2qZ5RJlOrMPlfuIFJEymgfZjtGVB4TJgrDEFnXQ',
-              { auth: { persistSession:true, autoRefreshToken:true, storage:localStorage, storageKey:'sl-auth-token' } }
-            );
-            window.sb = client;
-            try{ sb = client; }catch(e){}
-          }
-        }catch(e){}
-      }
-      if(!client) return false;
-
-      var session=null;
-      try{
-        var res = await Promise.race([
-          client.auth.getSession(),
-          new Promise(function(_,rej){ setTimeout(function(){rej(new Error('timeout'))}, 6000); })
-        ]);
-        session = res && res.data && res.data.session;
-      }catch(e){ console.warn('getSession', e); }
-
-      if(!session || !session.user){
-        // still show cache UI if logged flag
-        if(LS.getItem('sl_logged_in')==='1' && window.myProfile){
-          showApp();
-          return true;
-        }
-        return false;
-      }
-
-      LS.setItem('sl_logged_in','1');
-      showApp();
-
-      // Load profile from DB
-      try{
-        var uid = session.user.id;
-        var pr = await Promise.race([
-          client.from('profiles').select('*').eq('id', uid).maybeSingle(),
-          new Promise(function(_,rej){ setTimeout(function(){rej(new Error('timeout'))}, 6000); })
-        ]);
-        if(pr && pr.data){
-          window.myProfile = pr.data;
-          try{ if(typeof myProfile!=='undefined') myProfile = pr.data; }catch(e){}
-          slSaveProfileCache(pr.data);
-          paintProfile();
-        } else if(!window.myProfile){
-          // minimal profile from auth user
-          var meta = session.user.user_metadata || {};
-          window.myProfile = {
-            id: uid,
-            email: session.user.email,
-            username: meta.username || (session.user.email||'user').split('@')[0],
-            first_name: meta.first_name || '',
-            last_name: meta.last_name || '',
-            color: '#4C7CF3'
-          };
-          try{ myProfile = window.myProfile; }catch(e){}
-          slSaveProfileCache(window.myProfile);
-          paintProfile();
-        }
-      }catch(e){ console.warn('profile fetch', e); }
-
-      // Prefer original onAuthenticated if available (full init)
-      if(typeof onAuthenticated==='function' && forceNet!==false){
-        try{
-          if(!window._slAuthOnce){
-            window._slAuthOnce = 1;
-            await onAuthenticated(session.user);
-            slSaveProfileCache(window.myProfile);
-            paintProfile();
-          }
-        }catch(e){ console.warn('onAuthenticated', e); }
-      }
-
-      // Load chats/groups with timeout
-      try{
-        if(typeof loadChats==='function') await loadChats();
-      }catch(e){}
-      try{
-        if(typeof loadGroups==='function') await loadGroups();
-      }catch(e){}
-      paintChats();
-      try{ if(typeof updateAllUIs==='function') updateAllUIs(); }catch(e){}
-      return true;
-    }catch(e){
-      console.warn('reviveSession', e);
-      return false;
-    }
+      var st=el.getAttribute('style')||'';
+      if(/display\s*:\s*none/i.test(st)) return false;
+      var cs=getComputedStyle(el);
+      if(cs.display==='none'||cs.visibility==='hidden') return false;
+      var rect=el.getBoundingClientRect();
+      return rect.width>8&&rect.height>8;
+    }catch(e){ return false; }
   }
-
-  async function boot(){
-    killBoot();
-    bindTabs();
-    bindSettings();
-    slLoadProfileCache();
-    paintProfile();
-    paintChats();
-
-    var logged = false;
+  function hideBoot(){
     try{
-      logged = LS.getItem('sl_logged_in')==='1' || !!LS.getItem('sl-auth-token') ||
-        Object.keys(localStorage).some(function(k){ return k.indexOf('auth-token')!==-1 || k.indexOf('sb-')===0; });
+      var boot=document.getElementById('app-boot');
+      if(boot){ boot.classList.add('hide'); boot.style.setProperty('display','none','important'); boot.style.opacity='0'; boot.style.pointerEvents='none'; }
+      var hb=document.getElementById('sl-hard-boot');
+      if(hb) hb.style.setProperty('display','none','important');
     }catch(e){}
-
-    if(logged || window.myProfile){
-      showApp();
-      // activate chats page
-      try{
-        if(typeof switchPage==='function') switchPage('chats');
-        else {
-          document.querySelectorAll('.app-page').forEach(function(p){ p.classList.remove('active'); });
-          var pc=document.getElementById('page-chats');
-          if(pc){ pc.classList.add('active'); pc.style.display='flex'; }
-        }
-      }catch(e){}
-      await reviveSession(true);
-    }
-
-    bindTabs();
-    bindSettings();
-    paintProfile();
-    paintChats();
   }
-
-  window.slForceReady = function(){
-    killBoot();
-    showApp();
-    bindTabs();
-    bindSettings();
-    paintProfile();
-    paintChats();
-    reviveSession(true);
-  };
-  window.slKillBoot = killBoot;
-  window.slReviveSession = reviveSession;
-
-  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', boot);
-  else boot();
-  setTimeout(boot, 500);
-  setTimeout(function(){ reviveSession(true); }, 1500);
-  setTimeout(function(){ paintProfile(); paintChats(); bindSettings(); }, 3000);
-  setTimeout(function(){ paintProfile(); paintChats(); }, 6000);
-
-  console.log('[SL] full revive v9 ready — call slForceReady() or slReviveSession()');
+  function showAuth(){
+    var auth=document.getElementById('auth-screen'), app=document.getElementById('app-screen');
+    if(auth){ auth.style.setProperty('display','flex','important'); auth.style.setProperty('visibility','visible','important'); auth.style.setProperty('opacity','1','important'); auth.style.setProperty('background',D,'important'); }
+    if(app) app.style.setProperty('display','none','important');
+    document.documentElement.classList.add('sl-force-auth');
+    document.documentElement.classList.remove('sl-force-app');
+    try{ var c=document.getElementById('auth-choice'); if(c){ c.style.display=''; c.style.visibility='visible'; c.style.opacity='1'; c.style.pointerEvents='auto'; } }catch(e){}
+  }
+  function showApp(){
+    var auth=document.getElementById('auth-screen'), app=document.getElementById('app-screen');
+    if(app){ app.style.setProperty('display','flex','important'); app.style.setProperty('visibility','visible','important'); app.style.setProperty('opacity','1','important'); app.style.setProperty('background',D,'important'); }
+    if(auth) auth.style.setProperty('display','none','important');
+    document.documentElement.classList.add('sl-force-app');
+    document.documentElement.classList.remove('sl-force-auth');
+    try{
+      var page=document.getElementById('page-chats')||document.querySelector('.app-page');
+      if(page){ page.classList.add('active'); page.style.setProperty('display','flex','important'); page.style.setProperty('visibility','visible','important'); page.style.setProperty('pointer-events','auto','important'); }
+    }catch(e){}
+  }
+  function isLogged(){
+    try{
+      if(window.myProfile&&myProfile.id) return true;
+      if(localStorage.getItem('sl_logged_in')==='1') return true;
+      if(localStorage.getItem('sl_my_profile')) return true;
+      for(var i=0;i<localStorage.length;i++){
+        var k=localStorage.key(i)||'';
+        if(/auth-token|supabase.*token/i.test(k)){ var v=localStorage.getItem(k); if(v&&v.length>20) return true; }
+      }
+    }catch(e){}
+    return false;
+  }
+  function recover(){
+    paintDark();
+    var auth=document.getElementById('auth-screen'), app=document.getElementById('app-screen');
+    if(vis(auth)||vis(app)){
+      document.documentElement.classList.add('sl-ready');
+      hideBoot();
+      return;
+    }
+    if(isLogged()) showApp(); else showAuth();
+    document.documentElement.classList.add('sl-ready');
+    hideBoot();
+  }
+  paintDark();
+  var n=0;
+  (function raf(){ paintDark(); if(++n<45) requestAnimationFrame(raf); })();
+  function schedule(){ [0,50,100,200,400,800,1200,2000,3000,5000,8000,12000].forEach(function(ms){ setTimeout(recover,ms); }); }
+  if(document.body) schedule(); else document.addEventListener('DOMContentLoaded', schedule);
+  setInterval(function(){
+    paintDark();
+    var auth=document.getElementById('auth-screen'), app=document.getElementById('app-screen');
+    if(!vis(auth)&&!vis(app)) recover();
+  }, 2000);
+  window.addEventListener('pageshow', function(){ paintDark(); setTimeout(recover,0); setTimeout(recover,150); setTimeout(recover,500); });
+  document.addEventListener('visibilitychange', function(){ if(document.visibilityState==='visible'){ paintDark(); setTimeout(recover,50); } });
+  setTimeout(function(){ if(!document.documentElement.classList.contains('sl-ready')) recover(); hideBoot(); }, 4000);
+  console.log('[SL] anti-white v13');
 })();
 </script>
 
-
 <script>
-/* ========== NUCLEAR FIX v11 — clicks + favorites + chats reload ========== */
+/* NUCLEAR clicks + favorites + chats v11 */
 (function(){
-  if (window._slNuclear11) return;
-  window._slNuclear11 = 1;
-
-  function toast(m){
-    try{ if(typeof showToast==='function') showToast(m); else console.log('[SL]', m); }catch(e){}
-  }
-
+  if(window._slNuclear11) return; window._slNuclear11=1;
+  function toast(m){ try{ if(typeof showToast==='function') showToast(m); }catch(e){} }
   function ensureFavorites(){
     try{
-      if(!window.myProfile || !myProfile.id) return;
-      if(!Array.isArray(window.contacts)) window.contacts = [];
-      var self = contacts.find(function(c){ return c && String(c.id)===String(myProfile.id); });
+      if(!window.myProfile||!myProfile.id) return;
+      if(!Array.isArray(window.contacts)) window.contacts=[];
+      var self=contacts.find(function(c){ return c&&String(c.id)===String(myProfile.id); });
       if(!self){
-        contacts.unshift({
-          id: myProfile.id,
-          username: myProfile.username,
-          first_name: myProfile.first_name || 'Избранное',
-          last_name: myProfile.last_name || '',
-          avatar_url: myProfile.avatar_url,
-          color: myProfile.color || '#4C7CF3',
-          email: myProfile.email,
-          lastMessage: 'Заметки',
-          lastAt: new Date().toISOString()
-        });
+        contacts.unshift({id:myProfile.id,username:myProfile.username,first_name:myProfile.first_name||'Избранное',last_name:myProfile.last_name||'',avatar_url:myProfile.avatar_url,color:myProfile.color||'#4C7CF3',email:myProfile.email,lastMessage:'Заметки',lastAt:new Date().toISOString()});
       }
-      // always show news channel
       try{ if(typeof injectNewsChannelLocal==='function') injectNewsChannelLocal(); }catch(e){}
       if(typeof renderContactsAndGroups==='function') renderContactsAndGroups();
-      else paintListFallback();
-    }catch(e){ console.warn('ensureFavorites', e); }
+    }catch(e){}
   }
-
-  function paintListFallback(){
-    var list = document.getElementById('contacts-list');
-    if(!list) return;
-    var html = '';
-    (window.contacts||[]).forEach(function(c){
-      if(!c) return;
-      var name = (c.id===myProfile?.id) ? 'Избранное' : ((c.first_name||'')+' '+(c.last_name||'')).trim() || c.username || 'Чат';
-      var sub = c.lastMessage || ('@'+(c.username||''));
-      var ch = (name||'?')[0].toUpperCase();
-      var col = c.color || '#4C7CF3';
-      html += '<div class="sw-clip" data-cid="'+c.id+'" data-ctype="user"><div class="contact sw-front" data-cid="'+c.id+'" data-ctype="user" style="display:flex;align-items:center;gap:10px;padding:10px 12px">'+
-        '<div class="avatar" style="width:48px;height:48px;border-radius:50%;background:'+col+';display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700">'+ch+'</div>'+
-        '<div style="min-width:0;flex:1"><div class="contact-name">'+name+'</div><div class="contact-sub">'+sub+'</div></div></div></div>';
-    });
-    (window.groups||[]).forEach(function(g){
-      if(!g) return;
-      var name = g.name || 'Группа';
-      var ch = (name||'?')[0].toUpperCase();
-      html += '<div class="sw-clip" data-cid="'+g.id+'" data-ctype="group"><div class="contact sw-front" data-cid="'+g.id+'" data-ctype="group" style="display:flex;align-items:center;gap:10px;padding:10px 12px">'+
-        '<div class="avatar" style="width:48px;height:48px;border-radius:50%;background:#4C7CF3;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700">'+ch+'</div>'+
-        '<div style="min-width:0;flex:1"><div class="contact-name">'+name+'</div><div class="contact-sub">'+(g.description||'Канал')+'</div></div></div></div>';
-    });
-    if(!html) html = '<div class="empty-state">Нет чатов</div>';
-    list.innerHTML = html;
-  }
-
   async function hardReloadChats(){
     try{
       ensureFavorites();
-      var client = window.sb || (typeof sb!=='undefined'?sb:null);
-      if(!client || !window.myProfile) return;
-
-      // Parallel: messages + direct contacts list from profiles if any saved ids
-      var msgPromise = client.from('messages')
-        .select('sender_id,receiver_id,content,created_at,group_id')
-        .or('sender_id.eq.'+myProfile.id+',receiver_id.eq.'+myProfile.id)
-        .is('group_id', null)
-        .order('created_at', {ascending:false})
-        .limit(400);
-
-      var timed = function(p, ms){
-        return Promise.race([p, new Promise(function(_,rej){ setTimeout(function(){rej(new Error('t'))}, ms); })]);
-      };
-
+      var client=window.sb||(typeof sb!=='undefined'?sb:null);
+      if(!client||!window.myProfile) return;
+      var timed=function(p,ms){ return Promise.race([p,new Promise(function(_,rej){ setTimeout(function(){rej(new Error('t'))},ms); })]); };
       var data=null;
       try{
-        var res = await timed(msgPromise, 10000);
-        data = res && res.data;
-      }catch(e){ console.warn('msgs', e); }
-
-      var map = new Map();
-      (data||[]).forEach(function(m){
-        var pid = m.sender_id===myProfile.id ? m.receiver_id : m.sender_id;
-        if(!pid || map.has(pid)) return;
-        map.set(pid, {lastMessage: m.content||'', lastAt: m.created_at});
-      });
-      map.set(myProfile.id, map.get(myProfile.id) || {lastMessage:'Заметки', lastAt: new Date(0).toISOString()});
-
-      // also merge sl_my_contacts ids
-      try{
-        var idsExtra = JSON.parse(localStorage.getItem('sl_my_contacts')||'[]');
-        (idsExtra||[]).forEach(function(id){ if(id && !map.has(id)) map.set(id, {lastMessage:'', lastAt:null}); });
+        var res=await timed(client.from('messages').select('sender_id,receiver_id,content,created_at,group_id').or('sender_id.eq.'+myProfile.id+',receiver_id.eq.'+myProfile.id).is('group_id',null).order('created_at',{ascending:false}).limit(400),10000);
+        data=res&&res.data;
       }catch(e){}
-
-      var ids = Array.from(map.keys());
-      var profiles = [];
+      var map=new Map();
+      (data||[]).forEach(function(m){
+        var pid=m.sender_id===myProfile.id?m.receiver_id:m.sender_id;
+        if(!pid||map.has(pid)) return;
+        map.set(pid,{lastMessage:m.content||'',lastAt:m.created_at});
+      });
+      map.set(myProfile.id, map.get(myProfile.id)||{lastMessage:'Заметки',lastAt:new Date(0).toISOString()});
+      try{ (JSON.parse(localStorage.getItem('sl_my_contacts')||'[]')||[]).forEach(function(id){ if(id&&!map.has(id)) map.set(id,{lastMessage:'',lastAt:null}); }); }catch(e){}
+      var ids=Array.from(map.keys()), profiles=[];
       if(ids.length){
         try{
-          // chunk in case of many ids
           for(var i=0;i<ids.length;i+=80){
-            var chunk = ids.slice(i, i+80);
-            var pr = await timed(client.from('profiles').select('*').in('id', chunk), 8000);
-            if(pr && pr.data) profiles = profiles.concat(pr.data);
+            var chunk=ids.slice(i,i+80);
+            var pr=await timed(client.from('profiles').select('*').in('id',chunk),8000);
+            if(pr&&pr.data) profiles=profiles.concat(pr.data);
           }
-        }catch(e){ console.warn('profiles', e); }
+        }catch(e){}
       }
-
-      var byId = {};
-      profiles.forEach(function(p){ byId[p.id]=p; });
-      window.contacts = ids.map(function(id){
-        var p = byId[id] || (id===myProfile.id ? myProfile : {id:id, username:String(id).slice(0,8)});
-        return Object.assign({}, p, {
-          lastMessage: (map.get(id)||{}).lastMessage||'',
-          lastAt: (map.get(id)||{}).lastAt
-        });
+      var byId={}; profiles.forEach(function(p){ byId[p.id]=p; });
+      window.contacts=ids.map(function(id){
+        var p=byId[id]||(id===myProfile.id?myProfile:{id:id,username:String(id).slice(0,8)});
+        return Object.assign({},p,{lastMessage:(map.get(id)||{}).lastMessage||'',lastAt:(map.get(id)||{}).lastAt});
       });
-
       try{ if(typeof slSaveContactsCache==='function') slSaveContactsCache(); }catch(e){}
       ensureFavorites();
-
-      // groups
-      try{
-        if(typeof loadGroups==='function') await loadGroups();
-      }catch(e){}
+      try{ if(typeof loadGroups==='function') await loadGroups(); }catch(e){}
       try{ if(typeof injectNewsChannelLocal==='function') injectNewsChannelLocal(); }catch(e){}
       if(typeof renderContactsAndGroups==='function') renderContactsAndGroups();
-      else paintListFallback();
-    }catch(e){
-      console.warn('hardReloadChats', e);
-      ensureFavorites();
-    }
+    }catch(e){ ensureFavorites(); }
   }
-
   function openFavorites(){
     try{
       if(!window.myProfile){ toast('Нет профиля'); return; }
       if(typeof switchPage==='function') switchPage('chats');
-      var peer = {
-        id: myProfile.id,
-        username: myProfile.username,
-        first_name: 'Избранное',
-        color: myProfile.color,
-        avatar_url: myProfile.avatar_url
-      };
+      var peer={id:myProfile.id,username:myProfile.username,first_name:'Избранное',color:myProfile.color,avatar_url:myProfile.avatar_url};
       if(typeof openChat==='function') openChat(peer);
-      else toast('Чат недоступен');
-    }catch(e){ toast('Ошибка избранного'); }
+    }catch(e){}
   }
-
   function openEditProfile(){
     try{
-      var btn = document.getElementById('settings-edit-profile');
-      if(btn && typeof btn.onclick==='function'){
-        btn.onclick();
-        return;
-      }
-      // minimal fallback sheet
-      if(!window.myProfile){ toast('Профиль не загружен'); return; }
-      var prev=document.getElementById('sl-edit-profile'); if(prev) prev.remove();
-      var sheet=document.createElement('div');
-      sheet.id='sl-edit-profile';
-      sheet.style.cssText='position:fixed;inset:0;z-index:12000;background:#0B1120;color:#F4F7FB;display:flex;flex-direction:column;padding:16px;padding-top:max(16px,env(safe-area-inset-top))';
-      sheet.innerHTML='<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px"><button type="button" id="ep-x" style="width:40px;height:40px;border:none;background:transparent;color:#fff;font-size:22px">‹</button><b style="flex:1;text-align:center">Профиль</b><span style="width:40px"></span></div>'+
-        '<div style="font-size:18px;font-weight:700;margin-bottom:4px">'+(myProfile.first_name||'')+' '+(myProfile.last_name||'')+'</div>'+
-        '<div style="color:#8B9BB4;margin-bottom:16px">@'+(myProfile.username||'')+'</div>'+
-        '<div style="color:#8B9BB4;font-size:13px">Полный редактор откроется после синхронизации. Потяните вниз список настроек или перезайдите.</div>';
-      document.body.appendChild(sheet);
-      sheet.querySelector('#ep-x').onclick=function(){ sheet.remove(); };
-    }catch(e){ toast('Не удалось открыть профиль'); }
+      var btn=document.getElementById('settings-edit-profile');
+      if(btn&&typeof btn.onclick==='function'){ btn.onclick(); return; }
+      toast('Откройте пункт ещё раз');
+    }catch(e){}
   }
-
   function bindAllClicks(){
-    // Settings items — capture phase, touch + click
-    function wire(id, fn){
-      var el = document.getElementById(id);
-      if(!el || el._nuc) return;
-      el._nuc = 1;
-      el.style.cursor = 'pointer';
-      el.style.pointerEvents = 'auto';
-      var handler = function(e){
-        e.preventDefault();
-        e.stopPropagation();
-        try{ fn(e); }catch(err){ console.warn(id, err); toast('Ошибка: '+id); }
-      };
-      el.addEventListener('click', handler, true);
-      el.addEventListener('touchend', function(e){
-        // avoid double with click
-        if(el._touchLock) return;
-        el._touchLock = 1;
-        setTimeout(function(){ el._touchLock=0; }, 400);
-        handler(e);
-      }, {passive:false, capture:true});
+    function wire(id,fn){
+      var el=document.getElementById(id);
+      if(!el||el._nuc) return;
+      el._nuc=1; el.style.cursor='pointer'; el.style.pointerEvents='auto';
+      var handler=function(e){ e.preventDefault(); e.stopPropagation(); try{ fn(e); }catch(err){} };
+      el.addEventListener('click',handler,true);
+      el.addEventListener('touchend',function(e){ if(el._touchLock) return; el._touchLock=1; setTimeout(function(){ el._touchLock=0; },400); handler(e); },{passive:false,capture:true});
     }
-
     wire('settings-favorites', openFavorites);
     wire('settings-edit-profile', openEditProfile);
     wire('settings-edit-pencil', openEditProfile);
-
-    // Generic: any settings-item with id that has original onclick — ensure it fires
-    document.querySelectorAll('.settings-item[id]').forEach(function(el){
-      if(el._nuc2) return;
-      el._nuc2 = 1;
-      el.style.pointerEvents = 'auto';
-      el.addEventListener('click', function(e){
-        // if still no handler effect, at least log
-        console.log('[SL] settings tap', el.id);
-      }, true);
-    });
-
-    // Plus button
-    var plus = document.getElementById('plus-btn');
-    if(plus && !plus._nuc){
-      plus._nuc = 1;
-      plus.style.pointerEvents = 'auto';
-      var plusFn = function(e){
-        e.preventDefault();
-        e.stopPropagation();
-        try{
-          if(typeof window.openStartChatSheet==='function') window.openStartChatSheet();
-          else if(typeof window.slOpenNewChat==='function') window.slOpenNewChat();
-          else toast('Меню создания недоступно');
-        }catch(err){ toast('Ошибка +'); }
-      };
-      plus.addEventListener('click', plusFn, true);
-      plus.addEventListener('touchend', function(e){
-        if(plus._tl) return; plus._tl=1; setTimeout(function(){plus._tl=0},400);
-        plusFn(e);
-      }, {passive:false, capture:true});
+    var plus=document.getElementById('plus-btn');
+    if(plus&&!plus._nuc){
+      plus._nuc=1; plus.style.pointerEvents='auto';
+      var plusFn=function(e){ e.preventDefault(); e.stopPropagation(); try{ if(typeof window.openStartChatSheet==='function') window.openStartChatSheet(); else toast('Меню недоступно'); }catch(err){} };
+      plus.addEventListener('click',plusFn,true);
+      plus.addEventListener('touchend',function(e){ if(plus._tl) return; plus._tl=1; setTimeout(function(){ plus._tl=0; },400); plusFn(e); },{passive:false,capture:true});
     }
-
-    // Contact rows — open chat
-    var list = document.getElementById('contacts-list');
-    if(list && !list._nucClick){
-      list._nucClick = 1;
-      list.addEventListener('click', function(e){
-        var row = e.target.closest && e.target.closest('[data-cid]');
+    var list=document.getElementById('contacts-list');
+    if(list&&!list._nucClick){
+      list._nucClick=1;
+      list.addEventListener('click',function(e){
+        var row=e.target.closest&&e.target.closest('[data-cid]');
         if(!row) return;
-        var id = row.getAttribute('data-cid');
-        var type = row.getAttribute('data-ctype') || 'user';
+        var id=row.getAttribute('data-cid'), type=row.getAttribute('data-ctype')||'user';
         try{
           if(type==='group'){
-            var g = (window.groups||[]).find(function(x){ return x && String(x.id)===String(id); });
-            if(g && typeof openGroupChat==='function') openGroupChat(g);
-            else if(g && typeof openChat==='function') openChat(g);
+            var g=(window.groups||[]).find(function(x){ return x&&String(x.id)===String(id); });
+            if(g&&typeof openGroupChat==='function') openGroupChat(g);
+            else if(g&&typeof openChat==='function') openChat(g);
           } else {
-            var c = (window.contacts||[]).find(function(x){ return x && String(x.id)===String(id); });
-            if(!c && window.myProfile && String(id)===String(myProfile.id)) c = myProfile;
-            if(c && typeof openChat==='function') openChat(c);
-            else toast('Чат не найден');
+            var c=(window.contacts||[]).find(function(x){ return x&&String(x.id)===String(id); });
+            if(!c&&window.myProfile&&String(id)===String(myProfile.id)) c=myProfile;
+            if(c&&typeof openChat==='function') openChat(c);
           }
-        }catch(err){ console.warn('open row', err); }
-      }, true);
+        }catch(err){}
+      },true);
     }
-
-    // Bottom tabs already work — reinforce
     document.querySelectorAll('.bottom-tab').forEach(function(t){
-      if(t._nuc) return;
-      t._nuc = 1;
-      t.addEventListener('click', function(){
-        var tab = t.getAttribute('data-tab');
-        if(typeof switchPage==='function') switchPage(tab);
-        if(tab==='chats') setTimeout(ensureFavorites, 100);
-      }, true);
+      if(t._nuc) return; t._nuc=1;
+      t.addEventListener('click',function(){ var tab=t.getAttribute('data-tab'); if(typeof switchPage==='function') switchPage(tab); if(tab==='chats') setTimeout(ensureFavorites,100); },true);
     });
-
-    // Kill leftover boot overlays that block touches
     try{
-      var boot = document.getElementById('app-boot');
+      var boot=document.getElementById('app-boot');
       if(boot){ boot.style.pointerEvents='none'; boot.style.display='none'; }
-      document.querySelectorAll('.modal-overlay, .cd-overlay, .owl-overlay').forEach(function(ov){
-        var st = getComputedStyle(ov);
-        if(st.display!=='none' && !ov.querySelector('.modal, .cd-card, .owl-card')){
-          ov.style.display='none';
-        }
-      });
     }catch(e){}
   }
-
-  async function boot(){
-    bindAllClicks();
-    ensureFavorites();
-    await hardReloadChats();
-    bindAllClicks();
-  }
-
-  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', boot);
-  else boot();
-  setTimeout(boot, 800);
-  setTimeout(boot, 2500);
-  setTimeout(function(){ ensureFavorites(); bindAllClicks(); }, 5000);
-
-  window.slNuclearReload = hardReloadChats;
-  window.slEnsureFavorites = ensureFavorites;
-  console.log('[SL] nuclear v11 — taps + favorites + reload');
-})();
-</script>
-
-<script>
-/* ========== ANTI WHITE-SCREEN WATCHDOG v12 ========== */
-(function(){
-  if(window._slWhiteWatch12) return;
-  window._slWhiteWatch12 = 1;
-
-  var DARK = '#0F1419';
-  var ticks = 0;
-
-  function isVisible(el){
-    if(!el) return false;
-    try{
-      var st = el.getAttribute('style')||'';
-      if(/display\s*:\s*none/i.test(st)) return false;
-      var cs = getComputedStyle(el);
-      if(cs.display==='none' || cs.visibility==='hidden' || cs.opacity==='0') return false;
-      // zero size = not really shown
-      var r = el.getBoundingClientRect();
-      return r.width > 2 && r.height > 2;
-    }catch(e){ return false; }
-  }
-
-  function forceDark(){
-    try{
-      var root = document.documentElement;
-      var body = document.body;
-      if(!body) return;
-      // only force dark if user is not explicitly on light theme after ready
-      var wantLight = false;
-      try{
-        var t = localStorage.getItem('sl_theme');
-        if(t==='light') wantLight = true;
-        else if((t==='auto'||t==='system') && window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) wantLight = true;
-      }catch(e){}
-      if(wantLight && root.classList.contains('sl-ready')) return;
-
-      root.style.background = DARK;
-      root.style.colorScheme = 'dark';
-      body.style.background = DARK;
-      body.style.color = '#F4F7FB';
-      var boot = document.getElementById('app-boot');
-      if(boot){
-        boot.style.background = '#0B1120';
-        boot.style.color = '#E8EEF8';
-      }
-      var auth = document.getElementById('auth-screen');
-      var app = document.getElementById('app-screen');
-      if(auth) auth.style.background = DARK;
-      if(app) app.style.background = DARK;
-    }catch(e){}
-  }
-
-  function hideBoot(){
-    try{
-      var boot = document.getElementById('app-boot');
-      if(!boot) return;
-      boot.classList.add('hide');
-      boot.style.opacity = '0';
-      boot.style.pointerEvents = 'none';
-      boot.style.display = 'none';
-    }catch(e){}
-  }
-
-  function ensureSomethingVisible(){
-    try{
-      var auth = document.getElementById('auth-screen');
-      var app = document.getElementById('app-screen');
-      var authOk = isVisible(auth);
-      var appOk = isVisible(app);
-
-      if(authOk || appOk){
-        hideBoot();
-        document.documentElement.classList.add('sl-ready');
-        try{ sessionStorage.setItem('sl_painted','1'); }catch(e){}
-        return true;
-      }
-
-      // Neither visible — recover
-      forceDark();
-      var logged = false;
-      try{
-        logged = localStorage.getItem('sl_logged_in')==='1' || !!localStorage.getItem('sb-'+ (window.SUPABASE_URL||'').split('//')[1]+'-auth-token');
-      }catch(e){}
-      // heuristic: myProfile or sl_my_profile cache
-      try{
-        if(window.myProfile && myProfile.id) logged = true;
-        if(localStorage.getItem('sl_my_profile')) logged = true;
-      }catch(e){}
-
-      if(logged && app){
-        app.style.setProperty('display','flex','important');
-        app.style.setProperty('visibility','visible','important');
-        app.style.setProperty('opacity','1','important');
-        app.style.background = DARK;
-        if(auth){
-          auth.style.setProperty('display','none','important');
-        }
-        document.documentElement.classList.add('sl-force-app','sl-ready');
-        document.documentElement.classList.remove('sl-force-auth');
-        // activate chats page
-        try{
-          var page = document.getElementById('page-chats') || document.querySelector('.app-page');
-          if(page){
-            page.classList.add('active');
-            page.style.setProperty('display','flex','important');
-            page.style.setProperty('visibility','visible','important');
-            page.style.setProperty('pointer-events','auto','important');
-          }
-        }catch(e){}
-      } else if(auth){
-        auth.style.setProperty('display','flex','important');
-        auth.style.setProperty('visibility','visible','important');
-        auth.style.setProperty('opacity','1','important');
-        auth.style.background = DARK;
-        if(app) app.style.setProperty('display','none','important');
-        document.documentElement.classList.add('sl-force-auth','sl-ready');
-        document.documentElement.classList.remove('sl-force-app');
-        // show auth choice if empty
-        try{
-          var choice = document.getElementById('auth-choice');
-          if(choice){
-            choice.style.display = '';
-            choice.style.visibility = 'visible';
-            choice.style.opacity = '1';
-          }
-        }catch(e){}
-      }
-      hideBoot();
-      try{ sessionStorage.setItem('sl_painted','1'); }catch(e){}
-      return true;
-    }catch(e){ return false; }
-  }
-
-  function tick(){
-    ticks++;
-    forceDark();
-    ensureSomethingVisible();
-    // first 8s aggressive, then calm
-    if(ticks < 40){
-      // keep going
-    }
-  }
-
-  // Run ASAP
-  forceDark();
-  if(document.body) ensureSomethingVisible();
-  else document.addEventListener('DOMContentLoaded', function(){ forceDark(); ensureSomethingVisible(); });
-
-  // rAF burst for first paint
-  var n = 0;
-  (function raf(){
-    forceDark();
-    ensureSomethingVisible();
-    if(++n < 30) requestAnimationFrame(raf);
-  })();
-
-  setTimeout(tick, 50);
-  setTimeout(tick, 200);
-  setTimeout(tick, 500);
-  setTimeout(tick, 1000);
-  setTimeout(tick, 2000);
-  setTimeout(tick, 4000);
-  setTimeout(tick, 8000);
-
-  // interval for intermittent returns to white (bfcache, tab switch)
-  setInterval(function(){
-    forceDark();
-    var auth = document.getElementById('auth-screen');
-    var app = document.getElementById('app-screen');
-    if(!isVisible(auth) && !isVisible(app)){
-      ensureSomethingVisible();
-    }
-  }, 1500);
-
-  // iOS Safari bfcache / page restore
-  window.addEventListener('pageshow', function(ev){
-    forceDark();
-    setTimeout(ensureSomethingVisible, 0);
-    setTimeout(ensureSomethingVisible, 100);
-    setTimeout(ensureSomethingVisible, 400);
-  });
-
-  document.addEventListener('visibilitychange', function(){
-    if(document.visibilityState==='visible'){
-      forceDark();
-      setTimeout(ensureSomethingVisible, 50);
-    }
-  });
-
-  // When app signals ready — mark painted
-  try{
-    var obs = new MutationObserver(function(){
-      var auth = document.getElementById('auth-screen');
-      var app = document.getElementById('app-screen');
-      if(isVisible(auth) || isVisible(app)){
-        document.documentElement.classList.add('sl-ready');
-        hideBoot();
-      }
-    });
-    if(document.body) obs.observe(document.body, {attributes:true, childList:true, subtree:true, attributeFilter:['style','class']});
-  }catch(e){}
-
-  console.log('[SL] anti-white watchdog v12');
+  async function boot(){ bindAllClicks(); ensureFavorites(); await hardReloadChats(); bindAllClicks(); }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',boot); else boot();
+  setTimeout(boot,800); setTimeout(boot,2500); setTimeout(function(){ ensureFavorites(); bindAllClicks(); },5000);
+  window.slNuclearReload=hardReloadChats;
+  console.log('[SL] nuclear v11');
 })();
 </script>
 </body>
