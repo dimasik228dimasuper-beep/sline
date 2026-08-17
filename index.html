@@ -4813,7 +4813,7 @@ async function handleDeepLink(){
     // description marker
     if(!group){
       try{
-        const {data}=await sb.from('groups').select('*').limit(300);
+        const {data}=await sb.from('groups').select('*').limit(60);
         group = (data||[]).find(g=> String(g.invite_code||'')===code
           || String(g.description||'').includes('__invite__:'+code)
           || String(g.description||'').includes('invite:'+code));
@@ -4894,9 +4894,72 @@ async function joinOrOpenGroup(group){
 // ========== DATA ==========
 async function loadChats(){
   const list=document.getElementById('contacts-list'); if(!list||!myProfile) return;
-  list.innerHTML=loaderHTML();
+  // --- LOW EGRESS: cache first, network second ---
+  function cacheKey(){ return 'sl_contacts_cache_v2_'+(myProfile&&myProfile.id||'x'); }
+  function loadCache(){
+    try{
+      const raw=localStorage.getItem(cacheKey());
+      if(!raw) return null;
+      const o=JSON.parse(raw);
+      if(!o||!Array.isArray(o.items)) return null;
+      if(Date.now()-(o.ts||0)>1000*60*60*24*14) return o.items; // still use stale
+      return o.items;
+    }catch(e){ return null; }
+  }
+  function saveCache(items){
+    try{ localStorage.setItem(cacheKey(), JSON.stringify({ts:Date.now(),items:items||[]})); }catch(e){}
+  }
+  window.slSaveContactsCache=function(){ try{ saveCache(contacts); }catch(e){} };
+  window.slLoadContactsCache=loadCache;
+
+  // 1) Instant paint from cache
+  const cached=loadCache();
+  if(cached && cached.length){
+    contacts=cached;
+    try{ renderContactsAndGroups(); }catch(e){}
+  } else {
+    list.innerHTML=loaderHTML();
+  }
+
   try{
-    const {data}=await sb.from('messages').select('sender_id,receiver_id,content,created_at,group_id').or(`sender_id.eq.${myProfile.id},receiver_id.eq.${myProfile.id}`).is('group_id',null).order('created_at',{ascending:false}).limit(300);
+    // 2) Prefer single RPC (if SQL function installed)
+    let usedRpc=false;
+    try{
+      const {data:rpcData, error:rpcErr}=await sb.rpc('get_chat_list',{p_user_id:myProfile.id});
+      if(!rpcErr && Array.isArray(rpcData) && rpcData.length){
+        usedRpc=true;
+        const map=new Map();
+        rpcData.forEach(r=>{
+          if(!r||!r.peer_id) return;
+          map.set(r.peer_id,{
+            id:r.peer_id,
+            username:r.username,
+            first_name:r.first_name,
+            last_name:r.last_name,
+            avatar_url:r.avatar_url,
+            color:r.color,
+            lastMessage:r.last_message||'',
+            lastAt:r.last_at
+          });
+        });
+        if(!map.has(myProfile.id)){
+          map.set(myProfile.id,{id:myProfile.id,username:myProfile.username,first_name:myProfile.first_name,last_name:myProfile.last_name,avatar_url:myProfile.avatar_url,color:myProfile.color,lastMessage:'Заметки',lastAt:new Date(0).toISOString()});
+        }
+        contacts=[...map.values()];
+        saveCache(contacts);
+        renderContactsAndGroups();
+      }
+    }catch(e){ usedRpc=false; }
+
+    if(usedRpc) return;
+
+    // 3) Fallback: small messages query (limit 80, not 300)
+    const {data}=await sb.from('messages')
+      .select('sender_id,receiver_id,content,created_at')
+      .or(`sender_id.eq.${myProfile.id},receiver_id.eq.${myProfile.id}`)
+      .is('group_id',null)
+      .order('created_at',{ascending:false})
+      .limit(80);
     const map=new Map();
     for(const m of(data||[])){
       const pid=m.sender_id===myProfile.id?m.receiver_id:m.sender_id;
@@ -4906,10 +4969,29 @@ async function loadChats(){
     if(!map.has(myProfile.id)) map.set(myProfile.id,{lastMessage:'Заметки',lastAt:new Date(0).toISOString()});
     const ids=[...map.keys()];
     let profiles=[];
-    if(ids.length){ const {data:prs}=await sb.from('profiles').select('*').in('id',ids); profiles=prs||[]; }
+    if(ids.length){
+      // only needed columns
+      const {data:prs}=await sb.from('profiles').select('id,username,first_name,last_name,avatar_url,color,email').in('id',ids);
+      profiles=prs||[];
+    }
     contacts=profiles.map(p=>({...p,lastMessage:map.get(p.id)?.lastMessage||'',lastAt:map.get(p.id)?.lastAt}));
+    // ensure self
+    if(!contacts.some(c=>c&&c.id===myProfile.id)){
+      contacts.unshift({...myProfile,lastMessage:'Заметки',lastAt:new Date(0).toISOString()});
+    }
+    saveCache(contacts);
     renderContactsAndGroups();
-  }catch(e){ list.innerHTML='<div class="empty-state">Ошибка</div>'; }
+  }catch(e){
+    if(!contacts||!contacts.length){
+      // last resort: self + cache
+      const c2=loadCache();
+      if(c2&&c2.length){ contacts=c2; renderContactsAndGroups(); }
+      else {
+        contacts=[{...myProfile,lastMessage:'Заметки',lastAt:new Date(0).toISOString()}];
+        renderContactsAndGroups();
+      }
+    }
+  }
 }
 async function loadGroups(){
   try{ const {data}=await sb.from('group_members').select('group_id,role,groups(*)').eq('user_id',myProfile.id); groups=(data||[]).map(m=>({...m.groups,myRole:m.role})).filter(g=>g?.id); }catch(e){ groups=[]; }
@@ -20645,7 +20727,7 @@ window._slTranscribeImpl = window.transcribeVoiceMsg = async function(msg){
       let items=[];
       try{
         // comments stored as messages with content prefix or reply_to
-        const {data}=await sb.from('messages').select('*,profiles:sender_id(username,first_name)').eq('group_id', activeGroup.id).order('created_at',{ascending:true}).limit(300);
+        const {data}=await sb.from('messages').select('*,profiles:sender_id(username,first_name)').eq('group_id', activeGroup.id).order('created_at',{ascending:true}).limit(60);
         items=(data||[]).filter(m=>{
           if(m.type==='comment' && String(m.reply_to||m.reply_to_msg_id||'')===String(postMsg.id)) return true;
           if(String(m.content||'').startsWith('__comment__:'+postMsg.id+':')) return true;
@@ -22528,7 +22610,7 @@ html.sl-tv .composer textarea { min-height: 52px; font-size: 17px; }
     const grid=sheet.querySelector('#mg-grid');
     let rows=[];
     try{
-      let q=sb.from('messages').select('id,type,file_url,content,created_at').in('type',['image','photo','video','file','document']).order('created_at',{ascending:false}).limit(120);
+      let q=sb.from('messages').select('id,type,file_url,content,created_at').in('type',['image','photo','video','file','document']).order('created_at',{ascending:false}).limit(40);
       if(activeGroup) q=q.eq('group_id', activeGroup.id);
       else q=q.or(`and(sender_id.eq.${myProfile.id},receiver_id.eq.${activePartner.id}),and(sender_id.eq.${activePartner.id},receiver_id.eq.${myProfile.id})`);
       const {data}=await q; rows=data||[];
@@ -33135,7 +33217,7 @@ document.addEventListener('click', function(e){
   async function syncSongsFromServer(){
     if(!window.sb) return loadSongs();
     try{
-      const { data, error } = await sb.from('songs').select('*').order('created_at', { ascending: false }).limit(300);
+      const { data, error } = await sb.from('songs').select('*').order('created_at', { ascending: false }).limit(60);
       if(error) throw error;
       if(Array.isArray(data) && data.length){
         const mapped = data.map(r => ({
@@ -39455,7 +39537,7 @@ body{
       var timed=function(p,ms){ return Promise.race([p,new Promise(function(_,rej){ setTimeout(function(){rej(new Error('t'))},ms); })]); };
       var data=null;
       try{
-        var res=await timed(client.from('messages').select('sender_id,receiver_id,content,created_at,group_id').or('sender_id.eq.'+myProfile.id+',receiver_id.eq.'+myProfile.id).is('group_id',null).order('created_at',{ascending:false}).limit(400),10000);
+        var res=await timed(client.from('messages').select('sender_id,receiver_id,content,created_at,group_id').or('sender_id.eq.'+myProfile.id+',receiver_id.eq.'+myProfile.id).is('group_id',null).order('created_at',{ascending:false}).limit(80),10000);
         data=res&&res.data;
       }catch(e){}
       var map=new Map();
@@ -39556,6 +39638,40 @@ body{
   setTimeout(boot,800); setTimeout(boot,2500); setTimeout(function(){ ensureFavorites(); bindAllClicks(); },5000);
   window.slNuclearReload=hardReloadChats;
   console.log('[SL] nuclear v11');
+})();
+</script>
+
+<script>
+/* LOW EGRESS POLICY v1 */
+(function(){
+  if(window._slLowEgress) return; window._slLowEgress=1;
+  // Throttle loadChats to max once / 15s unless forced
+  var _lc = window.loadChats;
+  if(typeof _lc==='function'){
+    var last=0, inflight=null;
+    window.loadChats=async function(force){
+      var now=Date.now();
+      if(!force && now-last<15000 && Array.isArray(window.contacts)&&contacts.length){
+        try{ if(typeof renderContactsAndGroups==='function') renderContactsAndGroups(); }catch(e){}
+        return;
+      }
+      if(inflight) return inflight;
+      last=now;
+      inflight=Promise.resolve().then(function(){ return _lc.apply(this, arguments); }).finally(function(){ inflight=null; });
+      return inflight;
+    };
+  }
+  // Don't refetch profile every focus if cached
+  document.addEventListener('visibilitychange', function(){
+    if(document.visibilityState!=='visible') return;
+    // soft refresh chats at most
+    try{
+      if(typeof window.loadChats==='function' && window.myProfile){
+        setTimeout(function(){ window.loadChats(false); }, 500);
+      }
+    }catch(e){}
+  });
+  console.log('[SL] low-egress policy');
 })();
 </script>
 </body>
