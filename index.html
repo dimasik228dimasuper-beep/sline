@@ -2602,6 +2602,38 @@ body:not(.sl-content-ready) #app-screen:not(:has(*)){background:#0F1419}
   background: var(--bg, #0F1419) !important;
 }
 /* When auth is visible, kill bottom tabs / app shell underneath */
+
+/* ===== Stability: logged-in UI must win ===== */
+html.sl-force-app #auth-screen,
+html.sl-force-app.sl-on-auth #auth-screen,
+body.sl-force-app #auth-screen{
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+html.sl-force-app #app-screen,
+html.sl-force-app.sl-on-auth #app-screen{
+  display: flex !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
+}
+@media (max-width: 1024px){
+  html.sl-force-app .bottom-tabs,
+  html.sl-force-app.sl-on-auth .bottom-tabs,
+  body.sl-force-app .bottom-tabs,
+  html.sl-force-app body:not(.in-chat) .bottom-tabs{
+    display: flex !important;
+    visibility: visible !important;
+    pointer-events: auto !important;
+    height: auto !important;
+    opacity: 1 !important;
+  }
+}
+html.sl-force-app .nav-rail{
+  /* desktop only via existing media */
+}
+
 html.sl-force-auth .bottom-tabs,
 html.sl-force-auth #app-screen,
 html.sl-on-auth .bottom-tabs{
@@ -2698,37 +2730,59 @@ body.theme-light #auth-screen .auth-card{
 <script>
 (function(){
   if(window._slAuthFS) return; window._slAuthFS=1;
+  function showTabs(){
+    try{
+      document.querySelectorAll('.bottom-tabs').forEach(el=>{
+        el.style.removeProperty('display');
+        el.style.removeProperty('visibility');
+        el.style.removeProperty('pointer-events');
+        el.style.removeProperty('height');
+        el.style.removeProperty('opacity');
+      });
+    }catch(e){}
+  }
   function syncAuthChrome(){
     try{
-      const auth=document.getElementById('auth-screen');
-      const app=document.getElementById('app-screen');
-      if(!auth) return;
-      const cs=getComputedStyle(auth);
-      const authOn = cs.display!=='none' && cs.visibility!=='hidden' && auth.offsetParent!==null;
-      // also if app is hidden explicitly
-      const appHidden = app && (getComputedStyle(app).display==='none');
-      if(document.documentElement.classList.contains('sl-force-app') || window._slAppReady){
-        document.documentElement.classList.remove('sl-on-auth');
-        document.body.classList.remove('sl-on-auth');
+      var html=document.documentElement;
+      var body=document.body;
+      // Logged-in wins forever
+      if(html.classList.contains('sl-force-app') || window._slAppReady){
+        html.classList.remove('sl-on-auth','sl-force-auth','sl-booting');
+        if(body) body.classList.remove('sl-on-auth');
+        var auth=document.getElementById('auth-screen');
+        var app=document.getElementById('app-screen');
+        if(auth){ auth.style.setProperty('display','none','important'); }
+        if(app){
+          app.style.setProperty('display','flex','important');
+          app.style.setProperty('visibility','visible','important');
+        }
+        if(body && !body.classList.contains('in-chat')) showTabs();
         return;
       }
-      const on = authOn || document.documentElement.classList.contains('sl-force-auth');
-      document.documentElement.classList.toggle('sl-on-auth', !!on);
-      document.body.classList.toggle('sl-on-auth', !!on);
+      var auth=document.getElementById('auth-screen');
+      if(!auth) return;
+      var cs=getComputedStyle(auth);
+      var authOn = cs.display!=='none' && cs.visibility!=='hidden';
+      var on = authOn || html.classList.contains('sl-force-auth');
+      html.classList.toggle('sl-on-auth', !!on);
+      if(body) body.classList.toggle('sl-on-auth', !!on);
       if(on){
-        document.querySelectorAll('.bottom-tabs').forEach(el=>{ el.style.display='none'; });
+        document.querySelectorAll('.bottom-tabs').forEach(function(el){ el.style.display='none'; });
+      } else {
+        showTabs();
       }
     }catch(e){}
   }
-  setInterval(syncAuthChrome, 500);
+  // lighter polling; stop fighting after ready
+  var n=0;
+  var t=setInterval(function(){
+    syncAuthChrome();
+    n++;
+    if(window._slAppReady || n>40) clearInterval(t);
+  }, 400);
   document.addEventListener('DOMContentLoaded', syncAuthChrome);
   setTimeout(syncAuthChrome, 0);
-  setTimeout(syncAuthChrome, 300);
-  setTimeout(syncAuthChrome, 1000);
-  // after login success app shows — class removed by force-app
-  const _obs=new MutationObserver(syncAuthChrome);
-  try{ _obs.observe(document.documentElement,{attributes:true,attributeFilter:['class','style']}); }catch(e){}
-  try{ document.getElementById('auth-screen')&&_obs.observe(document.getElementById('auth-screen'),{attributes:true,attributeFilter:['style','class','hidden']}); }catch(e){}
+  setTimeout(syncAuthChrome, 500);
 })();
 </script>
 
@@ -4197,6 +4251,13 @@ async function doLogin(){
       try{
         document.documentElement.classList.remove('sl-booting','sl-on-auth','sl-force-auth');
         document.documentElement.classList.add('sl-ready','sl-force-app'); try{ window._slAppReady=1; }catch(e){}
+        try{
+          document.documentElement.classList.remove('sl-on-auth','sl-force-auth','sl-booting');
+          document.body && document.body.classList.remove('sl-on-auth');
+          var _a=document.getElementById('auth-screen'); if(_a) _a.style.setProperty('display','none','important');
+          var _p=document.getElementById('app-screen'); if(_p){ _p.style.setProperty('display','flex','important'); _p.style.setProperty('visibility','visible','important'); }
+          document.querySelectorAll('.bottom-tabs').forEach(function(el){ el.style.removeProperty('display'); el.style.removeProperty('visibility'); });
+        }catch(e){}
         document.body.classList.remove('sl-on-auth');
         const _a=document.getElementById('auth-screen');
         const _app=document.getElementById('app-screen');
@@ -9646,7 +9707,7 @@ function clearDraft(){
 }
 
 
-document.getElementById('settings-logout').onclick=async()=>{ if(await customConfirm(t('you_sure_logout'))){ try{ storage.removeItem('sl_logged_in'); await sb.auth.signOut(); }catch(e){} location.reload(); } };
+document.getElementById('settings-logout').onclick=async()=>{ if(await customConfirm(t('you_sure_logout'))){ try{ storage.removeItem('sl_logged_in'); try{ window._slAppReady=0; document.documentElement.classList.remove('sl-force-app'); }catch(e){} await sb.auth.signOut(); }catch(e){} location.reload(); } };
 
 // ========== REALTIME ==========
 
