@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="ru" style="background:#0F1419!important;color-scheme:dark">
 <head>
 <meta name="color-scheme" content="dark" />
 <style id="sl-no-white-v13">
@@ -46,35 +46,60 @@ html.sl-ready #sl-hard-boot{display:none!important}
 <script>
 (function(){
   try{
-    var t = localStorage.getItem('sl_theme');
-    var light;
-    if(!t || t==='auto' || t==='system'){
-      light = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
-    } else {
-      light = t==='light';
+    /* BOOT: always dark first paint — light only after html.sl-ready */
+    var t = null;
+    try{ t = localStorage.getItem('sl_theme'); }catch(e){}
+    var preferLight = false;
+    if(t === 'light') preferLight = true;
+    else if(!t || t === 'auto' || t === 'system'){
+      try{ preferLight = !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches); }catch(e){}
     }
-    window.__slLight = !!light;
-    var cls = light ? 'theme-light light-theme' : 'theme-dark night-mode';
+    window.__slPreferLight = preferLight;
+    // FORCE DARK during boot (prevents iOS white screen)
+    var light = false;
+    window.__slLight = false;
+    var cls = 'theme-dark night-mode';
     document.documentElement.className = (document.documentElement.className||'').replace(/\b(theme-light|light-theme|theme-dark|night-mode)\b/g,'') + ' ' + cls;
-    document.documentElement.style.colorScheme = light ? 'light' : 'dark';
+    document.documentElement.style.colorScheme = 'dark';
+    document.documentElement.style.background = '#0F1419';
     var m = document.querySelector('meta[name="theme-color"]');
-    if(m) m.setAttribute('content', light ? '#F4F6F9' : '#0F1419');
+    if(m) m.setAttribute('content', '#0F1419');
     function applyBody(){
       try{
         if(!document.body) return;
-        document.body.classList.toggle('theme-light', !!light);
-        document.body.classList.toggle('light-theme', !!light);
-        document.body.classList.toggle('theme-dark', !light);
-        document.body.classList.toggle('night-mode', !light);
+        document.body.classList.remove('theme-light','light-theme');
+        document.body.classList.add('theme-dark','night-mode');
+        document.body.style.background = '#0F1419';
+        document.body.style.color = '#F4F7FB';
       }catch(e){}
     }
     if(document.body) applyBody();
     else document.addEventListener('DOMContentLoaded', applyBody);
+    // After app ready, optionally apply light if user preferred
+    window.__slApplyPreferredTheme = function(){
+      try{
+        if(!window.__slPreferLight) return;
+        if(!document.documentElement.classList.contains('sl-ready')) return;
+        window.__slLight = true;
+        document.documentElement.classList.remove('theme-dark','night-mode');
+        document.documentElement.classList.add('theme-light','light-theme');
+        document.documentElement.style.colorScheme = 'light';
+        document.documentElement.style.background = '#F4F6F9';
+        if(document.body){
+          document.body.classList.remove('theme-dark','night-mode');
+          document.body.classList.add('theme-light','light-theme');
+          document.body.style.background = '#F4F6F9';
+          document.body.style.color = '#0F1419';
+        }
+        var m2 = document.querySelector('meta[name="theme-color"]');
+        if(m2) m2.setAttribute('content', '#F4F6F9');
+      }catch(e){}
+    };
   }catch(e){}
 })();
 </script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-<meta name="theme-color" content="#4C7CF3" />
+<meta name="theme-color" content="#0F1419" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <meta name="apple-mobile-web-app-title" content="SLine" />
@@ -2744,7 +2769,7 @@ body.theme-light #auth-screen .auth-card{
 
 </head>
 <body>
-<div id="sl-hard-boot" aria-hidden="true"><div class="sl-hb-dot"></div><div style="font:600 13px/1.3 system-ui,-apple-system,sans-serif;color:#8B9BB4">SLine</div></div>
+<div id="sl-hard-boot" aria-hidden="true" style="position:fixed;inset:0;z-index:2147483646;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:#0F1419;color:#E8EEF8;font-family:system-ui,-apple-system,sans-serif"><div class="sl-hb-dot"></div><div style="font:600 13px/1.3 system-ui,-apple-system,sans-serif;color:#8B9BB4">SLine</div></div>
 
 <script>(function(){try{document.documentElement.classList.remove('skin-green','skin-wa','skin-tg','skin-max','skin-sline');localStorage.removeItem('sl_ui_skin');}catch(e){}})();</script>
 
