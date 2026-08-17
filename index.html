@@ -2,7 +2,18 @@
 <html lang="ru" class="theme-dark night-mode" style="background:#0F1419!important;color-scheme:dark">
 <head>
 <meta charset="UTF-8" />
-<style>html,body{background:#0F1419!important;color:#F4F7FB!important;margin:0;min-height:100%;min-height:100dvh}#app-boot{background:#0B1120!important}</style>
+<style>
+html,body{background:#0F1419!important;color:#F4F7FB!important;margin:0!important;min-height:100%!important;min-height:100dvh!important}
+html{color-scheme:dark!important}
+body{background:#0F1419!important}
+#app-boot{background:#0B1120!important;color:#E8EEF8!important}
+#auth-screen{background:#0F1419!important;min-height:100dvh}
+#app-screen{background:#0F1419!important}
+/* never pure white */
+@media (prefers-color-scheme: light){
+  html,body,#auth-screen,#app-screen,#app-boot{background:#0F1419!important;color:#F4F7FB!important}
+}
+</style>
 <script>
 (function(){
   try{
@@ -2828,53 +2839,149 @@ html.sl-force-app #app-boot{display:none !important;}
 </div>
 
 <script>
-/* CRITICAL recovery: session → app only; no login flash */
+/* CRITICAL recovery v10 — iOS: never blank white; keep auth until app has content */
 (function(){
   function hasSession(){
     try{
-      if(window._slSessionHint || window._slAppReady) return true;
-      if(document.documentElement.classList.contains('sl-force-app')) return true;
+      if(window._slAppReady) return true;
       if(localStorage.getItem('sl_logged_in')==='1') return true;
+      if(localStorage.getItem('sl-auth-token')) return true;
     }catch(e){}
     return false;
   }
-  function paint(){
+  function appHasContent(){
     try{
-      if(window._slAppReady) return;
+      var app=document.getElementById('app-screen');
+      if(!app) return false;
+      var st=window.getComputedStyle(app);
+      if(st.display==='none'||st.visibility==='hidden') return false;
+      // real UI: contacts, bottom tabs, settings item, or any chat row
+      var node=app.querySelector('.bottom-tabs, #contacts-list .contact, #contacts-list .sw-clip, .settings-item, .max-chats-title, #page-chats .sidebar');
+      if(!node) return false;
+      var r=node.getBoundingClientRect();
+      return r.width>20 && r.height>20;
+    }catch(e){ return false; }
+  }
+  function showAuth(){
+    try{
       document.documentElement.style.background='#0F1419';
-      if(document.body) document.body.style.background='#0F1419';
+      document.documentElement.classList.remove('sl-force-app');
+      document.documentElement.classList.add('sl-ready','sl-force-auth');
+      if(document.body){
+        document.body.style.background='#0F1419';
+        document.body.style.color='#F4F7FB';
+      }
       var boot=document.getElementById('app-boot');
-      if(boot) boot.style.display='none';
+      if(boot){ boot.style.display='none'; }
       var auth=document.getElementById('auth-screen');
       var app=document.getElementById('app-screen');
-      if(hasSession()){
-        document.documentElement.classList.add('sl-force-app','sl-ready');
-        document.documentElement.classList.remove('sl-force-auth','sl-on-auth','sl-booting');
-        if(document.body) document.body.classList.remove('sl-on-auth');
-        if(auth){ auth.style.setProperty('display','none','important'); auth.style.setProperty('visibility','hidden','important'); }
-        if(app){
-          app.style.setProperty('display','flex','important');
-          app.style.setProperty('visibility','visible','important');
-          app.style.setProperty('opacity','1','important');
-        }
-        document.querySelectorAll('.bottom-tabs').forEach(function(el){
-          el.style.removeProperty('display');
-          el.style.removeProperty('visibility');
-        });
-        return;
-      }
-      // no session — show login
       if(auth){
         auth.style.setProperty('display','flex','important');
         auth.style.setProperty('visibility','visible','important');
+        auth.style.setProperty('opacity','1','important');
+        auth.style.setProperty('background','#0F1419','important');
       }
-      if(app) app.style.setProperty('display','none','important');
+      if(app){
+        app.style.setProperty('display','none','important');
+      }
     }catch(e){}
   }
+  function showApp(){
+    try{
+      document.documentElement.style.background='#0F1419';
+      document.documentElement.classList.add('sl-force-app','sl-ready');
+      document.documentElement.classList.remove('sl-force-auth','sl-on-auth','sl-booting');
+      if(document.body){
+        document.body.style.background='#0F1419';
+        document.body.classList.remove('sl-on-auth');
+      }
+      var boot=document.getElementById('app-boot');
+      if(boot){ boot.style.display='none'; try{boot.remove()}catch(e){} }
+      var auth=document.getElementById('auth-screen');
+      var app=document.getElementById('app-screen');
+      if(auth){ auth.style.setProperty('display','none','important'); }
+      if(app){
+        app.style.setProperty('display','flex','important');
+        app.style.setProperty('visibility','visible','important');
+        app.style.setProperty('opacity','1','important');
+        app.style.setProperty('background','#0F1419','important');
+      }
+      document.querySelectorAll('.bottom-tabs').forEach(function(el){
+        el.style.removeProperty('display');
+        el.style.display='flex';
+        el.style.visibility='visible';
+      });
+    }catch(e){}
+  }
+  function paint(){
+    try{
+      // Always dark first — kill iOS light flash
+      document.documentElement.style.background='#0F1419';
+      document.documentElement.style.colorScheme='dark';
+      if(document.body){
+        document.body.style.background='#0F1419';
+        document.body.style.color='#F4F7FB';
+      }
+      if(window._slAppReady && appHasContent()){
+        showApp();
+        return;
+      }
+      if(hasSession()){
+        // only switch to app if something is actually painted
+        if(appHasContent()) showApp();
+        else {
+          // keep dark boot or auth, not white void
+          var boot=document.getElementById('app-boot');
+          var auth=document.getElementById('auth-screen');
+          if(boot){
+            boot.style.display='flex';
+            boot.style.background='#0B1120';
+            boot.style.zIndex='2147483000';
+          } else if(auth){
+            showAuth();
+          }
+        }
+      } else {
+        showAuth();
+      }
+    }catch(e){
+      try{ showAuth(); }catch(e2){}
+    }
+  }
   paint();
-  setTimeout(paint, 200);
-  setTimeout(paint, 800);
-  setTimeout(paint, 2000);
+  setTimeout(paint, 300);
+  setTimeout(paint, 1000);
+  setTimeout(function(){
+    // hard safety: if still no content after 3s → auth screen (never blank white)
+    if(!appHasContent()){
+      var boot=document.getElementById('app-boot');
+      if(boot) boot.style.display='none';
+      if(hasSession() && window.myProfile){
+        showApp();
+        // still empty chats is ok — UI chrome must show
+        var app=document.getElementById('app-screen');
+        if(app){
+          app.style.setProperty('display','flex','important');
+          var pc=document.getElementById('page-chats');
+          if(pc){ pc.classList.add('active'); pc.style.display='flex'; pc.style.visibility='visible'; }
+        }
+      } else {
+        showAuth();
+      }
+    }
+  }, 3000);
+  setTimeout(function(){
+    if(!appHasContent()){
+      var auth=document.getElementById('auth-screen');
+      var app=document.getElementById('app-screen');
+      // last resort: show whatever exists with dark bg
+      document.documentElement.style.background='#0F1419';
+      if(document.body) document.body.style.background='#0F1419';
+      if(auth && (!app || getComputedStyle(app).display==='none')) showAuth();
+      else showApp();
+    }
+  }, 6000);
+  window._slCriticalPaint = paint;
 })();
 </script>
 
@@ -3329,7 +3436,7 @@ body.theme-light .topbar {
 
 </style>
 
-<div id="auth-screen">
+<div id="auth-screen" style="display:flex;min-height:100dvh;background:#0F1419;color:#F4F7FB">
   <div class="auth-card">
     <div class="brand"><div class="brand-mark" aria-label="SLine"></div><div class="brand-name">SLine</div></div>
     <div class="auth-sub" id="auth-sub-text">Современный мессенджер</div>
@@ -39715,12 +39822,15 @@ body{
 
   function showApp(){
     killBoot();
+    document.documentElement.style.background='#0F1419';
+    if(document.body){ document.body.style.background='#0F1419'; document.body.style.color='#F4F7FB'; }
     var auth=document.getElementById('auth-screen');
     var app=document.getElementById('app-screen');
     if(auth){ auth.style.setProperty('display','none','important'); }
     if(app){
       app.style.setProperty('display','flex','important');
       app.style.setProperty('visibility','visible','important');
+      app.style.setProperty('background','#0F1419','important');
       app.style.opacity='1';
       app.style.pointerEvents='auto';
     }
@@ -39729,6 +39839,16 @@ body{
       el.style.pointerEvents='auto';
       el.style.visibility='visible';
     });
+    // ensure a page is visible
+    var active=document.querySelector('.app-page.active');
+    if(!active){
+      var pc=document.getElementById('page-chats');
+      if(pc){ pc.classList.add('active'); pc.style.display='flex'; pc.style.visibility='visible'; pc.style.pointerEvents='auto'; }
+    } else {
+      active.style.display='flex';
+      active.style.visibility='visible';
+      active.style.pointerEvents='auto';
+    }
   }
 
   async function reviveSession(forceNet){
