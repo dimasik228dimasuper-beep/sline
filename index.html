@@ -3551,7 +3551,7 @@ body.theme-light .topbar {
               <input type="text" id="search-input" placeholder="Люди, чаты и сообщения" data-i18n-placeholder="ph_search">
             </div>
             <div class="folder-tabs max-folder-tabs" id="folder-tabs"></div>
-            <div class="contacts" id="contacts-list"><div class="sl-loader-inline" data-i18n="loading"><div class="sl-spinner"></div></div></div>
+            <div class="contacts" id="contacts-list"><div class="sl-loader-inline" data-i18n="loading" id="contacts-boot-spinner"><div class="sl-spinner"></div></div></div>
           </div>
         </div>
         <div class="chat-pane" id="chat-pane">
@@ -5004,10 +5004,26 @@ async function joinOrOpenGroup(group){
 
 // ========== DATA ==========
 async function loadChats(){
-  const list=document.getElementById('contacts-list'); if(!list||!myProfile) return;
-  list.innerHTML=loaderHTML();
+  const list=document.getElementById('contacts-list'); if(!list) return;
+  // Instant: paint from cache first (no spinner if we have data)
   try{
-    const {data}=await sb.from('messages').select('sender_id,receiver_id,content,created_at,group_id').or(`sender_id.eq.${myProfile.id},receiver_id.eq.${myProfile.id}`).is('group_id',null).order('created_at',{ascending:false}).limit(300);
+    if((!contacts||!contacts.length) && typeof slLoadContactsCache==='function'){
+      slLoadContactsCache();
+      if(contacts && contacts.length) renderContactsAndGroups();
+    }
+  }catch(e){}
+  if(!myProfile){
+    // still show cache / empty, don't hang forever
+    if(!list.querySelector('.contact,.sw-clip,.empty-state')) list.innerHTML=loaderHTML();
+    return;
+  }
+  // Only show spinner if list is empty
+  if(!list.querySelector('.contact,.sw-clip')) list.innerHTML=loaderHTML();
+  try{
+    const {data}=await Promise.race([
+      sb.from('messages').select('sender_id,receiver_id,content,created_at,group_id').or(`sender_id.eq.${myProfile.id},receiver_id.eq.${myProfile.id}`).is('group_id',null).order('created_at',{ascending:false}).limit(300),
+      new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')), 8000))
+    ]);
     const map=new Map();
     for(const m of(data||[])){
       const pid=m.sender_id===myProfile.id?m.receiver_id:m.sender_id;
@@ -5017,13 +5033,49 @@ async function loadChats(){
     if(!map.has(myProfile.id)) map.set(myProfile.id,{lastMessage:'Заметки',lastAt:new Date(0).toISOString()});
     const ids=[...map.keys()];
     let profiles=[];
-    if(ids.length){ const {data:prs}=await sb.from('profiles').select('*').in('id',ids); profiles=prs||[]; }
+    if(ids.length){
+      try{
+        const {data:prs}=await Promise.race([
+          sb.from('profiles').select('*').in('id',ids),
+          new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')), 6000))
+        ]);
+        profiles=prs||[];
+      }catch(e){ profiles=[]; }
+    }
     contacts=profiles.map(p=>({...p,lastMessage:map.get(p.id)?.lastMessage||'',lastAt:map.get(p.id)?.lastAt}));
+    // keep favorites/self
+    if(!contacts.some(c=>c && c.id===myProfile.id)){
+      contacts.unshift({...myProfile, lastMessage:'Заметки', lastAt:new Date(0).toISOString()});
+    }
+    try{ if(typeof slSaveContactsCache==='function') slSaveContactsCache(); }catch(e){}
     renderContactsAndGroups();
-  }catch(e){ list.innerHTML='<div class="empty-state">Ошибка</div>'; }
+  }catch(e){
+    console.warn('loadChats', e);
+    // keep cache on screen; only show error if completely empty
+    if(!list.querySelector('.contact,.sw-clip')){
+      try{ if(typeof slLoadContactsCache==='function') slLoadContactsCache(); }catch(e2){}
+      if(contacts && contacts.length) renderContactsAndGroups();
+      else list.innerHTML='<div class="empty-state">'+((typeof t==='function'?t('no_chats'):'Нет чатов'))+'</div>';
+    }
+  }
 }
 async function loadGroups(){
-  try{ const {data}=await sb.from('group_members').select('group_id,role,groups(*)').eq('user_id',myProfile.id); groups=(data||[]).map(m=>({...m.groups,myRole:m.role})).filter(g=>g?.id); }catch(e){ groups=[]; }
+  try{
+    if((!groups||!groups.length) && typeof slLoadGroupsCache==='function'){
+      slLoadGroupsCache();
+      if(groups && groups.length) renderContactsAndGroups();
+    }
+  }catch(e){}
+  try{
+    if(!myProfile){ renderContactsAndGroups(); return; }
+    const res = await Promise.race([
+      sb.from('group_members').select('group_id,role,groups(*)').eq('user_id',myProfile.id),
+      new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')), 8000))
+    ]);
+    const data = res && res.data;
+    groups=(data||[]).map(m=>({...m.groups,myRole:m.role})).filter(g=>g?.id);
+    try{ if(typeof slSaveGroupsCache==='function') slSaveGroupsCache(); }catch(e){}
+  }catch(e){ if(!groups||!groups.length) groups=[]; }
   // Locally hidden (deleted from list)
   try{
     const hid=new Set(JSON.parse(localStorage.getItem('sl_hidden_chats')||'[]').map(String));
@@ -39439,6 +39491,161 @@ body{
 </script>
 
 
+
+<script>
+/* ========== Instant cache: chats + avatar (no spinner wait) ========== */
+(function(){
+  if(window._slInstantCache) return; window._slInstantCache=1;
+  const LS = window.storage || localStorage;
+
+  window.slSaveContactsCache = function(){
+    try{
+      if(!Array.isArray(contacts) || !contacts.length) return;
+      const slim = contacts.slice(0,200).map(c=>({
+        id:c.id, username:c.username, first_name:c.first_name, last_name:c.last_name,
+        avatar_url:c.avatar_url, color:c.color, email:c.email, phone:c.phone,
+        lastMessage:c.lastMessage, lastAt:c.lastAt, badge_id:c.badge_id, isBot:c.isBot
+      }));
+      LS.setItem('sl_cache_contacts', JSON.stringify(slim));
+      LS.setItem('sl_cache_contacts_ts', String(Date.now()));
+    }catch(e){}
+  };
+  window.slLoadContactsCache = function(){
+    try{
+      const raw = LS.getItem('sl_cache_contacts');
+      if(!raw) return false;
+      const arr = JSON.parse(raw);
+      if(!Array.isArray(arr) || !arr.length) return false;
+      if(!Array.isArray(window.contacts) || !window.contacts.length) window.contacts = arr;
+      else if(!contacts.length) contacts = arr;
+      return true;
+    }catch(e){ return false; }
+  };
+  window.slSaveGroupsCache = function(){
+    try{
+      if(!Array.isArray(groups) || !groups.length) return;
+      const slim = groups.slice(0,100).map(g=>({
+        id:g.id, name:g.name, type:g.type, username:g.username, avatar_url:g.avatar_url,
+        color:g.color, description:g.description, is_public:g.is_public, myRole:g.myRole,
+        _news:g._news, _verified:g._verified, lastAt:g.lastAt, lastMessage:g.lastMessage
+      }));
+      LS.setItem('sl_cache_groups', JSON.stringify(slim));
+    }catch(e){}
+  };
+  window.slLoadGroupsCache = function(){
+    try{
+      const raw = LS.getItem('sl_cache_groups');
+      if(!raw) return false;
+      const arr = JSON.parse(raw);
+      if(!Array.isArray(arr) || !arr.length) return false;
+      if(!Array.isArray(window.groups) || !window.groups.length) window.groups = arr;
+      else if(!groups.length) groups = arr;
+      return true;
+    }catch(e){ return false; }
+  };
+  window.slSaveProfileCache = function(p){
+    try{
+      p = p || window.myProfile;
+      if(!p || !p.id) return;
+      LS.setItem('sl_cache_profile', JSON.stringify({
+        id:p.id, username:p.username, first_name:p.first_name, last_name:p.last_name,
+        avatar_url:p.avatar_url, color:p.color, email:p.email, phone:p.phone,
+        cover_url:p.cover_url, badge_id:p.badge_id, birth_date:p.birth_date
+      }));
+    }catch(e){}
+  };
+  window.slLoadProfileCache = function(){
+    try{
+      const raw = LS.getItem('sl_cache_profile');
+      if(!raw) return null;
+      const p = JSON.parse(raw);
+      if(!p || !p.id) return null;
+      if(!window.myProfile) window.myProfile = p;
+      else if(window.myProfile && !window.myProfile.avatar_url && p.avatar_url){
+        window.myProfile.avatar_url = p.avatar_url;
+      }
+      return p;
+    }catch(e){ return null; }
+  };
+
+  function instantPaint(){
+    try{
+      slLoadProfileCache();
+      slLoadContactsCache();
+      slLoadGroupsCache();
+      if(typeof updateAllUIs==='function' && window.myProfile) updateAllUIs();
+      // paint avatars in settings header even before full UI
+      try{
+        const p = window.myProfile;
+        if(p){
+          const ch = (p.username||p.first_name||'?')[0].toUpperCase();
+          const col = p.color || (typeof colorFor==='function'?colorFor(p.id):'#4C7CF3');
+          if(typeof renderAvatarInto==='function'){
+            renderAvatarInto(document.getElementById('me-avatar-chats'), p.avatar_url, ch, col);
+            renderAvatarInto(document.getElementById('settings-avatar'), p.avatar_url, ch, col);
+          }
+        }
+      }catch(e){}
+      if(typeof renderContactsAndGroups==='function'){
+        if((window.contacts&&contacts.length) || (window.groups&&groups.length)){
+          renderContactsAndGroups();
+        }
+      }
+      // if still only spinner after 1.2s — force empty state instead of eternal spinner
+      setTimeout(function(){
+        const list=document.getElementById('contacts-list');
+        if(!list) return;
+        if(list.querySelector('.contact,.sw-clip,.empty-state')) return;
+        if(list.querySelector('.sl-spinner,.sl-loader-inline')){
+          try{ if(typeof injectNewsChannelLocal==='function') injectNewsChannelLocal(); }catch(e){}
+          if(typeof renderContactsAndGroups==='function') renderContactsAndGroups();
+          if(!list.querySelector('.contact,.sw-clip')){
+            list.innerHTML='<div class="empty-state">Нет чатов</div>';
+          }
+        }
+      }, 1200);
+    }catch(e){}
+  }
+
+  // Hook save after successful auth profile
+  function patchOnAuth(){
+    if(typeof onAuthenticated!=='function' || onAuthenticated._cachePatched) return;
+    const orig = onAuthenticated;
+    window.onAuthenticated = onAuthenticated = async function(user){
+      const r = await orig.apply(this, arguments);
+      try{ if(window.myProfile) slSaveProfileCache(myProfile); }catch(e){}
+      try{ instantPaint(); }catch(e){}
+      return r;
+    };
+    onAuthenticated._cachePatched = 1;
+  }
+
+  // Hook updateAllUIs to persist profile
+  function patchUpdateUI(){
+    if(typeof updateAllUIs!=='function' || updateAllUIs._cachePatched) return;
+    const orig = updateAllUIs;
+    window.updateAllUIs = updateAllUIs = function(){
+      const r = orig.apply(this, arguments);
+      try{ if(window.myProfile) slSaveProfileCache(myProfile); }catch(e){}
+      return r;
+    };
+    updateAllUIs._cachePatched = 1;
+  }
+
+  function boot(){
+    instantPaint();
+    patchOnAuth();
+    patchUpdateUI();
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', boot);
+  else boot();
+  setTimeout(boot, 200);
+  setTimeout(boot, 800);
+  setTimeout(boot, 2000);
+  setTimeout(instantPaint, 400);
+  console.log('[SL] instant cache ready');
+})();
+</script>
 <script>
 /* ========== EMERGENCY BOOT FIX v8 — eternal loading + dead tabs ========== */
 (function(){
@@ -39630,7 +39837,20 @@ body{
   }catch(e){}
 
   // Expose for manual debug
-  window.slForceReady = forceUI;
+  window.slForceReady = function(){
+    forceUI();
+    try{
+      if(typeof slLoadProfileCache==='function') slLoadProfileCache();
+      if(typeof slLoadContactsCache==='function') slLoadContactsCache();
+      if(typeof slLoadGroupsCache==='function') slLoadGroupsCache();
+      if(typeof updateAllUIs==='function' && window.myProfile) updateAllUIs();
+      if(typeof renderContactsAndGroups==='function') renderContactsAndGroups();
+      var list=document.getElementById('contacts-list');
+      if(list && list.querySelector('.sl-spinner') && !list.querySelector('.contact,.sw-clip')){
+        list.innerHTML='<div class="empty-state">Нет чатов</div>';
+      }
+    }catch(e){}
+  };
   window.slKillBoot = killBoot;
   console.log('[SL] emergency boot fix v8 ready');
 })();
