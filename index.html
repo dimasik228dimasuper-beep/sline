@@ -3797,7 +3797,9 @@ let sb = null;
         sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     } catch(e2){ console.warn('supabase init', e2); }
   }
+  try{ window.sb = sb; }catch(e){}
 })();
+try{ if(typeof sb!=='undefined') window.sb = sb; }catch(e){}
 
 
 // Silence generic "Script error." and log real details when available
@@ -39493,366 +39495,398 @@ body{
 
 
 <script>
-/* ========== Instant cache: chats + avatar (no spinner wait) ========== */
+/* ========== FULL REVIVE v9: session + profile + chats + buttons ========== */
 (function(){
-  if(window._slInstantCache) return; window._slInstantCache=1;
+  if (window._slReviveV9) return;
+  window._slReviveV9 = 1;
+
   const LS = window.storage || localStorage;
-
-  window.slSaveContactsCache = function(){
-    try{
-      if(!Array.isArray(contacts) || !contacts.length) return;
-      const slim = contacts.slice(0,200).map(c=>({
-        id:c.id, username:c.username, first_name:c.first_name, last_name:c.last_name,
-        avatar_url:c.avatar_url, color:c.color, email:c.email, phone:c.phone,
-        lastMessage:c.lastMessage, lastAt:c.lastAt, badge_id:c.badge_id, isBot:c.isBot
-      }));
-      LS.setItem('sl_cache_contacts', JSON.stringify(slim));
-      LS.setItem('sl_cache_contacts_ts', String(Date.now()));
-    }catch(e){}
-  };
-  window.slLoadContactsCache = function(){
-    try{
-      const raw = LS.getItem('sl_cache_contacts');
-      if(!raw) return false;
-      const arr = JSON.parse(raw);
-      if(!Array.isArray(arr) || !arr.length) return false;
-      if(!Array.isArray(window.contacts) || !window.contacts.length) window.contacts = arr;
-      else if(!contacts.length) contacts = arr;
-      return true;
-    }catch(e){ return false; }
-  };
-  window.slSaveGroupsCache = function(){
-    try{
-      if(!Array.isArray(groups) || !groups.length) return;
-      const slim = groups.slice(0,100).map(g=>({
-        id:g.id, name:g.name, type:g.type, username:g.username, avatar_url:g.avatar_url,
-        color:g.color, description:g.description, is_public:g.is_public, myRole:g.myRole,
-        _news:g._news, _verified:g._verified, lastAt:g.lastAt, lastMessage:g.lastMessage
-      }));
-      LS.setItem('sl_cache_groups', JSON.stringify(slim));
-    }catch(e){}
-  };
-  window.slLoadGroupsCache = function(){
-    try{
-      const raw = LS.getItem('sl_cache_groups');
-      if(!raw) return false;
-      const arr = JSON.parse(raw);
-      if(!Array.isArray(arr) || !arr.length) return false;
-      if(!Array.isArray(window.groups) || !window.groups.length) window.groups = arr;
-      else if(!groups.length) groups = arr;
-      return true;
-    }catch(e){ return false; }
-  };
-  window.slSaveProfileCache = function(p){
-    try{
-      p = p || window.myProfile;
-      if(!p || !p.id) return;
-      LS.setItem('sl_cache_profile', JSON.stringify({
-        id:p.id, username:p.username, first_name:p.first_name, last_name:p.last_name,
-        avatar_url:p.avatar_url, color:p.color, email:p.email, phone:p.phone,
-        cover_url:p.cover_url, badge_id:p.badge_id, birth_date:p.birth_date
-      }));
-    }catch(e){}
-  };
-  window.slLoadProfileCache = function(){
-    try{
-      const raw = LS.getItem('sl_cache_profile');
-      if(!raw) return null;
-      const p = JSON.parse(raw);
-      if(!p || !p.id) return null;
-      if(!window.myProfile) window.myProfile = p;
-      else if(window.myProfile && !window.myProfile.avatar_url && p.avatar_url){
-        window.myProfile.avatar_url = p.avatar_url;
-      }
-      return p;
-    }catch(e){ return null; }
-  };
-
-  function instantPaint(){
-    try{
-      slLoadProfileCache();
-      slLoadContactsCache();
-      slLoadGroupsCache();
-      if(typeof updateAllUIs==='function' && window.myProfile) updateAllUIs();
-      // paint avatars in settings header even before full UI
-      try{
-        const p = window.myProfile;
-        if(p){
-          const ch = (p.username||p.first_name||'?')[0].toUpperCase();
-          const col = p.color || (typeof colorFor==='function'?colorFor(p.id):'#4C7CF3');
-          if(typeof renderAvatarInto==='function'){
-            renderAvatarInto(document.getElementById('me-avatar-chats'), p.avatar_url, ch, col);
-            renderAvatarInto(document.getElementById('settings-avatar'), p.avatar_url, ch, col);
-          }
-        }
-      }catch(e){}
-      if(typeof renderContactsAndGroups==='function'){
-        if((window.contacts&&contacts.length) || (window.groups&&groups.length)){
-          renderContactsAndGroups();
-        }
-      }
-      // if still only spinner after 1.2s — force empty state instead of eternal spinner
-      setTimeout(function(){
-        const list=document.getElementById('contacts-list');
-        if(!list) return;
-        if(list.querySelector('.contact,.sw-clip,.empty-state')) return;
-        if(list.querySelector('.sl-spinner,.sl-loader-inline')){
-          try{ if(typeof injectNewsChannelLocal==='function') injectNewsChannelLocal(); }catch(e){}
-          if(typeof renderContactsAndGroups==='function') renderContactsAndGroups();
-          if(!list.querySelector('.contact,.sw-clip')){
-            list.innerHTML='<div class="empty-state">Нет чатов</div>';
-          }
-        }
-      }, 1200);
-    }catch(e){}
-  }
-
-  // Hook save after successful auth profile
-  function patchOnAuth(){
-    if(typeof onAuthenticated!=='function' || onAuthenticated._cachePatched) return;
-    const orig = onAuthenticated;
-    window.onAuthenticated = onAuthenticated = async function(user){
-      const r = await orig.apply(this, arguments);
-      try{ if(window.myProfile) slSaveProfileCache(myProfile); }catch(e){}
-      try{ instantPaint(); }catch(e){}
-      return r;
-    };
-    onAuthenticated._cachePatched = 1;
-  }
-
-  // Hook updateAllUIs to persist profile
-  function patchUpdateUI(){
-    if(typeof updateAllUIs!=='function' || updateAllUIs._cachePatched) return;
-    const orig = updateAllUIs;
-    window.updateAllUIs = updateAllUIs = function(){
-      const r = orig.apply(this, arguments);
-      try{ if(window.myProfile) slSaveProfileCache(myProfile); }catch(e){}
-      return r;
-    };
-    updateAllUIs._cachePatched = 1;
-  }
-
-  function boot(){
-    instantPaint();
-    patchOnAuth();
-    patchUpdateUI();
-  }
-  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', boot);
-  else boot();
-  setTimeout(boot, 200);
-  setTimeout(boot, 800);
-  setTimeout(boot, 2000);
-  setTimeout(instantPaint, 400);
-  console.log('[SL] instant cache ready');
-})();
-</script>
-<script>
-/* ========== EMERGENCY BOOT FIX v8 — eternal loading + dead tabs ========== */
-(function(){
-  if (window._slEmergencyV8) return;
-  window._slEmergencyV8 = 1;
 
   function killBoot(){
     try{
       var boot = document.getElementById('app-boot');
-      if (boot) {
-        boot.classList.add('hide');
-        boot.style.cssText = 'display:none!important;opacity:0!important;pointer-events:none!important;z-index:-1!important';
-        try { boot.remove(); } catch(e){}
-      }
-      document.documentElement.classList.remove('sl-booting');
-      document.documentElement.classList.add('sl-ready');
+      if (boot) { boot.style.display='none'; try{boot.remove()}catch(e){} }
       var loader = document.getElementById('sl-loader');
-      if (loader) {
-        loader.classList.remove('show');
-        loader.style.display = 'none';
+      if (loader) { loader.classList.remove('show'); loader.style.display='none'; }
+      document.documentElement.classList.remove('sl-booting');
+      document.documentElement.classList.add('sl-ready','sl-force-app');
+    }catch(e){}
+  }
+
+  /* ---- cache ---- */
+  window.slSaveContactsCache = function(){
+    try{
+      if(!Array.isArray(window.contacts)||!contacts.length) return;
+      LS.setItem('sl_cache_contacts', JSON.stringify(contacts.slice(0,200).map(c=>({
+        id:c.id,username:c.username,first_name:c.first_name,last_name:c.last_name,
+        avatar_url:c.avatar_url,color:c.color,email:c.email,phone:c.phone,
+        lastMessage:c.lastMessage,lastAt:c.lastAt,badge_id:c.badge_id,isBot:c.isBot
+      }))));
+    }catch(e){}
+  };
+  window.slLoadContactsCache = function(){
+    try{
+      var arr=JSON.parse(LS.getItem('sl_cache_contacts')||'null');
+      if(!Array.isArray(arr)||!arr.length) return false;
+      if(!Array.isArray(window.contacts)||!contacts.length) window.contacts=arr;
+      return true;
+    }catch(e){return false}
+  };
+  window.slSaveGroupsCache = function(){
+    try{
+      if(!Array.isArray(window.groups)||!groups.length) return;
+      LS.setItem('sl_cache_groups', JSON.stringify(groups.slice(0,100)));
+    }catch(e){}
+  };
+  window.slLoadGroupsCache = function(){
+    try{
+      var arr=JSON.parse(LS.getItem('sl_cache_groups')||'null');
+      if(!Array.isArray(arr)||!arr.length) return false;
+      if(!Array.isArray(window.groups)||!groups.length) window.groups=arr;
+      return true;
+    }catch(e){return false}
+  };
+  window.slSaveProfileCache = function(p){
+    try{
+      p=p||window.myProfile; if(!p||!p.id) return;
+      LS.setItem('sl_cache_profile', JSON.stringify(p));
+    }catch(e){}
+  };
+  window.slLoadProfileCache = function(){
+    try{
+      var p=JSON.parse(LS.getItem('sl_cache_profile')||'null');
+      if(!p||!p.id) return null;
+      if(!window.myProfile) window.myProfile=p;
+      else {
+        // fill missing fields
+        Object.keys(p).forEach(function(k){
+          if(myProfile[k]==null || myProfile[k]==='') myProfile[k]=p[k];
+        });
+      }
+      return p;
+    }catch(e){return null}
+  };
+
+  function paintProfile(){
+    try{
+      var p = window.myProfile;
+      if(!p) return;
+      var name = p.first_name ? (p.first_name+' '+(p.last_name||'')).trim() : (p.username||'');
+      var ch = (p.username||p.first_name||'?')[0].toUpperCase();
+      var col = p.color || '#4C7CF3';
+      var nameEl = document.getElementById('settings-display-name');
+      if(nameEl && !nameEl.textContent.trim()) nameEl.textContent = name || ('@'+(p.username||''));
+      var unEl = document.getElementById('settings-display-username');
+      if(unEl && !unEl.textContent.trim()) unEl.textContent = '@'+(p.username||'');
+      var avText = document.getElementById('settings-avatar-text');
+      if(avText) avText.textContent = ch;
+      if(typeof renderAvatarInto==='function'){
+        renderAvatarInto(document.getElementById('settings-avatar'), p.avatar_url, ch, col);
+        renderAvatarInto(document.getElementById('me-avatar-chats'), p.avatar_url, ch, col);
+      } else {
+        // fallback: background image / letter
+        var sav = document.getElementById('settings-avatar');
+        if(sav){
+          if(p.avatar_url){
+            sav.style.backgroundImage = 'url('+p.avatar_url+')';
+            sav.style.backgroundSize = 'cover';
+            sav.classList.add('has-photo');
+            sav.innerHTML = '';
+          } else {
+            sav.style.background = col;
+            sav.textContent = ch;
+          }
+        }
+      }
+      if(typeof updateAllUIs==='function'){
+        try{ updateAllUIs(); }catch(e){}
       }
     }catch(e){}
   }
 
-  function isLogged(){
+  function paintChats(){
     try{
-      if (window._slAppReady || window._slSessionHint) return true;
-      if (document.documentElement.classList.contains('sl-force-app')) return true;
-      if (localStorage.getItem('sl_logged_in') === '1') return true;
-      var keys = Object.keys(localStorage || {});
-      for (var i=0;i<keys.length;i++){
-        var k = keys[i];
-        if (k.indexOf('auth-token') !== -1 || k.indexOf('sb-') === 0 || k.indexOf('supabase') !== -1) return true;
+      slLoadContactsCache();
+      slLoadGroupsCache();
+      if(typeof injectNewsChannelLocal==='function') injectNewsChannelLocal();
+      if(typeof renderContactsAndGroups==='function') renderContactsAndGroups();
+      var list = document.getElementById('contacts-list');
+      if(list && !list.querySelector('.contact,.sw-clip')){
+        // ensure at least news / empty state — never spinner
+        if(typeof injectNewsChannelLocal==='function'){
+          injectNewsChannelLocal();
+          if(typeof renderContactsAndGroups==='function') renderContactsAndGroups();
+        }
+        if(list.querySelector('.sl-spinner,.sl-loader-inline')){
+          list.innerHTML = '<div class="empty-state">Нет чатов</div>';
+        }
       }
     }catch(e){}
-    return false;
   }
 
-  function ensureSwitchPage(){
-    if (typeof window.switchPage === 'function' && !window.switchPage._emergency) {
-      // keep original but wrap safety
-      var orig = window.switchPage;
-      window.switchPage = function(page){
-        try { return orig.apply(this, arguments); }
-        catch(e){ console.warn('switchPage orig failed', e); emergencySwitch(page); }
-      };
-      window.switchPage._emergency = 1;
-      return;
+  /* ---- rebind settings items so they never silent-fail ---- */
+  function bindSettings(){
+    function bind(id, fn){
+      var el = document.getElementById(id);
+      if(!el || el._slReviveBound) return;
+      el._slReviveBound = 1;
+      el.addEventListener('click', function(e){
+        e.preventDefault();
+        e.stopPropagation();
+        try{
+          if(!window.myProfile){
+            slLoadProfileCache();
+            if(!window.myProfile && typeof showToast==='function'){
+              showToast('Профиль ещё загружается…');
+            }
+          }
+          // call original onclick if any
+          if(typeof el.onclick==='function' && el.onclick !== arguments.callee){
+            try{ el.onclick(e); return; }catch(err){}
+          }
+          fn && fn(e);
+        }catch(err){ console.warn('settings click', id, err); }
+      }, true);
     }
-    if (typeof window.switchPage !== 'function') {
-      window.switchPage = emergencySwitch;
-      window.switchPage._emergency = 1;
+    // Only ensure clickability; originals stay
+    ['settings-edit-profile','settings-favorites','settings-devices','settings-mail',
+     'settings-pin-lock','settings-passkey','settings-2fa','settings-my-link',
+     'settings-change-theme','settings-wallpaper','settings-emoji-status',
+     'settings-emoji-avatar','settings-logout'].forEach(function(id){
+      var el=document.getElementById(id);
+      if(!el || el._slReviveBound) return;
+      el._slReviveBound = 1;
+      el.style.pointerEvents = 'auto';
+      el.style.cursor = 'pointer';
+      // if original required myProfile and returned — retry after short load
+      el.addEventListener('click', function(){
+        if(!window.myProfile){
+          slLoadProfileCache();
+          paintProfile();
+        }
+      }, true);
+    });
+    // Fix edit-profile silent return when !myProfile
+    var edit = document.getElementById('settings-edit-profile');
+    if(edit && !edit._slEditFix){
+      edit._slEditFix = 1;
+      edit.addEventListener('click', async function(e){
+        if(window.myProfile) return; // original will handle
+        e.stopImmediatePropagation();
+        slLoadProfileCache();
+        if(!window.myProfile){
+          await reviveSession(true);
+        }
+        if(window.myProfile){
+          // re-trigger
+          setTimeout(function(){ try{ edit.onclick && edit.onclick(); }catch(err){} }, 50);
+        } else if(typeof showToast==='function'){
+          showToast('Не удалось загрузить профиль. Проверьте интернет.');
+        }
+      }, true);
     }
-  }
-
-  function emergencySwitch(page){
-    page = page || 'chats';
-    try{
-      document.querySelectorAll('.app-page').forEach(function(p){ p.classList.remove('active'); });
-      var el = document.getElementById('page-' + page);
-      if (el) {
-        el.classList.add('active');
-        el.style.display = 'flex';
-        el.style.visibility = 'visible';
-        el.style.pointerEvents = 'auto';
-        el.style.zIndex = '2';
-      }
-      document.querySelectorAll('.bottom-tab').forEach(function(t){
-        t.classList.toggle('active', t.getAttribute('data-tab') === page);
-      });
-      if (page !== 'chats') {
-        document.body.classList.remove('in-chat');
-        var side = document.getElementById('sidebar');
-        if (side) side.classList.remove('hidden');
-      }
-      if (page === 'calls' && typeof renderCallsList === 'function') {
-        try { renderCallsList(); } catch(e){}
-      }
-      if (page === 'chats' && typeof renderContactsAndGroups === 'function') {
-        try { renderContactsAndGroups(); } catch(e){}
-      }
-    }catch(e){ console.warn('emergencySwitch', e); }
   }
 
   function bindTabs(){
     try{
-      ensureSwitchPage();
+      if(typeof window.switchPage!=='function'){
+        window.switchPage = function(page){
+          document.querySelectorAll('.app-page').forEach(function(p){ p.classList.remove('active'); });
+          var el=document.getElementById('page-'+page);
+          if(el){ el.classList.add('active'); el.style.display='flex'; el.style.visibility='visible'; }
+          document.querySelectorAll('.bottom-tab').forEach(function(t){
+            t.classList.toggle('active', t.getAttribute('data-tab')===page);
+          });
+          if(page==='chats') paintChats();
+          if(page==='settings') paintProfile();
+        };
+      }
       document.querySelectorAll('.bottom-tab').forEach(function(t){
-        if (t._slTabBound) return;
-        t._slTabBound = 1;
+        if(t._slReviveTab) return;
+        t._slReviveTab = 1;
         t.addEventListener('click', function(ev){
           ev.preventDefault();
-          ev.stopPropagation();
-          var tab = t.getAttribute('data-tab') || 'chats';
-          if (typeof switchPage === 'function') switchPage(tab);
-          else emergencySwitch(tab);
-        }, true);
-      });
-      // also nav-rail if present
-      document.querySelectorAll('.nav-rail .nav-item').forEach(function(btn){
-        if (btn._slTabBound) return;
-        btn._slTabBound = 1;
-        btn.addEventListener('click', function(){
-          var tab = btn.getAttribute('data-tab') || 'chats';
-          if (typeof switchPage === 'function') switchPage(tab);
-          else emergencySwitch(tab);
+          var tab = t.getAttribute('data-tab')||'chats';
+          if(typeof switchPage==='function') switchPage(tab);
         }, true);
       });
     }catch(e){}
   }
 
-  function forceUI(){
-    try{
-      killBoot();
-      document.documentElement.style.background = '#0F1419';
-      if (document.body) {
-        document.body.style.background = '#0F1419';
-        document.body.style.visibility = 'visible';
-        document.body.style.opacity = '1';
-      }
-
-      var auth = document.getElementById('auth-screen');
-      var app  = document.getElementById('app-screen');
-      var logged = isLogged();
-
-      if (logged) {
-        document.documentElement.classList.add('sl-force-app','sl-ready');
-        document.documentElement.classList.remove('sl-force-auth','sl-on-auth');
-        try { window._slAppReady = 1; } catch(e){}
-        if (auth) {
-          auth.style.setProperty('display','none','important');
-          auth.style.pointerEvents = 'none';
-        }
-        if (app) {
-          app.style.setProperty('display','flex','important');
-          app.style.setProperty('visibility','visible','important');
-          app.style.setProperty('opacity','1','important');
-          app.style.minHeight = '100dvh';
-          app.style.pointerEvents = 'auto';
-        }
-        document.querySelectorAll('.bottom-tabs').forEach(function(el){
-          el.style.removeProperty('display');
-          el.style.display = 'flex';
-          el.style.visibility = 'visible';
-          el.style.pointerEvents = 'auto';
-          el.style.zIndex = '50';
-        });
-        // ensure a page is active
-        var active = document.querySelector('.app-page.active');
-        if (!active) {
-          emergencySwitch('chats');
-        } else {
-          active.style.display = 'flex';
-          active.style.visibility = 'visible';
-        }
-      } else {
-        document.documentElement.classList.add('sl-ready');
-        if (auth) {
-          auth.style.setProperty('display','flex','important');
-          auth.style.visibility = 'visible';
-          auth.style.opacity = '1';
-        }
-        if (app) app.style.setProperty('display','none','important');
-      }
-      bindTabs();
-    }catch(e){ console.warn('forceUI', e); }
-  }
-
-  // Run early and repeatedly
-  forceUI();
-  setTimeout(forceUI, 400);
-  setTimeout(forceUI, 1200);
-  setTimeout(forceUI, 2500);
-  setTimeout(forceUI, 5000);
-  setTimeout(forceUI, 9000);
-
-  // Absolute hard stop for boot overlay
-  setTimeout(function(){
+  function showApp(){
     killBoot();
-    forceUI();
-    bindTabs();
-  }, 12000);
+    var auth=document.getElementById('auth-screen');
+    var app=document.getElementById('app-screen');
+    if(auth){ auth.style.setProperty('display','none','important'); }
+    if(app){
+      app.style.setProperty('display','flex','important');
+      app.style.setProperty('visibility','visible','important');
+      app.style.opacity='1';
+      app.style.pointerEvents='auto';
+    }
+    document.querySelectorAll('.bottom-tabs').forEach(function(el){
+      el.style.display='flex';
+      el.style.pointerEvents='auto';
+      el.style.visibility='visible';
+    });
+  }
 
-  // Re-bind when DOM mutates (late scripts)
-  try{
-    var mo = new MutationObserver(function(){ bindTabs(); });
-    mo.observe(document.documentElement, { childList: true, subtree: true });
-    setTimeout(function(){ try{ mo.disconnect(); }catch(e){} }, 20000);
-  }catch(e){}
-
-  // Expose for manual debug
-  window.slForceReady = function(){
-    forceUI();
+  async function reviveSession(forceNet){
     try{
-      if(typeof slLoadProfileCache==='function') slLoadProfileCache();
-      if(typeof slLoadContactsCache==='function') slLoadContactsCache();
-      if(typeof slLoadGroupsCache==='function') slLoadGroupsCache();
-      if(typeof updateAllUIs==='function' && window.myProfile) updateAllUIs();
-      if(typeof renderContactsAndGroups==='function') renderContactsAndGroups();
-      var list=document.getElementById('contacts-list');
-      if(list && list.querySelector('.sl-spinner') && !list.querySelector('.contact,.sw-clip')){
-        list.innerHTML='<div class="empty-state">Нет чатов</div>';
+      // 1) cache first
+      slLoadProfileCache();
+      paintProfile();
+      paintChats();
+
+      var client = window.sb || (typeof sb!=='undefined' ? sb : null);
+      if(!client){
+        // try re-init
+        try{
+          if(window.supabase && window.supabase.createClient){
+            client = window.supabase.createClient(
+              'https://eshbyibuzvoztrsunvul.supabase.co',
+              'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVzaGJ5aWJ1enZvenRyc3VudnVsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU0MDk5MzUsImV4cCI6MjEwMDk4NTkzNX0.WVOd2qZ5RJlOrMPlfuIFJEymgfZjtGVB4TJgrDEFnXQ',
+              { auth: { persistSession:true, autoRefreshToken:true, storage:localStorage, storageKey:'sl-auth-token' } }
+            );
+            window.sb = client;
+            try{ sb = client; }catch(e){}
+          }
+        }catch(e){}
       }
+      if(!client) return false;
+
+      var session=null;
+      try{
+        var res = await Promise.race([
+          client.auth.getSession(),
+          new Promise(function(_,rej){ setTimeout(function(){rej(new Error('timeout'))}, 6000); })
+        ]);
+        session = res && res.data && res.data.session;
+      }catch(e){ console.warn('getSession', e); }
+
+      if(!session || !session.user){
+        // still show cache UI if logged flag
+        if(LS.getItem('sl_logged_in')==='1' && window.myProfile){
+          showApp();
+          return true;
+        }
+        return false;
+      }
+
+      LS.setItem('sl_logged_in','1');
+      showApp();
+
+      // Load profile from DB
+      try{
+        var uid = session.user.id;
+        var pr = await Promise.race([
+          client.from('profiles').select('*').eq('id', uid).maybeSingle(),
+          new Promise(function(_,rej){ setTimeout(function(){rej(new Error('timeout'))}, 6000); })
+        ]);
+        if(pr && pr.data){
+          window.myProfile = pr.data;
+          try{ if(typeof myProfile!=='undefined') myProfile = pr.data; }catch(e){}
+          slSaveProfileCache(pr.data);
+          paintProfile();
+        } else if(!window.myProfile){
+          // minimal profile from auth user
+          var meta = session.user.user_metadata || {};
+          window.myProfile = {
+            id: uid,
+            email: session.user.email,
+            username: meta.username || (session.user.email||'user').split('@')[0],
+            first_name: meta.first_name || '',
+            last_name: meta.last_name || '',
+            color: '#4C7CF3'
+          };
+          try{ myProfile = window.myProfile; }catch(e){}
+          slSaveProfileCache(window.myProfile);
+          paintProfile();
+        }
+      }catch(e){ console.warn('profile fetch', e); }
+
+      // Prefer original onAuthenticated if available (full init)
+      if(typeof onAuthenticated==='function' && forceNet!==false){
+        try{
+          if(!window._slAuthOnce){
+            window._slAuthOnce = 1;
+            await onAuthenticated(session.user);
+            slSaveProfileCache(window.myProfile);
+            paintProfile();
+          }
+        }catch(e){ console.warn('onAuthenticated', e); }
+      }
+
+      // Load chats/groups with timeout
+      try{
+        if(typeof loadChats==='function') await loadChats();
+      }catch(e){}
+      try{
+        if(typeof loadGroups==='function') await loadGroups();
+      }catch(e){}
+      paintChats();
+      try{ if(typeof updateAllUIs==='function') updateAllUIs(); }catch(e){}
+      return true;
+    }catch(e){
+      console.warn('reviveSession', e);
+      return false;
+    }
+  }
+
+  async function boot(){
+    killBoot();
+    bindTabs();
+    bindSettings();
+    slLoadProfileCache();
+    paintProfile();
+    paintChats();
+
+    var logged = false;
+    try{
+      logged = LS.getItem('sl_logged_in')==='1' || !!LS.getItem('sl-auth-token') ||
+        Object.keys(localStorage).some(function(k){ return k.indexOf('auth-token')!==-1 || k.indexOf('sb-')===0; });
     }catch(e){}
+
+    if(logged || window.myProfile){
+      showApp();
+      // activate chats page
+      try{
+        if(typeof switchPage==='function') switchPage('chats');
+        else {
+          document.querySelectorAll('.app-page').forEach(function(p){ p.classList.remove('active'); });
+          var pc=document.getElementById('page-chats');
+          if(pc){ pc.classList.add('active'); pc.style.display='flex'; }
+        }
+      }catch(e){}
+      await reviveSession(true);
+    }
+
+    bindTabs();
+    bindSettings();
+    paintProfile();
+    paintChats();
+  }
+
+  window.slForceReady = function(){
+    killBoot();
+    showApp();
+    bindTabs();
+    bindSettings();
+    paintProfile();
+    paintChats();
+    reviveSession(true);
   };
   window.slKillBoot = killBoot;
-  console.log('[SL] emergency boot fix v8 ready');
+  window.slReviveSession = reviveSession;
+
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', boot);
+  else boot();
+  setTimeout(boot, 500);
+  setTimeout(function(){ reviveSession(true); }, 1500);
+  setTimeout(function(){ paintProfile(); paintChats(); bindSettings(); }, 3000);
+  setTimeout(function(){ paintProfile(); paintChats(); }, 6000);
+
+  console.log('[SL] full revive v9 ready — call slForceReady() or slReviveSession()');
 })();
 </script>
 
