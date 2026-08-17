@@ -2707,9 +2707,14 @@ body.theme-light #auth-screen .auth-card{
       const authOn = cs.display!=='none' && cs.visibility!=='hidden' && auth.offsetParent!==null;
       // also if app is hidden explicitly
       const appHidden = app && (getComputedStyle(app).display==='none');
+      if(document.documentElement.classList.contains('sl-force-app') || window._slAppReady){
+        document.documentElement.classList.remove('sl-on-auth');
+        document.body.classList.remove('sl-on-auth');
+        return;
+      }
       const on = authOn || document.documentElement.classList.contains('sl-force-auth');
-      document.documentElement.classList.toggle('sl-on-auth', !!on && !document.documentElement.classList.contains('sl-force-app'));
-      document.body.classList.toggle('sl-on-auth', !!on && !document.documentElement.classList.contains('sl-force-app'));
+      document.documentElement.classList.toggle('sl-on-auth', !!on);
+      document.body.classList.toggle('sl-on-auth', !!on);
       if(on){
         document.querySelectorAll('.bottom-tabs').forEach(el=>{ el.style.display='none'; });
       }
@@ -2739,61 +2744,53 @@ body.theme-light #auth-screen .auth-card{
 </div>
 
 <script>
-/* CRITICAL iOS recovery — runs immediately, before heavy JS */
+/* CRITICAL iOS recovery — respect logged-in session */
 (function(){
+  function isLogged(){
+    try{
+      if(localStorage.getItem('sl_logged_in')==='1') return true;
+      if(document.documentElement.classList.contains('sl-force-app')) return true;
+      if(window.myProfile && window.myProfile.id) return true;
+    }catch(e){}
+    return false;
+  }
   function paint(){
     try{
-      document.documentElement.classList.remove('sl-booting');
-      document.documentElement.classList.add('sl-ready');
-      document.documentElement.style.background = '#0F1419';
-      if(document.body){
-        document.body.style.background = '#0F1419';
-        document.body.style.color = '#F4F7FB';
+      if(window._slAppReady) return;
+      document.documentElement.style.background='#0F1419';
+      if(document.body) document.body.style.background='#0F1419';
+      var boot=document.getElementById('app-boot');
+      if(boot) boot.style.display='none';
+      var auth=document.getElementById('auth-screen');
+      var app=document.getElementById('app-screen');
+      if(isLogged()){
+        document.documentElement.classList.add('sl-force-app','sl-ready');
+        document.documentElement.classList.remove('sl-booting','sl-on-auth','sl-force-auth');
+        if(document.body) document.body.classList.remove('sl-on-auth');
+        if(auth) auth.style.setProperty('display','none','important');
+        if(app){
+          app.style.setProperty('display','flex','important');
+          app.style.setProperty('visibility','visible','important');
+          app.style.setProperty('opacity','1','important');
+        }
+        return;
       }
-      var boot = document.getElementById('app-boot');
-      var auth = document.getElementById('auth-screen');
-      var app = document.getElementById('app-screen');
-      // Prefer auth until main app fully boots
+      document.documentElement.classList.remove('sl-booting');
       if(auth){
         auth.style.setProperty('display','flex','important');
         auth.style.setProperty('visibility','visible','important');
         auth.style.setProperty('opacity','1','important');
         auth.style.setProperty('background','#0F1419','important');
-        auth.style.setProperty('z-index','1000','important');
-        auth.style.setProperty('min-height','100dvh','important');
       }
-      if(app){
-        // keep app in DOM but behind until real login completes
-        var hasContent = false;
-        try{
-          hasContent = !!(app.querySelector('.contact, .chat-item, #messages .bubble, .bottom-tabs'));
-        }catch(e){}
-        if(!hasContent){
-          app.style.setProperty('display','none','important');
-        }
-      }
-      if(boot){
-        // hide boot overlay once auth exists in DOM
-        if(auth) boot.style.display = 'none';
-      }
-      var choice = document.getElementById('auth-choice');
-      if(choice){
-        choice.style.setProperty('display','block','important');
-        choice.style.setProperty('visibility','visible','important');
-      }
+      if(app) app.style.setProperty('display','none','important');
     }catch(e){}
   }
-  // run multiple times while heavy script loads
   paint();
-  setTimeout(paint, 100);
-  setTimeout(paint, 400);
+  setTimeout(paint, 300);
   setTimeout(paint, 1000);
-  setTimeout(paint, 2000);
-  setTimeout(paint, 4000);
-  setTimeout(paint, 8000);
+  setTimeout(paint, 2500);
   document.addEventListener('DOMContentLoaded', paint);
 })();
-
 </script>
 
 <script>
@@ -3376,14 +3373,26 @@ body.theme-light .topbar {
 
 
 <script>
-/* Instant paint after auth HTML — must run before heavy JS */
+/* Instant paint after auth HTML — only if no session flag */
 (function(){
   try{
-    document.documentElement.classList.remove('sl-booting');
     document.documentElement.style.background='#0F1419';
-    document.body && (document.body.style.background='#0F1419');
+    if(document.body) document.body.style.background='#0F1419';
     var boot=document.getElementById('app-boot');
     if(boot) boot.style.display='none';
+    var logged=false;
+    try{ logged = localStorage.getItem('sl_logged_in')==='1'; }catch(e){}
+    if(logged){
+      // let main app take over; do not force auth
+      document.documentElement.classList.add('sl-force-app');
+      document.documentElement.classList.remove('sl-booting','sl-on-auth','sl-force-auth');
+      var app=document.getElementById('app-screen');
+      var auth=document.getElementById('auth-screen');
+      if(app){ app.style.setProperty('display','flex','important'); app.style.setProperty('visibility','visible','important'); }
+      if(auth){ auth.style.setProperty('display','none','important'); }
+      return;
+    }
+    document.documentElement.classList.remove('sl-booting');
     var auth=document.getElementById('auth-screen');
     if(auth){
       auth.style.cssText='display:flex!important;visibility:visible!important;opacity:1!important;background:#0F1419!important;min-height:100dvh!important;position:relative!important;z-index:1000!important;';
@@ -4187,7 +4196,7 @@ async function doLogin(){
       // force UI into app even if some load hung
       try{
         document.documentElement.classList.remove('sl-booting','sl-on-auth','sl-force-auth');
-        document.documentElement.classList.add('sl-ready','sl-force-app');
+        document.documentElement.classList.add('sl-ready','sl-force-app'); try{ window._slAppReady=1; }catch(e){}
         document.body.classList.remove('sl-on-auth');
         const _a=document.getElementById('auth-screen');
         const _app=document.getElementById('app-screen');
@@ -39327,16 +39336,16 @@ body{
 
 
 <script>
-/* Emergency white-screen kill — last resort */
+/* Emergency white-screen kill — respects session */
 (function(){
   if(window._slWhiteKill) return; window._slWhiteKill=1;
   function forceUI(reason){
     try{
+      if(window._slAppReady) return;
       document.documentElement.classList.remove('sl-booting');
       document.documentElement.classList.add('sl-ready');
-      document.documentElement.style.background = '#0F1419';
-      document.body.style.background = '#0F1419';
-      document.body.style.color = '#F4F7FB';
+      document.documentElement.style.background='#0F1419';
+      if(document.body){ document.body.style.background='#0F1419'; document.body.style.color='#F4F7FB'; }
       var boot=document.getElementById('app-boot');
       if(boot) boot.style.display='none';
       var auth=document.getElementById('auth-screen');
@@ -39344,61 +39353,30 @@ body{
       var logged=false;
       try{
         if(localStorage.getItem('sl_logged_in')==='1') logged=true;
-        for(var i=0;i<localStorage.length;i++){
-          var k=localStorage.key(i)||'';
-          if(k.indexOf('auth-token')!==-1 || (k.indexOf('sb-')===0 && k.indexOf('auth')!==-1)){ logged=true; break; }
-        }
+        if(window.myProfile && myProfile.id) logged=true;
+        if(document.documentElement.classList.contains('sl-force-app')) logged=true;
       }catch(e){}
       if(logged && app){
         document.documentElement.classList.add('sl-force-app');
         document.documentElement.classList.remove('sl-force-auth','sl-on-auth');
-        document.body.classList.remove('sl-on-auth');
-        if(auth){ auth.style.setProperty('display','none','important'); }
+        if(document.body) document.body.classList.remove('sl-on-auth');
+        if(auth) auth.style.setProperty('display','none','important');
         app.style.setProperty('display','flex','important');
         app.style.setProperty('visibility','visible','important');
         app.style.setProperty('opacity','1','important');
-        app.style.setProperty('background','#0F1419','important');
-        app.style.setProperty('min-height','100dvh','important');
       } else if(auth){
         document.documentElement.classList.add('sl-force-auth');
-        document.documentElement.classList.remove('sl-force-app','sl-on-auth');
-        document.body.classList.remove('sl-on-auth');
+        document.documentElement.classList.remove('sl-force-app');
         auth.style.setProperty('display','flex','important');
         auth.style.setProperty('visibility','visible','important');
-        auth.style.setProperty('opacity','1','important');
         auth.style.setProperty('background','#0F1419','important');
-        auth.style.setProperty('min-height','100dvh','important');
-        auth.style.setProperty('z-index','100000','important');
         if(app) app.style.setProperty('display','none','important');
-        var choice=document.getElementById('auth-choice');
-        if(choice){
-          choice.style.setProperty('display','block','important');
-          choice.style.setProperty('visibility','visible','important');
-        }
-        var b1=document.getElementById('auth-go-login');
-        var b2=document.getElementById('auth-go-register');
-        if(b1) b1.style.setProperty('display','block','important');
-        if(b2) b2.style.setProperty('display','block','important');
       }
       console.log('[SL] white-kill', reason, 'logged='+logged);
-    }catch(e){ console.warn(e); }
-  }
-  setTimeout(function(){ forceUI('1.2s'); }, 1200);
-  setTimeout(function(){ forceUI('3s'); }, 3000);
-  setTimeout(function(){ forceUI('6s'); }, 6000);
-  // if still blank after 2s (no visible auth/app content)
-  setTimeout(function(){
-    try{
-      var auth=document.getElementById('auth-screen');
-      var app=document.getElementById('app-screen');
-      var vis=function(el){
-        if(!el) return false;
-        var r=el.getBoundingClientRect();
-        return r.width>20 && r.height>20 && getComputedStyle(el).display!=='none' && getComputedStyle(el).visibility!=='hidden';
-      };
-      if(!vis(auth) && !vis(app)) forceUI('blank-detect');
     }catch(e){}
-  }, 2000);
+  }
+  setTimeout(function(){ forceUI('1.5s'); }, 1500);
+  setTimeout(function(){ forceUI('4s'); }, 4000);
 })();
 </script>
 
