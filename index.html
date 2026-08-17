@@ -2577,14 +2577,15 @@ body:not(.sl-content-ready) #app-screen:not(:has(*)){background:#0F1419}
   background: var(--bg, #0F1419) !important;
 }
 /* When auth is visible, kill bottom tabs / app shell underneath */
-body:has(#auth-screen:not([style*="display: none"])) .bottom-tabs,
-body:has(#auth-screen:not([style*="display: none"])) #app-screen,
 html.sl-force-auth .bottom-tabs,
 html.sl-force-auth #app-screen,
-html:not(.sl-force-app) #auth-screen:not([hidden]) ~ #app-screen .bottom-tabs{
+html.sl-on-auth .bottom-tabs{
   display: none !important;
   visibility: hidden !important;
   pointer-events: none !important;
+}
+html.sl-force-auth #app-screen{
+  display: none !important;
 }
 /* Safer class toggles (no :has dependency only) */
 html.sl-on-auth #app-screen,
@@ -39256,6 +39257,83 @@ body{
   }
   setInterval(fixEmptyAuth, 1000);
   setTimeout(fixEmptyAuth, 300);
+})();
+</script>
+
+
+<script>
+/* Emergency white-screen kill — last resort */
+(function(){
+  if(window._slWhiteKill) return; window._slWhiteKill=1;
+  function forceUI(reason){
+    try{
+      document.documentElement.classList.remove('sl-booting');
+      document.documentElement.classList.add('sl-ready');
+      document.documentElement.style.background = '#0F1419';
+      document.body.style.background = '#0F1419';
+      document.body.style.color = '#F4F7FB';
+      var boot=document.getElementById('app-boot');
+      if(boot) boot.style.display='none';
+      var auth=document.getElementById('auth-screen');
+      var app=document.getElementById('app-screen');
+      var logged=false;
+      try{
+        if(localStorage.getItem('sl_logged_in')==='1') logged=true;
+        for(var i=0;i<localStorage.length;i++){
+          var k=localStorage.key(i)||'';
+          if(k.indexOf('auth-token')!==-1 || (k.indexOf('sb-')===0 && k.indexOf('auth')!==-1)){ logged=true; break; }
+        }
+      }catch(e){}
+      if(logged && app){
+        document.documentElement.classList.add('sl-force-app');
+        document.documentElement.classList.remove('sl-force-auth','sl-on-auth');
+        document.body.classList.remove('sl-on-auth');
+        if(auth){ auth.style.setProperty('display','none','important'); }
+        app.style.setProperty('display','flex','important');
+        app.style.setProperty('visibility','visible','important');
+        app.style.setProperty('opacity','1','important');
+        app.style.setProperty('background','#0F1419','important');
+        app.style.setProperty('min-height','100dvh','important');
+      } else if(auth){
+        document.documentElement.classList.add('sl-force-auth');
+        document.documentElement.classList.remove('sl-force-app','sl-on-auth');
+        document.body.classList.remove('sl-on-auth');
+        auth.style.setProperty('display','flex','important');
+        auth.style.setProperty('visibility','visible','important');
+        auth.style.setProperty('opacity','1','important');
+        auth.style.setProperty('background','#0F1419','important');
+        auth.style.setProperty('min-height','100dvh','important');
+        auth.style.setProperty('z-index','100000','important');
+        if(app) app.style.setProperty('display','none','important');
+        var choice=document.getElementById('auth-choice');
+        if(choice){
+          choice.style.setProperty('display','block','important');
+          choice.style.setProperty('visibility','visible','important');
+        }
+        var b1=document.getElementById('auth-go-login');
+        var b2=document.getElementById('auth-go-register');
+        if(b1) b1.style.setProperty('display','block','important');
+        if(b2) b2.style.setProperty('display','block','important');
+      }
+      console.log('[SL] white-kill', reason, 'logged='+logged);
+    }catch(e){ console.warn(e); }
+  }
+  setTimeout(function(){ forceUI('1.2s'); }, 1200);
+  setTimeout(function(){ forceUI('3s'); }, 3000);
+  setTimeout(function(){ forceUI('6s'); }, 6000);
+  // if still blank after 2s (no visible auth/app content)
+  setTimeout(function(){
+    try{
+      var auth=document.getElementById('auth-screen');
+      var app=document.getElementById('app-screen');
+      var vis=function(el){
+        if(!el) return false;
+        var r=el.getBoundingClientRect();
+        return r.width>20 && r.height>20 && getComputedStyle(el).display!=='none' && getComputedStyle(el).visibility!=='hidden';
+      };
+      if(!vis(auth) && !vis(app)) forceUI('blank-detect');
+    }catch(e){}
+  }, 2000);
 })();
 </script>
 
