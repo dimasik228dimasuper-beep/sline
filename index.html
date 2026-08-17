@@ -40010,5 +40010,307 @@ body{
 })();
 </script>
 
+
+<script>
+/* ========== NUCLEAR FIX v11 — clicks + favorites + chats reload ========== */
+(function(){
+  if (window._slNuclear11) return;
+  window._slNuclear11 = 1;
+
+  function toast(m){
+    try{ if(typeof showToast==='function') showToast(m); else console.log('[SL]', m); }catch(e){}
+  }
+
+  function ensureFavorites(){
+    try{
+      if(!window.myProfile || !myProfile.id) return;
+      if(!Array.isArray(window.contacts)) window.contacts = [];
+      var self = contacts.find(function(c){ return c && String(c.id)===String(myProfile.id); });
+      if(!self){
+        contacts.unshift({
+          id: myProfile.id,
+          username: myProfile.username,
+          first_name: myProfile.first_name || 'Избранное',
+          last_name: myProfile.last_name || '',
+          avatar_url: myProfile.avatar_url,
+          color: myProfile.color || '#4C7CF3',
+          email: myProfile.email,
+          lastMessage: 'Заметки',
+          lastAt: new Date().toISOString()
+        });
+      }
+      // always show news channel
+      try{ if(typeof injectNewsChannelLocal==='function') injectNewsChannelLocal(); }catch(e){}
+      if(typeof renderContactsAndGroups==='function') renderContactsAndGroups();
+      else paintListFallback();
+    }catch(e){ console.warn('ensureFavorites', e); }
+  }
+
+  function paintListFallback(){
+    var list = document.getElementById('contacts-list');
+    if(!list) return;
+    var html = '';
+    (window.contacts||[]).forEach(function(c){
+      if(!c) return;
+      var name = (c.id===myProfile?.id) ? 'Избранное' : ((c.first_name||'')+' '+(c.last_name||'')).trim() || c.username || 'Чат';
+      var sub = c.lastMessage || ('@'+(c.username||''));
+      var ch = (name||'?')[0].toUpperCase();
+      var col = c.color || '#4C7CF3';
+      html += '<div class="sw-clip" data-cid="'+c.id+'" data-ctype="user"><div class="contact sw-front" data-cid="'+c.id+'" data-ctype="user" style="display:flex;align-items:center;gap:10px;padding:10px 12px">'+
+        '<div class="avatar" style="width:48px;height:48px;border-radius:50%;background:'+col+';display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700">'+ch+'</div>'+
+        '<div style="min-width:0;flex:1"><div class="contact-name">'+name+'</div><div class="contact-sub">'+sub+'</div></div></div></div>';
+    });
+    (window.groups||[]).forEach(function(g){
+      if(!g) return;
+      var name = g.name || 'Группа';
+      var ch = (name||'?')[0].toUpperCase();
+      html += '<div class="sw-clip" data-cid="'+g.id+'" data-ctype="group"><div class="contact sw-front" data-cid="'+g.id+'" data-ctype="group" style="display:flex;align-items:center;gap:10px;padding:10px 12px">'+
+        '<div class="avatar" style="width:48px;height:48px;border-radius:50%;background:#4C7CF3;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700">'+ch+'</div>'+
+        '<div style="min-width:0;flex:1"><div class="contact-name">'+name+'</div><div class="contact-sub">'+(g.description||'Канал')+'</div></div></div></div>';
+    });
+    if(!html) html = '<div class="empty-state">Нет чатов</div>';
+    list.innerHTML = html;
+  }
+
+  async function hardReloadChats(){
+    try{
+      ensureFavorites();
+      var client = window.sb || (typeof sb!=='undefined'?sb:null);
+      if(!client || !window.myProfile) return;
+
+      // Parallel: messages + direct contacts list from profiles if any saved ids
+      var msgPromise = client.from('messages')
+        .select('sender_id,receiver_id,content,created_at,group_id')
+        .or('sender_id.eq.'+myProfile.id+',receiver_id.eq.'+myProfile.id)
+        .is('group_id', null)
+        .order('created_at', {ascending:false})
+        .limit(400);
+
+      var timed = function(p, ms){
+        return Promise.race([p, new Promise(function(_,rej){ setTimeout(function(){rej(new Error('t'))}, ms); })]);
+      };
+
+      var data=null;
+      try{
+        var res = await timed(msgPromise, 10000);
+        data = res && res.data;
+      }catch(e){ console.warn('msgs', e); }
+
+      var map = new Map();
+      (data||[]).forEach(function(m){
+        var pid = m.sender_id===myProfile.id ? m.receiver_id : m.sender_id;
+        if(!pid || map.has(pid)) return;
+        map.set(pid, {lastMessage: m.content||'', lastAt: m.created_at});
+      });
+      map.set(myProfile.id, map.get(myProfile.id) || {lastMessage:'Заметки', lastAt: new Date(0).toISOString()});
+
+      // also merge sl_my_contacts ids
+      try{
+        var idsExtra = JSON.parse(localStorage.getItem('sl_my_contacts')||'[]');
+        (idsExtra||[]).forEach(function(id){ if(id && !map.has(id)) map.set(id, {lastMessage:'', lastAt:null}); });
+      }catch(e){}
+
+      var ids = Array.from(map.keys());
+      var profiles = [];
+      if(ids.length){
+        try{
+          // chunk in case of many ids
+          for(var i=0;i<ids.length;i+=80){
+            var chunk = ids.slice(i, i+80);
+            var pr = await timed(client.from('profiles').select('*').in('id', chunk), 8000);
+            if(pr && pr.data) profiles = profiles.concat(pr.data);
+          }
+        }catch(e){ console.warn('profiles', e); }
+      }
+
+      var byId = {};
+      profiles.forEach(function(p){ byId[p.id]=p; });
+      window.contacts = ids.map(function(id){
+        var p = byId[id] || (id===myProfile.id ? myProfile : {id:id, username:String(id).slice(0,8)});
+        return Object.assign({}, p, {
+          lastMessage: (map.get(id)||{}).lastMessage||'',
+          lastAt: (map.get(id)||{}).lastAt
+        });
+      });
+
+      try{ if(typeof slSaveContactsCache==='function') slSaveContactsCache(); }catch(e){}
+      ensureFavorites();
+
+      // groups
+      try{
+        if(typeof loadGroups==='function') await loadGroups();
+      }catch(e){}
+      try{ if(typeof injectNewsChannelLocal==='function') injectNewsChannelLocal(); }catch(e){}
+      if(typeof renderContactsAndGroups==='function') renderContactsAndGroups();
+      else paintListFallback();
+    }catch(e){
+      console.warn('hardReloadChats', e);
+      ensureFavorites();
+    }
+  }
+
+  function openFavorites(){
+    try{
+      if(!window.myProfile){ toast('Нет профиля'); return; }
+      if(typeof switchPage==='function') switchPage('chats');
+      var peer = {
+        id: myProfile.id,
+        username: myProfile.username,
+        first_name: 'Избранное',
+        color: myProfile.color,
+        avatar_url: myProfile.avatar_url
+      };
+      if(typeof openChat==='function') openChat(peer);
+      else toast('Чат недоступен');
+    }catch(e){ toast('Ошибка избранного'); }
+  }
+
+  function openEditProfile(){
+    try{
+      var btn = document.getElementById('settings-edit-profile');
+      if(btn && typeof btn.onclick==='function'){
+        btn.onclick();
+        return;
+      }
+      // minimal fallback sheet
+      if(!window.myProfile){ toast('Профиль не загружен'); return; }
+      var prev=document.getElementById('sl-edit-profile'); if(prev) prev.remove();
+      var sheet=document.createElement('div');
+      sheet.id='sl-edit-profile';
+      sheet.style.cssText='position:fixed;inset:0;z-index:12000;background:#0B1120;color:#F4F7FB;display:flex;flex-direction:column;padding:16px;padding-top:max(16px,env(safe-area-inset-top))';
+      sheet.innerHTML='<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px"><button type="button" id="ep-x" style="width:40px;height:40px;border:none;background:transparent;color:#fff;font-size:22px">‹</button><b style="flex:1;text-align:center">Профиль</b><span style="width:40px"></span></div>'+
+        '<div style="font-size:18px;font-weight:700;margin-bottom:4px">'+(myProfile.first_name||'')+' '+(myProfile.last_name||'')+'</div>'+
+        '<div style="color:#8B9BB4;margin-bottom:16px">@'+(myProfile.username||'')+'</div>'+
+        '<div style="color:#8B9BB4;font-size:13px">Полный редактор откроется после синхронизации. Потяните вниз список настроек или перезайдите.</div>';
+      document.body.appendChild(sheet);
+      sheet.querySelector('#ep-x').onclick=function(){ sheet.remove(); };
+    }catch(e){ toast('Не удалось открыть профиль'); }
+  }
+
+  function bindAllClicks(){
+    // Settings items — capture phase, touch + click
+    function wire(id, fn){
+      var el = document.getElementById(id);
+      if(!el || el._nuc) return;
+      el._nuc = 1;
+      el.style.cursor = 'pointer';
+      el.style.pointerEvents = 'auto';
+      var handler = function(e){
+        e.preventDefault();
+        e.stopPropagation();
+        try{ fn(e); }catch(err){ console.warn(id, err); toast('Ошибка: '+id); }
+      };
+      el.addEventListener('click', handler, true);
+      el.addEventListener('touchend', function(e){
+        // avoid double with click
+        if(el._touchLock) return;
+        el._touchLock = 1;
+        setTimeout(function(){ el._touchLock=0; }, 400);
+        handler(e);
+      }, {passive:false, capture:true});
+    }
+
+    wire('settings-favorites', openFavorites);
+    wire('settings-edit-profile', openEditProfile);
+    wire('settings-edit-pencil', openEditProfile);
+
+    // Generic: any settings-item with id that has original onclick — ensure it fires
+    document.querySelectorAll('.settings-item[id]').forEach(function(el){
+      if(el._nuc2) return;
+      el._nuc2 = 1;
+      el.style.pointerEvents = 'auto';
+      el.addEventListener('click', function(e){
+        // if still no handler effect, at least log
+        console.log('[SL] settings tap', el.id);
+      }, true);
+    });
+
+    // Plus button
+    var plus = document.getElementById('plus-btn');
+    if(plus && !plus._nuc){
+      plus._nuc = 1;
+      plus.style.pointerEvents = 'auto';
+      var plusFn = function(e){
+        e.preventDefault();
+        e.stopPropagation();
+        try{
+          if(typeof window.openStartChatSheet==='function') window.openStartChatSheet();
+          else if(typeof window.slOpenNewChat==='function') window.slOpenNewChat();
+          else toast('Меню создания недоступно');
+        }catch(err){ toast('Ошибка +'); }
+      };
+      plus.addEventListener('click', plusFn, true);
+      plus.addEventListener('touchend', function(e){
+        if(plus._tl) return; plus._tl=1; setTimeout(function(){plus._tl=0},400);
+        plusFn(e);
+      }, {passive:false, capture:true});
+    }
+
+    // Contact rows — open chat
+    var list = document.getElementById('contacts-list');
+    if(list && !list._nucClick){
+      list._nucClick = 1;
+      list.addEventListener('click', function(e){
+        var row = e.target.closest && e.target.closest('[data-cid]');
+        if(!row) return;
+        var id = row.getAttribute('data-cid');
+        var type = row.getAttribute('data-ctype') || 'user';
+        try{
+          if(type==='group'){
+            var g = (window.groups||[]).find(function(x){ return x && String(x.id)===String(id); });
+            if(g && typeof openGroupChat==='function') openGroupChat(g);
+            else if(g && typeof openChat==='function') openChat(g);
+          } else {
+            var c = (window.contacts||[]).find(function(x){ return x && String(x.id)===String(id); });
+            if(!c && window.myProfile && String(id)===String(myProfile.id)) c = myProfile;
+            if(c && typeof openChat==='function') openChat(c);
+            else toast('Чат не найден');
+          }
+        }catch(err){ console.warn('open row', err); }
+      }, true);
+    }
+
+    // Bottom tabs already work — reinforce
+    document.querySelectorAll('.bottom-tab').forEach(function(t){
+      if(t._nuc) return;
+      t._nuc = 1;
+      t.addEventListener('click', function(){
+        var tab = t.getAttribute('data-tab');
+        if(typeof switchPage==='function') switchPage(tab);
+        if(tab==='chats') setTimeout(ensureFavorites, 100);
+      }, true);
+    });
+
+    // Kill leftover boot overlays that block touches
+    try{
+      var boot = document.getElementById('app-boot');
+      if(boot){ boot.style.pointerEvents='none'; boot.style.display='none'; }
+      document.querySelectorAll('.modal-overlay, .cd-overlay, .owl-overlay').forEach(function(ov){
+        var st = getComputedStyle(ov);
+        if(st.display!=='none' && !ov.querySelector('.modal, .cd-card, .owl-card')){
+          ov.style.display='none';
+        }
+      });
+    }catch(e){}
+  }
+
+  async function boot(){
+    bindAllClicks();
+    ensureFavorites();
+    await hardReloadChats();
+    bindAllClicks();
+  }
+
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', boot);
+  else boot();
+  setTimeout(boot, 800);
+  setTimeout(boot, 2500);
+  setTimeout(function(){ ensureFavorites(); bindAllClicks(); }, 5000);
+
+  window.slNuclearReload = hardReloadChats;
+  window.slEnsureFavorites = ensureFavorites;
+  console.log('[SL] nuclear v11 — taps + favorites + reload');
+})();
+</script>
 </body>
 </html>
