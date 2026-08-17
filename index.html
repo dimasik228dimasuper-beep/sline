@@ -2548,6 +2548,159 @@ body:not(.sl-content-ready) #app-screen:not(:has(*)){background:#0F1419}
 /* hide leftover TG more / three-dot buttons user asked to remove */
 #chat-more-btn, #chats-select-btn, button#chats-select-btn { display:none!important; visibility:hidden!important; pointer-events:none!important; width:0!important; height:0!important; overflow:hidden!important; margin:0!important; padding:0!important; border:none!important; }
 </style>
+
+
+
+
+<style id="sl-auth-fullscreen">
+/* Login / register — full screen, hide app chrome */
+#auth-screen{
+  position: fixed !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 100dvh !important;
+  max-height: none !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  justify-content: flex-start !important;
+  padding: 0 !important;
+  padding-top: env(safe-area-inset-top, 0px) !important;
+  padding-bottom: env(safe-area-inset-bottom, 0px) !important;
+  margin: 0 !important;
+  box-sizing: border-box !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch !important;
+  z-index: 100000 !important;
+  background: var(--bg, #0F1419) !important;
+}
+/* When auth is visible, kill bottom tabs / app shell underneath */
+body:has(#auth-screen:not([style*="display: none"])) .bottom-tabs,
+body:has(#auth-screen:not([style*="display: none"])) #app-screen,
+html.sl-force-auth .bottom-tabs,
+html.sl-force-auth #app-screen,
+html:not(.sl-force-app) #auth-screen:not([hidden]) ~ #app-screen .bottom-tabs{
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+/* Safer class toggles (no :has dependency only) */
+html.sl-on-auth #app-screen,
+html.sl-on-auth .bottom-tabs,
+html.sl-on-auth .nav-rail,
+body.sl-on-auth #app-screen,
+body.sl-on-auth .bottom-tabs,
+body.sl-on-auth .nav-rail{
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+html.sl-on-auth #auth-screen,
+body.sl-on-auth #auth-screen{
+  display: flex !important;
+}
+#auth-screen .auth-card{
+  width: 100% !important;
+  max-width: none !important;
+  min-height: 100% !important;
+  flex: 1 0 auto !important;
+  margin: 0 !important;
+  border-radius: 0 !important;
+  border: none !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  padding: 32px 22px calc(32px + env(safe-area-inset-bottom, 0px)) !important;
+  background: transparent !important;
+  position: relative !important;
+  overflow: visible !important;
+  animation: none !important;
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: center !important;
+  box-sizing: border-box !important;
+}
+#auth-screen .auth-card::before{
+  top: -15% !important;
+  right: -35% !important;
+  width: min(90vw, 360px) !important;
+  height: min(90vw, 360px) !important;
+  opacity: .22 !important;
+  pointer-events: none !important;
+}
+html.theme-light #auth-screen,
+body.theme-light #auth-screen{
+  background: #F2F4F8 !important;
+}
+html.theme-light #auth-screen .auth-card,
+body.theme-light #auth-screen .auth-card{
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+#auth-screen .brand-name{ font-size: 34px !important; letter-spacing: -0.02em !important; }
+#auth-screen .auth-sub{ margin-bottom: 28px !important; opacity: .75 !important; }
+#auth-screen .field input,
+#auth-screen input[type="text"],
+#auth-screen input[type="email"],
+#auth-screen input[type="password"],
+#auth-screen input[type="tel"]{
+  min-height: 48px !important;
+  font-size: 16px !important;
+  border-radius: 14px !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+#auth-screen .btn-primary,
+#auth-screen .btn-secondary{
+  min-height: 50px !important;
+  border-radius: 14px !important;
+  width: 100% !important;
+  font-size: 16px !important;
+  font-weight: 600 !important;
+}
+#auth-screen .auth-msg{ margin-top: 12px !important; }
+#auth-screen .auth-card > *{
+  width: 100%;
+  max-width: 440px;
+  margin-left: auto;
+  margin-right: auto;
+}
+</style>
+<script>
+(function(){
+  if(window._slAuthFS) return; window._slAuthFS=1;
+  function syncAuthChrome(){
+    try{
+      const auth=document.getElementById('auth-screen');
+      const app=document.getElementById('app-screen');
+      if(!auth) return;
+      const cs=getComputedStyle(auth);
+      const authOn = cs.display!=='none' && cs.visibility!=='hidden' && auth.offsetParent!==null;
+      // also if app is hidden explicitly
+      const appHidden = app && (getComputedStyle(app).display==='none');
+      const on = authOn || document.documentElement.classList.contains('sl-force-auth');
+      document.documentElement.classList.toggle('sl-on-auth', !!on && !document.documentElement.classList.contains('sl-force-app'));
+      document.body.classList.toggle('sl-on-auth', !!on && !document.documentElement.classList.contains('sl-force-app'));
+      if(on){
+        document.querySelectorAll('.bottom-tabs').forEach(el=>{ el.style.display='none'; });
+      }
+    }catch(e){}
+  }
+  setInterval(syncAuthChrome, 500);
+  document.addEventListener('DOMContentLoaded', syncAuthChrome);
+  setTimeout(syncAuthChrome, 0);
+  setTimeout(syncAuthChrome, 300);
+  setTimeout(syncAuthChrome, 1000);
+  // after login success app shows — class removed by force-app
+  const _obs=new MutationObserver(syncAuthChrome);
+  try{ _obs.observe(document.documentElement,{attributes:true,attributeFilter:['class','style']}); }catch(e){}
+  try{ document.getElementById('auth-screen')&&_obs.observe(document.getElementById('auth-screen'),{attributes:true,attributeFilter:['style','class','hidden']}); }catch(e){}
+})();
+</script>
+
 </head>
 <body>
 <script>(function(){try{document.documentElement.classList.remove('skin-green','skin-wa','skin-tg','skin-max','skin-sline');localStorage.removeItem('sl_ui_skin');}catch(e){}})();</script>
@@ -3676,13 +3829,19 @@ function updateAllUIs(){
     const _nameEl=document.getElementById('settings-display-name');
     if(_nameEl){
       const b=(typeof slBadgeHtml==='function'?slBadgeHtml(typeof slGetBadge==='function'?slGetBadge(myProfile):myProfile.badge_id, myProfile.color||'#4C7CF3'):'');
-      _nameEl.innerHTML=escapeHtml(name)+b;
+      const v=(typeof verifiedBadgeIf==='function'?verifiedBadgeIf(myProfile.email, myProfile.username):'');
+      _nameEl.innerHTML=escapeHtml(name)+v+b;
     } else setTxt('settings-display-name', name);
-    setTxt('settings-display-username', '@'+(myProfile.username||''));
+    const _un=document.getElementById('settings-display-username');
+    if(_un){
+      const v2=(typeof verifiedBadgeIf==='function'?verifiedBadgeIf(myProfile.email, myProfile.username):'');
+      _un.innerHTML='@'+escapeHtml(myProfile.username||'')+v2;
+    } else setTxt('settings-display-username', '@'+(myProfile.username||''));
     const _meName=document.getElementById('me-name-chats');
     if(_meName){
       const b2=(typeof slBadgeHtml==='function'?slBadgeHtml(typeof slGetBadge==='function'?slGetBadge(myProfile):myProfile.badge_id, myProfile.color||'#4C7CF3'):'');
-      _meName.innerHTML=escapeHtml(name)+b2;
+      const v3=(typeof verifiedBadgeIf==='function'?verifiedBadgeIf(myProfile.email, myProfile.username):'');
+      _meName.innerHTML=escapeHtml(name)+v3+b2;
     } else setTxt('me-name-chats', name);
     setTxt('settings-avatar-text', ch);
     renderAvatarInto(document.getElementById('me-avatar-chats'), myProfile.avatar_url, ch, col);
@@ -3792,7 +3951,17 @@ function normalizeContact(raw){
 function showAuthPanel(which){
   ['auth-choice','login-form','register-form','forgot-form'].forEach(id=>{
     const el = document.getElementById(id);
-    if(el) el.style.display = (id===which) ? 'block' : 'none';
+    if(!el) return;
+    if(id===which){
+      el.style.display = 'block';
+      el.style.visibility = 'visible';
+      el.style.pointerEvents = 'auto';
+      el.style.opacity = '1';
+    } else {
+      el.style.display = 'none';
+      el.style.visibility = 'hidden';
+      el.style.pointerEvents = 'none';
+    }
   });
   const sub = document.getElementById('auth-sub-text');
   if(sub){
@@ -3888,38 +4057,46 @@ async function doLogin(){
   if(!contact){ authMsg('Введите email или номер телефона'); return; }
   if(!password){ authMsg('Введите пароль'); return; }
   if(!sb){ authMsg('Сервис входа недоступен'); return; }
+  if(btn && btn.disabled && btn.classList.contains('btn-loading')){
+    // allow retry if previous hung
+    setBtnLoading(btn, false);
+  }
   setBtnLoading(btn, true);
+  const withTimeout = (p, ms, label)=>{
+    let t;
+    return Promise.race([
+      Promise.resolve(p).finally(()=>{ try{ clearTimeout(t); }catch(e){} }),
+      new Promise((_,rej)=>{ t=setTimeout(()=>rej(new Error(label||'timeout')), ms); })
+    ]);
+  };
+  // hard safety: always unlock button after 12s
+  const unlock = setTimeout(()=>{ try{ setBtnLoading(btn, false); }catch(e){} }, 12000);
   try{
-    // Build candidate emails: normalized variants + profile lookup by phone
     let candidates = Array.from(new Set([...(contact.emails||[contact.email]).filter(Boolean)]));
     if(contact.isPhone && contact.phoneVariants && contact.phoneVariants.length){
       try{
-        // Find profile linked to this phone (any format) and use its email for auth
         const ors = [];
-        for(const p of contact.phoneVariants.slice(0,8)){
+        for(const p of contact.phoneVariants.slice(0,6)){
           const s = String(p).replace(/"/g,'');
           ors.push('phone.eq.'+s);
           if(!s.startsWith('+')) ors.push('phone.eq.+' + s);
         }
-        // also match synthetic emails stored in profiles.email
-        for(const em of candidates.slice(0,4)){
-          ors.push('email.eq.'+em);
-        }
+        for(const em of candidates.slice(0,3)){ ors.push('email.eq.'+em); }
         if(ors.length){
-          const {data: rows} = await sb.from('profiles').select('email,phone').or(ors.join(',')).limit(5);
-          (rows||[]).forEach(r=>{
-            if(r && r.email) candidates.push(String(r.email).toLowerCase());
-          });
+          const q = sb.from('profiles').select('email,phone').or(ors.join(',')).limit(5);
+          const {data: rows} = await withTimeout(q, 4000, 'phone lookup timeout');
+          (rows||[]).forEach(r=>{ if(r && r.email) candidates.push(String(r.email).toLowerCase()); });
         }
       }catch(e){ console.warn('phone lookup', e); }
     }
     candidates = Array.from(new Set(candidates.map(e=>String(e).toLowerCase()).filter(Boolean)));
+    if(!candidates.length && contact.email) candidates = [String(contact.email).toLowerCase()];
 
     let lastError = null;
     let data = null;
     for(const email of candidates){
       try{
-        const res = await sb.auth.signInWithPassword({email, password});
+        const res = await withTimeout(sb.auth.signInWithPassword({email, password}), 8000, 'auth timeout');
         if(!res.error && res.data?.user){
           data = res.data;
           lastError = null;
@@ -3931,16 +4108,37 @@ async function doLogin(){
 
     if(!data?.user){
       const msg = (lastError && lastError.message) || '';
-      authMsg(/invalid|credentials|email/i.test(msg) ? 'Неверный логин или пароль' : (msg || 'Неверный логин или пароль'));
+      if(/timeout/i.test(msg)) authMsg('Сервер не отвечает. Проверьте интернет и попробуйте снова');
+      else authMsg(/invalid|credentials|email/i.test(msg) ? 'Неверный логин или пароль' : (msg || 'Неверный логин или пароль'));
       setBtnLoading(btn, false);
+      clearTimeout(unlock);
       return;
     }
-    if(data?.user) onAuthenticated(data.user);
-    else setBtnLoading(btn, false);
+    try{
+      await withTimeout(Promise.resolve(onAuthenticated(data.user)), 15000, 'app load timeout');
+    }catch(e){
+      console.warn('onAuthenticated', e);
+      // force UI into app even if some load hung
+      try{
+        document.documentElement.classList.remove('sl-booting','sl-on-auth','sl-force-auth');
+        document.documentElement.classList.add('sl-ready','sl-force-app');
+        document.body.classList.remove('sl-on-auth');
+        const _a=document.getElementById('auth-screen');
+        const _app=document.getElementById('app-screen');
+        if(_a){ _a.style.display='none'; }
+        if(_app){ _app.style.display='flex'; _app.style.visibility='visible'; }
+        if(typeof hideLoader==='function') hideLoader(true);
+        authMsg('');
+      }catch(e2){}
+    }
+    setBtnLoading(btn, false);
   }catch(e){
     console.warn('login', e);
-    authMsg('Ошибка сети');
+    authMsg(/timeout/i.test(String(e&&e.message)) ? 'Сервер не отвечает. Попробуйте снова' : 'Ошибка сети');
     setBtnLoading(btn, false);
+  }finally{
+    clearTimeout(unlock);
+    try{ setBtnLoading(btn, false); }catch(e){}
   }
 }
 
@@ -4463,14 +4661,29 @@ async function onAuthenticated(user){
   try{ if(typeof slMaybeShowThemeOnboarding==='function') slMaybeShowThemeOnboarding(); }catch(e){}
   // inline list spinners only — avoid sticky full-screen overlay on login
   try{
-    await loadChats(); await loadGroups(); await loadStories();
-    subscribeRealtime(); setupPresence(); setupTyping();
-    flushOfflineQueue();
-    handleDeepLink();
+    const boot = Promise.all([
+      Promise.resolve().then(()=>loadChats()).catch(e=>console.warn('loadChats',e)),
+      Promise.resolve().then(()=>loadGroups()).catch(e=>console.warn('loadGroups',e)),
+      Promise.resolve().then(()=>loadStories()).catch(e=>console.warn('loadStories',e)),
+    ]);
+    await Promise.race([
+      boot,
+      new Promise(r=>setTimeout(r, 10000))
+    ]);
+    try{ subscribeRealtime(); }catch(e){}
+    try{ setupPresence(); }catch(e){}
+    try{ setupTyping(); }catch(e){}
+    try{ flushOfflineQueue(); }catch(e){}
+    try{ handleDeepLink(); }catch(e){}
   } finally {
-    hideLoader(true);
-    document.documentElement.classList.remove('sl-booting');
-    document.documentElement.classList.add('sl-ready');
+    try{ hideLoader(true); }catch(e){}
+    document.documentElement.classList.remove('sl-booting','sl-on-auth','sl-force-auth');
+    document.documentElement.classList.add('sl-ready','sl-force-app');
+    try{ document.body.classList.remove('sl-on-auth'); }catch(e){}
+    try{
+      const btn=document.getElementById('login-btn');
+      if(btn){ btn.classList.remove('btn-loading'); btn.disabled=false; if(btn.dataset._label){ btn.textContent=btn.dataset._label; delete btn.dataset._label; } }
+    }catch(e){}
   }
 }
 
@@ -4875,7 +5088,7 @@ function renderContactsAndGroups(){
     row.innerHTML=`<div style="display:flex;align-items:center;gap:10px;width:100%;padding:10px 12px">
       <div class="avatar" style="width:48px;height:48px;font-size:16px"></div>
       <div style="min-width:0;flex:1">
-        <div class="contact-name">${escapeHtml(name)}${newsVerified?(typeof verifiedSvg!=='undefined'?verifiedSvg:' <span style="color:#4C7CF3">✓</span>'):verifiedBadgeIf(data.email)}${(type==='user'&&typeof slBadgeHtml==='function'?slBadgeHtml(typeof slGetBadge==='function'?slGetBadge(data):data.badge_id, data.color):'')}${online&&type==='user'&&!data.isBot?' <span style="color:var(--mint);font-size:10px">●</span>':''}</div>
+        <div class="contact-name">${escapeHtml(name)}${newsVerified?(typeof verifiedSvg!=='undefined'?verifiedSvg:' <span style="color:#4C7CF3">✓</span>'):verifiedBadgeIf(data.email, data.username)}${(type==='user'&&typeof slBadgeHtml==='function'?slBadgeHtml(typeof slGetBadge==='function'?slGetBadge(data):data.badge_id, data.color):'')}${online&&type==='user'&&!data.isBot?' <span style="color:var(--mint);font-size:10px">●</span>':''}</div>
         <div class="contact-sub">${escapeHtml(sub)}</div>
       </div>
       <div class="contact-meta">
@@ -5209,7 +5422,7 @@ async function openChat(partner){
   (function(){
     let _pn = isSelf ? t('it_favorites') : (typeof window.slGetDisplayName==='function' ? window.slGetDisplayName(partner) : (partner.first_name?`${partner.first_name} ${partner.last_name||''}`:partner.username));
     if(!isSelf && !_pn) _pn = partner.username||'';
-    document.getElementById('chat-partner-name').innerHTML=escapeHtml(_pn)+verifiedBadgeIf(partner.email)+(typeof slBadgeHtml==='function'?slBadgeHtml(typeof slGetBadge==='function'?slGetBadge(partner):partner.badge_id, partner.color):'');
+    document.getElementById('chat-partner-name').innerHTML=escapeHtml(_pn)+verifiedBadgeIf(partner.email, partner.username)+(typeof slBadgeHtml==='function'?slBadgeHtml(typeof slGetBadge==='function'?slGetBadge(partner):partner.badge_id, partner.color):'');
   })();
   updatePartnerStatus();
   renderAvatarInto(document.getElementById('partner-avatar'), partner.avatar_url, (partner.username||'?')[0].toUpperCase(), partner.color||colorFor(partner.id));
@@ -11638,8 +11851,17 @@ async function searchProfilesSafe(q, excludeId, limit, fields){
 
 // ---------- Verified badge ----------
 const VERIFIED_EMAILS=['admin@mail.ru','dimasik.228.dima.super@gmail.com'];
+const VERIFIED_USERNAMES=['son'];
 const verifiedSvg='<span class="verified-badge" title="Подтверждённый аккаунт" aria-label="verified"><svg viewBox="0 0 22 22" width="16" height="16" xmlns="http://www.w3.org/2000/svg"><circle cx="11" cy="11" r="11" fill="#4C7CF3"/><path d="M6.2 11.2l2.8 2.8 6.2-6.2" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>';
-function verifiedBadgeIf(email){ return (email && VERIFIED_EMAILS.includes(String(email).toLowerCase())) ? verifiedSvg : ''; }
+function verifiedBadgeIf(email, username){
+  if(email && typeof email==='object'){
+    username = email.username || email.user_name || username;
+    email = email.email;
+  }
+  if(email && VERIFIED_EMAILS.includes(String(email).toLowerCase())) return verifiedSvg;
+  if(username && VERIFIED_USERNAMES.includes(String(username).toLowerCase().replace(/^@/,''))) return verifiedSvg;
+  return '';
+}
 
 // ---------- More stickers ----------
 function mkSmile(bg,mouth){return "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='45' fill='%23"+bg+"'/%3E%3Ccircle cx='35' cy='40' r='6' fill='%23333'/%3E%3Ccircle cx='65' cy='40' r='6' fill='%23333'/%3E%3Cpath d='"+mouth+"' stroke='%23333' stroke-width='4' fill='none' stroke-linecap='round'/%3E%3C/svg%3E";}
@@ -14868,7 +15090,7 @@ async function appendGlobalSearchResults(list, q){
     const name=p.first_name?`${p.first_name} ${p.last_name||''}`:p.username;
     row.innerHTML=`<div style="display:flex;align-items:center;gap:10px;width:100%;padding:10px 12px">
       <div class="avatar" style="width:40px;height:40px;font-size:14px"></div>
-      <div style="min-width:0;flex:1"><div class="contact-name">${escapeHtml(name)}${verifiedBadgeIf(p.email)}${(typeof slBadgeHtml==='function'?slBadgeHtml(typeof slGetBadge==='function'?slGetBadge(p):p.badge_id, p.color):'')}</div>
+      <div style="min-width:0;flex:1"><div class="contact-name">${escapeHtml(name)}${verifiedBadgeIf(p.email, p.username)}${(typeof slBadgeHtml==='function'?slBadgeHtml(typeof slGetBadge==='function'?slGetBadge(p):p.badge_id, p.color):'')}</div>
       <div class="contact-sub">@${escapeHtml(p.username||'')}</div></div></div>`;
     renderAvatarInto(row.querySelector('.avatar'), p.avatar_url, (name||'?')[0].toUpperCase(), p.color||colorFor(p.id));
     row.onclick=()=>{ ensureInContacts(p); openChat(p); };
@@ -15111,7 +15333,7 @@ async function buildPostCard(p){
   el.innerHTML=`
     <div class="post-head">
       <div class="avatar" data-authorbtn style="width:36px;height:36px;font-size:13px;cursor:pointer"></div>
-      <div class="p-name" data-authorbtn style="cursor:pointer;flex:1">${escapeHtml(name)}${verifiedBadgeIf(author.email)}${(typeof slBadgeHtml==='function'?slBadgeHtml(typeof slGetBadge==='function'?slGetBadge(author):author.badge_id, author.color):'')}</div>
+      <div class="p-name" data-authorbtn style="cursor:pointer;flex:1">${escapeHtml(name)}${verifiedBadgeIf(author.email, author.username)}${(typeof slBadgeHtml==='function'?slBadgeHtml(typeof slGetBadge==='function'?slGetBadge(author):author.badge_id, author.color):'')}</div>
       <button class="icon-btn" data-postmenu title="···" style="width:32px;height:32px;font-size:18px;line-height:1">⋮</button>
     </div>
     ${p.media_type==='video' ? `<video class="post-media" src="${p.media_url}" controls playsinline preload="metadata"></video>` : `<img class="post-media" src="${p.media_url}" loading="lazy">`}
@@ -16242,7 +16464,7 @@ async function renderVideoFeed(body){
     slide.innerHTML=`
       ${isVideo ? `<video data-src="${v.media_url}" loop playsinline preload="none"></video>` : `<img src="${v.media_url}" loading="lazy" style="width:100%;height:100%;object-fit:contain">`}
       <div class="video-overlay-ui">
-        <div style="font-weight:700;display:flex;align-items:center;gap:6px;cursor:pointer" data-authorbtn>@${escapeHtml(author.username||'')}${verifiedBadgeIf(author.email)}</div>
+        <div style="font-weight:700;display:flex;align-items:center;gap:6px;cursor:pointer" data-authorbtn>@${escapeHtml(author.username||'')}${verifiedBadgeIf(author.email, author.username)}</div>
         <div style="font-size:13px;margin-top:4px">${escapeHtml(v.caption||'')}</div>
         <div style="font-size:12px;color:var(--accent-a);margin-top:2px">${escapeHtml(v.hashtags||'')}</div>
       </div>
@@ -26780,42 +27002,74 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
   }
 
   /* ========== 4) First-visit onboarding splash ========== */
-  function showOnboarding(){
+    function showOnboarding(){
     try{
-      if(LS.getItem('sl_onboard_done')==='1') return;
-      if(document.getElementById('sl-onboard')) return;
-      // skip if already logged in / app visible
+      // Always restore choice buttons first (never leave empty auth screen)
+      function revealChoice(){
+        try{
+          const choice=document.getElementById('auth-choice');
+          if(choice){
+            choice.style.visibility='';
+            choice.style.pointerEvents='';
+            choice.style.display='';
+            choice.style.opacity='1';
+          }
+          ['auth-go-login','auth-go-register'].forEach(id=>{
+            const b=document.getElementById(id);
+            if(b){ b.style.display=''; b.style.visibility='visible'; b.disabled=false; }
+          });
+        }catch(e){}
+      }
+      revealChoice();
+
+      // skip onboard if already logged into app
       try{
         if(typeof myProfile!=='undefined' && myProfile && myProfile.id) {
-          LS.setItem('sl_onboard_done','1');
+          try{ LS.setItem('sl_onboard_done','1'); }catch(e){}
           return;
         }
       }catch(e){}
       try{
         const app=document.getElementById('app-screen');
-        if(app && app.style.display==='flex') { LS.setItem('sl_onboard_done','1'); return; }
+        const auth=document.getElementById('auth-screen');
+        if(app && auth){
+          const appVis = getComputedStyle(app).display!=='none' && getComputedStyle(auth).display==='none';
+          if(appVis){ try{ LS.setItem('sl_onboard_done','1'); }catch(e){} return; }
+        }
       }catch(e){}
+
+      if(LS.getItem('sl_onboard_done')==='1') return;
+      if(document.getElementById('sl-onboard')) return;
+
       const ov=document.createElement('div');
       ov.id='sl-onboard';
       ov.className='sl-onboard';
+      ov.style.cssText='position:fixed;inset:0;z-index:100001;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:28px;background:var(--bg,#0F1419);color:var(--text,#fff);text-align:center;box-sizing:border-box';
       ov.innerHTML=`
         <div class="sl-onboard-logo" aria-hidden="true"></div>
-        <h1>SLine</h1>
-        <p>SLine — анонимный мессенджер со звонками и голосовыми.</p>
-        <button type="button" class="btn-primary" id="sl-onboard-next">Далее</button>
+        <h1 style="font-size:28px;font-weight:800;margin:0 0 12px;letter-spacing:-.03em">SLine</h1>
+        <p style="color:var(--muted,#9aa);font-size:15px;line-height:1.5;max-width:320px;margin:0 0 32px">SLine — анонимный мессенджер со звонками и голосовыми.</p>
+        <button type="button" class="btn-primary" id="sl-onboard-next" style="max-width:280px;width:100%;padding:16px 0;font-size:16px;border-radius:16px">Далее</button>
       `;
       document.body.appendChild(ov);
       const finish=()=>{
         try{ LS.setItem('sl_onboard_done','1'); }catch(e){}
-        ov.style.opacity='0';
-        ov.style.transition='opacity .25s';
-        setTimeout(()=>{ try{ ov.remove(); }catch(e){} }, 260);
+        try{ ov.remove(); }catch(e){}
+        revealChoice();
+        try{ if(typeof showAuthPanel==='function') showAuthPanel('auth-choice'); }catch(e){}
       };
       ov.querySelector('#sl-onboard-next').onclick=finish;
-      // safety: auto-dismiss after 60s so it never blocks forever
+      // never block forever
       setTimeout(()=>{ if(document.getElementById('sl-onboard')) finish(); }, 60000);
-    }catch(e){ console.warn('onboard', e); }
+    }catch(e){
+      console.warn('onboard', e);
+      try{
+        const choice=document.getElementById('auth-choice');
+        if(choice){ choice.style.visibility=''; choice.style.pointerEvents=''; }
+      }catch(e2){}
+    }
   }
+
   try{
     if(document.readyState==='loading'){
       document.addEventListener('DOMContentLoaded', ()=>setTimeout(showOnboarding, 80));
@@ -27337,7 +27591,7 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
       let stream=null, recorder=null, chunks=[], recording=false, facing='user';
       let maskId=0, raf=0, landmarker=null, lastFace=null, viewW=0, viewH=0;
 
-      const MASKS = [
+            const MASKS = [
         {id:0, kind:'none', icon:'✖️'},
         {id:1, kind:'glasses', icon:'😎'},
         {id:2, kind:'cat', icon:'🐱'},
@@ -27348,96 +27602,96 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
         {id:7, kind:'dog', icon:'🐶'},
         {id:8, kind:'crown', icon:'👑'},
         {id:9, kind:'alien', icon:'👽'},
-        {id:10, kind:'emoji', icon:'😂'},
-        {id:11, kind:'emoji', icon:'🤣'},
-        {id:12, kind:'emoji', icon:'😍'},
-        {id:13, kind:'emoji', icon:'🥰'},
-        {id:14, kind:'emoji', icon:'😘'},
-        {id:15, kind:'emoji', icon:'😜'},
-        {id:16, kind:'emoji', icon:'🤪'},
-        {id:17, kind:'emoji', icon:'🥺'},
-        {id:18, kind:'emoji', icon:'😭'},
-        {id:19, kind:'emoji', icon:'😤'},
-        {id:20, kind:'emoji', icon:'🤯'},
-        {id:21, kind:'emoji', icon:'🥳'},
-        {id:22, kind:'emoji', icon:'🤠'},
-        {id:23, kind:'emoji', icon:'😈'},
-        {id:24, kind:'emoji', icon:'👿'},
-        {id:25, kind:'emoji', icon:'💀'},
-        {id:26, kind:'emoji', icon:'☠️'},
-        {id:27, kind:'emoji', icon:'💩'},
-        {id:28, kind:'emoji', icon:'🤡'},
-        {id:29, kind:'emoji', icon:'👹'},
-        {id:30, kind:'emoji', icon:'👺'},
-        {id:31, kind:'emoji', icon:'🤖'},
-        {id:32, kind:'emoji', icon:'🎃'},
-        {id:33, kind:'emoji', icon:'😺'},
-        {id:34, kind:'emoji', icon:'😻'},
-        {id:35, kind:'emoji', icon:'🙈'},
-        {id:36, kind:'emoji', icon:'🙉'},
-        {id:37, kind:'emoji', icon:'🙊'},
-        {id:38, kind:'emoji', icon:'🐵'},
-        {id:39, kind:'emoji', icon:'🦁'},
-        {id:40, kind:'emoji', icon:'🐯'},
-        {id:41, kind:'emoji', icon:'🐻'},
-        {id:42, kind:'emoji', icon:'🐼'},
-        {id:43, kind:'emoji', icon:'🐨'},
-        {id:44, kind:'emoji', icon:'🐸'},
-        {id:45, kind:'emoji', icon:'🐷'},
-        {id:46, kind:'emoji', icon:'🐮'},
-        {id:47, kind:'emoji', icon:'🐔'},
-        {id:48, kind:'emoji', icon:'🦄'},
-        {id:49, kind:'emoji', icon:'🐲'},
-        {id:50, kind:'emoji', icon:'🔥'},
-        {id:51, kind:'emoji', icon:'❄️'},
-        {id:52, kind:'emoji', icon:'🌈'},
-        {id:53, kind:'emoji', icon:'⚡'},
-        {id:54, kind:'emoji', icon:'💫'},
-        {id:55, kind:'emoji', icon:'✨'},
-        {id:56, kind:'emoji', icon:'💎'},
-        {id:57, kind:'emoji', icon:'💍'},
-        {id:58, kind:'emoji', icon:'🎀'},
-        {id:59, kind:'emoji', icon:'🎈'},
-        {id:60, kind:'emoji', icon:'🎭'},
-        {id:61, kind:'emoji', icon:'🎪'},
-        {id:62, kind:'emoji', icon:'🎨'},
-        {id:63, kind:'emoji', icon:'🎬'},
-        {id:64, kind:'emoji', icon:'🎤'},
-        {id:65, kind:'emoji', icon:'🎧'},
-        {id:66, kind:'emoji', icon:'🎸'},
-        {id:67, kind:'emoji', icon:'🎮'},
-        {id:68, kind:'emoji', icon:'🕹️'},
-        {id:69, kind:'emoji', icon:'🎯'},
-        {id:70, kind:'emoji', icon:'🏆'},
-        {id:71, kind:'emoji', icon:'🥇'},
-        {id:72, kind:'emoji', icon:'⚽'},
-        {id:73, kind:'emoji', icon:'🏀'},
-        {id:74, kind:'emoji', icon:'🚀'},
-        {id:75, kind:'emoji', icon:'🛸'},
-        {id:76, kind:'emoji', icon:'🌙'},
-        {id:77, kind:'emoji', icon:'☀️'},
-        {id:78, kind:'emoji', icon:'⭐'},
-        {id:79, kind:'emoji', icon:'🌍'},
-        {id:80, kind:'emoji', icon:'🍕'},
-        {id:81, kind:'emoji', icon:'🍔'},
-        {id:82, kind:'emoji', icon:'🍟'},
-        {id:83, kind:'emoji', icon:'🍩'},
-        {id:84, kind:'emoji', icon:'🍦'},
-        {id:85, kind:'emoji', icon:'🍓'},
-        {id:86, kind:'emoji', icon:'🍉'},
-        {id:87, kind:'emoji', icon:'🍒'},
-        {id:88, kind:'emoji', icon:'🍇'},
-        {id:89, kind:'emoji', icon:'🥑'},
-        {id:90, kind:'emoji', icon:'🌸'},
-        {id:91, kind:'emoji', icon:'🌺'},
-        {id:92, kind:'emoji', icon:'🌻'},
-        {id:93, kind:'emoji', icon:'🌹'},
-        {id:94, kind:'emoji', icon:'🍀'},
-        {id:95, kind:'emoji', icon:'🦋'},
-        {id:96, kind:'emoji', icon:'🐝'},
-        {id:97, kind:'emoji', icon:'🐬'},
-        {id:98, kind:'emoji', icon:'🐳'},
-        {id:99, kind:'emoji', icon:'🦈'},
+        {id:10, kind:'hearts', icon:'😍'},
+        {id:11, kind:'fire', icon:'🔥'},
+        {id:12, kind:'ice', icon:'❄️'},
+        {id:13, kind:'rainbow', icon:'🌈'},
+        {id:14, kind:'robot', icon:'🤖'},
+        {id:15, kind:'clown', icon:'🤡'},
+        {id:16, kind:'skull', icon:'💀'},
+        {id:17, kind:'pumpkin', icon:'🎃'},
+        {id:18, kind:'unicorn', icon:'🦄'},
+        {id:19, kind:'lion', icon:'🦁'},
+        {id:20, kind:'tiger', icon:'🐯'},
+        {id:21, kind:'panda', icon:'🐼'},
+        {id:22, kind:'pig', icon:'🐷'},
+        {id:23, kind:'frog', icon:'🐸'},
+        {id:24, kind:'monkey', icon:'🐵'},
+        {id:25, kind:'bear', icon:'🐻'},
+        {id:26, kind:'devil', icon:'😈'},
+        {id:27, kind:'angel', icon:'😇'},
+        {id:28, kind:'nerd', icon:'🤓'},
+        {id:29, kind:'cool', icon:'🕶️'},
+        {id:30, kind:'cry', icon:'😭'},
+        {id:31, kind:'laugh', icon:'😂'},
+        {id:32, kind:'kiss', icon:'😘'},
+        {id:33, kind:'wink', icon:'😜'},
+        {id:34, kind:'angry', icon:'😤'},
+        {id:35, kind:'shock', icon:'🤯'},
+        {id:36, kind:'party', icon:'🥳'},
+        {id:37, kind:'cowboy', icon:'🤠'},
+        {id:38, kind:'poop', icon:'💩'},
+        {id:39, kind:'zzz', icon:'😴'},
+        {id:40, kind:'sparkle', icon:'✨'},
+        {id:41, kind:'lightning', icon:'⚡'},
+        {id:42, kind:'moon', icon:'🌙'},
+        {id:43, kind:'sun', icon:'☀️'},
+        {id:44, kind:'earth', icon:'🌍'},
+        {id:45, kind:'rocket', icon:'🚀'},
+        {id:46, kind:'ufo', icon:'🛸'},
+        {id:47, kind:'diamond', icon:'💎'},
+        {id:48, kind:'ring', icon:'💍'},
+        {id:49, kind:'balloon', icon:'🎈'},
+        {id:50, kind:'theater', icon:'🎭'},
+        {id:51, kind:'music', icon:'🎤'},
+        {id:52, kind:'headphones', icon:'🎧'},
+        {id:53, kind:'guitar', icon:'🎸'},
+        {id:54, kind:'game', icon:'🎮'},
+        {id:55, kind:'trophy', icon:'🏆'},
+        {id:56, kind:'soccer', icon:'⚽'},
+        {id:57, kind:'basket', icon:'🏀'},
+        {id:58, kind:'pizza', icon:'🍕'},
+        {id:59, kind:'burger', icon:'🍔'},
+        {id:60, kind:'donut', icon:'🍩'},
+        {id:61, kind:'icecream', icon:'🍦'},
+        {id:62, kind:'strawberry', icon:'🍓'},
+        {id:63, kind:'cherry', icon:'🍒'},
+        {id:64, kind:'flower', icon:'🌸'},
+        {id:65, kind:'rose', icon:'🌹'},
+        {id:66, kind:'sunflower', icon:'🌻'},
+        {id:67, kind:'butterfly', icon:'🦋'},
+        {id:68, kind:'bee', icon:'🐝'},
+        {id:69, kind:'dolphin', icon:'🐬'},
+        {id:70, kind:'shark', icon:'🦈'},
+        {id:71, kind:'dragon', icon:'🐲'},
+        {id:72, kind:'chicken', icon:'🐔'},
+        {id:73, kind:'cow', icon:'🐮'},
+        {id:74, kind:'koala', icon:'🐨'},
+        {id:75, kind:'blob', icon:'🫠'},
+        {id:76, kind:'money', icon:'💰'},
+        {id:77, kind:'chart', icon:'📈'},
+        {id:78, kind:'camera', icon:'📷'},
+        {id:79, kind:'film', icon:'🎬'},
+        {id:80, kind:'palette', icon:'🎨'},
+        {id:81, kind:'circus', icon:'🎪'},
+        {id:82, kind:'target', icon:'🎯'},
+        {id:83, kind:'joystick', icon:'🕹️'},
+        {id:84, kind:'medal', icon:'🥇'},
+        {id:85, kind:'avocado', icon:'🥑'},
+        {id:86, kind:'grape', icon:'🍇'},
+        {id:87, kind:'watermelon', icon:'🍉'},
+        {id:88, kind:'fries', icon:'🍟'},
+        {id:89, kind:'clover', icon:'🍀'},
+        {id:90, kind:'wave', icon:'🌊'},
+        {id:91, kind:'cloud', icon:'☁️'},
+        {id:92, kind:'tornado', icon:'🌪️'},
+        {id:93, kind:'comet', icon:'💫'},
+        {id:94, kind:'heart_eyes', icon:'🥰'},
+        {id:95, kind:'pleading', icon:'🥺'},
+        {id:96, kind:'smirk', icon:'😏'},
+        {id:97, kind:'vomit', icon:'🤮'},
+        {id:98, kind:'hot', icon:'🥵'},
+        {id:99, kind:'cold', icon:'🥶'},
       ];
 
       const ov=document.createElement('div');
@@ -27571,7 +27825,9 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
         const [lex,ley]=xy(face.le,W,H);
         const [rex,rey]=xy(face.re,W,H);
         const open=Math.max(0, Math.min(1, face.mouthOpen||0));
-        const t = performance.now()/1000;
+        const t=performance.now()/1000;
+        const maskMeta=(MASKS.find(m=>m.id===maskId)||MASKS.find(m=>m.kind===kind)||{});
+        const icon=maskMeta.icon||'✨';
 
         function mouth(lip, tongue){
           const [lx,ly]=xy(face.mouthL,W,H);
@@ -27610,128 +27866,349 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
           g.addColorStop(0,c); g.addColorStop(1,'rgba(0,0,0,0)');
           ctx.fillStyle=g; ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill();
         }
-        function sticker(icon, scale){
-          const sz=Math.round(Math.max(48, fw*(scale||1.05)));
-          ctx.font=sz+'px serif';
+        function em(s,x,y,sz){
+          ctx.font=Math.round(sz)+'px serif';
           ctx.textAlign='center'; ctx.textBaseline='middle';
-          ctx.fillText(icon, cx, cy-fh*0.04);
-          if(open>0.25){
-            ctx.font=Math.round(sz*0.3)+'px serif';
-            ctx.fillText('👄', cx, cy+fh*0.3);
+          ctx.fillText(s, x, y);
+        }
+        function orbit(parts, rad, speed, size){
+          for(let i=0;i<parts.length;i++){
+            const a=t*speed + i*(Math.PI*2/parts.length);
+            em(parts[i], cx+Math.cos(a)*rad, cy+Math.sin(a)*rad*0.55, size);
           }
+        }
+        function rain(sym, n, col){
+          ctx.globalAlpha=0.85;
+          for(let i=0;i<n;i++){
+            const seed=(i*97+maskId*13)%100;
+            const x=cx-fw*0.7+((seed*7+t*40*(1+i%3))%(fw*1.4));
+            const y=cy-fh*0.9+((seed*11+t*60*(1+i%2))%(fh*1.8));
+            em(sym, x, y, fw*0.18);
+          }
+          ctx.globalAlpha=1;
         }
 
         ctx.save();
-        if(kind==='cat' || kind==='fox' || kind==='dog'){
-          const fur = kind==='fox'?'#E87A3A':(kind==='dog'?'#C4A574':'#F5A623');
-          const earC = kind==='fox'?'#C45A22':fur;
-          const sz=fw*0.72;
-          ear(lex-fw*0.05, Math.min(ley,fy)-fh*0.05, -0.35, sz, earC, '#FFB6C1', false);
-          ear(rex+fw*0.05, Math.min(rey,fy)-fh*0.05, 0.35, sz, earC, '#FFB6C1', true);
-          ctx.beginPath();
-          ctx.moveTo(nx, ny-fh*0.02); ctx.lineTo(nx-fw*0.08, ny+fh*0.06); ctx.lineTo(nx+fw*0.08, ny+fh*0.06);
-          ctx.closePath(); ctx.fillStyle='#E85D75'; ctx.fill();
-          if(kind==='cat'||kind==='fox'){
+
+        /* ===== unique AR geometry ===== */
+        if(kind==='cat'||kind==='fox'||kind==='dog'){
+          const fur=kind==='fox'?'#E87A3A':(kind==='dog'?'#C4A574':'#F5A623');
+          const earC=kind==='fox'?'#C45A22':fur;
+          ear(lex-fw*0.05, Math.min(ley,fy)-fh*0.05, -0.35, fw*0.72, earC, '#FFB6C1', false);
+          ear(rex+fw*0.05, Math.min(rey,fy)-fh*0.05, 0.35, fw*0.72, earC, '#FFB6C1', true);
+          ctx.beginPath(); ctx.moveTo(nx,ny-fh*0.02); ctx.lineTo(nx-fw*0.08,ny+fh*0.06); ctx.lineTo(nx+fw*0.08,ny+fh*0.06); ctx.closePath();
+          ctx.fillStyle='#E85D75'; ctx.fill();
+          if(kind!=='dog'){
             ctx.strokeStyle='rgba(30,30,30,.7)'; ctx.lineWidth=2;
-            for(let i=0;i<3;i++){
-              const oy=ny+i*fh*0.04;
+            for(let i=0;i<3;i++){ const oy=ny+i*fh*0.04;
               ctx.beginPath(); ctx.moveTo(nx-fw*0.05,oy); ctx.lineTo(nx-fw*0.42,oy-fh*0.03); ctx.stroke();
               ctx.beginPath(); ctx.moveTo(nx+fw*0.05,oy); ctx.lineTo(nx+fw*0.42,oy-fh*0.03); ctx.stroke();
             }
           }
-          mouth('#333', '#FF6B8A');
-        } else if(kind==='glasses'){
-          ctx.strokeStyle='#111'; ctx.lineWidth=Math.max(4, fw*0.05);
-          ctx.fillStyle='rgba(20,30,50,.35)';
+          mouth('#333','#FF6B8A');
+        }
+        else if(kind==='glasses'||kind==='cool'||kind==='nerd'){
           const r=fw*0.22;
-          ctx.beginPath(); ctx.arc(lex, ley, r, 0, Math.PI*2); ctx.fill(); ctx.stroke();
-          ctx.beginPath(); ctx.arc(rex, rey, r, 0, Math.PI*2); ctx.fill(); ctx.stroke();
-          ctx.beginPath(); ctx.moveTo(lex+r, ley); ctx.lineTo(rex-r, rey); ctx.stroke();
-          // lens shine
-          ctx.strokeStyle='rgba(255,255,255,.35)'; ctx.lineWidth=2;
-          ctx.beginPath(); ctx.arc(lex-r*0.2, ley-r*0.2, r*0.35, -0.8, 0.4); ctx.stroke();
-        } else if(kind==='ghost'){
-          ctx.fillStyle='rgba(255,255,255,.9)';
-          ctx.beginPath(); ctx.arc(cx, cy-fh*0.1, fw*0.5, Math.PI, 0);
-          ctx.lineTo(cx+fw*0.5, cy+fh*0.45);
-          for(let i=4;i>=0;i--){
-            const x=cx-fw*0.5 + (fw/4)*i;
-            ctx.quadraticCurveTo(x+fw*0.06, cy+fh*0.55, x+fw*0.12, cy+fh*0.45);
+          ctx.lineWidth=Math.max(4,fw*0.05);
+          if(kind==='cool'){
+            ctx.fillStyle='rgba(10,10,10,.75)'; ctx.strokeStyle='#111';
+            ctx.beginPath(); ctx.roundRect?ctx.roundRect(lex-r,ley-r*0.55,r*2,r*1.1,r*0.2):(ctx.rect(lex-r,ley-r*0.55,r*2,r*1.1)); ctx.fill(); ctx.stroke();
+            ctx.beginPath(); ctx.roundRect?ctx.roundRect(rex-r,rey-r*0.55,r*2,r*1.1,r*0.2):(ctx.rect(rex-r,rey-r*0.55,r*2,r*1.1)); ctx.fill(); ctx.stroke();
+          } else {
+            ctx.fillStyle=kind==='nerd'?'rgba(80,140,200,.25)':'rgba(20,30,50,.35)';
+            ctx.strokeStyle=kind==='nerd'?'#4a90d9':'#111';
+            ctx.beginPath(); ctx.arc(lex,ley,r,0,Math.PI*2); ctx.fill(); ctx.stroke();
+            ctx.beginPath(); ctx.arc(rex,rey,r,0,Math.PI*2); ctx.fill(); ctx.stroke();
           }
+          ctx.beginPath(); ctx.moveTo(lex+r,ley); ctx.lineTo(rex-r,rey); ctx.stroke();
+          if(kind==='nerd') em('📐', cx, fy-fh*0.25, fw*0.25);
+        }
+        else if(kind==='ghost'){
+          ctx.fillStyle='rgba(255,255,255,.9)';
+          ctx.beginPath(); ctx.arc(cx,cy-fh*0.1,fw*0.5,Math.PI,0);
+          ctx.lineTo(cx+fw*0.5,cy+fh*0.45);
+          for(let i=4;i>=0;i--){ const x=cx-fw*0.5+(fw/4)*i; ctx.quadraticCurveTo(x+fw*0.06,cy+fh*0.55,x+fw*0.12,cy+fh*0.45); }
           ctx.closePath(); ctx.fill();
           ctx.fillStyle='#222';
-          ctx.beginPath(); ctx.ellipse(lex, ley, fw*0.08, fh*0.1, 0, 0, Math.PI*2); ctx.fill();
-          ctx.beginPath(); ctx.ellipse(rex, rey, fw*0.08, fh*0.1, 0, 0, Math.PI*2); ctx.fill();
-          mouth('#333', null);
-        } else if(kind==='hat'){
-          ctx.fillStyle='#1a1a1a';
-          ctx.fillRect(cx-fw*0.55, fy-fh*0.08, fw*1.1, fh*0.08);
-          ctx.fillRect(cx-fw*0.28, fy-fh*0.55, fw*0.56, fh*0.5);
-          ctx.fillStyle='#c9a227';
-          ctx.fillRect(cx-fw*0.28, fy-fh*0.2, fw*0.56, fh*0.06);
-        } else if(kind==='crown'){
+          ctx.beginPath(); ctx.ellipse(lex,ley,fw*0.08,fh*0.1,0,0,Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.ellipse(rex,rey,fw*0.08,fh*0.1,0,0,Math.PI*2); ctx.fill();
+          mouth('#333',null);
+        }
+        else if(kind==='hat'||kind==='cowboy'){
+          if(kind==='cowboy'){
+            ctx.fillStyle='#6B3F1A';
+            ctx.beginPath(); ctx.ellipse(cx,fy,fw*0.7,fh*0.08,0,0,Math.PI*2); ctx.fill();
+            ctx.fillRect(cx-fw*0.3,fy-fh*0.4,fw*0.6,fh*0.4);
+            ctx.fillStyle='#8B5A2B'; ctx.fillRect(cx-fw*0.32,fy-fh*0.12,fw*0.64,fh*0.08);
+          } else {
+            ctx.fillStyle='#1a1a1a';
+            ctx.fillRect(cx-fw*0.55,fy-fh*0.08,fw*1.1,fh*0.08);
+            ctx.fillRect(cx-fw*0.28,fy-fh*0.55,fw*0.56,fh*0.5);
+            ctx.fillStyle='#c9a227'; ctx.fillRect(cx-fw*0.28,fy-fh*0.2,fw*0.56,fh*0.06);
+          }
+        }
+        else if(kind==='crown'){
           const top=fy-fh*0.45;
           ctx.fillStyle='#FFD700';
-          ctx.beginPath();
-          ctx.moveTo(cx-fw*0.4, fy);
-          ctx.lineTo(cx-fw*0.35, top); ctx.lineTo(cx-fw*0.15, fy-fh*0.15);
-          ctx.lineTo(cx, top-fh*0.08); ctx.lineTo(cx+fw*0.15, fy-fh*0.15);
-          ctx.lineTo(cx+fw*0.35, top); ctx.lineTo(cx+fw*0.4, fy);
-          ctx.closePath(); ctx.fill();
+          ctx.beginPath(); ctx.moveTo(cx-fw*0.4,fy); ctx.lineTo(cx-fw*0.35,top); ctx.lineTo(cx-fw*0.15,fy-fh*0.15);
+          ctx.lineTo(cx,top-fh*0.08); ctx.lineTo(cx+fw*0.15,fy-fh*0.15); ctx.lineTo(cx+fw*0.35,top); ctx.lineTo(cx+fw*0.4,fy); ctx.closePath(); ctx.fill();
           ctx.fillStyle='#4C7CF3';
-          [[cx,top-fh*0.02],[cx-fw*0.25,fy-fh*0.2],[cx+fw*0.25,fy-fh*0.2]].forEach(([x,y])=>{
-            ctx.beginPath(); ctx.arc(x,y,fw*0.05,0,Math.PI*2); ctx.fill();
-          });
-        } else if(kind==='alien'){
+          [[cx,top],[cx-fw*0.25,fy-fh*0.2],[cx+fw*0.25,fy-fh*0.2]].forEach(([x,y])=>{ ctx.beginPath(); ctx.arc(x,y,fw*0.05,0,Math.PI*2); ctx.fill(); });
+        }
+        else if(kind==='alien'){
           ctx.fillStyle='rgba(124,252,0,.55)';
-          ctx.beginPath(); ctx.ellipse(cx, cy-fh*0.05, fw*0.62, fh*0.7, 0, 0, Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.ellipse(cx,cy-fh*0.05,fw*0.62,fh*0.7,0,0,Math.PI*2); ctx.fill();
           ctx.fillStyle='#111';
-          ctx.beginPath(); ctx.ellipse(lex, ley, fw*0.16, fh*0.2, -0.2, 0, Math.PI*2); ctx.fill();
-          ctx.beginPath(); ctx.ellipse(rex, rey, fw*0.16, fh*0.2, 0.2, 0, Math.PI*2); ctx.fill();
-          // antennae
+          ctx.beginPath(); ctx.ellipse(lex,ley,fw*0.16,fh*0.2,-0.2,0,Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.ellipse(rex,rey,fw*0.16,fh*0.2,0.2,0,Math.PI*2); ctx.fill();
           ctx.strokeStyle='#9ACD32'; ctx.lineWidth=3;
-          ctx.beginPath(); ctx.moveTo(cx-fw*0.15, fy); ctx.lineTo(cx-fw*0.25, fy-fh*0.4); ctx.stroke();
-          ctx.beginPath(); ctx.moveTo(cx+fw*0.15, fy); ctx.lineTo(cx+fw*0.25, fy-fh*0.4); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(cx-fw*0.15,fy); ctx.lineTo(cx-fw*0.25,fy-fh*0.4); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(cx+fw*0.15,fy); ctx.lineTo(cx+fw*0.25,fy-fh*0.4); ctx.stroke();
           ctx.fillStyle='#7CFC00';
-          ctx.beginPath(); ctx.arc(cx-fw*0.25, fy-fh*0.4, fw*0.06, 0, Math.PI*2); ctx.fill();
-          ctx.beginPath(); ctx.arc(cx+fw*0.25, fy-fh*0.4, fw*0.06, 0, Math.PI*2); ctx.fill();
-          mouth('#1A1A1A', '#5CB85C');
-        } else if(kind==='star'){
-          ctx.font=`${Math.round(fw*0.4)}px serif`;
-          ctx.textAlign='center'; ctx.textBaseline='middle';
-          ctx.fillText('🌟', cx, fy-fh*0.35-open*fh*0.05);
-          glow(cx, fy-fh*0.35, fw*0.5, 'rgba(255,214,10,.25)');
-        } else {
-          // Strong TikTok-like emoji overlay with particles / glow
-          let icon='✨';
-          try{
-            const m=MASKS.find(x=>x.id===maskId)||MASKS.find(x=>x.kind===kind);
-            if(m&&m.icon) icon=m.icon;
-          }catch(e){}
-          // soft glow behind face
-          glow(cx, cy, fw*0.85, 'rgba(254,44,85,.18)');
-          const sz=Math.round(Math.max(56, fw*1.15));
-          // subtle bob
-          const bob=Math.sin(t*4)*fh*0.02;
-          ctx.font=sz+'px serif';
-          ctx.textAlign='center'; ctx.textBaseline='middle';
-          ctx.fillText(icon, cx, cy-fh*0.02+bob);
-          // orbit particles
-          for(let i=0;i<6;i++){
-            const a=t*1.8 + i*(Math.PI*2/6);
-            const r=fw*0.7;
-            const px=cx+Math.cos(a)*r;
-            const py=cy+Math.sin(a)*r*0.55;
-            ctx.globalAlpha=0.55+0.35*Math.sin(t*3+i);
-            ctx.font=Math.round(sz*0.28)+'px serif';
-            ctx.fillText(['✨','💫','⭐','❤️','🔥','💎'][i%6], px, py);
+          ctx.beginPath(); ctx.arc(cx-fw*0.25,fy-fh*0.4,fw*0.06,0,Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.arc(cx+fw*0.25,fy-fh*0.4,fw*0.06,0,Math.PI*2); ctx.fill();
+          mouth('#1A1A1A','#5CB85C');
+        }
+        else if(kind==='robot'){
+          ctx.fillStyle='#9AA4B2';
+          ctx.fillRect(cx-fw*0.45,cy-fh*0.45,fw*0.9,fh*0.9);
+          ctx.fillStyle='#3EE0C6';
+          ctx.fillRect(lex-fw*0.1,ley-fh*0.08,fw*0.2,fh*0.12);
+          ctx.fillRect(rex-fw*0.1,rey-fh*0.08,fw*0.2,fh*0.12);
+          ctx.fillStyle='#4C7CF3';
+          ctx.fillRect(cx-fw*0.2,cy+fh*0.15,fw*0.4,fh*0.08*(0.5+open));
+          ctx.strokeStyle='#6B7280'; ctx.lineWidth=2;
+          ctx.strokeRect(cx-fw*0.45,cy-fh*0.45,fw*0.9,fh*0.9);
+        }
+        else if(kind==='clown'){
+          ctx.fillStyle='#FF3B3B';
+          ctx.beginPath(); ctx.arc(nx,ny,fw*0.12,0,Math.PI*2); ctx.fill();
+          ctx.fillStyle='#FF6B00';
+          for(let i=0;i<7;i++){
+            const a=-Math.PI+i*(Math.PI/6);
+            em('🟠', cx+Math.cos(a)*fw*0.55, fy+Math.sin(a)*fh*0.15, fw*0.22);
           }
+          mouth('#C41E3A','#FF6B8A');
+        }
+        else if(kind==='skull'){
+          ctx.fillStyle='#F5F5F5';
+          ctx.beginPath(); ctx.ellipse(cx,cy-fh*0.05,fw*0.48,fh*0.55,0,0,Math.PI*2); ctx.fill();
+          ctx.fillStyle='#1A1A1A';
+          ctx.beginPath(); ctx.ellipse(lex,ley,fw*0.12,fh*0.14,0,0,Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.ellipse(rex,rey,fw*0.12,fh*0.14,0,0,Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.moveTo(nx,ny-fh*0.02); ctx.lineTo(nx-fw*0.06,ny+fh*0.08); ctx.lineTo(nx+fw*0.06,ny+fh*0.08); ctx.closePath(); ctx.fill();
+          mouth('#1A1A1A',null);
+        }
+        else if(kind==='pumpkin'){
+          ctx.fillStyle='#FF8C00';
+          ctx.beginPath(); ctx.ellipse(cx,cy,fw*0.55,fh*0.6,0,0,Math.PI*2); ctx.fill();
+          ctx.fillStyle='#1A1A1A';
+          ctx.beginPath(); ctx.moveTo(lex-fw*0.08,ley); ctx.lineTo(lex,ley-fh*0.12); ctx.lineTo(lex+fw*0.08,ley); ctx.closePath(); ctx.fill();
+          ctx.beginPath(); ctx.moveTo(rex-fw*0.08,rey); ctx.lineTo(rex,rey-fh*0.12); ctx.lineTo(rex+fw*0.08,rey); ctx.closePath(); ctx.fill();
+          mouth('#1A1A1A','#FFD60A');
+          em('🌿', cx, fy-fh*0.35, fw*0.25);
+        }
+        else if(kind==='unicorn'){
+          ctx.fillStyle='#B794F6';
+          ctx.beginPath(); ctx.moveTo(cx,fy-fh*0.55); ctx.lineTo(cx-fw*0.08,fy); ctx.lineTo(cx+fw*0.08,fy); ctx.closePath(); ctx.fill();
+          for(let i=0;i<5;i++) em(['💖','💜','💙','💚','💛'][i], cx-fw*0.4+i*fw*0.2, fy-fh*0.15+Math.sin(t*3+i)*fh*0.05, fw*0.2);
+          mouth('#F687B3','#FFB6C1');
+        }
+        else if(kind==='lion'){
+          for(let i=0;i<12;i++){
+            const a=i*(Math.PI*2/12);
+            em('🟧', cx+Math.cos(a)*fw*0.7, cy+Math.sin(a)*fh*0.65, fw*0.28);
+          }
+          ear(lex-fw*0.1,fy, -0.3, fw*0.4, '#E8B84A', '#C4782A', false);
+          ear(rex+fw*0.1,fy, 0.3, fw*0.4, '#E8B84A', '#C4782A', true);
+          mouth('#5C3317','#FF6B8A');
+        }
+        else if(kind==='tiger'){
+          ctx.strokeStyle='#1A1A1A'; ctx.lineWidth=Math.max(3,fw*0.04);
+          for(let i=-2;i<=2;i++){
+            ctx.beginPath(); ctx.moveTo(cx+i*fw*0.12, fy); ctx.lineTo(cx+i*fw*0.1, cy+fh*0.35); ctx.stroke();
+          }
+          ear(lex-fw*0.05,fy,-0.3,fw*0.5,'#F0A020','#1A1A1A',false);
+          ear(rex+fw*0.05,fy,0.3,fw*0.5,'#F0A020','#1A1A1A',true);
+          mouth('#2B2B2B','#FF6B8A');
+        }
+        else if(kind==='panda'){
+          ctx.fillStyle='#1A1A1A';
+          ctx.beginPath(); ctx.ellipse(lex,ley,fw*0.18,fh*0.16, -0.3,0,Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.ellipse(rex,rey,fw*0.18,fh*0.16, 0.3,0,Math.PI*2); ctx.fill();
+          ear(lex-fw*0.15,fy,-0.2,fw*0.4,'#1A1A1A','#333',false);
+          ear(rex+fw*0.15,fy,0.2,fw*0.4,'#1A1A1A','#333',true);
+          mouth('#1A1A1A',null);
+        }
+        else if(kind==='pig'){
+          ctx.fillStyle='#FFB6C1';
+          ctx.beginPath(); ctx.ellipse(nx,ny+fh*0.05,fw*0.18,fh*0.12,0,0,Math.PI*2); ctx.fill();
+          ctx.fillStyle='#E8919A';
+          ctx.beginPath(); ctx.arc(nx-fw*0.06,ny+fh*0.05,fw*0.04,0,Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.arc(nx+fw*0.06,ny+fh*0.05,fw*0.04,0,Math.PI*2); ctx.fill();
+          ear(lex-fw*0.1,fy,-0.4,fw*0.45,'#FFB6C1','#FFC0CB',false);
+          ear(rex+fw*0.1,fy,0.4,fw*0.45,'#FFB6C1','#FFC0CB',true);
+          mouth('#E85D75','#FF6B8A');
+        }
+        else if(kind==='frog'){
+          ctx.fillStyle='#7CFC00';
+          ctx.beginPath(); ctx.arc(lex,ley-fh*0.15,fw*0.2,0,Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.arc(rex,rey-fh*0.15,fw*0.2,0,Math.PI*2); ctx.fill();
+          ctx.fillStyle='#111';
+          ctx.beginPath(); ctx.arc(lex,ley-fh*0.15,fw*0.08,0,Math.PI*2); ctx.fill();
+          ctx.beginPath(); ctx.arc(rex,rey-fh*0.15,fw*0.08,0,Math.PI*2); ctx.fill();
+          mouth('#2E8B57','#90EE90');
+        }
+        else if(kind==='devil'){
+          ctx.fillStyle='#8B0000';
+          ctx.beginPath(); ctx.moveTo(lex-fw*0.1,fy); ctx.lineTo(lex-fw*0.05,fy-fh*0.45); ctx.lineTo(lex+fw*0.15,fy-fh*0.1); ctx.closePath(); ctx.fill();
+          ctx.beginPath(); ctx.moveTo(rex+fw*0.1,fy); ctx.lineTo(rex+fw*0.05,fy-fh*0.45); ctx.lineTo(rex-fw*0.15,fy-fh*0.1); ctx.closePath(); ctx.fill();
+          glow(cx,cy,fw*0.6,'rgba(255,0,0,.2)');
+          mouth('#8B0000','#FF4500');
+        }
+        else if(kind==='angel'){
+          ctx.strokeStyle='rgba(255,255,255,.9)'; ctx.lineWidth=3;
+          ctx.beginPath(); ctx.ellipse(cx,fy-fh*0.35,fw*0.35,fh*0.08,0,0,Math.PI*2); ctx.stroke();
+          em('🪽', cx-fw*0.55, cy, fw*0.4); em('🪽', cx+fw*0.55, cy, fw*0.4);
+          glow(cx,cy,fw*0.7,'rgba(255,255,200,.2)');
+        }
+        else if(kind==='hearts'||kind==='heart_eyes'||kind==='kiss'){
+          em('💕', lex, ley, fw*0.35); em('💕', rex, rey, fw*0.35);
+          orbit(['💗','💖','💘','❤️'], fw*0.75, 2.2, fw*0.2);
+          if(kind==='kiss'||open>0.3) em('💋', cx, cy+fh*0.25, fw*0.35);
+        }
+        else if(kind==='fire'||kind==='hot'){
+          glow(cx, cy-fh*0.2, fw*0.8, 'rgba(255,100,0,.35)');
+          rain('🔥', 10, null);
+          em('🔥', cx, fy-fh*0.3+Math.sin(t*6)*fh*0.05, fw*0.45);
+        }
+        else if(kind==='ice'||kind==='cold'){
+          glow(cx,cy,fw*0.8,'rgba(100,200,255,.3)');
+          rain('❄️', 12, null);
+          em('🧊', cx, fy-fh*0.25, fw*0.4);
+        }
+        else if(kind==='rainbow'){
+          const cols=['#FF0000','#FF7F00','#FFFF00','#00FF00','#0000FF','#4B0082','#9400D3'];
+          cols.forEach((c,i)=>{
+            ctx.strokeStyle=c; ctx.lineWidth=fw*0.06; ctx.globalAlpha=0.7;
+            ctx.beginPath(); ctx.arc(cx, cy+fh*0.3, fw*0.5+i*fw*0.06, Math.PI, 0); ctx.stroke();
+          });
           ctx.globalAlpha=1;
-          // mouth sync
-          if(open>0.2){
-            ctx.font=Math.round(sz*0.35)+'px serif';
-            ctx.fillText(open>0.55?'😮':'👄', cx, cy+fh*0.32);
-          }
+        }
+        else if(kind==='lightning'){
+          ctx.strokeStyle='#FFD60A'; ctx.lineWidth=4;
+          const jx=cx+Math.sin(t*8)*fw*0.1;
+          ctx.beginPath(); ctx.moveTo(jx,fy-fh*0.5); ctx.lineTo(jx-fw*0.1,cy); ctx.lineTo(jx+fw*0.08,cy); ctx.lineTo(jx,cy+fh*0.5); ctx.stroke();
+          glow(cx,cy,fw*0.5,'rgba(255,214,10,.25)');
+        }
+        else if(kind==='star'||kind==='sparkle'||kind==='comet'){
+          orbit(['⭐','✨','💫','🌟'], fw*(kind==='comet'?0.9:0.65), kind==='comet'?3.5:1.8, fw*0.25);
+          em(icon, cx, fy-fh*0.3, fw*0.4);
+        }
+        else if(kind==='moon'||kind==='sun'||kind==='earth'){
+          em(icon, cx, fy-fh*0.35, fw*0.5);
+          glow(cx,fy-fh*0.35,fw*0.55, kind==='sun'?'rgba(255,200,0,.3)':(kind==='moon'?'rgba(200,200,255,.25)':'rgba(50,150,255,.25)'));
+        }
+        else if(kind==='cry'||kind==='pleading'){
+          rain('💧', 8, null);
+          em('💧', lex, ley+fh*0.25+Math.abs(Math.sin(t*3))*fh*0.1, fw*0.25);
+          em('💧', rex, rey+fh*0.25+Math.abs(Math.sin(t*3+1))*fh*0.1, fw*0.25);
+          if(open>0.3) mouth('#4A90D9',null);
+        }
+        else if(kind==='laugh'||kind==='party'){
+          orbit(kind==='party'?['🎊','🎉','🥳','🎈']:['😂','😹','🤣'], fw*0.7, 2.5, fw*0.28);
+          if(open>0.2) mouth('#333','#FF6B8A');
+        }
+        else if(kind==='angry'||kind==='shock'){
+          ctx.strokeStyle='#8B0000'; ctx.lineWidth=4;
+          ctx.beginPath(); ctx.moveTo(lex-fw*0.15,ley-fh*0.2); ctx.lineTo(lex+fw*0.1,ley-fh*0.08); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(rex+fw*0.15,rey-fh*0.2); ctx.lineTo(rex-fw*0.1,rey-fh*0.08); ctx.stroke();
+          if(kind==='shock'){ glow(cx,cy,fw*0.5,'rgba(255,200,0,.2)'); em('💥', cx, fy-fh*0.4, fw*0.35); }
+          mouth('#8B0000',null);
+        }
+        else if(kind==='zzz'){
+          em('💤', cx+fw*0.35, fy-fh*0.2+Math.sin(t*2)*fh*0.05, fw*0.35);
+          em('💤', cx+fw*0.5, fy-fh*0.45, fw*0.25);
+          ctx.globalAlpha=0.5; glow(cx,cy,fw*0.6,'rgba(100,100,200,.2)'); ctx.globalAlpha=1;
+        }
+        else if(kind==='money'||kind==='chart'){
+          rain('💵', 8, null);
+          em(icon, cx, fy-fh*0.3, fw*0.45);
+        }
+        else if(kind==='music'||kind==='headphones'||kind==='guitar'){
+          orbit(['🎵','🎶','🎼'], fw*0.7, 2, fw*0.25);
+          em(icon, cx, fy-fh*0.3, fw*0.45);
+        }
+        else if(kind==='rocket'||kind==='ufo'){
+          const yoff=Math.sin(t*3)*fh*0.08;
+          em(icon, cx, fy-fh*0.4+yoff, fw*0.5);
+          if(kind==='rocket') em('☁️', cx, cy+fh*0.4, fw*0.3);
+        }
+        else if(kind==='wave'||kind==='cloud'||kind==='tornado'){
+          if(kind==='tornado'){
+            for(let i=0;i<5;i++) em('💨', cx+Math.sin(t*4+i)*fw*0.3, cy-fh*0.3+i*fh*0.15, fw*0.3);
+          } else rain(kind==='wave'?'🌊':'☁️', 6, null);
+          em(icon, cx, fy-fh*0.25, fw*0.45);
+        }
+        else if(kind==='butterfly'||kind==='bee'){
+          const fl=Math.sin(t*8)*0.15;
+          ctx.save(); ctx.translate(lex-fw*0.3,ley); ctx.rotate(-0.3+fl); em(icon,0,0,fw*0.35); ctx.restore();
+          ctx.save(); ctx.translate(rex+fw*0.3,rey); ctx.rotate(0.3-fl); em(icon,0,0,fw*0.35); ctx.restore();
+        }
+        else if(kind==='flower'||kind==='rose'||kind==='sunflower'||kind==='clover'){
+          em(icon, cx, fy-fh*0.35, fw*0.5);
+          orbit([icon,'🌿','🍃'], fw*0.6, 1.2, fw*0.2);
+        }
+        else if(kind==='pizza'||kind==='burger'||kind==='donut'||kind==='icecream'||kind==='fries'||kind==='avocado'||kind==='grape'||kind==='watermelon'||kind==='strawberry'||kind==='cherry'){
+          em(icon, cx, cy-fh*0.05+Math.sin(t*3)*fh*0.03, fw*0.85);
+          if(open>0.4) em('😋', cx, cy+fh*0.35, fw*0.3);
+        }
+        else if(kind==='diamond'||kind==='ring'||kind==='trophy'||kind==='medal'){
+          glow(cx,fy-fh*0.3,fw*0.5,'rgba(255,215,0,.3)');
+          em(icon, cx, fy-fh*0.3, fw*0.5);
+          orbit(['✨','💎'], fw*0.65, 2, fw*0.2);
+        }
+        else if(kind==='game'||kind==='joystick'||kind==='target'||kind==='soccer'||kind==='basket'){
+          em(icon, cx, fy-fh*0.3, fw*0.5);
+          if(kind==='soccer'||kind==='basket') em(icon, cx+Math.sin(t*2)*fw*0.4, cy+fh*0.3, fw*0.3);
+        }
+        else if(kind==='theater'||kind==='film'||kind==='camera'||kind==='palette'||kind==='circus'){
+          em(icon, cx, fy-fh*0.3, fw*0.5);
+          orbit(['✨','🎬','⭐'], fw*0.65, 1.5, fw*0.22);
+        }
+        else if(kind==='monkey'||kind==='bear'||kind==='koala'||kind==='chicken'||kind==='cow'||kind==='dragon'||kind==='dolphin'||kind==='shark'){
+          // animal face overlay
+          ear(lex-fw*0.08,fy,-0.25,fw*0.55,'#C4A574','#FFB6C1',false);
+          ear(rex+fw*0.08,fy,0.25,fw*0.55,'#C4A574','#FFB6C1',true);
+          em(icon, cx, cy-fh*0.1, fw*0.7);
+          mouth('#333','#FF6B8A');
+        }
+        else if(kind==='wink'||kind==='smirk'||kind==='blob'||kind==='vomit'||kind==='poop'){
+          em(icon, cx, cy-fh*0.05, fw*0.9);
+          if(kind==='vomit'&&open>0.3) rain('🟢', 6, null);
+        }
+        else if(kind==='balloon'){
+          em('🎈', cx-fw*0.3, fy-fh*0.4+Math.sin(t*2)*fh*0.08, fw*0.4);
+          em('🎈', cx+fw*0.3, fy-fh*0.5+Math.sin(t*2+1)*fh*0.08, fw*0.35);
+        }
+        else {
+          // unique fallback per maskId — different orbit / scale / offset
+          const style = maskId % 7;
+          const bob=Math.sin(t*(2+style*0.4))*fh*0.03;
+          glow(cx,cy,fw*0.7,`hsla(${(maskId*37)%360},80%,60%,.2)`);
+          if(style===0){ em(icon,cx,cy+bob,fw*1.0); }
+          else if(style===1){ em(icon,lex,ley,fw*0.45); em(icon,rex,rey,fw*0.45); }
+          else if(style===2){ em(icon,cx,fy-fh*0.3+bob,fw*0.55); orbit([icon,'✨'],fw*0.7,2,fw*0.2); }
+          else if(style===3){ rain(icon,6,null); em(icon,cx,cy,fw*0.7); }
+          else if(style===4){ em(icon,cx-fw*0.35,cy+bob,fw*0.5); em(icon,cx+fw*0.35,cy-bob,fw*0.5); }
+          else if(style===5){ orbit([icon,icon,icon],fw*0.6,2.5,fw*0.3); }
+          else { em(icon,cx,cy-fh*0.1+bob,fw*0.85); if(open>0.25) em('👄',cx,cy+fh*0.3,fw*0.3); }
+        }
+        // mouth open indicator for most non-geometry masks
+        if(open>0.45 && !['cat','fox','dog','alien','robot','ghost','skull','pumpkin','pig','frog','glasses','cool','nerd'].includes(kind)){
+          ctx.globalAlpha=0.9;
+          em(open>0.7?'😮':'👄', cx, cy+fh*0.38, fw*0.28);
+          ctx.globalAlpha=1;
         }
         ctx.restore();
       }
@@ -38737,6 +39214,48 @@ body{
   document.head.appendChild(st);
 
   console.log('[SL] SVideo TikTok UI + 100 masks + music + friends inbox');
+})();
+</script>
+
+
+
+
+
+
+
+<script>
+(function(){
+  if(window._slAuthChoiceSafety) return; window._slAuthChoiceSafety=1;
+  function panelVisible(el){
+    if(!el) return false;
+    const st=el.getAttribute('style')||'';
+    if(/display\s*:\s*none/i.test(st)) return false;
+    try{ return getComputedStyle(el).display!=='none'; }catch(e){ return true; }
+  }
+  function fixEmptyAuth(){
+    try{
+      const auth=document.getElementById('auth-screen');
+      if(!auth || getComputedStyle(auth).display==='none') return;
+      if(document.getElementById('sl-onboard')) return;
+      const login=document.getElementById('login-form');
+      const reg=document.getElementById('register-form');
+      const forgot=document.getElementById('forgot-form');
+      const choice=document.getElementById('auth-choice');
+      const anyForm = panelVisible(login) || panelVisible(reg) || panelVisible(forgot);
+      if(anyForm){
+        if(choice){ choice.style.display='none'; choice.style.visibility='hidden'; }
+        return;
+      }
+      if(choice){
+        choice.style.display='';
+        choice.style.visibility='visible';
+        choice.style.pointerEvents='auto';
+        choice.style.opacity='1';
+      }
+    }catch(e){}
+  }
+  setInterval(fixEmptyAuth, 1000);
+  setTimeout(fixEmptyAuth, 300);
 })();
 </script>
 
