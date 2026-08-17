@@ -39440,34 +39440,199 @@ body{
 
 
 <script>
-/* White-screen kill — no login flash when session exists */
+/* ========== EMERGENCY BOOT FIX v8 — eternal loading + dead tabs ========== */
 (function(){
-  if(window._slWhiteKill) return; window._slWhiteKill=1;
-  function forceUI(){
+  if (window._slEmergencyV8) return;
+  window._slEmergencyV8 = 1;
+
+  function killBoot(){
     try{
-      if(window._slAppReady) return;
-      var logged = !!(window._slSessionHint || window._slAppReady || document.documentElement.classList.contains('sl-force-app'));
-      try{ if(localStorage.getItem('sl_logged_in')==='1') logged=true; }catch(e){}
-      document.documentElement.style.background='#0F1419';
-      if(document.body) document.body.style.background='#0F1419';
-      var boot=document.getElementById('app-boot');
-      if(boot) boot.style.display='none';
-      var auth=document.getElementById('auth-screen');
-      var app=document.getElementById('app-screen');
-      if(logged){
-        document.documentElement.classList.add('sl-force-app','sl-ready');
-        document.documentElement.classList.remove('sl-force-auth','sl-on-auth');
-        if(auth) auth.style.setProperty('display','none','important');
-        if(app){ app.style.setProperty('display','flex','important'); app.style.setProperty('visibility','visible','important'); }
-        document.querySelectorAll('.bottom-tabs').forEach(function(el){ el.style.removeProperty('display'); });
-      } else if(auth){
-        auth.style.setProperty('display','flex','important');
-        if(app) app.style.setProperty('display','none','important');
+      var boot = document.getElementById('app-boot');
+      if (boot) {
+        boot.classList.add('hide');
+        boot.style.cssText = 'display:none!important;opacity:0!important;pointer-events:none!important;z-index:-1!important';
+        try { boot.remove(); } catch(e){}
+      }
+      document.documentElement.classList.remove('sl-booting');
+      document.documentElement.classList.add('sl-ready');
+      var loader = document.getElementById('sl-loader');
+      if (loader) {
+        loader.classList.remove('show');
+        loader.style.display = 'none';
       }
     }catch(e){}
   }
-  setTimeout(forceUI, 1500);
-  setTimeout(forceUI, 4000);
+
+  function isLogged(){
+    try{
+      if (window._slAppReady || window._slSessionHint) return true;
+      if (document.documentElement.classList.contains('sl-force-app')) return true;
+      if (localStorage.getItem('sl_logged_in') === '1') return true;
+      var keys = Object.keys(localStorage || {});
+      for (var i=0;i<keys.length;i++){
+        var k = keys[i];
+        if (k.indexOf('auth-token') !== -1 || k.indexOf('sb-') === 0 || k.indexOf('supabase') !== -1) return true;
+      }
+    }catch(e){}
+    return false;
+  }
+
+  function ensureSwitchPage(){
+    if (typeof window.switchPage === 'function' && !window.switchPage._emergency) {
+      // keep original but wrap safety
+      var orig = window.switchPage;
+      window.switchPage = function(page){
+        try { return orig.apply(this, arguments); }
+        catch(e){ console.warn('switchPage orig failed', e); emergencySwitch(page); }
+      };
+      window.switchPage._emergency = 1;
+      return;
+    }
+    if (typeof window.switchPage !== 'function') {
+      window.switchPage = emergencySwitch;
+      window.switchPage._emergency = 1;
+    }
+  }
+
+  function emergencySwitch(page){
+    page = page || 'chats';
+    try{
+      document.querySelectorAll('.app-page').forEach(function(p){ p.classList.remove('active'); });
+      var el = document.getElementById('page-' + page);
+      if (el) {
+        el.classList.add('active');
+        el.style.display = 'flex';
+        el.style.visibility = 'visible';
+        el.style.pointerEvents = 'auto';
+        el.style.zIndex = '2';
+      }
+      document.querySelectorAll('.bottom-tab').forEach(function(t){
+        t.classList.toggle('active', t.getAttribute('data-tab') === page);
+      });
+      if (page !== 'chats') {
+        document.body.classList.remove('in-chat');
+        var side = document.getElementById('sidebar');
+        if (side) side.classList.remove('hidden');
+      }
+      if (page === 'calls' && typeof renderCallsList === 'function') {
+        try { renderCallsList(); } catch(e){}
+      }
+      if (page === 'chats' && typeof renderContactsAndGroups === 'function') {
+        try { renderContactsAndGroups(); } catch(e){}
+      }
+    }catch(e){ console.warn('emergencySwitch', e); }
+  }
+
+  function bindTabs(){
+    try{
+      ensureSwitchPage();
+      document.querySelectorAll('.bottom-tab').forEach(function(t){
+        if (t._slTabBound) return;
+        t._slTabBound = 1;
+        t.addEventListener('click', function(ev){
+          ev.preventDefault();
+          ev.stopPropagation();
+          var tab = t.getAttribute('data-tab') || 'chats';
+          if (typeof switchPage === 'function') switchPage(tab);
+          else emergencySwitch(tab);
+        }, true);
+      });
+      // also nav-rail if present
+      document.querySelectorAll('.nav-rail .nav-item').forEach(function(btn){
+        if (btn._slTabBound) return;
+        btn._slTabBound = 1;
+        btn.addEventListener('click', function(){
+          var tab = btn.getAttribute('data-tab') || 'chats';
+          if (typeof switchPage === 'function') switchPage(tab);
+          else emergencySwitch(tab);
+        }, true);
+      });
+    }catch(e){}
+  }
+
+  function forceUI(){
+    try{
+      killBoot();
+      document.documentElement.style.background = '#0F1419';
+      if (document.body) {
+        document.body.style.background = '#0F1419';
+        document.body.style.visibility = 'visible';
+        document.body.style.opacity = '1';
+      }
+
+      var auth = document.getElementById('auth-screen');
+      var app  = document.getElementById('app-screen');
+      var logged = isLogged();
+
+      if (logged) {
+        document.documentElement.classList.add('sl-force-app','sl-ready');
+        document.documentElement.classList.remove('sl-force-auth','sl-on-auth');
+        try { window._slAppReady = 1; } catch(e){}
+        if (auth) {
+          auth.style.setProperty('display','none','important');
+          auth.style.pointerEvents = 'none';
+        }
+        if (app) {
+          app.style.setProperty('display','flex','important');
+          app.style.setProperty('visibility','visible','important');
+          app.style.setProperty('opacity','1','important');
+          app.style.minHeight = '100dvh';
+          app.style.pointerEvents = 'auto';
+        }
+        document.querySelectorAll('.bottom-tabs').forEach(function(el){
+          el.style.removeProperty('display');
+          el.style.display = 'flex';
+          el.style.visibility = 'visible';
+          el.style.pointerEvents = 'auto';
+          el.style.zIndex = '50';
+        });
+        // ensure a page is active
+        var active = document.querySelector('.app-page.active');
+        if (!active) {
+          emergencySwitch('chats');
+        } else {
+          active.style.display = 'flex';
+          active.style.visibility = 'visible';
+        }
+      } else {
+        document.documentElement.classList.add('sl-ready');
+        if (auth) {
+          auth.style.setProperty('display','flex','important');
+          auth.style.visibility = 'visible';
+          auth.style.opacity = '1';
+        }
+        if (app) app.style.setProperty('display','none','important');
+      }
+      bindTabs();
+    }catch(e){ console.warn('forceUI', e); }
+  }
+
+  // Run early and repeatedly
+  forceUI();
+  setTimeout(forceUI, 400);
+  setTimeout(forceUI, 1200);
+  setTimeout(forceUI, 2500);
+  setTimeout(forceUI, 5000);
+  setTimeout(forceUI, 9000);
+
+  // Absolute hard stop for boot overlay
+  setTimeout(function(){
+    killBoot();
+    forceUI();
+    bindTabs();
+  }, 12000);
+
+  // Re-bind when DOM mutates (late scripts)
+  try{
+    var mo = new MutationObserver(function(){ bindTabs(); });
+    mo.observe(document.documentElement, { childList: true, subtree: true });
+    setTimeout(function(){ try{ mo.disconnect(); }catch(e){} }, 20000);
+  }catch(e){}
+
+  // Expose for manual debug
+  window.slForceReady = forceUI;
+  window.slKillBoot = killBoot;
+  console.log('[SL] emergency boot fix v8 ready');
 })();
 </script>
 
