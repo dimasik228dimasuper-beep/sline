@@ -1,30 +1,55 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="ru" class="theme-dark night-mode" style="background:#0F1419!important;color-scheme:dark">
 <head>
 <meta charset="UTF-8" />
+<style>html,body{background:#0F1419!important;color:#F4F7FB!important;margin:0;min-height:100%;min-height:100dvh}#app-boot{background:#0B1120!important}</style>
 <script>
 (function(){
   try{
-    var t = localStorage.getItem('sl_theme');
-    var light;
-    if(!t || t==='auto' || t==='system'){
-      light = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
-    } else {
-      light = t==='light';
-    }
-    window.__slLight = !!light;
-    var cls = light ? 'theme-light light-theme' : 'theme-dark night-mode';
-    document.documentElement.className = (document.documentElement.className||'').replace(/\b(theme-light|light-theme|theme-dark|night-mode)\b/g,'') + ' ' + cls;
-    document.documentElement.style.colorScheme = light ? 'light' : 'dark';
-    var m = document.querySelector('meta[name="theme-color"]');
-    if(m) m.setAttribute('content', light ? '#F4F6F9' : '#0F1419');
+    // Boot ALWAYS dark to avoid pure-white flash on iOS light system theme.
+    // User theme is applied only after app is ready.
+    document.documentElement.classList.add('theme-dark','night-mode');
+    document.documentElement.classList.remove('theme-light','light-theme');
+    document.documentElement.style.background = '#0F1419';
+    document.documentElement.style.colorScheme = 'dark';
+    window.__slLight = false;
+    window.__slApplyThemeLater = function(){
+      try{
+        var t = localStorage.getItem('sl_theme');
+        var light;
+        if(!t || t==='auto' || t==='system'){
+          light = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
+        } else {
+          light = t==='light';
+        }
+        // On auth screen stay dark; only switch light inside app if chosen
+        var auth=document.getElementById('auth-screen');
+        var authOn = auth && getComputedStyle(auth).display!=='none';
+        if(authOn) light = false;
+        window.__slLight = !!light;
+        document.documentElement.classList.toggle('theme-light', !!light);
+        document.documentElement.classList.toggle('light-theme', !!light);
+        document.documentElement.classList.toggle('theme-dark', !light);
+        document.documentElement.classList.toggle('night-mode', !light);
+        if(document.body){
+          document.body.classList.toggle('theme-light', !!light);
+          document.body.classList.toggle('light-theme', !!light);
+          document.body.classList.toggle('theme-dark', !light);
+          document.body.classList.toggle('night-mode', !light);
+        }
+        document.documentElement.style.colorScheme = light ? 'light' : 'dark';
+        document.documentElement.style.background = light ? '#F4F6F9' : '#0F1419';
+        var m = document.querySelector('meta[name="theme-color"]');
+        if(m) m.setAttribute('content', light ? '#F4F6F9' : '#0F1419');
+      }catch(e){}
+    };
     function applyBody(){
       try{
         if(!document.body) return;
-        document.body.classList.toggle('theme-light', !!light);
-        document.body.classList.toggle('light-theme', !!light);
-        document.body.classList.toggle('theme-dark', !light);
-        document.body.classList.toggle('night-mode', !light);
+        document.body.classList.add('theme-dark','night-mode');
+        document.body.classList.remove('theme-light','light-theme');
+        document.body.style.background = '#0F1419';
+        document.body.style.color = '#F4F7FB';
       }catch(e){}
     }
     if(document.body) applyBody();
@@ -2703,7 +2728,7 @@ body.theme-light #auth-screen .auth-card{
 </script>
 
 </head>
-<body>
+<body class="theme-dark night-mode" style="background:#0F1419;color:#F4F7FB;margin:0;min-height:100dvh">
 <script>(function(){try{document.documentElement.classList.remove('skin-green','skin-wa','skin-tg','skin-max','skin-sline');localStorage.removeItem('sl_ui_skin');}catch(e){}})();</script>
 
 
