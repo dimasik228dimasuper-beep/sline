@@ -3709,7 +3709,7 @@ let _fbApp = null, _fbAuth = null, _fbDb = null, _fbStorage = null;
     _fbApp = firebase.initializeApp(FIREBASE_CONFIG);
     _fbAuth = firebase.auth();
     _fbDb = firebase.database();
-    _fbStorage = firebase.storage();
+    try { _fbStorage = firebase.storage(); } catch (eSt) { console.warn('[SL] storage optional', eSt); _fbStorage = null; }
     console.log('[SL] Firebase ready');
   } catch (e) {
     console.error('[SL] Firebase init error', e);
@@ -4221,6 +4221,72 @@ let _fbApp = null, _fbAuth = null, _fbDb = null, _fbStorage = null;
 
   // Expose for nuclear scripts etc.
   window.sb = sb;
+  // Bulletproof from/insert (some paths expected supabase chaining)
+  (function hardenSb(){
+    function directInsert(table, payload){
+      return new Promise(async function(resolve){
+        try{
+          if(!_fbDb){ resolve({data:null, error:{message:'db not ready'}}); return; }
+          var items = Array.isArray(payload) ? payload : [payload];
+          var out = [];
+          for(var i=0;i<items.length;i++){
+            var item = items[i] || {};
+            var id = item.id || ('m_'+Date.now()+'_'+Math.random().toString(36).slice(2,9));
+            var data = Object.assign({}, item, {id:id});
+            if(!data.created_at) data.created_at = new Date().toISOString();
+            await _fbDb.ref('tables/'+table+'/'+id).set(data);
+            out.push(data);
+          }
+          resolve({data: Array.isArray(payload)?out:out[0], error:null});
+        }catch(e){
+          resolve({data:null, error:{message:e.message||String(e)}});
+        }
+      });
+    }
+    var _origFrom = sb.from.bind(sb);
+    sb.from = function(table){
+      var q;
+      try{ q = _origFrom(table); }catch(e){ q = null; }
+      if(!q || typeof q.insert !== 'function'){
+        q = {
+          insert: function(payload){
+            var p = directInsert(table, payload);
+            var chain = {
+              select: function(){ return chain; },
+              single: function(){ return chain; },
+              maybeSingle: function(){ return chain; },
+              then: function(res, rej){ return p.then(res, rej); },
+              catch: function(fn){ return p.catch(fn); }
+            };
+            return chain;
+          },
+          select: function(){ return q; },
+          eq: function(){ return q; },
+          then: function(res){ return Promise.resolve({data:[], error:null}).then(res); }
+        };
+        return q;
+      }
+      // wrap existing insert to always allow .select().single()
+      var _ins = q.insert.bind(q);
+      q.insert = function(payload){
+        var ret = _ins(payload);
+        if(ret && typeof ret.then === 'function' && typeof ret.select === 'function') return ret;
+        // if plain promise, add chain methods
+        var p = Promise.resolve(ret);
+        var chain = {
+          select: function(){ return chain; },
+          single: function(){ return chain; },
+          maybeSingle: function(){ return chain; },
+          then: function(res, rej){ return p.then(res, rej); },
+          catch: function(fn){ return p.catch(fn); }
+        };
+        return chain;
+      };
+      return q;
+    };
+    window.sb = sb;
+    window.slDirectInsert = directInsert;
+  })();
   window.firebaseAuth = _fbAuth;
   window.firebaseDb = _fbDb;
   window.B2_CONFIG = { keyId: B2_KEY_ID, applicationKey: B2_APPLICATION_KEY, keyName: B2_KEY_NAME, bucket: B2_BUCKET };
@@ -8132,7 +8198,17 @@ async function sendMessage(type='text', fileUrl=null, content=null){
   renderMessage({...payload, id:localId, created_at:new Date().toISOString(), _pending:true}, !!activeGroup);
   scrollToBottom();
   try{
-    let {data,error}=await sb.from('messages').insert(payload).select().single();
+    let data=null, error=null;
+    try{
+      const res = await sb.from('messages').insert(payload).select().single();
+      data = res && res.data; error = res && res.error;
+    }catch(eIns){
+      console.warn('[SL] insert chain failed, direct', eIns);
+      try{
+        const res2 = await (window.slDirectInsert ? window.slDirectInsert('messages', payload) : Promise.resolve({data:null,error:{message:String(eIns)}}));
+        data = res2.data; error = res2.error;
+      }catch(e2){ error = {message: e2.message||String(e2)}; }
+    }
     // If reply_to_msg_id causes FK/uuid error — retry without it (text quote still preserved)
     if(error && payload.reply_to_msg_id && /uuid|foreign key|reply_to|invalid input|violates/i.test(String(error.message||error))){
       try{
