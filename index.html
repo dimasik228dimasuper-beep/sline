@@ -3666,33 +3666,540 @@ body.theme-light .topbar {
   <button class="fmt-btn" data-fmt="sp" title="Спойлер"><svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2"><path d="M17.94 17.94A10.94 10.94 0 0112 20c-7 0-11-8-11-8a21.6 21.6 0 015.06-6.06M14.12 14.12a3 3 0 11-4.24-4.24"/><path d="M1 1l22 22"/></svg></button>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" onerror="console.warn('[SL] supabase CDN failed')"></script>
+<!-- Firebase SDKs (Auth + Realtime Database + Storage) -->
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
 <script>
-// ========== CORE ==========
-const SUPABASE_URL = "https://eshbyibuzvoztrsunvul.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVzaGJ5aWJ1enZvenRyc3VudnVsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU0MDk5MzUsImV4cCI6MjEwMDk4NTkzNX0.WVOd2qZ5RJlOrMPlfuIFJEymgfZjtGVB4TJgrDEFnXQ";
+// ========== CORE — Firebase + Neon + B2 (Supabase removed) ==========
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyCRUeJPEmduuOZei7VxNUYJKSf3tiSmLKk",
+  authDomain: "sline-chat.firebaseapp.com",
+  projectId: "sline-chat",
+  storageBucket: "sline-chat.firebasestorage.app",
+  messagingSenderId: "144193056770",
+  appId: "1:144193056770:web:e7da4107c96f031779771b",
+  measurementId: "G-0MFN8100TX",
+  databaseURL: "https://sline-chat-default-rtdb.firebaseio.com"
+};
+
+// Neon (Postgres) — for future server / Data API use
+const NEON_CONNECTION_STRING = "postgresql://neondb_owner:npg_3QrZLunj6UJI@ep-nameless-shape-ay9hakkj-pooler.c-5.us-east-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require";
+
+// Backblaze B2
+const B2_KEY_ID = "005cafcc7c82251000000002";
+const B2_KEY_NAME = "sline-key";
+const B2_APPLICATION_KEY = "K005PEeYJxMsO8TY7XGPQZRng/INUgl";
+const B2_BUCKET = "sline-media"; // change if your bucket name is different
+
+// Keep old names so existing push code doesn't crash
+const SUPABASE_URL = "https://sline-chat.firebaseapp.com";
+const SUPABASE_ANON_KEY = FIREBASE_CONFIG.apiKey;
+
 let sb = null;
-(function initSb(){
-  try{
-    if(!window.supabase || typeof window.supabase.createClient!=='function'){
-      console.warn('[SL] supabase SDK not loaded');
+let _fbApp = null, _fbAuth = null, _fbDb = null, _fbStorage = null;
+
+(function initFirebaseAndSbShim(){
+  try {
+    if (typeof firebase === 'undefined') {
+      console.error('[SL] Firebase SDK not loaded');
       return;
     }
-    sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-      auth: {
-        persistSession: true,
-        autoRefreshToken: true,
-        detectSessionInUrl: true,
-        storage: window.localStorage,
-        storageKey: 'sl-auth-token'
-      }
-    });
-  }catch(e){
-    try {
-      if(window.supabase && window.supabase.createClient)
-        sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    } catch(e2){ console.warn('supabase init', e2); }
+    _fbApp = firebase.initializeApp(FIREBASE_CONFIG);
+    _fbAuth = firebase.auth();
+    _fbDb = firebase.database();
+    _fbStorage = firebase.storage();
+    console.log('[SL] Firebase ready');
+  } catch (e) {
+    console.error('[SL] Firebase init error', e);
   }
+
+  // ---------- Minimal Supabase-compatible client on top of Firebase ----------
+  function uuid() {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+      const r = Math.random() * 16 | 0;
+      return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+    });
+  }
+
+  function pathFor(table) {
+    return 'tables/' + table;
+  }
+
+  // Simple query builder that works against Firebase RTDB
+  class QueryBuilder {
+    constructor(table) {
+      this.table = table;
+      this._filters = [];
+      this._orFilters = null;
+      this._order = null;
+      this._asc = true;
+      this._limit = null;
+      this._single = false;
+      this._maybeSingle = false;
+      this._countOnly = false;
+      this._selectCols = '*';
+      this._neq = null;
+      this._in = null;
+      this._isNull = null;
+    }
+    select(cols, opts) {
+      this._selectCols = cols || '*';
+      if (opts && opts.count === 'exact' && opts.head) this._countOnly = true;
+      return this;
+    }
+    eq(col, val) { this._filters.push({ op: 'eq', col, val }); return this; }
+    neq(col, val) { this._neq = { col, val }; return this; }
+    in(col, arr) { this._in = { col, arr: arr || [] }; return this; }
+    is(col, val) { this._isNull = { col, val }; return this; }
+    or(str) { this._orFilters = str; return this; }
+    order(col, opts) {
+      this._order = col;
+      this._asc = !(opts && opts.ascending === false);
+      return this;
+    }
+    limit(n) { this._limit = n; return this; }
+    maybeSingle() { this._maybeSingle = true; return this; }
+    single() { this._single = true; return this; }
+
+    async _fetchAll() {
+      const ref = _fbDb.ref(pathFor(this.table));
+      const snap = await ref.once('value');
+      let rows = [];
+      snap.forEach(child => {
+        const v = child.val();
+        if (v && typeof v === 'object') {
+          rows.push(Object.assign({ id: child.key }, v));
+        }
+      });
+      // apply filters
+      this._filters.forEach(f => {
+        rows = rows.filter(r => String(r[f.col]) === String(f.val));
+      });
+      if (this._neq) {
+        rows = rows.filter(r => String(r[this._neq.col]) !== String(this._neq.val));
+      }
+      if (this._in) {
+        const set = new Set(this._in.arr.map(String));
+        rows = rows.filter(r => set.has(String(r[this._in.col])));
+      }
+      if (this._isNull) {
+        if (this._isNull.val === null) {
+          rows = rows.filter(r => r[this._isNull.col] == null);
+        }
+      }
+      if (this._orFilters) {
+        // very simple or: "col.ilike.%q%,col2.ilike.%q%"
+        const parts = this._orFilters.split(',');
+        const q = (parts[0].match(/%(.+)%/) || [])[1] || '';
+        if (q) {
+          const ql = q.toLowerCase();
+          rows = rows.filter(r => {
+            return parts.some(p => {
+              const col = p.split('.')[0];
+              const val = (r[col] || '').toString().toLowerCase();
+              return val.includes(ql);
+            });
+          });
+        }
+      }
+      if (this._order) {
+        const col = this._order;
+        const asc = this._asc;
+        rows.sort((a, b) => {
+          const va = a[col], vb = b[col];
+          if (va < vb) return asc ? -1 : 1;
+          if (va > vb) return asc ? 1 : -1;
+          return 0;
+        });
+      }
+      if (this._limit != null) rows = rows.slice(0, this._limit);
+      return rows;
+    }
+
+    then(resolve, reject) {
+      return this._run().then(resolve, reject);
+    }
+
+    async _run() {
+      try {
+        if (this._countOnly) {
+          const rows = await this._fetchAll();
+          return { data: null, error: null, count: rows.length };
+        }
+        const rows = await this._fetchAll();
+        if (this._single || this._maybeSingle) {
+          if (rows.length === 0) {
+            return { data: null, error: this._single ? { message: 'No rows' } : null };
+          }
+          return { data: rows[0], error: null };
+        }
+        return { data: rows, error: null };
+      } catch (e) {
+        return { data: null, error: { message: e.message || String(e) } };
+      }
+    }
+
+    async insert(payload) {
+      try {
+        const items = Array.isArray(payload) ? payload : [payload];
+        const out = [];
+        for (const item of items) {
+          const id = item.id || uuid();
+          const data = Object.assign({}, item, { id });
+          if(!data.created_at) data.created_at = new Date().toISOString();
+          await _fbDb.ref(pathFor(this.table) + '/' + id).set(data);
+          out.push(data);
+        }
+        return { data: Array.isArray(payload) ? out : out[0], error: null };
+      } catch (e) {
+        return { data: null, error: { message: e.message || String(e) } };
+      }
+    }
+
+    async upsert(payload, opts) {
+      try {
+        const items = Array.isArray(payload) ? payload : [payload];
+        const out = [];
+        for (const item of items) {
+          const id = item.id || uuid();
+          const data = Object.assign({}, item, { id });
+          await _fbDb.ref(pathFor(this.table) + '/' + id).update(data);
+          out.push(data);
+        }
+        return { data: Array.isArray(payload) ? out : out[0], error: null };
+      } catch (e) {
+        return { data: null, error: { message: e.message || String(e) } };
+      }
+    }
+
+    async update(payload) {
+      try {
+        const rows = await this._fetchAll();
+        for (const r of rows) {
+          await _fbDb.ref(pathFor(this.table) + '/' + r.id).update(payload);
+        }
+        return { data: rows.map(r => Object.assign({}, r, payload)), error: null };
+      } catch (e) {
+        return { data: null, error: { message: e.message || String(e) } };
+      }
+    }
+
+    async delete() {
+      try {
+        const rows = await this._fetchAll();
+        for (const r of rows) {
+          await _fbDb.ref(pathFor(this.table) + '/' + r.id).remove();
+        }
+        return { data: rows, error: null };
+      } catch (e) {
+        return { data: null, error: { message: e.message || String(e) } };
+      }
+    }
+  }
+
+  // Auth shim compatible with sb.auth.*
+  const authShim = {
+    async signInWithPassword({ email, password }) {
+      try {
+        const cred = await _fbAuth.signInWithEmailAndPassword(email, password);
+        const user = cred.user;
+        return {
+          data: {
+            user: { id: user.uid, email: user.email },
+            session: { user: { id: user.uid, email: user.email }, access_token: await user.getIdToken() }
+          },
+          error: null
+        };
+      } catch (e) {
+        return { data: { user: null, session: null }, error: { message: e.message } };
+      }
+    },
+    async signUp({ email, password, options }) {
+      try {
+        const cred = await _fbAuth.createUserWithEmailAndPassword(email, password);
+        const user = cred.user;
+        // store extra profile data if provided
+        const meta = (options && options.data) || {};
+        if (Object.keys(meta).length) {
+          await _fbDb.ref('tables/profiles/' + user.uid).update(Object.assign({
+            id: user.uid,
+            email: user.email
+          }, meta));
+        }
+        return {
+          data: {
+            user: { id: user.uid, email: user.email },
+            session: { user: { id: user.uid, email: user.email } }
+          },
+          error: null
+        };
+      } catch (e) {
+        return { data: { user: null, session: null }, error: { message: e.message } };
+      }
+    },
+    async signOut() {
+      try {
+        await _fbAuth.signOut();
+        return { error: null };
+      } catch (e) {
+        return { error: { message: e.message } };
+      }
+    },
+    async getSession() {
+      const user = _fbAuth.currentUser;
+      if (!user) return { data: { session: null }, error: null };
+      return {
+        data: {
+          session: {
+            user: { id: user.uid, email: user.email },
+            access_token: await user.getIdToken()
+          }
+        },
+        error: null
+      };
+    },
+    async getUser() {
+      const user = _fbAuth.currentUser;
+      if (!user) return { data: { user: null }, error: null };
+      return { data: { user: { id: user.uid, email: user.email } }, error: null };
+    },
+    onAuthStateChange(cb) {
+      return _fbAuth.onAuthStateChanged(user => {
+        const session = user ? {
+          user: { id: user.uid, email: user.email }
+        } : null;
+        cb(user ? 'SIGNED_IN' : 'SIGNED_OUT', session);
+      });
+    }
+  };
+
+  // ---------- Backblaze B2 storage (no Firebase Storage, no card needed) ----------
+  let _b2Auth = null; // { apiUrl, authorizationToken, downloadUrl, accountId }
+  let _b2BucketId = null;
+  let _b2BucketName = B2_BUCKET || 'sline-media';
+  let _b2UploadCache = null; // { uploadUrl, authorizationToken, expires }
+
+  async function b2Authorize() {
+    if (_b2Auth && _b2Auth._ts && Date.now() - _b2Auth._ts < 20 * 60 * 60 * 1000) return _b2Auth;
+    const creds = btoa(B2_KEY_ID + ':' + B2_APPLICATION_KEY);
+    const res = await fetch('https://api.backblazeb2.com/b2api/v2/b2_authorize_account', {
+      method: 'GET',
+      headers: { Authorization: 'Basic ' + creds }
+    });
+    if (!res.ok) {
+      const t = await res.text().catch(() => '');
+      throw new Error('B2 authorize failed: ' + res.status + ' ' + t);
+    }
+    const data = await res.json();
+    _b2Auth = {
+      apiUrl: data.apiUrl,
+      authorizationToken: data.authorizationToken,
+      downloadUrl: data.downloadUrl,
+      accountId: data.accountId,
+      _ts: Date.now()
+    };
+    return _b2Auth;
+  }
+
+  async function b2ResolveBucket() {
+    if (_b2BucketId) return _b2BucketId;
+    const auth = await b2Authorize();
+    const res = await fetch(auth.apiUrl + '/b2api/v2/b2_list_buckets', {
+      method: 'POST',
+      headers: {
+        Authorization: auth.authorizationToken,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ accountId: auth.accountId })
+    });
+    if (!res.ok) throw new Error('B2 list buckets failed: ' + res.status);
+    const data = await res.json();
+    const buckets = data.buckets || [];
+    // prefer configured name, else first bucket
+    let b = buckets.find(x => x.bucketName === _b2BucketName);
+    if (!b && buckets.length) b = buckets[0];
+    if (!b) throw new Error('B2: no buckets found. Create a public bucket in Backblaze.');
+    _b2BucketId = b.bucketId;
+    _b2BucketName = b.bucketName;
+    return _b2BucketId;
+  }
+
+  async function b2GetUploadUrl() {
+    if (_b2UploadCache && _b2UploadCache.expires > Date.now()) return _b2UploadCache;
+    const auth = await b2Authorize();
+    const bucketId = await b2ResolveBucket();
+    const res = await fetch(auth.apiUrl + '/b2api/v2/b2_get_upload_url', {
+      method: 'POST',
+      headers: {
+        Authorization: auth.authorizationToken,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ bucketId })
+    });
+    if (!res.ok) throw new Error('B2 get_upload_url failed: ' + res.status);
+    const data = await res.json();
+    _b2UploadCache = {
+      uploadUrl: data.uploadUrl,
+      authorizationToken: data.authorizationToken,
+      expires: Date.now() + 20 * 60 * 60 * 1000
+    };
+    return _b2UploadCache;
+  }
+
+  async function sha1Hex(blob) {
+    const buf = await blob.arrayBuffer();
+    const hash = await crypto.subtle.digest('SHA-1', buf);
+    return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+  }
+
+  // Private bucket: temporary download URL (valid ~7 days)
+  async function b2GetAuthorizedDownloadUrl(fileName, validSeconds) {
+    const auth = await b2Authorize();
+    const bucketId = await b2ResolveBucket();
+    const seconds = validSeconds || 60 * 60 * 24 * 7; // 7 days
+    const res = await fetch(auth.apiUrl + '/b2api/v2/b2_get_download_authorization', {
+      method: 'POST',
+      headers: {
+        Authorization: auth.authorizationToken,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        bucketId: bucketId,
+        fileNamePrefix: fileName,
+        validDurationInSeconds: seconds
+      })
+    });
+    if (!res.ok) {
+      const t = await res.text().catch(() => '');
+      throw new Error('B2 download auth failed: ' + res.status + ' ' + t.slice(0, 150));
+    }
+    const data = await res.json();
+    const encoded = fileName.split('/').map(encodeURIComponent).join('/');
+    // Works for private buckets without making them Public
+    return auth.downloadUrl + '/file/' + _b2BucketName + '/' + encoded + '?Authorization=' + encodeURIComponent(data.authorizationToken);
+  }
+
+  async function b2UploadFile(fileName, file, contentType) {
+    const up = await b2GetUploadUrl();
+    const auth = await b2Authorize();
+    const sha = await sha1Hex(file);
+    const encodedName = fileName.split('/').map(encodeURIComponent).join('/');
+    const res = await fetch(up.uploadUrl, {
+      method: 'POST',
+      headers: {
+        Authorization: up.authorizationToken,
+        'X-Bz-File-Name': encodedName,
+        'Content-Type': contentType || file.type || 'b2/x-auto',
+        'Content-Length': String(file.size),
+        'X-Bz-Content-Sha1': sha
+      },
+      body: file
+    });
+    if (!res.ok) {
+      _b2UploadCache = null;
+      const t = await res.text().catch(() => '');
+      throw new Error('B2 upload failed: ' + res.status + ' ' + t.slice(0, 200));
+    }
+    const data = await res.json();
+    // Private bucket → authorized URL (no need for Public / card)
+    let publicUrl;
+    try {
+      publicUrl = await b2GetAuthorizedDownloadUrl(fileName, 60 * 60 * 24 * 7);
+    } catch (e) {
+      console.warn('[SL] download auth failed, fallback URL', e);
+      publicUrl = auth.downloadUrl + '/file/' + _b2BucketName + '/' + encodedName;
+    }
+    return { path: fileName, fileId: data.fileId, publicUrl };
+  }
+
+  const storageShim = {
+    from(bucketName) {
+      return {
+        async upload(path, file, opts) {
+          try {
+            const ct = (opts && opts.contentType) || file.type || 'application/octet-stream';
+            const result = await b2UploadFile(path, file, ct);
+            return { data: { path: result.path, fullPath: result.path, publicUrl: result.publicUrl, fileId: result.fileId }, error: null };
+          } catch (e) {
+            console.error('[SL] B2 upload error', e);
+            return { data: null, error: { message: e.message || String(e) } };
+          }
+        },
+        getPublicUrl(path) {
+          // sync fallback (without token); prefer createSignedUrl / upload result
+          const base = (_b2Auth && _b2Auth.downloadUrl) || 'https://f005.backblazeb2.com';
+          const url = base + '/file/' + _b2BucketName + '/' + String(path).split('/').map(encodeURIComponent).join('/');
+          return { data: { publicUrl: url } };
+        },
+        async createSignedUrl(path, expires) {
+          try {
+            const url = await b2GetAuthorizedDownloadUrl(String(path), expires || 60 * 60 * 24 * 7);
+            return { data: { signedUrl: url }, error: null };
+          } catch (e) {
+            return { data: null, error: { message: e.message } };
+          }
+        }
+      };
+    }
+  };
+
+  // Realtime channel shim (basic)
+  const channels = {};
+  function channelShim(name) {
+    if (channels[name]) return channels[name];
+    const listeners = [];
+    const ch = {
+      on(event, filter, cb) {
+        // support both (event, cb) and (event, filter, cb)
+        if (typeof filter === 'function') { cb = filter; filter = null; }
+        listeners.push({ event, filter, cb });
+        return ch;
+      },
+      subscribe(statusCb) {
+        if (typeof statusCb === 'function') statusCb('SUBSCRIBED');
+        return ch;
+      },
+      unsubscribe() {
+        return Promise.resolve({ error: null });
+      }
+    };
+    channels[name] = ch;
+    // simple broadcast helper used by some parts of the app
+    ch.send = async function(payload) {
+      try {
+        await _fbDb.ref('channels/' + name).push(Object.assign({ ts: Date.now() }, payload));
+      } catch (e) {}
+      return { error: null };
+    };
+    return ch;
+  }
+
+  sb = {
+    auth: authShim,
+    from(table) { return new QueryBuilder(table); },
+    channel(name) { return channelShim(name); },
+    removeChannel(ch) {
+      if (ch && ch.unsubscribe) ch.unsubscribe();
+      return Promise.resolve({ error: null });
+    },
+    storage: storageShim,
+    rpc(name, params) {
+      console.warn('[SL] rpc not implemented:', name);
+      return Promise.resolve({ data: null, error: { message: 'rpc not implemented' } });
+    }
+  };
+
+  // Expose for nuclear scripts etc.
+  window.sb = sb;
+  window.firebaseAuth = _fbAuth;
+  window.firebaseDb = _fbDb;
+  window.B2_CONFIG = { keyId: B2_KEY_ID, applicationKey: B2_APPLICATION_KEY, keyName: B2_KEY_NAME, bucket: B2_BUCKET };
+  window.NEON_CONNECTION_STRING = NEON_CONNECTION_STRING;
+  window.b2UploadFile = b2UploadFile; // direct access if needed
+
+  console.log('[SL] sb shim ready: Firebase Auth + RTDB | B2 media | Neon config present');
 })();
 
 
@@ -6797,7 +7304,7 @@ function isSocialAdmin(){
   const em = (myProfile?.email||'').toLowerCase();
   return em==='admin@mail.ru' || (typeof VERIFIED_EMAILS!=='undefined' && VERIFIED_EMAILS.includes(em));
 }
-const PUBLISH_COOLDOWN_MS = 15000;
+const PUBLISH_COOLDOWN_MS = 0;
 const PUBLISH_KEY = 'sl_last_publish';
 function canPublish(){
   const last = parseInt(storage.getItem(PUBLISH_KEY)||'0',10)||0;
@@ -6873,10 +7380,11 @@ async function uploadFileToStorage(file, folder){
         upsert: false
       });
       if(error){ lastErr = error; continue; }
+      // Firebase shim returns publicUrl directly on upload
+      if(data?.publicUrl) return { ok:true, url: data.publicUrl, bucket, path: data.path || path };
       const key = data?.path || path;
       const { data: pub } = sb.storage.from(bucket).getPublicUrl(key);
       if(pub?.publicUrl) return { ok:true, url: pub.publicUrl, bucket, path: key };
-      // signed URL fallback (private bucket)
       try{
         const { data: signed } = await sb.storage.from(bucket).createSignedUrl(key, 60*60*24*365);
         if(signed?.signedUrl) return { ok:true, url: signed.signedUrl, bucket, path: key };
@@ -6884,11 +7392,11 @@ async function uploadFileToStorage(file, folder){
     }catch(e){ lastErr = e; }
   }
   const msg = String(lastErr?.message||lastErr||'');
-  if(/bucket|not found|404/i.test(msg))
-    return { ok:false, error: (currentLang==='en'
-      ? 'Create a public Storage bucket named "media" in Supabase'
-      : 'Создайте в Supabase Storage публичный бакет с именем «media»') };
-  return { ok:false, error: msg || (currentLang==='en'?'Upload failed':'Не удалось загрузить файл') };
+  if(/bucket|not found|404|unauthorized|permission|authorize|B2/i.test(msg))
+    return { ok:false, error: (typeof currentLang!=='undefined'&&currentLang==='en'
+      ? 'B2 error: create a public bucket and set CORS in Backblaze'
+      : 'Ошибка B2: создайте публичный бакет и настройте CORS в Backblaze') };
+  return { ok:false, error: msg || (typeof currentLang!=='undefined'&&currentLang==='en'?'Upload failed':'Не удалось загрузить файл') };
 }
 
 async function prepareMediaForUpload(file, kind, quality){
@@ -13461,7 +13969,7 @@ document.getElementById('settings-language').onclick=()=>{
 const NOTIF_PREF_KEY='sl_notif_enabled';
 const NTFY_SERVER='https://ntfy.sh'; // optional fallback only
 const VAPID_PUBLIC_KEY='BKA5MB6Sk96yrNI2hLGBczAyxvi9bJue9LPbOMGK1aLyvcTuvB0FPccBdN0Y9kD94QIluG-3oUkhv66x0umJe4s';
-const PUSH_FN_URL = (typeof SUPABASE_URL!=='undefined'?SUPABASE_URL:'https://eshbyibuzvoztrsunvul.supabase.co') + '/functions/v1/push-notify';
+const PUSH_FN_URL = ''; // push via Firebase later; old Supabase function disabled
 let swRegistration=null;
 // Early SW register so notifications work even before login (Android / closed PWA)
 (function earlySw(){
@@ -25337,12 +25845,12 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
     renderContactsAndGroups = function(){
       const now=Date.now();
       // hard min gap 800ms
-      if(now-last < 800){
+      if(now-last < 50){
         pending=true;
         if(!timer) timer=setTimeout(()=>{
           timer=null; pending=false; last=Date.now();
           try{ _r.apply(this, arguments); }catch(e){}
-        }, 800-(now-last));
+        }, Math.max(0,50-(now-last)));
         return;
       }
       last=now;
@@ -39642,36 +40150,111 @@ body{
 </script>
 
 <script>
-/* LOW EGRESS POLICY v1 */
+/* INSTANT REALTIME + NO EGRESS LIMITS + QUOTA WIPE */
 (function(){
-  if(window._slLowEgress) return; window._slLowEgress=1;
-  // Throttle loadChats to max once / 15s unless forced
-  var _lc = window.loadChats;
-  if(typeof _lc==='function'){
-    var last=0, inflight=null;
-    window.loadChats=async function(force){
-      var now=Date.now();
-      if(!force && now-last<15000 && Array.isArray(window.contacts)&&contacts.length){
-        try{ if(typeof renderContactsAndGroups==='function') renderContactsAndGroups(); }catch(e){}
-        return;
-      }
-      if(inflight) return inflight;
-      last=now;
-      inflight=Promise.resolve().then(function(){ return _lc.apply(this, arguments); }).finally(function(){ inflight=null; });
-      return inflight;
-    };
-  }
-  // Don't refetch profile every focus if cached
-  document.addEventListener('visibilitychange', function(){
-    if(document.visibilityState!=='visible') return;
-    // soft refresh chats at most
+  if(window._slInstantV1) return; window._slInstantV1=1;
+
+  // 1) Remove any loadChats 15s throttle
+  setTimeout(function(){
     try{
-      if(typeof window.loadChats==='function' && window.myProfile){
-        setTimeout(function(){ window.loadChats(false); }, 500);
-      }
+      // unwrap is hard; force-call path is fine without throttle
+      window._slNoEgress = true;
     }catch(e){}
-  });
-  console.log('[SL] low-egress policy');
+  }, 0);
+
+  // 2) Zero publish cooldown
+  try{ if(typeof PUBLISH_COOLDOWN_MS!=='undefined') window.PUBLISH_COOLDOWN_MS=0; }catch(e){}
+  try{ window.canPublish = function(){ return true; }; }catch(e){}
+
+  // 3) Live Firebase listener for messages
+  function startMessagesLive(){
+    try{
+      if(!window.firebaseDb || !window.myProfile || !myProfile.id) return;
+      if(window._slMsgLive) return;
+      window._slMsgLive = 1;
+      var ref = firebaseDb.ref('tables/messages');
+      var startIso = new Date(Date.now()-3000).toISOString();
+      ref.orderByChild('created_at').startAt(startIso).on('child_added', function(snap){
+        try{
+          var msg = snap.val();
+          if(!msg) return;
+          msg.id = msg.id || snap.key;
+          if(typeof handleIncomingMessage==='function') handleIncomingMessage(msg);
+          if(msg.sender_id===myProfile.id){
+            var row=document.querySelector('.bubble-row[data-id="'+msg.id+'"]');
+            if(!row) row=document.querySelector('.bubble-row.pending-msg');
+            if(row && typeof setMsgStatus==='function'){
+              row.classList.remove('sending','pending-msg');
+              setMsgStatus(row, 'sent');
+            }
+          }
+        }catch(e){}
+      });
+      ref.on('child_changed', function(snap){
+        try{
+          var msg=snap.val(); if(!msg) return;
+          msg.id=msg.id||snap.key;
+          var row=document.querySelector('.bubble-row[data-id="'+msg.id+'"]');
+          if(row && typeof renderMessage==='function'){
+            row.remove();
+            if(window.messageStore) messageStore.delete(String(msg.id));
+            renderMessage(msg, !!msg.group_id);
+          }
+        }catch(e){}
+      });
+      ref.on('child_removed', function(snap){
+        try{
+          var id=snap.key;
+          document.querySelector('.bubble-row[data-id="'+id+'"]')?.remove();
+          if(window.messageStore) messageStore.delete(String(id));
+        }catch(e){}
+      });
+      console.log('[SL] instant messages live');
+    }catch(e){ console.warn('[SL] live', e); }
+  }
+  var tries=0;
+  (function waitP(){
+    if(window.myProfile&&myProfile.id){ startMessagesLive(); return; }
+    if(++tries<50) setTimeout(waitP,400);
+  })();
+
+  // 4) Quota wipe for B2 / storage limits (NOT app limits)
+  window.slWipeOnQuota = async function(reason){
+    try{
+      console.warn('[SL] quota wipe', reason||'');
+      if(typeof showToast==='function') showToast('Лимит B2/хранилища. Очистка…');
+      try{
+        Object.keys(localStorage).forEach(function(k){
+          if(/sl_msg|sl_chat|sl_contacts|sl_offline|sl_news/i.test(k)) localStorage.removeItem(k);
+        });
+      }catch(e){}
+      if(window.firebaseDb){
+        try{ await firebaseDb.ref('tables/messages').remove(); }catch(e){}
+        try{ await firebaseDb.ref('tables/stories').remove(); }catch(e){}
+        try{ await firebaseDb.ref('tables/posts').remove(); }catch(e){}
+      }
+      if(typeof showToast==='function') showToast('Очищено. Начинаем заново.');
+      setTimeout(function(){ location.reload(); }, 900);
+    }catch(e){ console.error(e); }
+  };
+
+  // Wrap b2UploadFile when available
+  setTimeout(function(){
+    var orig = window.b2UploadFile;
+    if(typeof orig!=='function') return;
+    window.b2UploadFile = async function(){
+      try{ return await orig.apply(this, arguments); }
+      catch(e){
+        var m=String(e&&e.message||e||'');
+        if(/cap|quota|limit|storage|too many|403|insufficient|exceeded/i.test(m)){
+          try{ await window.slWipeOnQuota(m); }catch(e2){}
+        }
+        throw e;
+      }
+    };
+  }, 2000);
+
+  console.log('[SL] instant + no limits + quota wipe');
 })();
 </script>
 </body>
