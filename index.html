@@ -2873,7 +2873,7 @@ window.addEventListener('unhandledrejection', function(ev){
   try{
     var keys = Object.keys(localStorage||{});
     var has = keys.some(function(k){
-      if(k.indexOf('auth-token')===-1 && k.indexOf('supabase.auth')===-1) return false;
+      if(k.indexOf('auth-token')===-1 && k.indexOf('sline.auth')===-1) return false;
       try{
         var v = localStorage.getItem(k);
         if(!v) return false;
@@ -3672,7 +3672,7 @@ body.theme-light .topbar {
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
 <script>
-// ========== CORE — Firebase + Neon + B2 (Supabase removed) ==========
+// ========== CORE — Firebase + Neon + B2 ==========
 const FIREBASE_CONFIG = {
   apiKey: "AIzaSyCRUeJPEmdduOZei7VxNUYJKSf3tiSmLKk",
   authDomain: "sline-chat.firebaseapp.com",
@@ -3694,8 +3694,8 @@ const B2_APPLICATION_KEY = "K005PEeYJxMsO8TY7XGPQZRng/INUgl";
 const B2_BUCKET = "sline-media"; // change if your bucket name is different
 
 // Keep old names so existing push code doesn't crash
-const SUPABASE_URL = "https://sline-chat.firebaseapp.com";
-const SUPABASE_ANON_KEY = FIREBASE_CONFIG.apiKey;
+const APP_BACKEND_URL = "https://sline-chat.firebaseapp.com";
+const APP_ANON_KEY = FIREBASE_CONFIG.apiKey;
 
 let sb = null;
 let _fbApp = null, _fbAuth = null, _fbDb = null, _fbStorage = null;
@@ -3715,7 +3715,7 @@ let _fbApp = null, _fbAuth = null, _fbDb = null, _fbStorage = null;
     console.error('[SL] Firebase init error', e);
   }
 
-  // ---------- Minimal Supabase-compatible client on top of Firebase ----------
+  // ---------- Backend client (Firebase Auth + RTDB) ----------
   function uuid() {
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
       const r = Math.random() * 16 | 0;
@@ -3841,37 +3841,65 @@ let _fbApp = null, _fbAuth = null, _fbDb = null, _fbStorage = null;
       }
     }
 
-    async insert(payload) {
-      try {
-        const items = Array.isArray(payload) ? payload : [payload];
-        const out = [];
-        for (const item of items) {
-          const id = item.id || uuid();
-          const data = Object.assign({}, item, { id });
-          if(!data.created_at) data.created_at = new Date().toISOString();
-          await _fbDb.ref(pathFor(this.table) + '/' + id).set(data);
-          out.push(data);
+    // Returns a thenable that supports .select().single() chaining
+    insert(payload) {
+      const self = this;
+      const run = async () => {
+        try {
+          const items = Array.isArray(payload) ? payload : [payload];
+          const out = [];
+          for (const item of items) {
+            const id = item.id || uuid();
+            const data = Object.assign({}, item, { id });
+            if (!data.created_at) data.created_at = new Date().toISOString();
+            await _fbDb.ref(pathFor(self.table) + '/' + id).set(data);
+            out.push(data);
+          }
+          let data = Array.isArray(payload) ? out : out[0];
+          if (self._single && Array.isArray(data)) data = data[0] || null;
+          if (self._maybeSingle && Array.isArray(data)) data = data[0] || null;
+          return { data, error: null };
+        } catch (e) {
+          return { data: null, error: { message: e.message || String(e) } };
         }
-        return { data: Array.isArray(payload) ? out : out[0], error: null };
-      } catch (e) {
-        return { data: null, error: { message: e.message || String(e) } };
-      }
+      };
+      const chain = {
+        select(cols) { self._selectCols = cols || '*'; return chain; },
+        single() { self._single = true; return chain; },
+        maybeSingle() { self._maybeSingle = true; return chain; },
+        then(resolve, reject) { return run().then(resolve, reject); },
+        catch(fn) { return run().catch(fn); }
+      };
+      return chain;
     }
 
-    async upsert(payload, opts) {
-      try {
-        const items = Array.isArray(payload) ? payload : [payload];
-        const out = [];
-        for (const item of items) {
-          const id = item.id || uuid();
-          const data = Object.assign({}, item, { id });
-          await _fbDb.ref(pathFor(this.table) + '/' + id).update(data);
-          out.push(data);
+    upsert(payload, opts) {
+      const self = this;
+      const run = async () => {
+        try {
+          const items = Array.isArray(payload) ? payload : [payload];
+          const out = [];
+          for (const item of items) {
+            const id = item.id || uuid();
+            const data = Object.assign({}, item, { id });
+            await _fbDb.ref(pathFor(self.table) + '/' + id).update(data);
+            out.push(data);
+          }
+          let data = Array.isArray(payload) ? out : out[0];
+          if (self._single && Array.isArray(data)) data = data[0] || null;
+          return { data, error: null };
+        } catch (e) {
+          return { data: null, error: { message: e.message || String(e) } };
         }
-        return { data: Array.isArray(payload) ? out : out[0], error: null };
-      } catch (e) {
-        return { data: null, error: { message: e.message || String(e) } };
-      }
+      };
+      const chain = {
+        select(cols) { return chain; },
+        single() { self._single = true; return chain; },
+        maybeSingle() { self._maybeSingle = true; return chain; },
+        then(resolve, reject) { return run().then(resolve, reject); },
+        catch(fn) { return run().catch(fn); }
+      };
+      return chain;
     }
 
     async update(payload) {
@@ -4472,7 +4500,7 @@ function renderAvatarInto(el, url, ch, color){
 let _regStep = 1;
 let _pendingRegUser = null;
 let _pendingRegSession = null;
-let _pendingRegContact = null; // email used for supabase
+let _pendingRegContact = null; // email used for auth
 let _awaitingRecoveryKey = false; // block auto-login until user sees recovery key
 
 function authMsg(text){
@@ -4491,7 +4519,7 @@ function canonicalizePhoneDigits(digits){
   return d;
 }
 
-/** Normalize contact: returns { email, phone, display, emails[] } for Supabase */
+/** Normalize contact: returns { email, phone, display, emails[] } for auth */
 function normalizeContact(raw){
   const v = String(raw||'').trim();
   if(!v) return null;
@@ -5646,7 +5674,7 @@ window.injectNewsChannelLocal = injectNewsChannelLocal;
 window.ensureNewsChannelVisible = injectNewsChannelLocal;
 window.isNewsChannel = isNewsChannel;
 
-// Resolve / create real news channel in Supabase (valid UUID from DB)
+// Resolve / create real news channel in database (valid UUID)
 async function resolveNewsChannelReal(){
   if(!sb || !myProfile) return injectNewsChannelLocal();
   try{
@@ -7396,7 +7424,7 @@ async function readFileAsDataURL(file){
   return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(file); });
 }
 
-/** Upload large media to Supabase Storage (supports multi-GB if bucket allows). */
+/** Upload large media to B2 storage. */
 function dataUrlToFile(dataUrl, filename){
   try{
     const m = String(dataUrl).match(/^data:([^;]+);base64,(.+)$/);
@@ -12272,7 +12300,7 @@ async function openStoryEditor(file, opts){
     if(typeof window._slPublishStoryImpl === 'function'){
       return window._slPublishStoryImpl(mediaUrl, mediaType, overlays, caption, sourceFile);
     }
-    // Fallback: local + supabase insert (same as before simplified)
+    // Fallback: local + DB insert
     showLoader();
     try{
       const expires = new Date(Date.now()+24*3600*1000).toISOString();
@@ -14019,7 +14047,7 @@ document.getElementById('settings-language').onclick=()=>{
 const NOTIF_PREF_KEY='sl_notif_enabled';
 const NTFY_SERVER='https://ntfy.sh'; // optional fallback only
 const VAPID_PUBLIC_KEY='BKA5MB6Sk96yrNI2hLGBczAyxvi9bJue9LPbOMGK1aLyvcTuvB0FPccBdN0Y9kD94QIluG-3oUkhv66x0umJe4s';
-const PUSH_FN_URL = ''; // push via Firebase later; old Supabase function disabled
+const PUSH_FN_URL = ''; // push via Firebase later
 let swRegistration=null;
 // Early SW register so notifications work even before login (Android / closed PWA)
 (function earlySw(){
@@ -14083,7 +14111,7 @@ function stopRingtone(){
   try{ if(navigator.vibrate) navigator.vibrate(0); }catch(e){}
 }
 
-/** Save Web Push subscription to Supabase so server can wake closed browsers */
+/** Save Web Push subscription so server can wake closed browsers */
 async function savePushSubscription(sub){
   if(!myProfile||!sub||!sb) return;
   const json=sub.toJSON ? sub.toJSON() : sub;
@@ -14128,7 +14156,7 @@ async function sendWebPushToUser(userId, title, body, opts={}){
       if(session?.access_token) headers['Authorization']='Bearer '+session.access_token;
     }catch(e){}
     // anon key as fallback so function can run with verify_jwt=false or use service role inside
-    if(typeof SUPABASE_ANON_KEY!=='undefined') headers['apikey']=SUPABASE_ANON_KEY;
+    if(typeof APP_ANON_KEY!=='undefined') headers['apikey']=APP_ANON_KEY;
     await fetch(PUSH_FN_URL, {
       method:'POST',
       headers,
@@ -14804,7 +14832,7 @@ document.getElementById('settings-notifications').onclick=async()=>{
   };
 };
 
-// ---------- WebRTC Calls (voice + video) via Supabase Realtime signaling ----------
+// ---------- WebRTC Calls (voice + video) via realtime signaling ----------
 const RTC_CONFIG={
   iceServers:[
     {urls:'stun:stun.cloudflare.com:3478'},
@@ -14828,7 +14856,7 @@ const RTC_CONFIG={
   bundlePolicy: 'max-bundle',
   rtcpMuxPolicy: 'require'
 };
-/** Normalize SDP from Supabase broadcast (plain object / string) */
+/** Normalize SDP from broadcast (plain object / string) */
 function slNormSdp(raw){
   if(!raw) return null;
   let s = raw;
@@ -17968,7 +17996,7 @@ document.getElementById('settings-devices').onclick=async()=>{
   ov.querySelector('#dv-logout-all').onclick=async()=>{
     if(!(await customConfirm(currentLang==='en'?'Sign out on all devices?':'Выйти на всех устройствах?'))) return;
     try{
-      // Supabase global sign out
+      // Global sign out
       await sb.auth.signOut({scope:'global'});
     }catch(e){
       try{ await sb.auth.signOut(); }catch(e2){}
@@ -19465,7 +19493,7 @@ function scheduleBirthdayAfterAppReady(){
         addPerson({id, first_name:name||'Чат', avatar_url:''}, type==='group'||type==='channel'?'group':'user');
       });
     }catch(e){}
-    // from supabase
+    // from backend
     try{
       if(typeof sb!=='undefined' && sb && myProfile){
         const {data}=await sb.from('profiles').select('id,username,first_name,last_name,avatar_url,color').neq('id', myProfile.id).limit(80);
@@ -21374,7 +21402,7 @@ window._slTranscribeImpl = window.transcribeVoiceMsg = async function(msg){
 })();
 
 
-// ========== REAL multi-account (Supabase sessions) ==========
+// ========== REAL multi-account (sessions) ==========
 (function(){
   const ACC_KEY = 'sl_account_sessions_v3';
   function getAccSessions(){
@@ -33287,7 +33315,7 @@ document.addEventListener('click', function(e){
     });
   }
 
-  async function publishBotToSupabase(bot){
+  async function publishBotToBackend(bot){
     if(!window.sb) return false;
     try{
       // try dedicated table
@@ -33318,7 +33346,7 @@ document.addEventListener('click', function(e){
     if(bot) return bot;
     bot = loadMyBots().find(b => b.username === username);
     if(bot) return bot;
-    // supabase
+    // backend
     if(window.sb){
       try{
         const { data } = await sb.from('bots').select('*').eq('username', username).maybeSingle();
@@ -33658,7 +33686,7 @@ document.addEventListener('click', function(e){
       upsertCatalog(saved);
       ensureMyBotsInContacts();
       try{ renderContactsAndGroups?.(); }catch(e){}
-      const ok = await publishBotToSupabase(saved);
+      const ok = await publishBotToBackend(saved);
       // broadcast so peers can catalog
       try{
         if(window.sb){
@@ -33817,7 +33845,7 @@ document.addEventListener('click', function(e){
   }
 
   async function uploadAudioFile(file){
-    // Prefer Supabase storage
+    // Prefer B2 storage
     if(typeof uploadFileToStorage === 'function'){
       try{
         const up = await uploadFileToStorage(file, 'music');
@@ -38752,7 +38780,7 @@ body{
       try{
         logged = localStorage.getItem('sl_logged_in')==='1' ||
           Object.keys(localStorage||{}).some(function(k){
-            return k.indexOf('auth-token')!==-1 || k.indexOf('sb-')===0 || k.indexOf('supabase')!==-1;
+            return k.indexOf('auth-token')!==-1 || k.indexOf('sb-')===0 || k.indexOf('sline-auth')!==-1;
           });
       }catch(e){}
       if(logged && app){
@@ -38820,7 +38848,7 @@ body{
       try{
         logged = localStorage.getItem('sl_logged_in')==='1' ||
           Object.keys(localStorage||{}).some(function(k){
-            return k.indexOf('auth-token')!==-1 || k.indexOf('supabase.auth')!==-1;
+            return k.indexOf('auth-token')!==-1 || k.indexOf('sline.auth')!==-1;
           });
       }catch(e){}
       document.documentElement.classList.remove('sl-booting');
@@ -40036,7 +40064,7 @@ body{
       if(localStorage.getItem('sl_my_profile')) return true;
       for(var i=0;i<localStorage.length;i++){
         var k=localStorage.key(i)||'';
-        if(/auth-token|supabase.*token/i.test(k)){ var v=localStorage.getItem(k); if(v&&v.length>20) return true; }
+        if(/auth-token|sline.*token|firebase/i.test(k)){ var v=localStorage.getItem(k); if(v&&v.length>20) return true; }
       }
     }catch(e){}
     return false;
