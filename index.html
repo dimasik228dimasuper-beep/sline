@@ -4596,6 +4596,10 @@ function findRecoveryRecord(key){
 }
 
 function setRegStep(step){
+  // Never leave recovery-key screen until user confirms
+  if(_awaitingRecoveryKey && step !== 6 && step < 6){
+    step = 6;
+  }
   _regStep = step;
   const form = document.getElementById('register-form');
   if(form && step >= 1){
@@ -4752,7 +4756,24 @@ async function doRegisterFinish(){
   const username = (document.getElementById('reg-username')?.value||'').trim().toLowerCase();
   const birth = document.getElementById('reg-birth')?.value || '';
   let contact = null;
-  try{ contact = (typeof buildContactFromReg==='function' ? buildContactFromReg() : null) || normalizeContact(document.getElementById('reg-contact')?.value); }catch(e){ contact = normalizeContact(document.getElementById('reg-contact')?.value); }
+  // Resolve contact robustly: try current mode, then email fields, then hidden, then phone
+  try{
+    contact = (typeof buildContactFromReg==='function' ? buildContactFromReg() : null);
+  }catch(e){ contact = null; }
+  if(!contact){
+    try{
+      const local = (document.getElementById('reg-email-local')?.value||'').trim().toLowerCase().replace(/@/g,'');
+      if(local){
+        const email = local + '@' + (window._regDomain||'gmail.com');
+        const hc = document.getElementById('reg-contact'); if(hc) hc.value = email;
+        contact = normalizeContact(email);
+        window._regMode = 'email';
+      }
+    }catch(e){}
+  }
+  if(!contact){
+    try{ contact = normalizeContact(document.getElementById('reg-contact')?.value); }catch(e){}
+  }
   const password = document.getElementById('reg-password')?.value || '';
   const password2 = document.getElementById('reg-password2')?.value || '';
 
@@ -4780,34 +4801,62 @@ async function doRegisterFinish(){
     showAuthPanel('register-form');
     setRegStep(6);
 
-    const {data, error} = await sb.auth.signUp({
-      email: contact.email,
-      password,
-      options: {
-        data: {
-          username,
-          first_name: first,
-          last_name: last,
-          birth_date: birth,
-          phone: contact.phone || null,
-          recovery_key: recoveryKey
-        },
-        emailRedirectTo: undefined
-      }
-    });
+    let data = null, error = null;
+    try{
+      const res = await sb.auth.signUp({
+        email: contact.email,
+        password,
+        options: {
+          data: {
+            username,
+            first_name: first,
+            last_name: last,
+            birth_date: birth,
+            phone: contact.phone || null,
+            recovery_key: recoveryKey
+          },
+          emailRedirectTo: undefined
+        }
+      });
+      data = res.data; error = res.error;
+    }catch(eSign){
+      error = { message: eSign.message || String(eSign) };
+    }
     if(error){
-      _awaitingRecoveryKey = false;
       const em = String(error.message||error||'');
-      if(/username|unique|duplicate|already|занят|profiles_username/i.test(em)){
+      if(/email-already-in-use|already in use|EMAIL_EXISTS|already registered|уже|exists/i.test(em)){
+        try{
+          const a = await sb.auth.signInWithPassword({email: contact.email, password});
+          if(!a.error && a.data?.user){
+            data = a.data;
+            error = null;
+          } else {
+            _awaitingRecoveryKey = false;
+            authMsg('Этот email уже зарегистрирован. Войдите или укажите другой.');
+            setBtnLoading(btn, false);
+            setRegStep(1);
+            return;
+          }
+        }catch(e2){
+          _awaitingRecoveryKey = false;
+          authMsg('Этот email уже зарегистрирован. Войдите или укажите другой.');
+          setBtnLoading(btn, false);
+          setRegStep(1);
+          return;
+        }
+      } else if(/username|unique|duplicate|занят|profiles_username/i.test(em)){
+        _awaitingRecoveryKey = false;
         authMsg('Это имя пользователя уже занято');
         setBtnLoading(btn, false);
         setRegStep(3);
         return;
+      } else {
+        authMsg(em || 'Ошибка регистрации');
+        setBtnLoading(btn, false);
+        // stay on step 6 if key already shown, otherwise step 4
+        try{ setRegStep(_awaitingRecoveryKey ? 6 : 4); }catch(e){}
+        return;
       }
-      authMsg(em || 'Ошибка регистрации');
-      setBtnLoading(btn, false);
-      setRegStep(1); // back to contact form
-      return;
     }
 
     let user = data?.user || null;
@@ -4920,10 +4969,10 @@ function wireAuthUI(){
   const goL=document.getElementById('auth-go-login');
   const goR=document.getElementById('auth-go-register');
   if(goL){ goL.onclick=()=>showAuthPanel('login-form'); goL.addEventListener('click',()=>showAuthPanel('login-form')); }
-  if(goR){ goR.onclick=()=>{ _regStep=1; try{ if(typeof setRegMode==='function') setRegMode('phone'); else window._regMode='phone'; }catch(e){} setRegStep(1); showAuthPanel('register-form'); }; }
+  if(goR){ goR.onclick=()=>{ _regStep=1; try{ if(typeof setRegMode==='function') setRegMode('email'); else window._regMode='email'; }catch(e){} setRegStep(1); showAuthPanel('register-form'); }; }
   document.getElementById('auth-go-register')?.addEventListener('click', ()=>{
     _regStep = 1;
-    try{ if(typeof setRegMode==='function') setRegMode('phone'); else window._regMode='phone'; }catch(e){}
+    try{ if(typeof setRegMode==='function') setRegMode('email'); else window._regMode='email'; }catch(e){}
     setRegStep(1);
     showAuthPanel('register-form');
   });
@@ -4983,6 +5032,7 @@ function wireAuthUI(){
     if(em) em.style.display = mode==='email' ? 'block' : 'none';
     if(sw) sw.textContent = mode==='phone' ? 'Регистрация по email' : 'Регистрация по телефону';
   };
+  window._regMode = window._regMode || 'email';
   window.buildContactFromReg = function(){
     if(window._regMode === 'email'){
       const local = (document.getElementById('reg-email-local')?.value||'').trim().toLowerCase().replace(/@/g,'');
