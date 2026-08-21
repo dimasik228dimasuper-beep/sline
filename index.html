@@ -2795,10 +2795,9 @@ body.theme-light #auth-screen .auth-card{
       try {
         for (var i = 0; i < localStorage.length; i++) {
           var k = localStorage.key(i) || '';
-          if (k.indexOf('auth-token') !== -1 || k.indexOf('sb-') === 0 || k === 'sl_logged_in') {
-            if (k === 'sl_logged_in' && localStorage.getItem(k) !== '1') continue;
-            logged = true; break;
-          }
+          if (k === 'sl_logged_in' && localStorage.getItem(k) === '1') { logged = true; break; }
+          if (k.indexOf('firebase:authUser:') === 0) { logged = true; break; }
+          if (k.indexOf('auth-token') !== -1 || k.indexOf('sb-') === 0) { logged = true; break; }
         }
       } catch(e){}
       if (logged && app) {
@@ -3708,6 +3707,7 @@ let _fbApp = null, _fbAuth = null, _fbDb = null, _fbStorage = null;
     }
     _fbApp = firebase.initializeApp(FIREBASE_CONFIG);
     _fbAuth = firebase.auth();
+    try { _fbAuth.setPersistence(firebase.auth.Auth.Persistence.LOCAL); } catch (eP) { console.warn('persist', eP); }
     _fbDb = firebase.database();
     try { _fbStorage = firebase.storage(); } catch (eSt) { console.warn('[SL] storage optional', eSt); _fbStorage = null; }
     console.log('[SL] Firebase ready');
@@ -3976,13 +3976,35 @@ let _fbApp = null, _fbAuth = null, _fbDb = null, _fbStorage = null;
       }
     },
     async getSession() {
-      const user = _fbAuth.currentUser;
+      // Wait until Firebase restores persisted user (avoids flash of login screen)
+      const user = await new Promise(resolve => {
+        try {
+          if (!_fbAuth) return resolve(null);
+          const cur = _fbAuth.currentUser;
+          if (cur) return resolve(cur);
+          let done = false;
+          const unsub = _fbAuth.onAuthStateChanged(u => {
+            if (done) return;
+            done = true;
+            try { unsub(); } catch (e) {}
+            resolve(u || null);
+          });
+          setTimeout(() => {
+            if (done) return;
+            done = true;
+            try { unsub(); } catch (e) {}
+            resolve(_fbAuth.currentUser || null);
+          }, 3000);
+        } catch (e) { resolve(null); }
+      });
       if (!user) return { data: { session: null }, error: null };
+      let token = null;
+      try { token = await user.getIdToken(); } catch (e) {}
       return {
         data: {
           session: {
             user: { id: user.uid, email: user.email },
-            access_token: await user.getIdToken()
+            access_token: token
           }
         },
         error: null
@@ -5286,6 +5308,13 @@ async function onAuthenticated(user){
     _pendingRegUser = user || _pendingRegUser;
     return;
   }
+  try{ storage.setItem('sl_logged_in','1'); }catch(e){}
+  try{
+    document.documentElement.classList.add('sl-force-app','sl-ready');
+    document.documentElement.classList.remove('sl-on-auth','sl-force-auth','sl-booting');
+    const a=document.getElementById('auth-screen'); if(a) a.style.display='none';
+    const app=document.getElementById('app-screen'); if(app){ app.style.display='flex'; app.style.visibility='visible'; }
+  }catch(e){}
   currentUser=user;
   let profile;
   try{ const r=await sb.from('profiles').select('*').eq('id',user.id).maybeSingle(); profile=r.data; }catch(e){}
@@ -8120,6 +8149,12 @@ input.addEventListener('input',()=>{
   sendTyping();
 });
 async function sendMessage(type='text', fileUrl=null, content=null){
+  if(window._slSendLock) return;
+  window._slSendLock = true;
+  try { return await _sendMessageInner(type, fileUrl, content); }
+  finally { setTimeout(function(){ window._slSendLock = false; }, 400); }
+}
+async function _sendMessageInner(type='text', fileUrl=null, content=null){
   if(editingMsgId){
     const text=input.value.trim();
     if(text){ await sb.from('messages').update({content:text}).eq('id',editingMsgId);
@@ -10525,11 +10560,43 @@ openGroup = async function(group){
 function handleIncomingMessage(msg){
   if(!msg || !myProfile) return;
   // already on screen
-  if(msg.id && document.querySelector(`.bubble-row[data-id="${msg.id}"]`)) {
-    // still refresh list timestamps
+  if(msg.id && document.querySelector('.bubble-row[data-id="'+msg.id+'"]')) {
     try{ loadChats(); }catch(e){}
     return;
   }
+  // Own message: merge into optimistic pending bubble (prevents doubles)
+  try{
+    if(msg.sender_id && myProfile && String(msg.sender_id)===String(myProfile.id)){
+      const pending = document.querySelector('.bubble-row.pending-msg, .bubble-row.sending');
+      if(pending){
+        const oldId = pending.dataset.id;
+        pending.dataset.id = msg.id;
+        const bub = pending.querySelector('.bubble');
+        if(bub) bub.dataset.id = msg.id;
+        pending.classList.remove('sending','pending-msg');
+        if(window.messageStore){
+          if(oldId) messageStore.delete(String(oldId));
+          messageStore.set(String(msg.id), msg);
+        }
+        if(msg.created_at) pending.dataset.created = msg.created_at;
+        if(typeof setMsgStatus==='function') setMsgStatus(pending, 'sent');
+        try{ loadChats(); }catch(e){}
+        return;
+      }
+      // content-based dedupe for same second
+      const rows = document.querySelectorAll('.bubble-row.me, .bubble-row[data-me="1"]');
+      for(let i=0;i<rows.length;i++){
+        const r = rows[i];
+        const t = (r.querySelector('.bubble')||{}).textContent||'';
+        if(msg.content && t.indexOf(String(msg.content).slice(0,40))!==-1 && (r.dataset.id||'').indexOf('local_')===0){
+          r.dataset.id = msg.id;
+          r.classList.remove('sending','pending-msg');
+          if(typeof setMsgStatus==='function') setMsgStatus(r, 'sent');
+          return;
+        }
+      }
+    }
+  }catch(e){}
   // Group chat open
   if(msg.group_id){
     if(activeGroup && String(msg.group_id) === String(activeGroup.id)){
@@ -19401,16 +19468,18 @@ function scheduleBirthdayAfterAppReady(){
   }
   if(!sb){ showAuth(); return; }
   try{
-    // Prefer stored session immediately
+    // Wait for Firebase restored session — open chats immediately if logged in
     const {data, error} = await sb.auth.getSession();
     if(data?.session?.user){
+      try{ storage.setItem('sl_logged_in','1'); }catch(e){}
       showAppShell();
-      await onAuthenticated(data.session.user);
-      document.documentElement.classList.remove('sl-booting');
-      document.documentElement.classList.add('sl-ready');
+      document.documentElement.classList.remove('sl-booting','sl-on-auth','sl-force-auth');
+      document.documentElement.classList.add('sl-ready','sl-force-app');
       hideLoader(true);
+      await onAuthenticated(data.session.user);
       try{ scheduleBirthdayAfterAppReady(); }catch(e){}
     } else {
+      try{ storage.removeItem('sl_logged_in'); }catch(e){}
       showAuth();
     }
   }catch(e){
