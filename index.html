@@ -19,6 +19,16 @@ html:not(.sl-ready) body.light-theme{background:#0F1419!important;color:#F4F7FB!
 #sl-hard-boot .sl-hb-dot{width:12px;height:12px;border-radius:50%;background:#4C7CF3;animation:slHbPulse .9s ease-in-out infinite alternate}
 @keyframes slHbPulse{from{opacity:.35;transform:scale(.85)}to{opacity:1;transform:scale(1)}}
 html.sl-ready #sl-hard-boot{display:none!important}
+
+/* No persistent chat selection highlight */
+.contact.active, .contact.active:hover, .sw-front.active.contact {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.contact:active {
+  background: var(--panel-hover) !important;
+}
+
 </style>
 <script>
 (function(){
@@ -111,6 +121,8 @@ html.sl-ready #sl-hard-boot{display:none!important}
 <link rel="apple-touch-icon" sizes="180x180" href="data:image/png;base64,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" />
 <link rel="manifest" href='data:application/json,{"name":"SLine","short_name":"SLine","start_url":".","display":"standalone","background_color":"#0B1120","theme_color":"#4C7CF3","icons":[{"src":"data:image/png;base64,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","sizes":"192x192","type":"image/png","purpose":"any"},{"src":"data:image/png;base64,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","sizes":"192x192","type":"image/png","purpose":"maskable"},{"src":"data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%20192%20192%22%3E%3Cdefs%3E%3ClinearGradient%20id%3D%22slg%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%221%22%3E%3Cstop%20offset%3D%220%22%20stop-color%3D%22%234C7CF3%22/%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%236D5DF6%22/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect%20width%3D%22192%22%20height%3D%22192%22%20rx%3D%2240%22%20fill%3D%22url%28%23slg%29%22/%3E%3Cpath%20d%3D%22M96%2042c-30%200-54%2020-54%2046%200%2016%208%2030%2022%2038l-7%2024%2026-15c4%201%208%202%2013%202%2030%200%2054-21%2054-49S126%2042%2096%2042z%22%20fill%3D%22none%22%20stroke%3D%22%23ffffff%22%20stroke-width%3D%2210%22%20stroke-linejoin%3D%22round%22%20stroke-linecap%3D%22round%22/%3E%3C/svg%3E","sizes":"any","type":"image/svg+xml","purpose":"any"}]}' />
 <title>SLine</title>
+<meta name="description" content="SLine — современный мессенджер" />
+<meta property="og:title" content="SLine" />
 <style>
 :root {
   --bg:#0F1419; --panel:#1A222D; --panel-hover:#243041; --line:rgba(255,255,255,.08); --text:#F4F7FB; --muted:#8B9BB4;
@@ -296,8 +308,8 @@ body.chats-selecting .max-folder-tabs .folder-tab[data-can-del="1"] .ft-x{displa
 .story-ring{width:52px;height:52px;border-radius:50%;padding:2px;background:linear-gradient(135deg,var(--accent-a),var(--mint))}
 .contacts{flex:none;overflow-x:hidden;overflow-y:visible;padding:6px 6px 24px;min-height:0;max-width:100%}
 .contact{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:14px;cursor:pointer;position:relative;overflow:hidden;transition:background .15s;background:var(--panel)}
-.contact:hover,.contact.active{background:var(--panel-hover)}
-.contact.active{box-shadow:inset 3px 0 0 var(--accent-a)}
+.contact:hover{background:var(--panel-hover)}
+.contact.active{background:transparent;box-shadow:none}
 .contact-name{font-size:14px;font-weight:600}
 .contact-sub{font-size:12px;color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .contact-meta{display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0;min-width:36px}
@@ -2984,13 +2996,13 @@ body::before {
   border-radius: 16px !important;
   transition: background .2s ease, transform .22s var(--spring), box-shadow .25s ease !important;
 }
-.contact:hover, .contact.active, .sw-front.active {
+.contact:hover, .sw-front.active {
   background: var(--panel-hover) !important;
 }
 .contact:active, .sw-front:active {
   transform: scale(.985);
 }
-.contact.active, .sw-front.active {
+.sw-front.active {
   box-shadow: inset 3px 0 0 var(--accent-a), 0 0 0 1px rgba(91,140,255,.12) !important;
 }
 .unread-badge {
@@ -3289,7 +3301,7 @@ body.theme-light .topbar {
 
     <div id="forgot-form" style="display:none">
       <p style="font-size:13px;color:var(--muted);margin-bottom:14px;line-height:1.45">Введите ключ восстановления, который вы получили при регистрации.</p>
-      <div class="field"><label>Ключ восстановления</label><input type="text" id="forgot-key" placeholder="signal_line_key_…" autocomplete="off" spellcheck="false" style="font-family:monospace;font-size:13px"></div>
+      <div class="field"><label>Ключ восстановления</label><input type="text" id="forgot-key" placeholder="sline_key_…" autocomplete="off" spellcheck="false" style="font-family:monospace;font-size:13px"></div>
       <button type="button" class="btn-primary" id="forgot-submit-btn">Далее</button>
       <button type="button" class="btn-secondary" id="forgot-back-btn" style="margin-top:8px">← Назад ко входу</button>
     </div>
@@ -4672,7 +4684,7 @@ function generateRecoveryKey(){
   const arr = new Uint8Array(18);
   try{ crypto.getRandomValues(arr); }catch(e){ for(let i=0;i<18;i++) arr[i]=Math.floor(Math.random()*256); }
   for(let i=0;i<18;i++) s += alphabet[arr[i] % alphabet.length];
-  return 'signal_line_key_' + s;
+  return 'sline_key_' + s;
 }
 
 function saveRecoveryRecord(key, record){
@@ -4841,7 +4853,7 @@ async function doForgotRecover(){
   authMsg('');
   const key = (document.getElementById('forgot-key')?.value||'').trim();
   if(!key){ authMsg('Введите ключ восстановления'); return; }
-  if(!key.startsWith('signal_line_key_')){ authMsg('Неверный формат ключа'); return; }
+  if(!key.startsWith('sline_key_') && !key.startsWith('signal_line_key_')){ authMsg('Неверный формат ключа'); return; }
   const rec = findRecoveryRecord(key);
   if(!rec || !rec.email || !rec.password){
     authMsg('Ключ не найден на этом устройстве');
@@ -5639,7 +5651,7 @@ async function loadChats(){
       .or(`sender_id.eq.${myProfile.id},receiver_id.eq.${myProfile.id}`)
       .is('group_id',null)
       .order('created_at',{ascending:false})
-      .limit(80);
+      .limit(300);
     const map=new Map();
     for(const m of(data||[])){
       const pid=m.sender_id===myProfile.id?m.receiver_id:m.sender_id;
@@ -5716,7 +5728,7 @@ async function loadGroups(){
 }
 const NEWS_FALLBACK_ID = 'a1000000-0000-4000-8000-000000000001';
 const NEWS_NAME = 'SLine новости';
-const NEWS_USERNAME = 'signal_line_news';
+const NEWS_USERNAME = 'sline';
 const NEWS_PUBLISHERS = ['dimasik.228.dima.super@gmail.com','admin@mail.ru'];
 const NEWS_MSGS_KEY = 'sl_news_local_msgs';
 function isNewsPublisher(){ return NEWS_PUBLISHERS.includes(String(myProfile?.email||'').toLowerCase()); }
@@ -5851,13 +5863,13 @@ function renderContactsAndGroups(){
   let srcGroups = showArchive ? groups.filter(g=>archive.includes(g.id)) : groups.filter(g=>!archive.includes(g.id));
   // Never hide news channel unless searching something else
   const NEWS_NAME='SLine новости';
-  if(!srcGroups.some(g=>g && (g.name===NEWS_NAME || g.username==='signal_line_news'))){
+  if(!srcGroups.some(g=>g && (g.name===NEWS_NAME || g.username==='sline'))){
     try{ injectNewsChannelLocal(); srcGroups = showArchive ? groups.filter(g=>archive.includes(g.id)) : groups.filter(g=>!archive.includes(g.id)); }catch(e){}
   }
   // Pin news first
   srcGroups = [...srcGroups].sort((a,b)=>{
-    const an=(a.name===NEWS_NAME||a.username==='signal_line_news')?0:1;
-    const bn=(b.name===NEWS_NAME||b.username==='signal_line_news')?0:1;
+    const an=(a.name===NEWS_NAME||a.username==='sline')?0:1;
+    const bn=(b.name===NEWS_NAME||b.username==='sline')?0:1;
     return an-bn;
   });
   (q?srcGroups.filter(g=>(g.name||'').toLowerCase().includes(q) || 'sline новости'.includes(q) || 'новости'.includes(q)):srcGroups).forEach(g=>items.push({type:'group',data:g,unread:unread[g.id]||0}));
@@ -5872,7 +5884,7 @@ function renderContactsAndGroups(){
     if(activeFolder==='Новые'){
       items=items.filter(it=>(it.unread|0)>0);
     } else if(activeFolder==='Каналы'){
-      items=items.filter(it=>it.type==='group' && it.data && (it.data.type==='channel' || it.data._news || it.data.username==='signal_line_news'));
+      items=items.filter(it=>it.type==='group' && it.data && (it.data.type==='channel' || it.data._news || it.data.username==='sline'));
     } else {
       try{
         const folders=JSON.parse(storage.getItem('sl_folders')||'{}');
@@ -5887,7 +5899,7 @@ function renderContactsAndGroups(){
   items.forEach(({type,data,unread:u})=>{
     const row=document.createElement('div');
     const isActive=(type==='user'&&activePartner?.id===data.id)||(type==='group'&&activeGroup?.id===data.id);
-    row.className='contact'+(isActive?' active':'');
+    row.className='contact';
     const isSelf=data.id===myProfile?.id;
     let name=type==='group'?data.name:(isSelf?t('it_favorites'):(typeof window.slGetDisplayName==='function'?window.slGetDisplayName(data):(data.first_name?`${data.first_name} ${data.last_name||''}`:data.username)));
     if(type==='user' && !isSelf && (!name || name===data.username)){
@@ -5898,7 +5910,7 @@ function renderContactsAndGroups(){
           name=((o.first||'').trim()+' '+(o.last||'').trim()).trim();
       }catch(e){}
     }
-    const newsVerified = type==='group' && (data._verified || data.username==='signal_line_news' || data.name==='SLine новости');
+    const newsVerified = type==='group' && (data._verified || data.username==='sline' || data.name==='SLine новости');
     let sub;
     if(type==='group'){
       if(data.type==='channel'){
@@ -6591,8 +6603,8 @@ async function loadMessages(){
   if(partnerSnap?.isBot) return;
 
   try{
-    // Only last 100 messages — much faster than full history
-    let q=sb.from('messages').select('id,sender_id,receiver_id,group_id,content,type,file_url,created_at').is('group_id',null).order('created_at',{ascending:false}).limit(100);
+    // Load chat history (high limit for full visible history)
+    let q=sb.from('messages').select('id,sender_id,receiver_id,group_id,content,type,file_url,created_at').is('group_id',null).order('created_at',{ascending:false}).limit(500);
     if(partnerSnap.id===myProfile.id) q=q.eq('sender_id',myProfile.id).eq('receiver_id',myProfile.id);
     else q=q.or(`and(sender_id.eq.${myProfile.id},receiver_id.eq.${partnerSnap.id}),and(sender_id.eq.${partnerSnap.id},receiver_id.eq.${myProfile.id})`);
     const {data, error}=await q;
@@ -6636,7 +6648,7 @@ async function loadGroupMessages(){
   try{
     let rows=[];
     if(activeGroup?.id && activeGroup.id !== NEWS_FALLBACK_ID){
-      const {data}=await sb.from('messages').select('id,sender_id,receiver_id,group_id,content,type,file_url,created_at,profiles:sender_id(username,first_name)').eq('group_id',activeGroup.id).order('created_at',{ascending:false}).limit(100);
+      const {data}=await sb.from('messages').select('id,sender_id,receiver_id,group_id,content,type,file_url,created_at,profiles:sender_id(username,first_name)').eq('group_id',activeGroup.id).order('created_at',{ascending:false}).limit(500);
       rows = (data||[]).slice().reverse();
     }
     if(isNews){
@@ -9908,7 +9920,7 @@ window.slApplyProfileBadgeFields = function(p){
 window.slHydrateBadges = async function(ids){
   if(!sb || !ids || !ids.length) return;
   const need = [...new Set(ids.map(String))].filter(id=>{
-    if(!id || id==='support_signal_line') return false;
+    if(!id || id==='support_sline') return false;
     if(window._slBadgeCache[id]) return false;
     return true;
   }).slice(0, 80);
@@ -10642,7 +10654,7 @@ function setupPresence(){
     try{ if(typeof updatePartnerStatus==='function') updatePartnerStatus(); }catch(e){}
     try{ updatePartnerStatus(); }catch(e){}
     // list refresh throttled globally — soft schedule
-    try{ if(typeof renderContactsAndGroups==='function') setTimeout(()=>renderContactsAndGroups(), 500); }catch(e){}
+    try{ if(typeof renderContactsAndGroups==='function') try{renderContactsAndGroups();}catch(e){} }catch(e){}
   });
   presenceChannel.subscribe(async s=>{ if(s==='SUBSCRIBED') await presenceChannel.track({user_id:myProfile.id}); });
 }
@@ -11743,10 +11755,10 @@ window.openChannelProfile = async function(group){
     try{
       let rows=[];
       try{
-        const {data}=await sb.from('group_messages').select('id,content,created_at').eq('group_id',group.id).order('created_at',{ascending:false}).limit(100);
+        const {data}=await sb.from('group_messages').select('id,content,created_at').eq('group_id',group.id).order('created_at',{ascending:false}).limit(500);
         rows=data||[];
       }catch(e){
-        const r2=await sb.from('messages').select('id,content,created_at').eq('group_id',group.id).order('created_at',{ascending:false}).limit(100);
+        const r2=await sb.from('messages').select('id,content,created_at').eq('group_id',group.id).order('created_at',{ascending:false}).limit(500);
         rows=r2.data||[];
       }
       const links=[];
@@ -14748,7 +14760,7 @@ async function slCatchUpMissedNotifications(){
       .eq('receiver_id', myProfile.id)
       .gt('created_at', since)
       .order('created_at', { ascending: true })
-      .limit(80);
+      .limit(300);
     if(error){ console.warn('[SL] catch-up', error); return; }
     const rows = (data||[]).filter(m=> m && m.sender_id && String(m.sender_id)!==String(myProfile.id));
     if(!rows.length){
@@ -18405,7 +18417,7 @@ updateCircleIcon();
         document.querySelectorAll('#contacts-list .contact, #contacts-list [data-id], #contacts-list .chat-row').forEach(row=>{
           const id = row.dataset?.id || row.dataset?.uid || row.getAttribute('data-partner') || '';
           const name = (row.querySelector('.contact-name, .chat-name, .name')||{}).textContent||'';
-          const isSup = id==='support_signal_line' || /поддержка\s*sline/i.test(name) || row.dataset?.support==='1';
+          const isSup = id==='support_sline' || /поддержка\s*sline/i.test(name) || row.dataset?.support==='1';
           if(isSup){
             const av = row.querySelector('.avatar');
             if(av) paintSupportAvatar(av);
@@ -18426,7 +18438,7 @@ updateCircleIcon();
       document.querySelectorAll('#contacts-list .contact, #contacts-list [data-id]').forEach(row=>{
         const id = row.dataset?.id || '';
         const name = (row.querySelector('.contact-name, .chat-name, .name')||{}).textContent||'';
-        if(id==='support_signal_line' || /поддержка\s*sline/i.test(name)){
+        if(id==='support_sline' || /поддержка\s*sline/i.test(name)){
           const av = row.querySelector('.avatar');
           if(av && !av.classList.contains('support-avatar')) paintSupportAvatar(av);
         }
@@ -18450,7 +18462,7 @@ function isSupportAdmin(){
   }catch(e){ return false; }
 }
 const SUPPORT_CONTACT = {
-  id: 'support_signal_line',
+  id: 'support_sline',
   username: 'support',
   first_name: 'Поддержка SLine',
   last_name: '',
@@ -19641,7 +19653,7 @@ function scheduleBirthdayAfterAppReady(){
     // from backend
     try{
       if(typeof sb!=='undefined' && sb && myProfile){
-        const {data}=await sb.from('profiles').select('id,username,first_name,last_name,avatar_url,color').neq('id', myProfile.id).limit(80);
+        const {data}=await sb.from('profiles').select('id,username,first_name,last_name,avatar_url,color').neq('id', myProfile.id).limit(300);
         (data||[]).forEach(p=>addPerson(p,'user'));
       }
     }catch(e){}
@@ -20565,7 +20577,7 @@ function scheduleBirthdayAfterAppReady(){
 
 // ========== FEATURE PACK: news channel, 404, avatar history, multi-account, email verify, transcribe ==========
 (function(){
-  const NEWS_USERNAME = 'signal_line_news';
+  const NEWS_USERNAME = 'sline';
   const NEWS_NAME = 'SLine новости';
   const NEWS_PUBLISHERS = ['dimasik.228.dima.super@gmail.com','admin@mail.ru'];
 
@@ -22687,11 +22699,11 @@ html.sl-tv .composer textarea { min-height: 52px; font-size: 17px; }
     let inbox = [], outbox = [];
     if(sb && box){
       try{
-        const {data: inc} = await sb.from('sigli_mail').select('*').eq('to_addr', box).order('created_at',{ascending:false}).limit(100);
+        const {data: inc} = await sb.from('sigli_mail').select('*').eq('to_addr', box).order('created_at',{ascending:false}).limit(500);
         if(inc) inbox = inc;
       }catch(e){ console.warn('sigli_mail inbox', e); }
       try{
-        const {data: out} = await sb.from('sigli_mail').select('*').eq('from_addr', box).order('created_at',{ascending:false}).limit(100);
+        const {data: out} = await sb.from('sigli_mail').select('*').eq('from_addr', box).order('created_at',{ascending:false}).limit(500);
         if(out) outbox = out;
       }catch(e){ console.warn('sigli_mail outbox', e); }
     }
@@ -26117,7 +26129,7 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
         await _lg.apply(this, arguments);
         if(Array.isArray(groups) && groups.length<=1 && prev.length>2){
           // keep news but merge previous
-          const news = groups.filter(g=>g&&(g._news||g.username==='signal_line_news'));
+          const news = groups.filter(g=>g&&(g._news||g.username==='sline'));
           const map = new Map();
           prev.forEach(g=>{ if(g&&g.id) map.set(String(g.id), g); });
           news.forEach(g=>{ if(g&&g.id) map.set(String(g.id), {...map.get(String(g.id)), ...g}); });
@@ -40268,7 +40280,7 @@ body{
       var timed=function(p,ms){ return Promise.race([p,new Promise(function(_,rej){ setTimeout(function(){rej(new Error('t'))},ms); })]); };
       var data=null;
       try{
-        var res=await timed(client.from('messages').select('sender_id,receiver_id,content,created_at,group_id').or('sender_id.eq.'+myProfile.id+',receiver_id.eq.'+myProfile.id).is('group_id',null).order('created_at',{ascending:false}).limit(80),10000);
+        var res=await timed(client.from('messages').select('sender_id,receiver_id,content,created_at,group_id').or('sender_id.eq.'+myProfile.id+',receiver_id.eq.'+myProfile.id).is('group_id',null).order('created_at',{ascending:false}).limit(300),10000);
         data=res&&res.data;
       }catch(e){}
       var map=new Map();
