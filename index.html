@@ -44612,9 +44612,55 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
     if(!l) return true;
     return (l.scrollHeight - l.scrollTop - l.clientHeight) < 160;
   }
+  function isChatOpen(){
+    // FAB only inside an open chat, never on chat list / sidebar
+    try{
+      var chat = document.getElementById('chat-active') || document.getElementById('chat-panel') || document.querySelector('.chat-main, #chat, .chat-view');
+      if(chat){
+        var st = window.getComputedStyle(chat);
+        if(st.display==='none' || st.visibility==='hidden' || chat.classList.contains('hidden')) return false;
+      }
+      // mobile: sidebar visible = list mode
+      var side = document.querySelector('.sidebar');
+      if(side){
+        var ss = window.getComputedStyle(side);
+        var sideVisible = ss.display!=='none' && ss.visibility!=='hidden' && !side.classList.contains('hidden');
+        // on narrow screens sidebar takes full width when list is shown
+        if(sideVisible && window.innerWidth <= 1024){
+          var transform = ss.transform || '';
+          // if sidebar not translated away, we're on list
+          if(!side.classList.contains('hidden') && (!transform || transform==='none' || /matrix\(1,\s*0/.test(transform))){
+            // check if chat is actually shown
+            var ca = document.getElementById('chat-active');
+            if(ca){
+              var cst = window.getComputedStyle(ca);
+              if(cst.display==='none' || ca.classList.contains('hidden')) return false;
+            }
+          }
+        }
+      }
+      // no messages list in DOM or not visible
+      var l=document.getElementById('messages-list');
+      if(!l) return false;
+      var ls=window.getComputedStyle(l);
+      if(ls.display==='none' || ls.visibility==='hidden') return false;
+      // composer visible is a strong signal we're in a chat
+      var comp=document.getElementById('composer');
+      if(comp){
+        var cs=window.getComputedStyle(comp);
+        if(cs.display==='none' || cs.visibility==='hidden') return false;
+      }
+      return true;
+    }catch(e){ return !!document.getElementById('messages-list'); }
+  }
   function checkScroll(){
+    if(!isChatOpen()){
+      resetPending();
+      hideFab();
+      return;
+    }
     var l=document.getElementById('messages-list');
-    if(!l) return;
+    if(!l){ hideFab(); return; }
     if(!isNearBottom(l)) showFab();
     else {
       resetPending();
@@ -44697,13 +44743,30 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
 
   document.addEventListener('click', function(e){
     var t=e.target;
-    if(t && t.closest && (t.closest('.contact-item') || t.closest('[data-chat-id]') || t.closest('.chat-list-item'))){
+    if(!t || !t.closest) return;
+    // opening another chat — reset
+    if(t.closest('.contact-item') || t.closest('[data-chat-id]') || t.closest('.chat-list-item')){
+      seenMsgIds = new Set();
+      activeChatKey = '';
+      resetPending();
+      hideFab();
+    }
+    // back to chat list
+    if(t.closest('#back-btn') || t.closest('.back-btn') || t.id==='back-btn'){
       seenMsgIds = new Set();
       activeChatKey = '';
       resetPending();
       hideFab();
     }
   }, true);
+
+  // poll: hide FAB when not in chat (list / settings / etc.)
+  setInterval(function(){
+    if(!isChatOpen()){
+      resetPending();
+      hideFab();
+    }
+  }, 500);
 
   console.log('[SL] scroll FAB badge — real messages only');
 })();
