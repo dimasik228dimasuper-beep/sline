@@ -7658,11 +7658,18 @@ function slSplitEmojis(s){
 function buildMessageBody(msg, replyHtml, bodyText){
   if(msg.type==='circle'){
     const src = escapeHtml(msg.file_url||'');
+    // Hint MIME for Safari when URL has no extension (data: / signed URLs)
+    const isWebm = /\.webm(\?|$)|video\/webm|codecs=vp/i.test(msg.file_url||'');
+    const isMp4 = /\.mp4(\?|$)|video\/mp4|quicktime/i.test(msg.file_url||'');
+    const typeHint = isWebm ? 'video/webm' : (isMp4 ? 'video/mp4' : 'video/mp4');
     return `<div class="circle-msg-wrap" data-mid="${msg.id}">
       <div class="circle-msg" data-src="${src}">
         <div class="circle-ring" aria-hidden="true"><svg viewBox="0 0 100 100"><circle class="ring-bg" cx="50" cy="50" r="47"/><circle class="ring-prog" cx="50" cy="50" r="47"/><circle class="ring-knob" cx="97" cy="50" r="4.2"/></svg></div>
         <div class="circle-msg-inner">
-          <video src="${src}" playsinline webkit-playsinline preload="metadata" muted loop></video>
+          <video playsinline webkit-playsinline x5-playsinline preload="auto" muted loop crossorigin="anonymous">
+            <source src="${src}" type="${typeHint}">
+            <source src="${src}">
+          </video>
           <div class="circle-play-overlay" style="display:none"><svg viewBox="0 0 24 24" style="width:36px;height:36px;fill:#fff"><path d="M8 5v14l11-7z"/></svg></div>
           <div class="circle-mute"><svg viewBox="0 0 24 24"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M23 9l-6 6M17 9l6 6" stroke="#fff" stroke-width="2" fill="none"/></svg></div>
           <div class="circle-dur">0:00</div>
@@ -7950,11 +7957,25 @@ function renderMessage(msg, isGroup=false){
       setPausedUI(false);
       showTopBar(true);
       try{
-        if(v.readyState<2&&v.src){ try{v.load();}catch(e){} }
+        // Prefer currentSrc / source elements
+        if(v.readyState<2){ try{ v.load(); }catch(e){} }
+        await new Promise((res)=>{
+          if(v.readyState>=2) return res();
+          const t=setTimeout(res, 2500);
+          v.addEventListener('loadeddata', ()=>{ clearTimeout(t); res(); }, {once:true});
+          v.addEventListener('error', ()=>{ clearTimeout(t); res(); }, {once:true});
+        });
         await v.play();
         startRingLoop();
       }catch(err){
-        try{ v.muted=true; await v.play(); v.muted=false; startRingLoop(); }catch(e2){
+        try{
+          v.muted=true;
+          await v.play();
+          // unmute after play starts (iOS gesture already used)
+          setTimeout(()=>{ try{ v.muted=false; }catch(e){} }, 80);
+          startRingLoop();
+        }catch(e2){
+          console.warn('circle play fail', e2, v.error, v.currentSrc||v.src);
           showToast('Не удалось воспроизвести кружок');
           collapse();
         }
@@ -34643,55 +34664,85 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
     v.classList.toggle('mirrored', facing==='user');
     try{ await v.play(); }catch(e){}
 
-    // Front camera: prepare screen flash helper (user toggles via button; default off)
-    // Canvas loop for stable recording across flips
+    // Wait until camera actually delivers frames (otherwise recorded video is black)
     try{
-      if(typeof window._tgCircleStartCanvas==='function'){
-        window._tgCircleStartCanvas(v, facing);
+      const t0 = Date.now();
+      while(Date.now()-t0 < 4000){
+        if((v.videoWidth|0) > 16 && (v.videoHeight|0) > 16 && v.readyState >= 2) break;
+        await new Promise(r=>setTimeout(r, 50));
       }
     }catch(e){}
 
-    let recStream = mediaStream;
-    try{
-      if(typeof window._tgCircleGetCanvasStream==='function'){
-        const cs = window._tgCircleGetCanvasStream();
-        if(cs){
-          recStream = cs;
-          const at = mediaStream.getAudioTracks()[0];
-          if(at && !recStream.getAudioTracks().length) recStream.addTrack(at);
-        }
-      } else if(typeof startCircleCanvasLoop==='function'){
-        const canvas = startCircleCanvasLoop(v);
-        if(canvas && canvas.captureStream){
-          recStream = canvas.captureStream(30);
-          const at = mediaStream.getAudioTracks()[0];
-          if(at) recStream.addTrack(at);
-        }
-      }
-    }catch(e){ recStream = mediaStream; }
+    // Detect iOS / Safari — canvas.captureStream often yields black WebM that cannot play
+    const ua = navigator.userAgent||'';
+    const isIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform==='MacIntel' && navigator.maxTouchPoints>1);
+    const isSafari = /^((?!chrome|android).)*safari/i.test(ua) || isIOS;
 
+    // Canvas loop only as visual helper on non-iOS; recording prefers real camera tracks
+    try{
+      if(typeof window._tgCircleStartCanvas==='function'){
+        window._tgCircleStartCanvas(v, facing);
+      } else if(typeof startCircleCanvasLoop==='function' && !isIOS){
+        startCircleCanvasLoop(v);
+      }
+    }catch(e){}
+
+    // ALWAYS record from the live camera stream on iOS/Safari (not canvas)
+    // Canvas captureStream → black frames + WebM = "Не удалось воспроизвести"
+    let recStream = mediaStream;
+    if(!isIOS && !isSafari){
+      try{
+        if(typeof window._tgCircleGetCanvasStream==='function'){
+          const cs = window._tgCircleGetCanvasStream();
+          if(cs && cs.getVideoTracks().length){
+            // only use canvas if it has produced a frame
+            const vt = cs.getVideoTracks()[0];
+            const settings = vt.getSettings?.()||{};
+            if((settings.width|0) > 2 || vt.readyState==='live'){
+              recStream = new MediaStream(cs.getVideoTracks());
+              const at = mediaStream.getAudioTracks()[0];
+              if(at) recStream.addTrack(at);
+            }
+          }
+        }
+      }catch(e){ recStream = mediaStream; }
+    }
+
+    // Prefer MP4 on iOS/Safari; WebM elsewhere as fallback
     let mime = '';
-    const candidates = [
-      'video/mp4',
-      'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
-      'video/quicktime',
-      'video/webm;codecs=vp8,opus',
-      'video/webm'
-    ];
+    const candidates = isIOS || isSafari
+      ? [
+          'video/mp4',
+          'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
+          'video/mp4;codecs=avc1,mp4a.40.2',
+          'video/quicktime',
+          'video/webm;codecs=vp8,opus',
+          'video/webm'
+        ]
+      : [
+          'video/webm;codecs=vp9,opus',
+          'video/webm;codecs=vp8,opus',
+          'video/webm',
+          'video/mp4',
+          'video/mp4;codecs=avc1.42E01E,mp4a.40.2'
+        ];
     for(const t of candidates){
       try{ if(window.MediaRecorder && MediaRecorder.isTypeSupported(t)){ mime=t; break; } }catch(e){}
     }
     try{
       mediaRec = mime
-        ? new MediaRecorder(recStream,{mimeType:mime, videoBitsPerSecond:1600000})
+        ? new MediaRecorder(recStream,{mimeType:mime, videoBitsPerSecond:1800000, audioBitsPerSecond:128000})
         : new MediaRecorder(recStream);
     }catch(e){
       try{ mediaRec=new MediaRecorder(recStream); }catch(e2){
         try{ mediaRec=new MediaRecorder(mediaStream); }catch(e3){ toast('Запись недоступна'); cancelRec(); return; }
       }
     }
+    console.info('[circle] record mime=', mediaRec.mimeType||mime, 'ios=', isIOS);
     mediaRec.ondataavailable=e=>{ if(e.data&&e.data.size) chunks.push(e.data); };
-    try{ mediaRec.start(200); }catch(e){ toast('Не удалось начать запись'); cancelRec(); return; }
+    try{ mediaRec.start(250); }catch(e){
+      try{ mediaRec.start(); }catch(e2){ toast('Не удалось начать запись'); cancelRec(); return; }
+    }
 
     clearInterval(recTimer);
     recTimer=setInterval(()=>{
@@ -34792,39 +34843,66 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
   }
 
     function finishCircle(){
-    if(!recording) return;
+    if(!recording && !(mediaRec && mediaRec.state!=='inactive')) return;
     clearInterval(recTimer);
     setScreenFlash(false);
-    const minMs = 600;
+    const minMs = 500;
     const elapsed = Date.now() - recStart;
     const done=async ()=>{
       recording=false;
+      // give last ondataavailable a tick
+      await new Promise(r=>setTimeout(r, 80));
       stopTracks();
-      const mime = (chunks[0] && chunks[0].type) || (mediaRec && mediaRec.mimeType) || 'video/mp4';
+      let mime = (mediaRec && mediaRec.mimeType) || (chunks[0] && chunks[0].type) || '';
+      if(!mime || mime==='application/octet-stream'){
+        // infer
+        const isIOS2 = /iPad|iPhone|iPod/.test(navigator.userAgent||'');
+        mime = isIOS2 ? 'video/mp4' : 'video/webm';
+      }
+      // normalize empty codec strings
+      if(/^video\/mp4/i.test(mime)) mime = 'video/mp4';
+      else if(/^video\/quicktime/i.test(mime)) mime = 'video/mp4';
+      else if(/^video\/webm/i.test(mime)) mime = 'video/webm';
       const blob=new Blob(chunks,{type:mime});
       clearUI();
-      if(elapsed < minMs || blob.size<800){ toast('Слишком коротко — удерживайте дольше'); chunks=[]; return; }
+      if(elapsed < minMs || blob.size<1200){
+        toast('Слишком коротко — удерживайте дольше');
+        chunks=[]; return;
+      }
       try{
         let url = null;
-        // Prefer Storage URL (works better than huge data: in DB + iOS)
+        const ext = /mp4|quicktime/i.test(mime) ? 'mp4' : (/webm/i.test(mime)?'webm':'mp4');
+        const file = new File([blob], 'circle_'+Date.now()+'.'+ext, { type: mime });
         try{
-          const ext = /mp4|quicktime/i.test(mime) ? 'mp4' : (/webm/i.test(mime)?'webm':'mp4');
-          const file = new File([blob], 'circle_'+Date.now()+'.'+ext, { type: mime });
           if(typeof uploadFileToStorage === 'function'){
             const up = await uploadFileToStorage(file, 'circles');
             if(up && up.ok && up.url) url = up.url;
+            else if(up && up.error) console.warn('circle upload', up.error);
           }
         }catch(e){ console.warn('circle upload', e); }
         if(!url){
-          // fallback data URL
-          url = await new Promise((res,rej)=>{
-            const r=new FileReader();
-            r.onload=()=>res(r.result);
-            r.onerror=rej;
-            r.readAsDataURL(blob);
-          });
+          // blob: URL is better than giant data: for playback; but sendMessage may need durable URL
+          // Prefer data URL only if small enough; else try object URL stored via sendMessage
+          if(blob.size < 2.5*1024*1024){
+            url = await new Promise((res,rej)=>{
+              const r=new FileReader();
+              r.onload=()=>res(r.result);
+              r.onerror=rej;
+              r.readAsDataURL(blob);
+            });
+          } else {
+            // last resort: still data URL (may fail on huge files)
+            url = await new Promise((res,rej)=>{
+              const r=new FileReader();
+              r.onload=()=>res(r.result);
+              r.onerror=rej;
+              r.readAsDataURL(blob);
+            });
+          }
         }
+        // Ensure URL carries a playable extension hint for some players
         if(typeof sendMessage==='function') await sendMessage('circle', url, '');
+        else toast('Не отправилось');
       }catch(e){
         console.error(e);
         toast('Не отправилось');
