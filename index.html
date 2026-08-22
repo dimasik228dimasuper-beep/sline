@@ -5666,6 +5666,12 @@ async function onAuthenticated(user){
     try{ setupTyping(); }catch(e){}
     try{ flushOfflineQueue(); }catch(e){}
     try{ handleDeepLink(); }catch(e){}
+    // Index + preload so 1st and later chat opens are instant
+    try{
+      setTimeout(function(){
+        migrateMessagesToChatIndex().then(function(){ return preloadRecentChatCaches(); }).catch(function(){});
+      }, 400);
+    }catch(e){}
   } finally {
     try{ hideLoader(true); }catch(e){}
     document.documentElement.classList.remove('sl-booting','sl-on-auth','sl-force-auth');
@@ -6514,20 +6520,28 @@ async function openChat(partner){
     lockEl.style.display='flex';
     buildPinKeypad();
   } else lockEl.style.display='none';
-  // Telegram-style: paint local cache SYNCHRONOUSLY before any network
+  // Instant: memory/localStorage first (sync), then IDB, then network
   try{
     const ck = chatCacheKey(partner, null);
-    const cached = ck && getCachedMessages(ck);
     const list=document.getElementById('messages-list');
+    const cached = ck && getCachedMessages(ck);
     if(cached && cached.length){
       paintMessages(cached, false);
+      if(list) list.dataset.ck = ck;
     } else if(list){
-      // keep previous only if same chat; otherwise soft clear without blocking
       list.textContent = '';
       list.dataset.paintSig = '';
+      list.dataset.ck = ck || '';
+    }
+    // IDB fill without waiting
+    if(ck && !(cached && cached.length)){
+      getCachedMessagesAsync(ck).then(function(rows){
+        if(!rows || !rows.length) return;
+        if(!activePartner || activePartner.id !== partner.id) return;
+        paintMessages(rows, false);
+      }).catch(function(){});
     }
   }catch(e){}
-  // network refresh in background — never blocks UI
   Promise.resolve().then(function(){ try{ loadMessages(); }catch(e){} });
   showPinnedBar();
   scrollToBottom(true);
@@ -6708,18 +6722,64 @@ window.addEventListener('online', ()=>{
 });
 
 
-// ===== Instant chat history cache =====
+// ===== Instant chat history cache (Telegram-style) =====
 const _msgCache = new Map(); // key -> {rows, ts}
+const _chatMsgUnsubs = new Map(); // live listeners per chat
+const SL_IDB_NAME = 'sline_msg_cache_v1';
+let _idb = null;
+
 function chatCacheKey(partner, group){
   if(group && group.id) return 'g:'+group.id;
   if(partner && partner.id) return 'dm:'+(myProfile&&myProfile.id?myProfile.id:'x')+':'+partner.id;
   return null;
 }
+function dmPairKey(a, b){
+  return [String(a), String(b)].sort().join('_');
+}
+
+function _idbOpen(){
+  return new Promise(function(resolve){
+    try{
+      if(_idb) return resolve(_idb);
+      var req = indexedDB.open(SL_IDB_NAME, 1);
+      req.onupgradeneeded = function(){
+        var db = req.result;
+        if(!db.objectStoreNames.contains('chats')) db.createObjectStore('chats');
+      };
+      req.onsuccess = function(){ _idb = req.result; resolve(_idb); };
+      req.onerror = function(){ resolve(null); };
+    }catch(e){ resolve(null); }
+  });
+}
+async function idbGet(key){
+  try{
+    var db = await _idbOpen();
+    if(!db) return null;
+    return await new Promise(function(resolve){
+      var tx = db.transaction('chats', 'readonly');
+      var req = tx.objectStore('chats').get(key);
+      req.onsuccess = function(){ resolve(req.result || null); };
+      req.onerror = function(){ resolve(null); };
+    });
+  }catch(e){ return null; }
+}
+async function idbSet(key, rows){
+  try{
+    var db = await _idbOpen();
+    if(!db) return;
+    await new Promise(function(resolve){
+      var tx = db.transaction('chats', 'readwrite');
+      tx.objectStore('chats').put(rows, key);
+      tx.oncomplete = function(){ resolve(); };
+      tx.onerror = function(){ resolve(); };
+    });
+  }catch(e){}
+}
+
 function getCachedMessages(key){
   if(!key) return null;
   const hit = _msgCache.get(key);
   if(hit && hit.rows && hit.rows.length) return hit.rows;
-  // memory → sessionStorage → localStorage (Telegram-style durable cache)
   for (const store of [sessionStorage, localStorage]) {
     try{
       const raw = store.getItem('sl_mc_'+key);
@@ -6734,30 +6794,42 @@ function getCachedMessages(key){
   }
   return null;
 }
+async function getCachedMessagesAsync(key){
+  var sync = getCachedMessages(key);
+  if(sync && sync.length) return sync;
+  try{
+    var rows = await idbGet(key);
+    if(Array.isArray(rows) && rows.length){
+      _msgCache.set(key, {rows, ts:Date.now()});
+      return rows;
+    }
+  }catch(e){}
+  return null;
+}
 function setCachedMessages(key, rows){
   if(!key || !rows) return;
-  const slim = rows.slice(-200).map(m=>({
+  const slim = rows.slice(-250).map(m=>({
     id:m.id, sender_id:m.sender_id, receiver_id:m.receiver_id, group_id:m.group_id,
-    content: typeof m.content==='string' && m.content.length>3000 ? m.content.slice(0,3000) : m.content,
+    content: typeof m.content==='string' && m.content.length>4000 ? m.content.slice(0,4000) : m.content,
     type:m.type,
-    file_url: (typeof m.file_url==='string' && m.file_url.length>8000) ? null : m.file_url,
+    file_url: (typeof m.file_url==='string' && m.file_url.length>12000) ? null : m.file_url,
     created_at:m.created_at
   }));
   _msgCache.set(key, {rows:slim, ts:Date.now()});
   const json = JSON.stringify(slim);
   try{ sessionStorage.setItem('sl_mc_'+key, json); }catch(e){}
   try{ localStorage.setItem('sl_mc_'+key, json); }catch(e){
-    // prune oldest caches if quota
     try{
       const keys=[];
       for(let i=0;i<localStorage.length;i++){
         const k=localStorage.key(i);
         if(k && k.indexOf('sl_mc_')===0) keys.push(k);
       }
-      keys.slice(0, Math.max(1, keys.length-8)).forEach(k=>localStorage.removeItem(k));
+      keys.slice(0, Math.max(1, keys.length-12)).forEach(k=>localStorage.removeItem(k));
       localStorage.setItem('sl_mc_'+key, json);
     }catch(e2){}
   }
+  idbSet(key, slim);
 }
 function paintMessages(rows, isGroup){
   const list=document.getElementById('messages-list');
@@ -6772,16 +6844,121 @@ function paintMessages(rows, isGroup){
     }
     list.dataset.paintSig = sig;
   }catch(e){}
-  // Instant paint — no visibility:hidden (that made TG-feel laggy)
-  const frag = document.createDocumentFragment();
-  const holder = document.createElement('div');
-  // renderMessage appends to #messages-list — temporarily point list id trick not needed
-  // Clear and append in one frame
   list.textContent = '';
   for(let i=0;i<rows.length;i++){
     try{ renderMessage(rows[i], !!isGroup); }catch(e){}
   }
   scrollToBottom(true);
+}
+
+/** Read one chat from Firebase chat_msgs — small payload, fast */
+async function fetchChatMsgsFast(pairOrGroupKey, isGroup){
+  if(!window.firebaseDb) return [];
+  const path = isGroup ? ('chat_msgs/g_' + pairOrGroupKey) : ('chat_msgs/' + pairOrGroupKey);
+  try{
+    // limitToLast keeps first open fast even if history is long
+    let snap;
+    try {
+      snap = await firebaseDb.ref(path).orderByChild('created_at').limitToLast(200).once('value');
+    } catch (eOrd) {
+      snap = await firebaseDb.ref(path).limitToLast(200).once('value');
+    }
+    const val = snap.val() || {};
+    let rows = Object.keys(val).map(k => Object.assign({id: k}, val[k]||{}));
+    rows.sort((a,b) => String(a.created_at||'').localeCompare(String(b.created_at||'')));
+    return rows;
+  }catch(e1){
+    try{
+      const snap = await firebaseDb.ref(path).once('value');
+      const val = snap.val() || {};
+      let rows = Object.keys(val).map(k => Object.assign({id: k}, val[k]||{}));
+      rows.sort((a,b) => String(a.created_at||'').localeCompare(String(b.created_at||'')));
+      return rows;
+    }catch(e2){ return []; }
+  }
+}
+
+/** Live updates for open chat only */
+function subscribeChatLive(cacheKey, pairOrGroupKey, isGroup, partnerId){
+  try{
+    if(!window.firebaseDb) return;
+    // unsubscribe previous
+    _chatMsgUnsubs.forEach(function(unsub, k){
+      try{ unsub(); }catch(e){}
+    });
+    _chatMsgUnsubs.clear();
+    const path = isGroup ? ('chat_msgs/g_' + pairOrGroupKey) : ('chat_msgs/' + pairOrGroupKey);
+    const ref = firebaseDb.ref(path);
+    const handler = function(snap){
+      try{
+        const msg = snap.val();
+        if(!msg) return;
+        msg.id = msg.id || snap.key;
+        // merge into cache
+        const cur = getCachedMessages(cacheKey) || [];
+        if(!cur.some(m => String(m.id)===String(msg.id))){
+          cur.push(msg);
+          setCachedMessages(cacheKey, cur);
+        }
+        if(typeof handleIncomingMessage==='function') handleIncomingMessage(msg);
+      }catch(e){}
+    };
+    ref.limitToLast(30).on('child_added', handler);
+    _chatMsgUnsubs.set(cacheKey, function(){ try{ ref.off('child_added', handler); }catch(e){} });
+  }catch(e){}
+}
+
+/** One-time: index tables/messages → chat_msgs for this user (background) */
+async function migrateMessagesToChatIndex(){
+  try{
+    if(!window.firebaseDb || !myProfile || !myProfile.id) return;
+    if(localStorage.getItem('sl_msg_idx_v1')==='1') return;
+    const snap = await firebaseDb.ref('tables/messages').once('value');
+    const val = snap.val() || {};
+    const updates = {};
+    let n = 0;
+    Object.keys(val).forEach(function(id){
+      const m = val[id];
+      if(!m || typeof m !== 'object') return;
+      const data = Object.assign({id: id}, m);
+      if(data.group_id){
+        updates['chat_msgs/g_' + data.group_id + '/' + id] = data;
+        n++;
+      } else if(data.sender_id && data.receiver_id){
+        // only chats involving me
+        if(String(data.sender_id)!==String(myProfile.id) && String(data.receiver_id)!==String(myProfile.id)) return;
+        const key = dmPairKey(data.sender_id, data.receiver_id);
+        updates['chat_msgs/' + key + '/' + id] = data;
+        n++;
+      }
+    });
+    // write in chunks of 100
+    const keys = Object.keys(updates);
+    for(let i=0;i<keys.length;i+=80){
+      const chunk = {};
+      keys.slice(i, i+80).forEach(k => { chunk[k] = updates[k]; });
+      await firebaseDb.ref().update(chunk);
+    }
+    localStorage.setItem('sl_msg_idx_v1', '1');
+    console.log('[SL] indexed messages', n);
+  }catch(e){ console.warn('[SL] migrate idx', e); }
+}
+
+/** Preload last N contacts into memory/IDB so open is instant */
+async function preloadRecentChatCaches(){
+  try{
+    if(!window.firebaseDb || !myProfile) return;
+    const list = (window.contacts || []).slice(0, 12);
+    for(let i=0;i<list.length;i++){
+      const c = list[i];
+      if(!c || !c.id) continue;
+      const ck = chatCacheKey(c, null);
+      if(getCachedMessages(ck) && getCachedMessages(ck).length) continue;
+      const pair = dmPairKey(myProfile.id, c.id);
+      const rows = await fetchChatMsgsFast(pair, false);
+      if(rows.length) setCachedMessages(ck, rows);
+    }
+  }catch(e){}
 }
 
 async function loadMessages(){
@@ -6790,78 +6967,57 @@ async function loadMessages(){
   const cacheKey = chatCacheKey(partnerSnap, null);
   const listEl = document.getElementById('messages-list');
 
-  // If cache already painted for this chat, keep gen stable (avoid flicker/clear)
+  // 1) SYNC paint from memory/localStorage (0 ms)
   let hadCache = false;
   if(cacheKey){
     const cached = getCachedMessages(cacheKey);
     if(cached && cached.length){
       hadCache = true;
-      if(listEl && listEl.dataset.ck !== cacheKey){
-        paintMessages(cached, false);
-      } else if(listEl && !listEl.childElementCount){
+      if(listEl && (listEl.dataset.ck !== cacheKey || !listEl.childElementCount)){
         paintMessages(cached, false);
       }
       if(listEl) listEl.dataset.ck = cacheKey;
     }
   }
-
-  // generation token — discard stale responses (only bump if switching chat)
-  if(!hadCache || !listEl || listEl.dataset.ck !== cacheKey){
-    window._slChatGen = (window._slChatGen||0) + 1;
-  }
+  window._slChatGen = (window._slChatGen||0) + 1;
   const _gen = window._slChatGen;
   if(listEl) listEl.dataset.ck = cacheKey||'';
 
-  // Local news channel messages
-  if(groupSnap && typeof isNewsChannel==='function' && isNewsChannel(groupSnap)){
+  // 2) IDB async (still local, very fast)
+  if(cacheKey && !hadCache){
     try{
-      const realId = storage.getItem('sl_news_real_id');
-      if(realId && realId!==NEWS_FALLBACK_ID){
-        activeGroup = {...groupSnap, id: realId, _localOnly:false};
-      } else {
-        const list=document.getElementById('messages-list');
-        if(list && _gen===window._slChatGen) list.innerHTML='';
-        const locals=getNewsLocalMsgs();
-        locals.forEach(msg=>renderMessage(msg, true));
-        if(!/^[0-9a-fA-F-]{36}$/.test(String((activeGroup||groupSnap).id)) || (activeGroup||groupSnap).id===NEWS_FALLBACK_ID && (activeGroup||groupSnap)._localOnly){
-          scrollToBottom();
-          return;
-        }
+      const idbRows = await getCachedMessagesAsync(cacheKey);
+      if(_gen !== window._slChatGen) return;
+      if(idbRows && idbRows.length){
+        hadCache = true;
+        paintMessages(idbRows, false);
       }
     }catch(e){}
   }
 
   if(!partnerSnap){
     if(!activeGroup){
-      const list=document.getElementById('messages-list');
-      if(list && _gen===window._slChatGen && !getCachedMessages(cacheKey)?.length) list.innerHTML='';
+      if(listEl && !hadCache) listEl.textContent = '';
     }
     return;
   }
-  if(partnerSnap?.isBot) return;
+  if(partnerSnap.isBot) return;
 
+  // 3) Network: ONLY this chat path
   try{
-    // ONLY per-chat index (never scan whole tables/messages — that was the lag)
-    let rows = [];
-    if(window.firebaseDb && partnerSnap && myProfile){
-      const key = [String(myProfile.id), String(partnerSnap.id)].sort().join('_');
-      const snap = await firebaseDb.ref('chat_msgs/' + key).once('value');
-      const val = snap.val() || {};
-      rows = Object.keys(val).map(k => Object.assign({id: k}, val[k]||{}));
-      rows.sort((a,b) => String(a.created_at||'').localeCompare(String(b.created_at||'')));
-    }
+    const pair = dmPairKey(myProfile.id, partnerSnap.id);
+    const rows = await fetchChatMsgsFast(pair, false);
     if(_gen !== window._slChatGen) return;
     if(activePartner?.id !== partnerSnap.id) return;
     if(rows.length){
       setCachedMessages(cacheKey, rows);
       paintMessages(rows, false);
-    } else {
-      // Keep whatever cache already painted in openChat — do NOT clear, do NOT full-scan
-      const list=document.getElementById('messages-list');
-      if(list && !list.childElementCount){
+    } else if(!hadCache){
+      if(listEl && !listEl.childElementCount){
         if(typeof window.slShowEmptyChatHint==='function') window.slShowEmptyChatHint();
       }
     }
+    subscribeChatLive(cacheKey, pair, false, partnerSnap.id);
   }catch(e){ console.warn('loadMessages', e); }
 }
 async function loadGroupMessages(){
