@@ -33699,6 +33699,7 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
         background:rgba(0,0,0,.92);
         display:flex; flex-direction:column; align-items:center; justify-content:center;
         animation:tgBarUp .18s ease;
+        overflow:hidden;
       }
       #tg-circle-ov .tg-cl-wrap{
         width:min(78vw,340px); height:min(78vw,340px);
@@ -33743,24 +33744,34 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
       #tg-circle-ov.locked .tg-cl-pause{ display:flex; }
       #tg-circle-ov .tg-cl-bottom{
         position:absolute; left:0; right:0; bottom:0;
-        padding:0 10px calc(10px + env(safe-area-inset-bottom,0px));
-        display:flex; align-items:flex-end; gap:8px;
+        padding:0 8px calc(12px + env(safe-area-inset-bottom,0px));
+        display:grid;
+        grid-template-columns: 52px 1fr 72px;
+        align-items:end;
+        gap:6px;
+        box-sizing:border-box;
+        max-width:100vw;
+        overflow:visible;
+        z-index:6;
       }
       #tg-circle-ov .tg-cl-tools{
         display:flex; flex-direction:column; gap:8px;
         margin-bottom:8px;
+        align-items:center;
       }
       #tg-circle-ov .tg-cl-tool{
         width:44px; height:44px; border-radius:50%; border:none;
         background:rgba(255,255,255,.12); color:#fff;
         display:flex; align-items:center; justify-content:center;
+        flex-shrink:0;
       }
       #tg-circle-ov .tg-cl-tool.on{ background:#F7B955; color:#111; }
-      #tg-circle-ov .tg-cl-tool svg{ width:22px; height:22px; }
+      #tg-circle-ov .tg-cl-tool.svg, #tg-circle-ov .tg-cl-tool svg{ width:22px; height:22px; }
       #tg-circle-ov .tg-cl-mid{
-        flex:1; display:flex; align-items:center; gap:8px;
+        min-width:0;
+        display:flex; align-items:center; gap:8px;
         background:rgba(33,33,33,.92); border-radius:24px;
-        padding:12px 14px; margin-bottom:6px;
+        padding:12px 12px; margin-bottom:6px;
         transition: background .15s, transform .12s;
       }
       #tg-circle-ov .tg-cl-mid.canceling{ background:rgba(70,18,22,.96); }
@@ -33786,15 +33797,17 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
       #tg-circle-ov.locked .tg-cl-hint{ display:none; }
       #tg-circle-ov.locked .tg-cl-cancel{ display:block; }
       #tg-circle-ov .tg-cl-side{
-        position:relative; width:74px; height:74px;
+        position:relative; width:72px; height:72px;
         display:flex; align-items:flex-end; justify-content:center;
         flex-shrink:0;
+        overflow:visible;
       }
       #tg-circle-ov .tg-cl-lock-rail{
-        position:absolute; bottom:70px; left:50%; transform:translateX(-50%);
-        width:40px; height:88px;
+        position:absolute; bottom:72px; left:50%; transform:translateX(-50%);
+        width:40px; height:100px;
         display:flex; flex-direction:column; align-items:center;
         opacity:1; pointer-events:none;
+        z-index:4;
       }
       #tg-circle-ov .tg-cl-lock-rail::before{
         content:''; position:absolute; top:34px; bottom:8px; left:50%;
@@ -33843,12 +33856,34 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
       #tg-circle-ov.locked .tg-cl-btn{
         animation:tgSendLand .32s cubic-bezier(.2,.85,.3,1.25);
       }
-      /* Front screen flash stronger */
+      /* Front screen flash — white screen around circle (like TG/WA) */
       #tg-screen-flash{
-        position:fixed; inset:0; z-index:4540;
-        background:#fff; opacity:0.95; pointer-events:none;
+        position:absolute; inset:0; z-index:0;
+        background:#fff; opacity:1; pointer-events:none;
         display:none; transition:opacity .12s;
       }
+      #tg-circle-ov.front-flash{
+        background:#fff !important;
+      }
+      #tg-circle-ov.front-flash .tg-cl-wrap{
+        box-shadow:0 0 0 3px rgba(0,0,0,.08), 0 20px 60px rgba(0,0,0,.25);
+        z-index:2;
+      }
+      #tg-circle-ov.front-flash .tg-cl-bottom,
+      #tg-circle-ov.front-flash .tg-cl-pause{
+        z-index:3;
+      }
+      #tg-circle-ov.front-flash .tg-cl-mid{
+        background:rgba(0,0,0,.55);
+      }
+      #tg-circle-ov.front-flash .tg-cl-tool{
+        background:rgba(0,0,0,.35);
+      }
+      #tg-circle-ov.front-flash .tg-cl-tool.on{
+        background:#F7B955; color:#111;
+      }
+      #tg-circle-ov .tg-cl-wrap{ z-index:2; }
+      #tg-circle-ov .tg-cl-bottom{ z-index:3; }
 
 
       /* Voice preview bar after release */
@@ -34275,18 +34310,30 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
   let screenFlashEl = null;
   function setScreenFlash(on){
     try{
+      const ov = document.getElementById('tg-circle-ov');
       if(on){
+        // Light up the whole screen (messenger-style front flash).
+        // Class on overlay: white background around the circle preview.
+        if(ov) ov.classList.add('front-flash');
         if(!screenFlashEl){
           screenFlashEl = document.createElement('div');
           screenFlashEl.id = 'tg-screen-flash';
-          screenFlashEl.style.cssText = 'position:fixed;inset:0;z-index:4540;background:#fff;opacity:0.97;pointer-events:none;transition:opacity .12s';
+          // Above app UI but BEHIND circle preview (preview is inside ov)
+          screenFlashEl.style.cssText = 'position:fixed;inset:0;z-index:4545;background:#fff;opacity:1;pointer-events:none;transition:opacity .12s';
           document.body.appendChild(screenFlashEl);
         }
+        // Put flash inside overlay as first child so it fills screen under the circle
+        if(ov && screenFlashEl.parentNode !== ov){
+          ov.insertBefore(screenFlashEl, ov.firstChild);
+          screenFlashEl.style.position = 'absolute';
+          screenFlashEl.style.zIndex = '0';
+        }
         screenFlashEl.style.display = 'block';
-        screenFlashEl.style.opacity = '0.97';
+        screenFlashEl.style.opacity = '1';
         try{ document.documentElement.style.background = '#fff'; }catch(e){}
         try{ document.body.style.background = '#fff'; }catch(e){}
       } else {
+        if(ov) ov.classList.remove('front-flash');
         if(screenFlashEl){ screenFlashEl.style.display = 'none'; }
         try{ document.documentElement.style.background = ''; }catch(e){}
         try{ document.body.style.background = ''; }catch(e){}
@@ -34301,8 +34348,9 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
     const hint=ov.querySelector('.tg-cl-hint');
     const btn=ov.querySelector('.tg-cl-btn');
     const lockIco=ov.querySelector('.tg-cl-lock-ico');
-    const cx = Math.max(-120, Math.min(20, dx));
-    const cy = Math.max(-110, Math.min(10, dy));
+    // Keep button inside screen: allow left cancel drag + up lock, no right overflow
+    const cx = Math.max(-100, Math.min(0, dx));
+    const cy = Math.max(-100, Math.min(0, dy));
     const canceling = dx < -40;
     const locking = dy < -55;
     ov.classList.toggle('canceling', canceling);
@@ -34663,13 +34711,12 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
     const lockIco=document.getElementById('tg-vh-lock-ico');
     const rail=document.getElementById('tg-vh-lock-rail');
     // clamp drag: left cancel, up lock
-    const cx = Math.max(-120, Math.min(20, dx));
-    const cy = Math.max(-110, Math.min(10, dy));
+    const cx = Math.max(-100, Math.min(0, dx));
+    const cy = Math.max(-100, Math.min(0, dy));
     const canceling = dx < -40;
     const locking = dy < -55;
     if(panel){
       panel.classList.toggle('canceling', canceling);
-      // panel slides a bit with horizontal drag
       panel.style.transform = 'translateX(' + Math.max(-30, Math.min(0, dx*0.15)) + 'px)';
     }
     if(hint){
