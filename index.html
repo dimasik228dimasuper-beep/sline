@@ -2601,6 +2601,46 @@ body.light-theme .sl-theme-card {
   color: #1A1D21 !important;
 }
 
+
+/* Light theme: pure cool gray — no warm/yellow tint on chat list */
+body.theme-light #page-chats,
+body.light-theme #page-chats,
+body.theme-light #page-chats.active,
+body.light-theme #page-chats.active,
+body.theme-light .sidebar,
+body.light-theme .sidebar,
+body.theme-light .sidebar-scroll,
+body.light-theme .sidebar-scroll,
+body.theme-light .sidebar-header,
+body.light-theme .sidebar-header,
+body.theme-light .contacts,
+body.light-theme .contacts,
+body.theme-light #no-chat-state,
+body.light-theme #no-chat-state,
+body.theme-light .chat-pane,
+body.light-theme .chat-pane{
+  background:#F4F6F9 !important;
+  background-image:none !important;
+  background-color:#F4F6F9 !important;
+}
+body.theme-light .sidebar-header,
+body.light-theme .sidebar-header,
+body.theme-light .contact,
+body.light-theme .contact,
+body.theme-light .sw-front,
+body.light-theme .sw-front,
+body.theme-light .sw-clip,
+body.light-theme .sw-clip{
+  background:#FFFFFF !important;
+  background-image:none !important;
+}
+body.theme-light .search-box input,
+body.light-theme .search-box input,
+body.theme-light #search-input,
+body.light-theme #search-input{
+  background:#EEF1F5 !important;
+  background-image:none !important;
+}
 /* ===== LIGHT THEME: search / folders / status / lists ===== */
 body.theme-light .search-box,
 body.light-theme .search-box,
@@ -9550,7 +9590,33 @@ function renderRecActions(){
   document.getElementById('rcancel').onclick=cancelRecording;
   document.getElementById('rpause').onclick=togglePauseRecording;
   document.getElementById('rflash')?.addEventListener('click', (e)=>{ e.stopPropagation(); toggleCircleTorch(); });
-  document.getElementById('rsend').onclick=finishRecording;
+  (function bindOldRsend(){
+    const btn=document.getElementById('rsend');
+    if(!btn) return;
+    // voice: tap send now; hold = still send (no separate editor in old overlay)
+    // circle: always finishRecording
+    let t=null, held=false, armed=false;
+    btn.onclick=null;
+    btn.onpointerdown=function(e){
+      if(e.button!=null && e.button!==0) return;
+      e.preventDefault(); e.stopPropagation();
+      held=false; armed=true;
+      clearTimeout(t);
+      t=setTimeout(function(){ held=true; try{ navigator.vibrate?.(12);}catch(err){} }, 420);
+    };
+    function end(e){
+      if(!armed) return;
+      armed=false; clearTimeout(t);
+      if(typeof recordMode!=='undefined' && recordMode==='voice'){
+        // both tap and hold finish; old overlay has no preview — always send
+        try{ finishRecording(); }catch(err){}
+      } else {
+        try{ finishRecording(); }catch(err){}
+      }
+    }
+    btn.onpointerup=end;
+    btn.onpointercancel=function(){ armed=false; clearTimeout(t); };
+  })();
   document.getElementById('rflip')?.addEventListener('click', async ()=>{
     if(document.getElementById('rflip')?._flipping) return;
     const btn = document.getElementById('rflip');
@@ -9656,13 +9722,15 @@ function cancelRecording(){
 function finishRecording(){
   if(!mediaRecorder) return;
   if(mediaRecorder.state==='inactive'){
-    // already stopped — try send whatever chunks we have
+    // already stopped — only send if we have real audio/video
     if(recordedChunks && recordedChunks.length){
       const blob=new Blob(recordedChunks,{type:recordMode==='circle'?'video/webm':'audio/webm'});
-      if(blob.size>0 || recordMode==='voice'){
+      if(blob.size >= 400){
         const reader=new FileReader();
         reader.onload=async ev=> await sendMessage(recordMode==='circle'?'circle':'voice', ev.target.result, '');
-        reader.readAsDataURL(blob.size?blob:new Blob([new Uint8Array([0])],{type:'audio/webm'}));
+        reader.readAsDataURL(blob);
+      } else {
+        showToast('Слишком короткая запись');
       }
     }
     return;
@@ -9677,17 +9745,9 @@ function finishRecording(){
     document.getElementById('circle-record-overlay').style.display='none';
     isRecording=false;
     const blob=new Blob(recordedChunks||[],{type:(mediaRecorder&&mediaRecorder.mimeType)||(recordMode==='circle'?'video/mp4':'audio/webm')});
-    // Allow short voice notes; only block completely empty
-    if(!blob.size){
-      // still try to send a tiny placeholder for voice so UX isn't blocked
-      if(recordMode==='voice'){
-        const silent = new Blob([new Uint8Array([0])], {type:'audio/webm'});
-        const reader=new FileReader();
-        reader.onload=async ev=> await sendMessage('voice', ev.target.result, '');
-        reader.readAsDataURL(silent);
-        return;
-      }
-      showToast('Пустая запись — попробуйте ещё раз');
+    // Never auto-send empty/near-empty recordings
+    if(!blob.size || blob.size < 400){
+      showToast('Слишком короткая запись');
       recordedChunks=[];
       return;
     }
@@ -11796,17 +11856,35 @@ function applyWallpaperPreset(){
   const list=document.getElementById('messages-list'); if(!list) return;
   const w=(function(){ try{ var v=storage.getItem(WALLPAPER_KEY); if(v===''||v==='none'||v==='null'){ try{storage.removeItem(WALLPAPER_KEY);}catch(x){} return null; } return v; }catch(e){ return null; } })();
   const isLight = (typeof slIsLightTheme==='function') ? slIsLightTheme() : (document.body.classList.contains('theme-light')||document.documentElement.classList.contains('theme-light'));
-  const isDesk = (typeof slIsDesktopWallpaper==='function') ? slIsDesktopWallpaper() : ((window.innerWidth||0)>=900);
-  function paint(el, url, size, repeat, pos){
-    if(!el) return;
+  function paintMsgOnly(url, size, repeat, pos){
     try{
-      el.style.setProperty('background-image', url ? ('url('+url+')') : 'none', 'important');
-      el.style.setProperty('background-size', size||'cover', 'important');
-      el.style.setProperty('background-repeat', repeat||'no-repeat', 'important');
-      el.style.setProperty('background-position', pos||'center center', 'important');
-      el.style.setProperty('background-color', 'transparent', 'important');
+      list.style.setProperty('background-image', url ? ('url('+url+')') : 'none', 'important');
+      list.style.setProperty('background-size', size||'cover', 'important');
+      list.style.setProperty('background-repeat', repeat||'no-repeat', 'important');
+      list.style.setProperty('background-position', pos||'center center', 'important');
+      list.style.setProperty('background-color', 'transparent', 'important');
     }catch(e){}
   }
+  // NEVER put wallpaper on sidebar / chat list / page chrome — only message area
+  try{
+    ['chat-pane','chat-active','page-chats','sidebar','no-chat-state'].forEach(function(id){
+      var el = document.getElementById(id) || document.querySelector('.'+id);
+      if(!el) return;
+      el.style.removeProperty('background-image');
+      el.classList.remove('theme-doodle-wall','has-wall');
+      if(id==='sidebar' || id==='page-chats'){
+        el.style.setProperty('background-image','none','important');
+      }
+    });
+    var pane=document.querySelector('.chat-pane');
+    var side=document.querySelector('.sidebar');
+    [pane, side].forEach(function(el){
+      if(!el) return;
+      el.style.setProperty('background-image','none','important');
+      el.classList.remove('theme-doodle-wall','has-wall');
+    });
+  }catch(e){}
+
   if(w){
     list.classList.remove('theme-doodle-wall');
     list.classList.add('has-wall');
@@ -11818,43 +11896,19 @@ function applyWallpaperPreset(){
         list.style.setProperty('background-position','center center','important');
       }catch(e){}
     } else {
-      paint(list, w, 'cover', 'no-repeat', 'center center');
+      paintMsgOnly(w, 'cover', 'no-repeat', 'center center');
     }
-    try{
-      const chat=document.getElementById('chat-active');
-      const pane=document.querySelector('.chat-pane');
-      [chat,pane].forEach(function(el){ if(el){ el.classList.add('has-wall'); paint(el, w.startsWith('grad:')?null:w, 'cover','no-repeat','center center'); if(w.startsWith('grad:')) el.style.setProperty('background-image', w.slice(5), 'important'); }});
-    }catch(e){}
     try{ applyNoChatWallpaper(); }catch(e){}
     return;
   }
-  // Default: light theme = photo wallpapers (phone vs desktop); dark = tiled dark doodle
+  // Default: light theme = photo wallpapers only inside messages; dark = tile
   list.classList.add('theme-doodle-wall');
   list.classList.add('has-wall');
   const url = (typeof slDefaultWallpaperUrl==='function') ? slDefaultWallpaperUrl() : null;
   if(isLight && url){
-    paint(list, url, 'cover', 'no-repeat', 'center center');
-    try{
-      const chat=document.getElementById('chat-active');
-      const pane=document.querySelector('.chat-pane');
-      [chat,pane].forEach(function(el){
-        if(!el) return;
-        el.classList.add('theme-doodle-wall','has-wall');
-        paint(el, url, 'cover', 'no-repeat', 'center center');
-      });
-    }catch(e){}
+    paintMsgOnly(url, 'cover', 'no-repeat', 'center center');
   } else if(url){
-    // dark: small tile
-    paint(list, url, '340px auto', 'repeat', 'center top');
-    try{
-      const chat=document.getElementById('chat-active');
-      const pane=document.querySelector('.chat-pane');
-      [chat,pane].forEach(function(el){
-        if(!el) return;
-        el.classList.remove('theme-doodle-wall','has-wall');
-        el.style.setProperty('background-image','none','important');
-      });
-    }catch(e){}
+    paintMsgOnly(url, '340px auto', 'repeat', 'center top');
   }
   try{ applyNoChatWallpaper(); }catch(e){}
 }
@@ -11862,17 +11916,10 @@ function applyNoChatWallpaper(){
   try{
     const el = document.getElementById('no-chat-state');
     if(!el) return;
+    // Solid neutral background — no yellow/green wallpaper on empty state / list
+    el.style.setProperty('background-image','none','important');
     const isLight = (typeof slIsLightTheme==='function') ? slIsLightTheme() : (document.body.classList.contains('theme-light')||document.documentElement.classList.contains('theme-light'));
-    if(!isLight){
-      el.style.setProperty('background-image','none','important');
-      el.style.setProperty('background-color','','important');
-      return;
-    }
-    const url = (typeof slIsDesktopWallpaper==='function' && slIsDesktopWallpaper()) ? SL_WALLPAPER_LIGHT_DESKTOP : SL_WALLPAPER_LIGHT;
-    el.style.setProperty('background-image','url('+url+')','important');
-    el.style.setProperty('background-size','cover','important');
-    el.style.setProperty('background-repeat','no-repeat','important');
-    el.style.setProperty('background-position','center center','important');
+    el.style.setProperty('background-color', isLight ? '#F4F6F9' : '#0F1419', 'important');
   }catch(e){}
 }
 window.applyNoChatWallpaper = applyNoChatWallpaper;
@@ -33457,34 +33504,107 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
       }
       @keyframes tgHintIn{ from{opacity:0;transform:translateX(-50%) translateY(8px)} to{opacity:1;transform:translateX(-50%) translateY(0)} }
 
-      /* Voice recording bar (Telegram) */
-      #tg-voice-bar{
+      /* Voice recording — Telegram hold / slide */
+      #tg-voice-hud{
         position:fixed; left:0; right:0; bottom:0; z-index:4600;
-        background:#1c1f2e;
-        padding:10px 12px calc(10px + env(safe-area-inset-bottom,0px));
-        display:flex; align-items:center; gap:10px;
-        box-shadow:0 -4px 24px rgba(0,0,0,.4);
-        animation:tgBarUp .2s ease;
+        pointer-events:none;
+        padding:0 10px calc(8px + env(safe-area-inset-bottom,0px));
       }
-      @keyframes tgBarUp{ from{transform:translateY(100%)} to{transform:none} }
-      .tg-vb-dot{
+      #tg-voice-hud *{ pointer-events:none; }
+      #tg-voice-hud.locked *{ pointer-events:auto; }
+      .tg-vh-row{
+        display:flex; align-items:center; gap:10px;
+        min-height:56px;
+      }
+      .tg-vh-left{
+        flex:1; display:flex; align-items:center; gap:8px;
+        background:rgba(28,31,46,.92); border-radius:28px;
+        padding:10px 14px; min-width:0;
+        transition: background .2s, transform .2s;
+      }
+      .tg-vh-left.cancel-hint{ background:rgba(80,20,28,.92); }
+      .tg-vh-dot{
         width:10px; height:10px; border-radius:50%; background:#e53935;
-        animation:tgPulse 1s ease infinite;
-        flex-shrink:0;
+        animation:tgPulse 1s ease infinite; flex-shrink:0;
       }
       @keyframes tgPulse{ 0%,100%{opacity:1} 50%{opacity:.35} }
-      .tg-vb-time{ color:#fff; font-size:15px; font-variant-numeric:tabular-nums; min-width:52px; }
-      .tg-vb-cancel{
+      .tg-vh-time{
+        color:#fff; font-size:15px; font-variant-numeric:tabular-nums;
+        min-width:48px; font-weight:600;
+      }
+      .tg-vh-hint{
+        flex:1; text-align:center; color:rgba(255,255,255,.55);
+        font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+        transition:color .15s, transform .15s;
+      }
+      .tg-vh-hint.cancel{ color:#ff6b7a; transform:translateX(-12px); }
+      .tg-vh-mic-wrap{
+        position:relative; width:64px; height:64px; flex-shrink:0;
+        display:flex; align-items:center; justify-content:center;
+      }
+      .tg-vh-lock{
+        position:absolute; bottom:72px; left:50%; transform:translateX(-50%);
+        width:40px; height:40px; border-radius:50%;
+        background:rgba(28,31,46,.92); border:1px solid rgba(255,255,255,.12);
+        display:flex; align-items:center; justify-content:center;
+        color:rgba(255,255,255,.7); opacity:0; transition:opacity .2s, transform .2s;
+      }
+      .tg-vh-lock.show{ opacity:1; }
+      .tg-vh-lock.armed{
+        background:#3A7AFE; color:#fff; transform:translateX(-50%) scale(1.08);
+        box-shadow:0 4px 16px rgba(58,122,254,.5);
+      }
+      .tg-vh-lock svg{ width:20px; height:20px; }
+      .tg-vh-mic{
+        width:60px; height:60px; border-radius:50%; border:none;
+        background:#3A7AFE; color:#fff;
+        display:flex; align-items:center; justify-content:center;
+        box-shadow:0 6px 22px rgba(58,122,254,.5);
+        transition:transform .15s, background .15s;
+      }
+      .tg-vh-mic.recording{ transform:scale(1.08); }
+      .tg-vh-mic.canceling{ background:#e53935; transform:scale(.92); }
+      .tg-vh-mic svg{ width:26px; height:26px; }
+      .tg-vh-actions{
+        display:none; align-items:center; gap:10px; width:100%;
+        background:rgba(28,31,46,.96); border-radius:28px;
+        padding:8px 10px;
+      }
+      #tg-voice-hud.locked .tg-vh-hold{ display:none; }
+      #tg-voice-hud.locked .tg-vh-actions{ display:flex; }
+      .tg-vh-pause, .tg-vh-send-btn{
+        width:48px; height:48px; border-radius:50%; border:none;
+        display:flex; align-items:center; justify-content:center;
+        cursor:pointer; flex-shrink:0;
+      }
+      .tg-vh-pause{ background:rgba(255,255,255,.1); color:#fff; }
+      .tg-vh-send-btn{ background:#3A7AFE; color:#fff; box-shadow:0 4px 16px rgba(58,122,254,.45); }
+      .tg-vh-send-btn svg, .tg-vh-pause svg{ width:22px; height:22px; }
+      .tg-vh-cancel-btn{
         flex:1; text-align:center; color:#5B9CFF; font-size:16px;
         background:none; border:none; cursor:pointer; padding:8px;
       }
-      .tg-vb-send{
-        width:52px; height:52px; border-radius:50%; border:none;
-        background:#3A7AFE; color:#fff; display:flex; align-items:center; justify-content:center;
-        cursor:pointer; box-shadow:0 4px 16px rgba(58,122,254,.45); flex-shrink:0;
+      /* Cancel trash animation */
+      #tg-voice-cancel-anim{
+        position:fixed; left:50%; bottom:100px; transform:translateX(-50%);
+        z-index:4700; pointer-events:none;
+        display:flex; flex-direction:column; align-items:center; gap:8px;
+        animation:tgCancelPop .55s ease forwards;
       }
-      .tg-vb-send:active{ transform:scale(.94); }
-      .tg-vb-send svg{ width:24px; height:24px; }
+      #tg-voice-cancel-anim .tg-ca-ico{
+        width:56px; height:56px; border-radius:50%;
+        background:rgba(229,57,53,.2); border:2px solid #e53935;
+        display:flex; align-items:center; justify-content:center;
+        color:#e53935;
+      }
+      #tg-voice-cancel-anim .tg-ca-ico svg{ width:28px; height:28px; }
+      #tg-voice-cancel-anim .tg-ca-txt{ color:#ff6b7a; font-size:14px; font-weight:600; }
+      @keyframes tgCancelPop{
+        0%{ opacity:0; transform:translateX(-50%) scale(.6); }
+        35%{ opacity:1; transform:translateX(-50%) scale(1.08); }
+        100%{ opacity:0; transform:translateX(-50%) translateY(-24px) scale(.9); }
+      }
+      @keyframes tgBarUp{ from{transform:translateY(100%)} to{transform:none} }
 
       /* Voice preview bar after release */
       #tg-voice-preview{
@@ -33615,12 +33735,18 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
     return m+':'+ss+','+cs;
   }
 
+  let voiceLocked = false;
+  let voiceGesture = null;
+
   function clearUI(){
     document.getElementById('tg-voice-bar')?.remove();
+    document.getElementById('tg-voice-hud')?.remove();
     document.getElementById('tg-voice-preview')?.remove();
     document.getElementById('tg-circle-ov')?.remove();
-    // hide old overlay
+    document.getElementById('tg-voice-cancel-anim')?.remove();
     try{ const o=document.getElementById('circle-record-overlay'); if(o) o.style.display='none'; }catch(e){}
+    voiceLocked=false;
+    voiceGesture=null;
   }
 
   function stopTracks(){
@@ -33629,9 +33755,81 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
     mediaStream=null;
   }
 
+  function showCancelAnim(){
+    try{ document.getElementById('tg-voice-cancel-anim')?.remove(); }catch(e){}
+    const el=document.createElement('div');
+    el.id='tg-voice-cancel-anim';
+    el.innerHTML=`<div class="tg-ca-ico">${TRASH}</div><div class="tg-ca-txt">Отменено</div>`;
+    document.body.appendChild(el);
+    setTimeout(()=>{ try{ el.remove(); }catch(e){} }, 600);
+  }
+
+  function buildVoiceHud(){
+    document.getElementById('tg-voice-hud')?.remove();
+    const hud=document.createElement('div');
+    hud.id='tg-voice-hud';
+    hud.innerHTML=`
+      <div class="tg-vh-hold">
+        <div class="tg-vh-row">
+          <div class="tg-vh-left" id="tg-vh-left">
+            <span class="tg-vh-dot"></span>
+            <span class="tg-vh-time" id="tg-vh-time">0:00,00</span>
+            <span class="tg-vh-hint" id="tg-vh-hint">Влево — отмена</span>
+          </div>
+          <div class="tg-vh-mic-wrap">
+            <div class="tg-vh-lock show" id="tg-vh-lock">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/></svg>
+            </div>
+            <div class="tg-vh-mic recording" id="tg-vh-mic">${MIC}</div>
+          </div>
+        </div>
+      </div>
+      <div class="tg-vh-actions">
+        <button type="button" class="tg-vh-pause" id="tg-vh-pause">${PAUSE}</button>
+        <button type="button" class="tg-vh-cancel-btn" id="tg-vh-cancel">Отмена</button>
+        <button type="button" class="tg-vh-send-btn" id="tg-vh-send">${ARROW}</button>
+      </div>`;
+    document.body.appendChild(hud);
+    return hud;
+  }
+
+  function lockVoice(){
+    if(!recording || voiceLocked) return;
+    voiceLocked=true;
+    const hud=document.getElementById('tg-voice-hud');
+    if(hud) hud.classList.add('locked');
+    try{ navigator.vibrate?.(15); }catch(e){}
+    const pauseBtn=document.getElementById('tg-vh-pause');
+    const cancelBtn=document.getElementById('tg-vh-cancel');
+    const sendBtn=document.getElementById('tg-vh-send');
+    if(pauseBtn) pauseBtn.onclick=()=>{
+      try{
+        if(!mediaRec) return;
+        if(!paused && mediaRec.state==='recording'){ mediaRec.pause(); paused=true; pauseBtn.innerHTML=PLAY; }
+        else if(paused && mediaRec.state==='paused'){ mediaRec.resume(); paused=false; pauseBtn.innerHTML=PAUSE; }
+      }catch(e){}
+    };
+    if(cancelBtn) cancelBtn.onclick=()=>{ showCancelAnim(); cancelRec(); };
+    if(sendBtn){
+      // tap = send, hold = preview
+      let t=null, held=false, armed=false;
+      sendBtn.onpointerdown=(e)=>{
+        if(e.button!=null&&e.button!==0) return;
+        e.preventDefault(); held=false; armed=true;
+        clearTimeout(t);
+        t=setTimeout(()=>{ held=true; finishVoice('preview'); }, 420);
+      };
+      const end=()=>{ if(!armed) return; armed=false; clearTimeout(t); if(!held) finishVoice('direct'); };
+      sendBtn.onpointerup=end;
+      sendBtn.onpointercancel=()=>{ armed=false; clearTimeout(t); };
+    }
+  }
+
   async function startVoice(){
     if(recording) return;
     clearUI();
+    voiceLocked=false;
+    voiceGesture=null;
     try{
       mediaStream = await navigator.mediaDevices.getUserMedia({ audio:true });
     }catch(e){ toast('Нет доступа к микрофону'); return; }
@@ -33640,44 +33838,52 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
     recording=true;
     recStart=Date.now();
     let mime='audio/webm';
-    if(!MediaRecorder.isTypeSupported(mime)) mime='audio/mp4';
+    try{ if(!MediaRecorder.isTypeSupported(mime)) mime='audio/mp4'; }catch(e){}
     try{ mediaRec=new MediaRecorder(mediaStream,{mimeType:mime}); }
     catch(e){ mediaRec=new MediaRecorder(mediaStream); }
     mediaRec.ondataavailable=e=>{ if(e.data&&e.data.size) chunks.push(e.data); };
-    mediaRec.start(100);
+    try{ mediaRec.start(100); }catch(e){ try{ mediaRec.start(); }catch(e2){} }
 
-    const bar=document.createElement('div');
-    bar.id='tg-voice-bar';
-    bar.innerHTML=`
-      <span class="tg-vb-dot"></span>
-      <span class="tg-vb-time" id="tg-vb-time">0:00,00</span>
-      <button type="button" class="tg-vb-cancel" id="tg-vb-cancel">${typeof t==='function'?t('cancel'):'Отмена'}</button>
-      <button type="button" class="tg-vb-send" id="tg-vb-send">${ARROW}</button>`;
-    document.body.appendChild(bar);
-    bar.querySelector('#tg-vb-cancel').onclick=()=>cancelRec();
-    bar.querySelector('#tg-vb-send').onclick=()=>finishVoice(true);
-
+    buildVoiceHud();
     clearInterval(recTimer);
     recTimer=setInterval(()=>{
-      const el=document.getElementById('tg-vb-time');
+      if(paused) return;
+      const el=document.getElementById('tg-vh-time');
       if(el) el.textContent=fmt(Date.now()-recStart);
     }, 50);
   }
 
-  function finishVoice(send){
+  // mode: true/'preview' = open editor; 'direct' = send immediately; false = cancel
+  function finishVoice(mode){
     if(!recording && !previewUrl) return;
+    const wantPreview = (mode === true || mode === 'preview');
+    const wantDirect = (mode === 'direct');
+    const wantSend = wantPreview || wantDirect;
     clearInterval(recTimer);
     const stopAndHandle = ()=>{
       recording=false;
       stopTracks();
       const blob=new Blob(chunks, {type: chunks[0]?.type||'audio/webm'});
-      if(!send || blob.size<200){
+      if(!wantSend || blob.size<400){
         clearUI();
-        if(blob.size<200) toast('Слишком коротко');
+        if(wantSend && blob.size<400) toast('Слишком коротко');
         chunks=[];
         return;
       }
-      // show preview
+      // TAP send → send immediately
+      if(wantDirect){
+        clearUI();
+        const reader=new FileReader();
+        reader.onload=async ev=>{
+          try{
+            if(typeof sendMessage==='function') await sendMessage('voice', ev.target.result, '');
+          }catch(e){ toast('Не отправилось'); }
+          chunks=[];
+        };
+        reader.readAsDataURL(blob);
+        return;
+      }
+      // HOLD send → preview / edit
       clearUI();
       previewUrl = URL.createObjectURL(blob);
       const bar=document.createElement('div');
@@ -33691,7 +33897,6 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
         </div>
         <button type="button" class="tg-vp-send" id="tg-vp-send">${ARROW}</button>`;
       document.body.appendChild(bar);
-      // simple waveform decoration
       try{
         const c=document.getElementById('tg-vp-canvas');
         const ctx=c.getContext('2d');
@@ -33704,7 +33909,7 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
       previewAudio = new Audio(previewUrl);
       previewAudio.onloadedmetadata=()=>{
         const d=document.getElementById('tg-vp-dur');
-        if(d) d.textContent = Math.floor(previewAudio.duration)+'с';
+        if(d) d.textContent = Math.floor(previewAudio.duration||0)+'с';
       };
       let playing=false;
       bar.querySelector('#tg-vp-play').onclick=()=>{
@@ -34088,29 +34293,54 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
     } else done();
   }
 
-  // Bind button: tap = switch mode, hold = record
+  // Bind: tap = switch mode; hold = record (must keep finger);
+  // slide up = lock; slide left / release = cancel with animation
   let holdTimer=null;
   let held=false;
   let ptrId=null;
+  let startX=0, startY=0;
+  let gestureDone=false; // cancelled or locked via gesture
+
+  function updateHoldVisual(dx, dy){
+    const left=document.getElementById('tg-vh-left');
+    const hint=document.getElementById('tg-vh-hint');
+    const mic=document.getElementById('tg-vh-mic');
+    const lock=document.getElementById('tg-vh-lock');
+    const canceling = dx < -40;
+    const locking = dy < -40;
+    if(left) left.classList.toggle('cancel-hint', canceling);
+    if(hint){
+      hint.classList.toggle('cancel', canceling);
+      if(canceling) hint.textContent='Отпустите для отмены';
+      else if(locking) hint.textContent='Отпустите для фиксации';
+      else hint.textContent='Влево — отмена';
+    }
+    if(mic) mic.classList.toggle('canceling', canceling);
+    if(lock){
+      lock.classList.toggle('show', true);
+      lock.classList.toggle('armed', locking && !canceling);
+    }
+  }
 
   function bind(){
     const btn=document.getElementById('circle-btn');
     if(!btn || btn.dataset.tgRec==='1') return;
-    // clone to drop old listeners
     const neo=btn.cloneNode(true);
     neo.id='circle-btn';
     neo.dataset.tgRec='1';
-    neo.style.cssText='display:flex!important;visibility:visible!important;opacity:1!important;width:40px;height:40px;align-items:center;justify-content:center;pointer-events:auto!important';
+    neo.style.cssText='display:flex!important;visibility:visible!important;opacity:1!important;width:40px;height:40px;align-items:center;justify-content:center;pointer-events:auto!important;touch-action:none';
     btn.parentNode.replaceChild(neo, btn);
     updateBtnIcon();
 
     neo.addEventListener('pointerdown', e=>{
       if(e.button!=null && e.button!==0) return;
+      if(voiceLocked && recording) return; // locked UI handles itself
       e.preventDefault();
       e.stopPropagation();
       if(typeof e.stopImmediatePropagation==='function') e.stopImmediatePropagation();
-      held=false;
+      held=false; gestureDone=false;
       ptrId=e.pointerId;
+      startX=e.clientX; startY=e.clientY;
       try{ neo.setPointerCapture(e.pointerId); }catch(err){}
       clearTimeout(holdTimer);
       holdTimer=setTimeout(()=>{
@@ -34118,28 +34348,59 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
         try{ navigator.vibrate?.(15); }catch(err){}
         if(mode==='voice') startVoice();
         else startCircle();
-      }, 350);
+      }, 280);
     });
+
+    neo.addEventListener('pointermove', e=>{
+      if(ptrId!=null && e.pointerId!==ptrId) return;
+      if(!held || !recording || voiceLocked || mode!=='voice') return;
+      const dx=e.clientX-startX;
+      const dy=e.clientY-startY;
+      updateHoldVisual(dx, dy);
+      // lock threshold
+      if(dy < -70 && Math.abs(dx) < 80){
+        gestureDone=true;
+        lockVoice();
+        try{ neo.releasePointerCapture(e.pointerId); }catch(err){}
+        held=false; ptrId=null;
+      }
+      // cancel threshold while holding
+      if(dx < -90 && Math.abs(dy) < 80){
+        gestureDone=true;
+        showCancelAnim();
+        cancelRec();
+        try{ neo.releasePointerCapture(e.pointerId); }catch(err){}
+        held=false; ptrId=null;
+      }
+    });
+
     const end=(e)=>{
       if(ptrId!=null && e && e.pointerId!=null && e.pointerId!==ptrId) return;
       clearTimeout(holdTimer);
       try{ if(e&&e.pointerId!=null) neo.releasePointerCapture(e.pointerId); }catch(err){}
+      if(gestureDone || voiceLocked){ held=false; ptrId=null; return; }
       if(!held){
-        // tap → switch mode
+        // short tap → switch mode
+        if(recording){ held=false; ptrId=null; return; }
         mode = mode==='voice' ? 'circle' : 'voice';
+        try{ localStorage.setItem('sl_tg_rec_mode', mode); }catch(err){}
         updateBtnIcon();
         showModeHint();
       } else if(recording && mode==='voice'){
-        // release after hold on voice → go to preview
-        finishVoice(true);
+        // released without lock → cancel with animation
+        showCancelAnim();
+        cancelRec();
       } else if(recording && mode==='circle'){
-        // Keep recording until user taps Send or Cancel (fixes accidental instant send)
-        // Do not call finishCircle on finger release
+        // circle: keep until send on overlay (existing)
       }
       held=false; ptrId=null;
     };
     neo.addEventListener('pointerup', end);
-    neo.addEventListener('pointercancel', ()=>{ clearTimeout(holdTimer); held=false; if(recording) cancelRec(); });
+    neo.addEventListener('pointercancel', ()=>{
+      clearTimeout(holdTimer);
+      if(recording && mode==='voice' && !voiceLocked){ showCancelAnim(); cancelRec(); }
+      held=false; ptrId=null; gestureDone=false;
+    });
   }
 
   bind();
