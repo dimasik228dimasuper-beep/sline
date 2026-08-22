@@ -33510,17 +33510,26 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
       /* Voice recording — Telegram 1:1 full motion */
       #tg-voice-hud{
         position:fixed; left:0; right:0; bottom:0; z-index:4600;
-        padding:0 6px calc(4px + env(safe-area-inset-bottom,0px));
+        padding:0 8px calc(10px + env(safe-area-inset-bottom,0px));
         pointer-events:none;
         animation:tgBarUp .16s ease;
+        overflow:visible;
+        max-width:100vw;
+        box-sizing:border-box;
       }
       #tg-voice-hud.locked{ pointer-events:auto; }
       .tg-vh-sheet{
-        display:flex; align-items:flex-end; gap:4px;
-        min-height:64px; position:relative;
+        display:grid;
+        grid-template-columns: 1fr 72px;
+        align-items:end;
+        gap:6px;
+        min-height:72px;
+        position:relative;
+        overflow:visible;
+        max-width:100%;
       }
       .tg-vh-panel{
-        flex:1; min-width:0;
+        min-width:0;
         display:flex; align-items:center; gap:8px;
         background:rgba(33,33,33,.94);
         border-radius:24px;
@@ -33551,18 +33560,20 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
       .tg-vh-hint .tg-arr{ opacity:.65; margin-right:3px; }
       .tg-vh-side{
         position:relative;
-        width:74px; height:74px;
+        width:72px; height:72px;
         flex-shrink:0;
         display:flex; align-items:flex-end; justify-content:center;
         padding-bottom:2px;
+        overflow:visible;
       }
       .tg-vh-lock-rail{
         position:absolute;
-        bottom:70px; left:50%; transform:translateX(-50%);
-        width:40px; height:88px;
+        bottom:72px; left:50%; transform:translateX(-50%);
+        width:40px; height:100px;
         display:flex; flex-direction:column; align-items:center; justify-content:flex-start;
-        opacity:0; pointer-events:none;
+        opacity:1; pointer-events:none;
         transition:opacity .18s ease;
+        z-index:4;
       }
       .tg-vh-lock-rail.show{ opacity:1; }
       .tg-vh-lock-rail::before{
@@ -33637,7 +33648,11 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
         padding:8px 8px 8px 12px;
         margin-bottom:6px;
         animation:tgLockRowIn .28s cubic-bezier(.2,.85,.3,1.1);
+        pointer-events:auto;
+        box-sizing:border-box;
       }
+      #tg-voice-hud.locked .tg-vh-locked-row{ display:flex !important; }
+      #tg-vh-cancel{ pointer-events:auto; cursor:pointer; }
       @keyframes tgLockRowIn{
         from{ opacity:0; transform:translateY(16px) scale(.96) }
         to{ opacity:1; transform:none }
@@ -34123,9 +34138,10 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
   }
 
   function lockVoice(){
-    if(!recording || voiceLocked) return;
+    if(voiceLocked) return;
+    if(!document.getElementById('tg-voice-hud')) return;
     voiceLocked=true;
-    // morph mic → send on the floating button, pop the lock, then show locked row
+    gestureDone=true;
     const btn=document.getElementById('tg-vh-btn');
     const lockIco=document.getElementById('tg-vh-lock-ico');
     if(btn){
@@ -34137,7 +34153,7 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
       lockIco.classList.add('armed','locked-pop');
     }
     try{ navigator.vibrate?.(20); }catch(e){}
-    setTimeout(function(){
+    const wire=function(){
       const hud=document.getElementById('tg-voice-hud');
       if(hud) hud.classList.add('locked');
       try{
@@ -34155,20 +34171,24 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
           else if(paused && mediaRec.state==='paused'){ mediaRec.resume(); paused=false; pauseBtn.innerHTML=PAUSE; }
         }catch(e){}
       };
-      if(cancelBtn) cancelBtn.onclick=()=>{ showCancelAnim(); cancelRec(); };
+      if(cancelBtn){
+        cancelBtn.onclick=()=>{ showCancelAnim(); cancelRec(); };
+      }
       if(sendBtn){
-        let t=null, held=false, armed=false;
+        let t=null, heldSend=false, armed=false;
         sendBtn.onpointerdown=(e)=>{
           if(e.button!=null&&e.button!==0) return;
-          e.preventDefault(); held=false; armed=true;
+          e.preventDefault(); heldSend=false; armed=true;
           clearTimeout(t);
-          t=setTimeout(()=>{ held=true; finishVoice('preview'); }, 450);
+          t=setTimeout(()=>{ heldSend=true; finishVoice('preview'); }, 450);
         };
-        const end=()=>{ if(!armed) return; armed=false; clearTimeout(t); if(!held) finishVoice('direct'); };
+        const end=()=>{ if(!armed) return; armed=false; clearTimeout(t); if(!heldSend) finishVoice('direct'); };
         sendBtn.onpointerup=end;
         sendBtn.onpointercancel=()=>{ armed=false; clearTimeout(t); };
       }
-    }, 220);
+    };
+    wire();
+    setTimeout(wire, 220);
   }
 
   async function startVoice(){
@@ -34722,11 +34742,11 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
     const btn=document.getElementById('tg-vh-btn');
     const lockIco=document.getElementById('tg-vh-lock-ico');
     const rail=document.getElementById('tg-vh-lock-rail');
-    // clamp drag: left cancel, up lock
+    // clamp drag: left cancel, up lock — never overflow right edge
     const cx = Math.max(-100, Math.min(0, dx));
     const cy = Math.max(-100, Math.min(0, dy));
     const canceling = dx < -40;
-    const locking = dy < -55;
+    const locking = dy < -50;
     if(panel){
       panel.classList.toggle('canceling', canceling);
       panel.style.transform = 'translateX(' + Math.max(-30, Math.min(0, dx*0.15)) + 'px)';
