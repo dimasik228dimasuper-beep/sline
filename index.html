@@ -33793,9 +33793,11 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
         display:none; flex:1; text-align:center;
         background:none; border:none; color:#5B9CFF;
         font-size:16px; font-weight:500; padding:10px;
+        cursor:pointer; pointer-events:auto;
       }
-      #tg-circle-ov.locked .tg-cl-hint{ display:none; }
-      #tg-circle-ov.locked .tg-cl-cancel{ display:block; }
+      #tg-circle-ov.locked .tg-cl-hint{ display:none !important; }
+      #tg-circle-ov.locked .tg-cl-cancel{ display:block !important; }
+      #tg-circle-ov.locked .tg-cl-mid{ pointer-events:auto; }
       #tg-circle-ov .tg-cl-side{
         position:relative; width:72px; height:72px;
         display:flex; align-items:flex-end; justify-content:center;
@@ -34352,7 +34354,7 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
     const cx = Math.max(-100, Math.min(0, dx));
     const cy = Math.max(-100, Math.min(0, dy));
     const canceling = dx < -40;
-    const locking = dy < -55;
+    const locking = dy < -50;
     ov.classList.toggle('canceling', canceling);
     ov.classList.toggle('locking', locking && !canceling);
     if(mid){
@@ -34376,8 +34378,9 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
   }
 
   function lockCircle(){
-    if(!recording || voiceLocked) return;
+    if(voiceLocked) return;
     voiceLocked=true;
+    gestureDone=true;
     const ov=document.getElementById('tg-circle-ov');
     if(!ov) return;
     const btn=ov.querySelector('.tg-cl-btn');
@@ -34389,17 +34392,26 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
     }
     if(lockIco) lockIco.classList.add('armed','locked-pop');
     try{ navigator.vibrate?.(20); }catch(e){}
-    setTimeout(function(){
+    // Apply locked UI immediately + after anim
+    const wire=()=>{
       ov.classList.add('locked');
       ov.classList.remove('canceling','locking');
-      // send / cancel on locked UI
-      const sendBtn=ov.querySelector('.tg-cl-btn');
+      const hint=ov.querySelector('.tg-cl-hint');
+      if(hint) hint.style.display='none';
       const cancelBtn=ov.querySelector('.tg-cl-cancel');
-      if(cancelBtn) cancelBtn.onclick=(e)=>{ e.preventDefault(); e.stopPropagation(); setScreenFlash(false); showCancelAnim(); cancelRec(); };
+      if(cancelBtn){
+        cancelBtn.style.display='block';
+        cancelBtn.onclick=(e)=>{ e.preventDefault(); e.stopPropagation(); setScreenFlash(false); showCancelAnim(); cancelRec(); };
+      }
+      const sendBtn=ov.querySelector('.tg-cl-btn');
       if(sendBtn){
         sendBtn.onclick=(e)=>{ e.preventDefault(); e.stopPropagation(); finishCircle(); };
       }
-    }, 220);
+      const pauseBtn=ov.querySelector('#tg-cl-pause');
+      if(pauseBtn) pauseBtn.style.display='flex';
+    };
+    wire();
+    setTimeout(wire, 220);
   }
 
   async function startCircle(){
@@ -34767,16 +34779,20 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
       }, 180);
     });
 
+    // last drag deltas (so pointerup can lock if finger released in lock zone)
+    let lastDx=0, lastDy=0;
+
     neo.addEventListener('pointermove', e=>{
       if(ptrId!=null && e.pointerId!==ptrId) return;
-      // allow visual drag as soon as held (even while getUserMedia still pending)
       if(!held || voiceLocked) return;
       const dx=e.clientX-startX;
       const dy=e.clientY-startY;
+      lastDx=dx; lastDy=dy;
       if(mode==='voice'){
         if(!document.getElementById('tg-voice-hud')) return;
         updateHoldVisual(dx, dy);
-        if(dy < -80 && Math.abs(dx) < 90){
+        // auto-lock when reaching lock icon
+        if(dy < -70 && Math.abs(dx) < 100){
           gestureDone=true;
           try{
             const b=document.getElementById('tg-vh-btn');
@@ -34785,8 +34801,9 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
           lockVoice();
           try{ neo.releasePointerCapture(e.pointerId); }catch(err){}
           held=false; ptrId=null;
+          return;
         }
-        if(dx < -90 && Math.abs(dy) < 80){
+        if(dx < -80 && Math.abs(dy) < 90){
           gestureDone=true;
           showCancelAnim();
           cancelRec();
@@ -34794,10 +34811,9 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
           held=false; ptrId=null;
         }
       } else {
-        // circle — same gestures
         if(!document.getElementById('tg-circle-ov')) return;
         updateCircleHoldVisual(dx, dy);
-        if(dy < -80 && Math.abs(dx) < 90){
+        if(dy < -70 && Math.abs(dx) < 100){
           gestureDone=true;
           try{
             const b=document.querySelector('#tg-circle-ov .tg-cl-btn');
@@ -34806,8 +34822,9 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
           lockCircle();
           try{ neo.releasePointerCapture(e.pointerId); }catch(err){}
           held=false; ptrId=null;
+          return;
         }
-        if(dx < -90 && Math.abs(dy) < 80){
+        if(dx < -80 && Math.abs(dy) < 90){
           gestureDone=true;
           setScreenFlash(false);
           showCancelAnim();
@@ -34822,7 +34839,7 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
       if(ptrId!=null && e && e.pointerId!=null && e.pointerId!==ptrId) return;
       clearTimeout(holdTimer);
       try{ if(e&&e.pointerId!=null) neo.releasePointerCapture(e.pointerId); }catch(err){}
-      if(gestureDone || voiceLocked){ held=false; ptrId=null; return; }
+      if(gestureDone || voiceLocked){ held=false; ptrId=null; lastDx=0; lastDy=0; return; }
       if(!held){
         if(recording){ held=false; ptrId=null; return; }
         mode = mode==='voice' ? 'circle' : 'voice';
@@ -34830,22 +34847,36 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
         updateBtnIcon();
         showModeHint();
       } else if(held && !voiceLocked){
-        // release without lock → cancel (even if getUserMedia still pending)
-        setScreenFlash(false);
-        showCancelAnim();
-        cancelRec();
+        // Release in lock zone → LOCK (not cancel). Matches "Отпустите для фиксации".
+        if(lastDy < -50 && Math.abs(lastDx) < 100){
+          gestureDone=true;
+          if(mode==='voice') lockVoice();
+          else lockCircle();
+        } else {
+          // release without lock → cancel
+          setScreenFlash(false);
+          showCancelAnim();
+          cancelRec();
+        }
       }
-      held=false; ptrId=null;
+      held=false; ptrId=null; lastDx=0; lastDy=0;
     };
     neo.addEventListener('pointerup', end);
     neo.addEventListener('pointercancel', ()=>{
       clearTimeout(holdTimer);
-      if(held && !voiceLocked){
-        setScreenFlash(false);
-        showCancelAnim();
-        cancelRec();
+      // pointercancel: still honor lock zone if finger was up
+      if(held && !voiceLocked && !gestureDone){
+        if(lastDy < -50 && Math.abs(lastDx) < 100){
+          gestureDone=true;
+          if(mode==='voice') lockVoice();
+          else lockCircle();
+        } else {
+          setScreenFlash(false);
+          showCancelAnim();
+          cancelRec();
+        }
       }
-      held=false; ptrId=null; gestureDone=false;
+      held=false; ptrId=null; gestureDone=false; lastDx=0; lastDy=0;
     });
   }
 
