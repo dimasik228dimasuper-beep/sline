@@ -33510,7 +33510,7 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
       /* Voice recording — Telegram 1:1 full motion */
       #tg-voice-hud{
         position:fixed; left:0; right:0; bottom:0; z-index:4600;
-        padding:0 8px calc(10px + env(safe-area-inset-bottom,0px));
+        padding:90px 8px calc(10px + env(safe-area-inset-bottom,0px)) 8px;
         pointer-events:none;
         animation:tgBarUp .16s ease;
         overflow:visible;
@@ -33568,8 +33568,8 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
       }
       .tg-vh-lock-rail{
         position:absolute;
-        bottom:72px; left:50%; transform:translateX(-50%);
-        width:40px; height:100px;
+        bottom:64px; left:50%; transform:translateX(-50%);
+        width:44px; height:72px;
         display:flex; flex-direction:column; align-items:center; justify-content:flex-start;
         opacity:1; pointer-events:none;
         transition:opacity .18s ease;
@@ -34743,10 +34743,10 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
     const lockIco=document.getElementById('tg-vh-lock-ico');
     const rail=document.getElementById('tg-vh-lock-rail');
     // clamp drag: left cancel, up lock — never overflow right edge
-    const cx = Math.max(-100, Math.min(0, dx));
-    const cy = Math.max(-100, Math.min(0, dy));
+    const cx = Math.max(-110, Math.min(0, dx));
+    const cy = Math.max(-140, Math.min(0, dy));
     const canceling = dx < -40;
-    const locking = dy < -50;
+    const locking = dy < -36;
     if(panel){
       panel.classList.toggle('canceling', canceling);
       panel.style.transform = 'translateX(' + Math.max(-30, Math.min(0, dx*0.15)) + 'px)';
@@ -34811,12 +34811,12 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
       if(mode==='voice'){
         if(!document.getElementById('tg-voice-hud')) return;
         updateHoldVisual(dx, dy);
-        // auto-lock when reaching lock icon
-        if(dy < -70 && Math.abs(dx) < 100){
+        // auto-lock when reaching lock icon (short pull — ~36-48px)
+        if(dy < -48 && Math.abs(dx) < 110){
           gestureDone=true;
           try{
             const b=document.getElementById('tg-vh-btn');
-            if(b){ b.style.transition='transform .2s cubic-bezier(.2,.85,.3,1.2)'; b.style.transform='translate(0px,-88px) scale(1.05)'; }
+            if(b){ b.style.transition='transform .2s cubic-bezier(.2,.85,.3,1.2)'; b.style.transform='translate(0px,-56px) scale(1.05)'; }
           }catch(err){}
           lockVoice();
           try{ neo.releasePointerCapture(e.pointerId); }catch(err){}
@@ -34868,7 +34868,7 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
         showModeHint();
       } else if(held && !voiceLocked){
         // Release in lock zone → LOCK (not cancel). Matches "Отпустите для фиксации".
-        if(lastDy < -50 && Math.abs(lastDx) < 100){
+        if(lastDy < -36 && Math.abs(lastDx) < 110){
           gestureDone=true;
           if(mode==='voice') lockVoice();
           else lockCircle();
@@ -34886,7 +34886,7 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
       clearTimeout(holdTimer);
       // pointercancel: still honor lock zone if finger was up
       if(held && !voiceLocked && !gestureDone){
-        if(lastDy < -50 && Math.abs(lastDx) < 100){
+        if(lastDy < -36 && Math.abs(lastDx) < 110){
           gestureDone=true;
           if(mode==='voice') lockVoice();
           else lockCircle();
