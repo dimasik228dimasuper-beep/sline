@@ -2787,6 +2787,118 @@ body.theme-light #auth-screen .auth-card{
 
 
 
+
+<!-- DB migration gate: stuck cache / old backend -->
+<div id="sl-migrate-gate" style="display:none;position:fixed;inset:0;z-index:2147483647;background:#0B1120;color:#E8EEF8;font-family:system-ui,-apple-system,sans-serif;align-items:center;justify-content:center;padding:28px;box-sizing:border-box;text-align:center;flex-direction:column;gap:18px">
+  <div style="width:56px;height:56px;border-radius:16px;background:linear-gradient(135deg,#4C7CF3,#7B5CFF);display:flex;align-items:center;justify-content:center;font-size:28px">💬</div>
+  <div style="font-size:22px;font-weight:800;letter-spacing:-0.02em">SLine</div>
+  <div style="max-width:340px;font-size:16px;line-height:1.55;color:#C5D0E0;font-weight:500">
+    Мессенджер SLine переходит на другую базу данных.<br><br>
+    Просим вас зарегистрироваться снова.
+  </div>
+  <button type="button" id="sl-migrate-btn" style="margin-top:8px;border:none;border-radius:14px;padding:14px 28px;font-size:16px;font-weight:700;color:#fff;background:linear-gradient(135deg,#4C7CF3,#6B8CFF);cursor:pointer;width:100%;max-width:320px">
+    Зарегистрироваться снова
+  </button>
+  <div style="font-size:12px;color:#6B7C94;max-width:300px;line-height:1.4">Старый кэш и сессия будут очищены. История на старом сервере недоступна.</div>
+</div>
+<script>
+(function(){
+  var VER = 'firebase-neon-b2-1';
+  var KEY = 'sl_backend_v';
+  function needMigrate(){
+    try{
+      if(localStorage.getItem(KEY) === VER) return false;
+      // Any sign of old session / stuck cache
+      var stuck = false;
+      try{
+        if(localStorage.getItem('sl_logged_in') === '1') stuck = true;
+        for(var i=0;i<localStorage.length;i++){
+          var k = localStorage.key(i)||'';
+          if(k.indexOf('firebase:authUser:')===0) stuck = true;
+          if(k.indexOf('sb-')===0 || k.indexOf('supabase')!==-1) stuck = true;
+          if(k.indexOf('auth-token')!==-1) stuck = true;
+          if(k.indexOf('sl_mc_')===0) stuck = true;
+          if(k.indexOf('sl_msg')===0 || k.indexOf('sl_chat')===0) stuck = true;
+        }
+      }catch(e){}
+      // Always migrate once if version not set (even empty install is fine — skip if truly clean)
+      try{
+        if(!localStorage.getItem(KEY) && localStorage.length === 0 && sessionStorage.length === 0) {
+          localStorage.setItem(KEY, VER);
+          return false;
+        }
+      }catch(e){}
+      if(!localStorage.getItem(KEY)) return true;
+      return stuck && localStorage.getItem(KEY) !== VER;
+    }catch(e){ return true; }
+  }
+  function wipeAll(){
+    try{
+      var keep = {};
+      // wipe everything
+      try{ localStorage.clear(); }catch(e){}
+      try{ sessionStorage.clear(); }catch(e){}
+      try{
+        if(window.indexedDB && indexedDB.databases){
+          indexedDB.databases().then(function(dbs){
+            (dbs||[]).forEach(function(db){
+              try{ if(db && db.name) indexedDB.deleteDatabase(db.name); }catch(e){}
+            });
+          });
+        }
+      }catch(e){}
+      try{ localStorage.setItem(KEY, VER); }catch(e){}
+    }catch(e){}
+  }
+  function showGate(){
+    var g = document.getElementById('sl-migrate-gate');
+    if(!g) return;
+    g.style.display = 'flex';
+    document.documentElement.classList.add('sl-ready');
+    document.documentElement.classList.remove('sl-booting','sl-force-app');
+    document.documentElement.classList.add('sl-force-auth');
+    try{
+      var boot = document.getElementById('app-boot'); if(boot) boot.style.display='none';
+      var hb = document.getElementById('sl-hard-boot'); if(hb) hb.style.display='none';
+      var app = document.getElementById('app-screen'); if(app) app.style.display='none';
+      var auth = document.getElementById('auth-screen'); if(auth) auth.style.display='none';
+    }catch(e){}
+    var btn = document.getElementById('sl-migrate-btn');
+    if(btn){
+      btn.onclick = function(){
+        btn.disabled = true;
+        btn.textContent = 'Очистка…';
+        wipeAll();
+        try{
+          if(window.firebase && firebase.auth){
+            firebase.auth().signOut().catch(function(){});
+          }
+        }catch(e){}
+        setTimeout(function(){
+          try{ localStorage.setItem(KEY, VER); }catch(e){}
+          location.reload();
+        }, 400);
+      };
+    }
+  }
+  try{
+    if(needMigrate()){
+      // prevent early boot from forcing chats
+      window.__slMustMigrate = true;
+      if(document.readyState === 'loading'){
+        document.addEventListener('DOMContentLoaded', showGate);
+      } else {
+        showGate();
+      }
+      setTimeout(showGate, 0);
+      setTimeout(showGate, 50);
+    } else {
+      try{ localStorage.setItem(KEY, VER); }catch(e){}
+    }
+  }catch(e){}
+})();
+</script>
+
 <div id="app-boot" style="position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:#0B1120;z-index:2147483000;color:#E8EEF8;font-family:system-ui,-apple-system,sans-serif">
   <div class="dot" style="width:12px;height:12px;border-radius:50%;background:#4C7CF3"></div>
   <div class="boot-msg" style="font:600 14px/1.3 system-ui,-apple-system,sans-serif;color:#8B9BB4">SLine</div>
@@ -2797,6 +2909,14 @@ body.theme-light #auth-screen .auth-card{
 (function(){
   function showSomething(){
     try{
+      if(window.__slMustMigrate){
+        var g=document.getElementById('sl-migrate-gate');
+        if(g) g.style.display='flex';
+        var boot0=document.getElementById('app-boot'); if(boot0) boot0.style.display='none';
+        var app0=document.getElementById('app-screen'); if(app0) app0.style.display='none';
+        var auth0=document.getElementById('auth-screen'); if(auth0) auth0.style.display='none';
+        return;
+      }
       document.documentElement.classList.remove('sl-booting');
       document.documentElement.classList.add('sl-ready');
       var boot = document.getElementById('app-boot');
@@ -6394,17 +6514,21 @@ async function openChat(partner){
     lockEl.style.display='flex';
     buildPinKeypad();
   } else lockEl.style.display='none';
-  // Instant history from cache
+  // Telegram-style: paint local cache SYNCHRONOUSLY before any network
   try{
     const ck = chatCacheKey(partner, null);
     const cached = ck && getCachedMessages(ck);
-    if(cached && cached.length) paintMessages(cached, false);
-    else {
-      const list=document.getElementById('messages-list');
-      if(list) list.innerHTML='';
+    const list=document.getElementById('messages-list');
+    if(cached && cached.length){
+      paintMessages(cached, false);
+    } else if(list){
+      // keep previous only if same chat; otherwise soft clear without blocking
+      list.textContent = '';
+      list.dataset.paintSig = '';
     }
   }catch(e){}
-  loadMessages(); // background refresh
+  // network refresh in background — never blocks UI
+  Promise.resolve().then(function(){ try{ loadMessages(); }catch(e){} });
   showPinnedBar();
   scrollToBottom(true);
 }
@@ -6588,53 +6712,57 @@ window.addEventListener('online', ()=>{
 const _msgCache = new Map(); // key -> {rows, ts}
 function chatCacheKey(partner, group){
   if(group && group.id) return 'g:'+group.id;
-  if(partner && partner.id) return 'dm:'+myProfile?.id+':'+partner.id;
+  if(partner && partner.id) return 'dm:'+(myProfile&&myProfile.id?myProfile.id:'x')+':'+partner.id;
   return null;
 }
 function getCachedMessages(key){
   if(!key) return null;
   const hit = _msgCache.get(key);
-  if(hit) return hit.rows;
-  try{
-    const raw = sessionStorage.getItem('sl_mc_'+key);
-    if(raw){
-      const rows = JSON.parse(raw);
-      if(Array.isArray(rows)){ _msgCache.set(key, {rows, ts:Date.now()}); return rows; }
-    }
-  }catch(e){}
+  if(hit && hit.rows && hit.rows.length) return hit.rows;
+  // memory → sessionStorage → localStorage (Telegram-style durable cache)
+  for (const store of [sessionStorage, localStorage]) {
+    try{
+      const raw = store.getItem('sl_mc_'+key);
+      if(raw){
+        const rows = JSON.parse(raw);
+        if(Array.isArray(rows) && rows.length){
+          _msgCache.set(key, {rows, ts:Date.now()});
+          return rows;
+        }
+      }
+    }catch(e){}
+  }
   return null;
 }
 function setCachedMessages(key, rows){
   if(!key || !rows) return;
-  const slim = rows.slice(-150).map(m=>({
+  const slim = rows.slice(-200).map(m=>({
     id:m.id, sender_id:m.sender_id, receiver_id:m.receiver_id, group_id:m.group_id,
-    content: typeof m.content==='string' && m.content.length>2000 ? m.content.slice(0,2000) : m.content,
+    content: typeof m.content==='string' && m.content.length>3000 ? m.content.slice(0,3000) : m.content,
     type:m.type,
-    file_url:m.file_url,
-    created_at:m.created_at,
-    profiles:m.profiles||undefined
+    file_url: (typeof m.file_url==='string' && m.file_url.length>8000) ? null : m.file_url,
+    created_at:m.created_at
   }));
-  // Full rows in memory (fast)
   _msgCache.set(key, {rows:slim, ts:Date.now()});
-  // sessionStorage: strip heavy data: URLs so parse is instant next open
-  try{
-    const light = slim.map(m=>{
-      const fu = m.file_url;
-      if(typeof fu==='string' && fu.length>4000 && (fu.startsWith('data:')||fu.startsWith('['))){
-        return {...m, file_url: (m.type==='album'?'[]':null), _heavy:1, content: m.type==='text'?m.content:(m.content||m.type||'')};
+  const json = JSON.stringify(slim);
+  try{ sessionStorage.setItem('sl_mc_'+key, json); }catch(e){}
+  try{ localStorage.setItem('sl_mc_'+key, json); }catch(e){
+    // prune oldest caches if quota
+    try{
+      const keys=[];
+      for(let i=0;i<localStorage.length;i++){
+        const k=localStorage.key(i);
+        if(k && k.indexOf('sl_mc_')===0) keys.push(k);
       }
-      return m;
-    });
-    sessionStorage.setItem('sl_mc_'+key, JSON.stringify(light));
-  }catch(e){
-    try{ sessionStorage.removeItem('sl_mc_'+key); }catch(e2){}
+      keys.slice(0, Math.max(1, keys.length-8)).forEach(k=>localStorage.removeItem(k));
+      localStorage.setItem('sl_mc_'+key, json);
+    }catch(e2){}
   }
 }
 function paintMessages(rows, isGroup){
   const list=document.getElementById('messages-list');
   if(!list) return;
   rows = rows||[];
-  // Skip full re-paint if same chat already shows same last message
   try{
     const last = rows.length ? rows[rows.length-1] : null;
     const sig = (last && last.id ? String(last.id) : 'empty') + ':' + rows.length + ':' + (isGroup?'g':'d');
@@ -6644,15 +6772,14 @@ function paintMessages(rows, isGroup){
     }
     list.dataset.paintSig = sig;
   }catch(e){}
-  // Fast path: clear once, render into fragment via existing renderMessage (it appends to list)
-  list.innerHTML='';
-  const prev = list.style.display;
-  // temporarily hide to avoid layout thrash
-  list.style.visibility='hidden';
-  try{
-    for(let i=0;i<rows.length;i++) renderMessage(rows[i], !!isGroup);
-  }finally{
-    list.style.visibility='';
+  // Instant paint — no visibility:hidden (that made TG-feel laggy)
+  const frag = document.createDocumentFragment();
+  const holder = document.createElement('div');
+  // renderMessage appends to #messages-list — temporarily point list id trick not needed
+  // Clear and append in one frame
+  list.textContent = '';
+  for(let i=0;i<rows.length;i++){
+    try{ renderMessage(rows[i], !!isGroup); }catch(e){}
   }
   scrollToBottom(true);
 }
@@ -6714,45 +6841,26 @@ async function loadMessages(){
   if(partnerSnap?.isBot) return;
 
   try{
-    // Instant path: read per-chat index (chat_msgs) — no full table scan
+    // ONLY per-chat index (never scan whole tables/messages — that was the lag)
     let rows = [];
-    let error = null;
-    try{
-      if(window.firebaseDb && partnerSnap && myProfile){
-        const key = [String(myProfile.id), String(partnerSnap.id)].sort().join('_');
-        const snap = await firebaseDb.ref('chat_msgs/' + key).once('value');
-        const val = snap.val() || {};
-        rows = Object.keys(val).map(k => Object.assign({id: k}, val[k]));
-        rows.sort((a,b) => String(a.created_at||'').localeCompare(String(b.created_at||'')));
-      }
-    }catch(eFast){ console.warn('fast load', eFast); }
-    // Fallback: legacy full table query
-    if(!rows.length){
-      let q=sb.from('messages').select('id,sender_id,receiver_id,group_id,content,type,file_url,created_at').is('group_id',null).order('created_at',{ascending:false}).limit(500);
-      if(partnerSnap.id===myProfile.id) q=q.eq('sender_id',myProfile.id).eq('receiver_id',myProfile.id);
-      else q=q.or(`and(sender_id.eq.${myProfile.id},receiver_id.eq.${partnerSnap.id}),and(sender_id.eq.${partnerSnap.id},receiver_id.eq.${myProfile.id})`);
-      const res = await q;
-      error = res.error;
-      rows = (res.data||[]).slice().reverse();
-      // backfill index for next time
-      try{
-        if(window.firebaseDb && rows.length && myProfile){
-          const key = [String(myProfile.id), String(partnerSnap.id)].sort().join('_');
-          const updates = {};
-          rows.forEach(m => { if(m && m.id) updates[m.id] = m; });
-          await firebaseDb.ref('chat_msgs/' + key).update(updates);
-        }
-      }catch(eBf){}
+    if(window.firebaseDb && partnerSnap && myProfile){
+      const key = [String(myProfile.id), String(partnerSnap.id)].sort().join('_');
+      const snap = await firebaseDb.ref('chat_msgs/' + key).once('value');
+      const val = snap.val() || {};
+      rows = Object.keys(val).map(k => Object.assign({id: k}, val[k]||{}));
+      rows.sort((a,b) => String(a.created_at||'').localeCompare(String(b.created_at||'')));
     }
     if(_gen !== window._slChatGen) return;
     if(activePartner?.id !== partnerSnap.id) return;
-    const list=document.getElementById('messages-list');
-    if(!list) return;
-    if(error){ console.warn('loadMessages error', error); return; }
-    setCachedMessages(cacheKey, rows);
-    paintMessages(rows, false);
-    if(!rows.length && partnerSnap && partnerSnap.id!==myProfile?.id){
-      if(typeof window.slShowEmptyChatHint==='function') window.slShowEmptyChatHint();
+    if(rows.length){
+      setCachedMessages(cacheKey, rows);
+      paintMessages(rows, false);
+    } else {
+      // Keep whatever cache already painted in openChat — do NOT clear, do NOT full-scan
+      const list=document.getElementById('messages-list');
+      if(list && !list.childElementCount){
+        if(typeof window.slShowEmptyChatHint==='function') window.slShowEmptyChatHint();
+      }
     }
   }catch(e){ console.warn('loadMessages', e); }
 }
@@ -6790,17 +6898,7 @@ async function loadGroupMessages(){
           rows.sort((a,b)=> String(a.created_at||'').localeCompare(String(b.created_at||'')));
         }
       }catch(e){}
-      if(!rows.length){
-        const {data}=await sb.from('messages').select('id,sender_id,receiver_id,group_id,content,type,file_url,created_at,profiles:sender_id(username,first_name)').eq('group_id',activeGroup.id).order('created_at',{ascending:false}).limit(500);
-        rows = (data||[]).slice().reverse();
-        try{
-          if(window.firebaseDb && rows.length){
-            const updates = {};
-            rows.forEach(m => { if(m&&m.id) updates[m.id]=m; });
-            await firebaseDb.ref('chat_msgs/g_' + activeGroup.id).update(updates);
-          }
-        }catch(e){}
-      }
+      // no full-table fallback — empty index means new/empty channel
     }
     if(isNews){
       const locals = getNewsLocalMsgs();
@@ -19647,6 +19745,14 @@ function scheduleBirthdayAfterAppReady(){
     const app=document.getElementById('app-screen');
     if(a) a.style.display='none';
     if(app) app.style.display='flex';
+  }
+  if(window.__slMustMigrate){
+    try{
+      const g=document.getElementById('sl-migrate-gate');
+      if(g) g.style.display='flex';
+      showAuth();
+    }catch(e){}
+    return;
   }
   if(!sb){ showAuth(); return; }
   try{
