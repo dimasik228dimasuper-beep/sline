@@ -33504,165 +33504,189 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
       }
       @keyframes tgHintIn{ from{opacity:0;transform:translateX(-50%) translateY(8px)} to{opacity:1;transform:translateX(-50%) translateY(0)} }
 
-      /* Voice recording — Telegram 1:1 */
+      /* Voice recording — Telegram 1:1 full motion */
       #tg-voice-hud{
         position:fixed; left:0; right:0; bottom:0; z-index:4600;
-        padding:0 8px calc(6px + env(safe-area-inset-bottom,0px));
+        padding:0 6px calc(4px + env(safe-area-inset-bottom,0px));
         pointer-events:none;
-        animation:tgBarUp .18s ease;
+        animation:tgBarUp .16s ease;
       }
       #tg-voice-hud.locked{ pointer-events:auto; }
       .tg-vh-sheet{
-        display:flex; align-items:center; gap:6px;
-        min-height:56px;
+        display:flex; align-items:flex-end; gap:4px;
+        min-height:64px; position:relative;
       }
       .tg-vh-panel{
         flex:1; min-width:0;
         display:flex; align-items:center; gap:8px;
         background:rgba(33,33,33,.94);
-        border-radius:26px;
-        padding:10px 14px 10px 12px;
-        transition: background .18s ease, transform .15s ease;
+        border-radius:24px;
+        padding:11px 14px 11px 12px;
+        margin-bottom:6px;
+        transition: background .15s ease, transform .12s ease, opacity .15s;
+        will-change:transform;
       }
-      .tg-vh-panel.canceling{
-        background:rgba(60,20,24,.95);
-      }
+      .tg-vh-panel.canceling{ background:rgba(70,18,22,.96); }
       .tg-vh-dot{
         width:9px; height:9px; border-radius:50%; background:#e53935;
         animation:tgPulse 1s ease infinite; flex-shrink:0;
       }
-      @keyframes tgPulse{ 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(.85)} }
+      @keyframes tgPulse{ 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.35;transform:scale(.82)} }
       .tg-vh-time{
         color:#fff; font-size:15px; font-weight:500;
         font-variant-numeric:tabular-nums; min-width:54px;
-        letter-spacing:.02em;
       }
       .tg-vh-hint{
         flex:1; text-align:center;
-        color:rgba(255,255,255,.45);
-        font-size:14.5px; font-weight:400;
+        color:rgba(255,255,255,.42);
+        font-size:14.5px;
         white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
-        transition: color .15s, transform .15s;
+        transition: color .12s, transform .12s;
         user-select:none;
       }
-      .tg-vh-hint.cancel{
-        color:#ff5c6a;
-        transform:translateX(-18px);
-      }
-      .tg-vh-hint .tg-arr{ opacity:.7; margin-right:4px; }
+      .tg-vh-hint.cancel{ color:#ff5c6a; transform:translateX(-22px); }
+      .tg-vh-hint .tg-arr{ opacity:.65; margin-right:3px; }
       .tg-vh-side{
         position:relative;
-        width:72px; height:72px;
+        width:74px; height:74px;
         flex-shrink:0;
-        display:flex; align-items:center; justify-content:center;
+        display:flex; align-items:flex-end; justify-content:center;
+        padding-bottom:2px;
       }
-      /* lock pillar above mic */
       .tg-vh-lock-rail{
         position:absolute;
-        bottom:66px; left:50%; transform:translateX(-50%);
-        width:36px;
-        display:flex; flex-direction:column; align-items:center;
-        gap:2px;
-        opacity:0;
-        transition:opacity .2s ease;
-        pointer-events:none;
+        bottom:70px; left:50%; transform:translateX(-50%);
+        width:40px; height:88px;
+        display:flex; flex-direction:column; align-items:center; justify-content:flex-start;
+        opacity:0; pointer-events:none;
+        transition:opacity .18s ease;
       }
       .tg-vh-lock-rail.show{ opacity:1; }
+      .tg-vh-lock-rail::before{
+        content:'';
+        position:absolute; top:34px; bottom:8px; left:50%;
+        width:2px; transform:translateX(-50%);
+        background:linear-gradient(to top, rgba(255,255,255,.08), rgba(255,255,255,.22));
+        border-radius:2px;
+      }
       .tg-vh-lock-ico{
-        width:36px; height:36px; border-radius:50%;
-        background:rgba(33,33,33,.94);
-        border:1px solid rgba(255,255,255,.1);
+        width:38px; height:38px; border-radius:50%;
+        background:rgba(33,33,33,.95);
+        border:1px solid rgba(255,255,255,.12);
         display:flex; align-items:center; justify-content:center;
-        color:rgba(255,255,255,.65);
-        transition: background .18s, color .18s, transform .18s, box-shadow .18s;
+        color:rgba(255,255,255,.6);
+        z-index:2;
+        transition: background .15s, color .15s, transform .18s cubic-bezier(.2,.9,.3,1.3), box-shadow .15s;
       }
       .tg-vh-lock-ico.armed{
-        background:#3390ec;
-        color:#fff;
-        transform:scale(1.1);
-        box-shadow:0 4px 14px rgba(51,144,236,.55);
+        background:#3390ec; color:#fff;
+        transform:scale(1.18);
+        box-shadow:0 0 0 6px rgba(51,144,236,.28), 0 6px 18px rgba(51,144,236,.45);
+      }
+      .tg-vh-lock-ico.locked-pop{
+        animation:tgLockPop .35s cubic-bezier(.2,.9,.3,1.4) forwards;
+      }
+      @keyframes tgLockPop{
+        0%{ transform:scale(1.18) }
+        50%{ transform:scale(1.35) }
+        100%{ transform:scale(0); opacity:0 }
       }
       .tg-vh-lock-ico svg{ width:18px; height:18px; }
       .tg-vh-lock-chev{
-        color:rgba(255,255,255,.4);
-        display:flex; flex-direction:column; align-items:center;
-        line-height:0.6; font-size:10px;
-        animation:tgChev 1.1s ease infinite;
+        position:absolute; bottom:4px; left:50%; transform:translateX(-50%);
+        color:rgba(255,255,255,.35); font-size:9px; line-height:.7;
+        text-align:center; z-index:1;
+        animation:tgChev 1s ease infinite;
       }
       @keyframes tgChev{
-        0%,100%{ transform:translateY(0); opacity:.35 }
-        50%{ transform:translateY(-3px); opacity:.8 }
+        0%,100%{ transform:translateX(-50%) translateY(0); opacity:.3 }
+        50%{ transform:translateX(-50%) translateY(-4px); opacity:.85 }
       }
       .tg-vh-btn{
-        width:58px; height:58px; border-radius:50%; border:none;
+        width:60px; height:60px; border-radius:50%; border:none;
         background:#3390ec; color:#fff;
         display:flex; align-items:center; justify-content:center;
-        box-shadow:0 4px 18px rgba(51,144,236,.5);
-        transition: transform .15s cubic-bezier(.2,.9,.3,1.2), background .15s;
-        animation:tgMicIn .22s cubic-bezier(.2,.9,.3,1.2);
+        box-shadow:0 4px 20px rgba(51,144,236,.5);
+        position:relative; z-index:3;
+        will-change:transform;
+        transition: background .14s, box-shadow .14s;
+        animation:tgMicIn .2s cubic-bezier(.2,.9,.3,1.25);
       }
       @keyframes tgMicIn{
-        from{ transform:scale(.55); opacity:.5 }
+        from{ transform:scale(.45); opacity:.4 }
         to{ transform:scale(1); opacity:1 }
       }
-      .tg-vh-btn.recording{ transform:scale(1.06); }
       .tg-vh-btn.canceling{
         background:#e53935;
-        transform:scale(.9);
-        box-shadow:0 4px 18px rgba(229,57,53,.45);
+        box-shadow:0 4px 18px rgba(229,57,53,.5);
       }
-      .tg-vh-btn svg{ width:26px; height:26px; }
-      /* Locked state row */
+      .tg-vh-btn svg{ width:26px; height:26px; pointer-events:none; }
+      .tg-vh-btn .tg-ico-mic,
+      .tg-vh-btn .tg-ico-send{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; transition:opacity .2s, transform .25s cubic-bezier(.2,.9,.3,1.2); }
+      .tg-vh-btn .tg-ico-send{ opacity:0; transform:scale(.4) translateY(8px); }
+      .tg-vh-btn.is-send .tg-ico-mic{ opacity:0; transform:scale(.4) translateY(-8px); }
+      .tg-vh-btn.is-send .tg-ico-send{ opacity:1; transform:scale(1) translateY(0); }
+      /* Locked row */
       .tg-vh-locked-row{
-        display:none; align-items:center; gap:8px; width:100%;
+        display:none; align-items:center; gap:6px; width:100%;
         background:rgba(33,33,33,.96);
-        border-radius:26px;
-        padding:8px 10px;
-        animation:tgBarUp .18s ease;
+        border-radius:24px;
+        padding:8px 8px 8px 12px;
+        margin-bottom:6px;
+        animation:tgLockRowIn .28s cubic-bezier(.2,.85,.3,1.1);
+      }
+      @keyframes tgLockRowIn{
+        from{ opacity:0; transform:translateY(16px) scale(.96) }
+        to{ opacity:1; transform:none }
       }
       #tg-voice-hud.locked .tg-vh-sheet{ display:none; }
       #tg-voice-hud.locked .tg-vh-locked-row{ display:flex; }
       .tg-vh-pause{
-        width:46px; height:46px; border-radius:50%; border:none;
+        width:44px; height:44px; border-radius:50%; border:none;
         background:rgba(255,255,255,.1); color:#fff;
         display:flex; align-items:center; justify-content:center;
         cursor:pointer; flex-shrink:0;
+        animation:tgMicIn .22s ease .05s both;
       }
-      .tg-vh-pause:active{ transform:scale(.92); }
+      .tg-vh-pause:active{ transform:scale(.9); }
       .tg-vh-pause svg{ width:20px; height:20px; }
       .tg-vh-cancel-txt{
         flex:1; text-align:center; color:#5B9CFF;
         font-size:16px; font-weight:500;
         background:none; border:none; cursor:pointer; padding:10px;
       }
-      .tg-vh-cancel-txt:active{ opacity:.7; }
       .tg-vh-send{
         width:52px; height:52px; border-radius:50%; border:none;
         background:#3390ec; color:#fff;
         display:flex; align-items:center; justify-content:center;
         cursor:pointer; flex-shrink:0;
         box-shadow:0 4px 16px rgba(51,144,236,.5);
-        animation:tgMicIn .2s ease;
+        animation:tgSendLand .32s cubic-bezier(.2,.85,.3,1.25);
       }
-      .tg-vh-send:active{ transform:scale(.92); }
+      @keyframes tgSendLand{
+        0%{ transform:translateY(28px) scale(.5); opacity:.3 }
+        60%{ transform:translateY(-4px) scale(1.08); opacity:1 }
+        100%{ transform:none; opacity:1 }
+      }
+      .tg-vh-send:active{ transform:scale(.9); }
       .tg-vh-send svg{ width:24px; height:24px; }
-      /* Cancel trash — appears where attach icon is */
-      #tg-voice-cancel-anim{
-        position:fixed;
-        left:18px;
-        bottom:calc(14px + env(safe-area-inset-bottom,0px));
-        z-index:4700; pointer-events:none;
+      /* Paperclip → trash in composer */
+      #composer.tg-rec-hide{ opacity:0 !important; pointer-events:none !important; }
+      #tg-attach-trash{
+        position:fixed; z-index:4650; pointer-events:none;
         width:40px; height:40px;
         display:flex; align-items:center; justify-content:center;
         color:#e53935;
-        animation:tgTrashIn .55s ease forwards;
       }
-      #tg-voice-cancel-anim svg{ width:26px; height:26px; }
-      @keyframes tgTrashIn{
-        0%{ opacity:0; transform:scale(.4) rotate(-20deg); }
-        25%{ opacity:1; transform:scale(1.15) rotate(0deg); }
-        55%{ opacity:1; transform:scale(1) rotate(0deg); }
-        100%{ opacity:0; transform:scale(.7) translateY(8px); }
+      #tg-attach-trash svg{ width:24px; height:24px; }
+      #tg-attach-trash.throw{
+        animation:tgTrashThrow .55s cubic-bezier(.2,.7,.3,1) forwards;
+      }
+      @keyframes tgTrashThrow{
+        0%{ opacity:1; transform:scale(1) rotate(0deg) translateY(0); }
+        25%{ opacity:1; transform:scale(1.2) rotate(-18deg) translateY(-6px); }
+        55%{ opacity:1; transform:scale(1.05) rotate(12deg) translateY(-2px); }
+        100%{ opacity:0; transform:scale(.5) rotate(40deg) translateY(18px); }
       }
       @keyframes tgBarUp{ from{transform:translateY(100%);opacity:0} to{transform:none;opacity:1} }
 
@@ -33817,12 +33841,31 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
   }
 
   function showCancelAnim(){
-    try{ document.getElementById('tg-voice-cancel-anim')?.remove(); }catch(e){}
+    // Replace paperclip area with trash + throw animation
+    try{ document.getElementById('tg-attach-trash')?.remove(); }catch(e){}
     const el=document.createElement('div');
-    el.id='tg-voice-cancel-anim';
+    el.id='tg-attach-trash';
     el.innerHTML=TRASH;
+    // position over attach / paperclip button
+    let left=16, bottom=14;
+    try{
+      const att = document.querySelector('#composer .attach-btn, #composer #attach-btn, #composer button[title*="файл"], #composer button[title*="Файл"], #composer .composer-attach, #attach-btn');
+      const clip = att || document.querySelector('#composer button svg')?.closest('button');
+      if(clip){
+        const r=clip.getBoundingClientRect();
+        left = r.left + r.width/2 - 20;
+        bottom = window.innerHeight - r.bottom + (r.height/2 - 20);
+      } else {
+        bottom = 12 + (parseInt(getComputedStyle(document.documentElement).getPropertyValue('env(safe-area-inset-bottom)')||'0',10)||0);
+      }
+    }catch(e){}
+    el.style.left = left+'px';
+    el.style.bottom = bottom+'px';
     document.body.appendChild(el);
-    setTimeout(()=>{ try{ el.remove(); }catch(e){} }, 580);
+    // force reflow then throw
+    void el.offsetWidth;
+    el.classList.add('throw');
+    setTimeout(()=>{ try{ el.remove(); }catch(e){} }, 560);
   }
 
   function buildVoiceHud(){
@@ -33836,14 +33879,17 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
           <span class="tg-vh-time" id="tg-vh-time">0:00,00</span>
           <span class="tg-vh-hint" id="tg-vh-hint"><span class="tg-arr">‹</span> Влево — отмена</span>
         </div>
-        <div class="tg-vh-side">
+        <div class="tg-vh-side" id="tg-vh-side">
           <div class="tg-vh-lock-rail show" id="tg-vh-lock-rail">
             <div class="tg-vh-lock-ico" id="tg-vh-lock-ico">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/></svg>
             </div>
             <div class="tg-vh-lock-chev">▲<br>▲</div>
           </div>
-          <div class="tg-vh-btn recording" id="tg-vh-btn">${MIC}</div>
+          <div class="tg-vh-btn" id="tg-vh-btn">
+            <span class="tg-ico-mic">${MIC}</span>
+            <span class="tg-ico-send">${ARROW}</span>
+          </div>
         </div>
       </div>
       <div class="tg-vh-locked-row">
@@ -33854,10 +33900,9 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
         <button type="button" class="tg-vh-send" id="tg-vh-send">${ARROW}</button>
       </div>`;
     document.body.appendChild(hud);
-    // hide real composer while recording
     try{
       const comp=document.getElementById('composer');
-      if(comp){ comp.style.opacity='0'; comp.style.pointerEvents='none'; }
+      if(comp) comp.classList.add('tg-rec-hide');
     }catch(e){}
     return hud;
   }
@@ -33865,48 +33910,57 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
   function restoreComposer(){
     try{
       const comp=document.getElementById('composer');
-      if(comp){ comp.style.opacity=''; comp.style.pointerEvents=''; }
+      if(comp){ comp.classList.remove('tg-rec-hide'); comp.style.opacity=''; comp.style.pointerEvents=''; }
     }catch(e){}
   }
 
   function lockVoice(){
     if(!recording || voiceLocked) return;
     voiceLocked=true;
-    const hud=document.getElementById('tg-voice-hud');
-    if(hud) hud.classList.add('locked');
-    try{ navigator.vibrate?.(18); }catch(e){}
-    // sync timer into locked row
-    try{
-      const t1=document.getElementById('tg-vh-time');
-      const t2=document.getElementById('tg-vh-time2');
-      if(t1&&t2) t2.textContent=t1.textContent;
-    }catch(e){}
-    const pauseBtn=document.getElementById('tg-vh-pause');
-    const cancelBtn=document.getElementById('tg-vh-cancel');
-    const sendBtn=document.getElementById('tg-vh-send');
-    if(pauseBtn) pauseBtn.onclick=()=>{
-      try{
-        if(!mediaRec) return;
-        if(!paused && mediaRec.state==='recording'){
-          mediaRec.pause(); paused=true; pauseBtn.innerHTML=PLAY;
-        } else if(paused && mediaRec.state==='paused'){
-          mediaRec.resume(); paused=false; pauseBtn.innerHTML=PAUSE;
-        }
-      }catch(e){}
-    };
-    if(cancelBtn) cancelBtn.onclick=()=>{ showCancelAnim(); cancelRec(); };
-    if(sendBtn){
-      let t=null, held=false, armed=false;
-      sendBtn.onpointerdown=(e)=>{
-        if(e.button!=null&&e.button!==0) return;
-        e.preventDefault(); held=false; armed=true;
-        clearTimeout(t);
-        t=setTimeout(()=>{ held=true; finishVoice('preview'); }, 450);
-      };
-      const end=()=>{ if(!armed) return; armed=false; clearTimeout(t); if(!held) finishVoice('direct'); };
-      sendBtn.onpointerup=end;
-      sendBtn.onpointercancel=()=>{ armed=false; clearTimeout(t); };
+    // morph mic → send on the floating button, pop the lock, then show locked row
+    const btn=document.getElementById('tg-vh-btn');
+    const lockIco=document.getElementById('tg-vh-lock-ico');
+    if(btn){
+      btn.style.transition='transform .25s cubic-bezier(.2,.85,.3,1.2)';
+      btn.style.transform='translate(0px,0px) scale(1)';
+      btn.classList.add('is-send');
     }
+    if(lockIco){
+      lockIco.classList.add('armed','locked-pop');
+    }
+    try{ navigator.vibrate?.(20); }catch(e){}
+    setTimeout(function(){
+      const hud=document.getElementById('tg-voice-hud');
+      if(hud) hud.classList.add('locked');
+      try{
+        const t1=document.getElementById('tg-vh-time');
+        const t2=document.getElementById('tg-vh-time2');
+        if(t1&&t2) t2.textContent=t1.textContent;
+      }catch(e){}
+      const pauseBtn=document.getElementById('tg-vh-pause');
+      const cancelBtn=document.getElementById('tg-vh-cancel');
+      const sendBtn=document.getElementById('tg-vh-send');
+      if(pauseBtn) pauseBtn.onclick=()=>{
+        try{
+          if(!mediaRec) return;
+          if(!paused && mediaRec.state==='recording'){ mediaRec.pause(); paused=true; pauseBtn.innerHTML=PLAY; }
+          else if(paused && mediaRec.state==='paused'){ mediaRec.resume(); paused=false; pauseBtn.innerHTML=PAUSE; }
+        }catch(e){}
+      };
+      if(cancelBtn) cancelBtn.onclick=()=>{ showCancelAnim(); cancelRec(); };
+      if(sendBtn){
+        let t=null, held=false, armed=false;
+        sendBtn.onpointerdown=(e)=>{
+          if(e.button!=null&&e.button!==0) return;
+          e.preventDefault(); held=false; armed=true;
+          clearTimeout(t);
+          t=setTimeout(()=>{ held=true; finishVoice('preview'); }, 450);
+        };
+        const end=()=>{ if(!armed) return; armed=false; clearTimeout(t); if(!held) finishVoice('direct'); };
+        sendBtn.onpointerup=end;
+        sendBtn.onpointercancel=()=>{ armed=false; clearTimeout(t); };
+      }
+    }, 220);
   }
 
   async function startVoice(){
@@ -34394,16 +34448,30 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
     const btn=document.getElementById('tg-vh-btn');
     const lockIco=document.getElementById('tg-vh-lock-ico');
     const rail=document.getElementById('tg-vh-lock-rail');
-    const canceling = dx < -36;
-    const locking = dy < -36;
-    if(panel) panel.classList.toggle('canceling', canceling);
+    // clamp drag: left cancel, up lock
+    const cx = Math.max(-120, Math.min(20, dx));
+    const cy = Math.max(-110, Math.min(10, dy));
+    const canceling = dx < -40;
+    const locking = dy < -55;
+    if(panel){
+      panel.classList.toggle('canceling', canceling);
+      // panel slides a bit with horizontal drag
+      panel.style.transform = 'translateX(' + Math.max(-30, Math.min(0, dx*0.15)) + 'px)';
+    }
     if(hint){
       hint.classList.toggle('cancel', canceling);
       if(canceling) hint.innerHTML='Отпустите для отмены';
       else if(locking) hint.innerHTML='Отпустите для фиксации';
       else hint.innerHTML='<span class="tg-arr">‹</span> Влево — отмена';
     }
-    if(btn) btn.classList.toggle('canceling', canceling);
+    if(btn){
+      btn.classList.toggle('canceling', canceling);
+      // button follows finger (Telegram rubber-band)
+      const scale = canceling ? 0.88 : (locking ? 1.05 : 1);
+      btn.style.transform = 'translate(' + cx + 'px,' + cy + 'px) scale(' + scale + ')';
+      if(locking && !canceling) btn.classList.add('is-send');
+      else btn.classList.remove('is-send');
+    }
     if(rail) rail.classList.add('show');
     if(lockIco) lockIco.classList.toggle('armed', locking && !canceling);
   }
@@ -34444,8 +34512,13 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
       const dy=e.clientY-startY;
       updateHoldVisual(dx, dy);
       // lock threshold
-      if(dy < -70 && Math.abs(dx) < 80){
+      if(dy < -80 && Math.abs(dx) < 90){
         gestureDone=true;
+        // snap button up into lock then morph
+        try{
+          const btn=document.getElementById('tg-vh-btn');
+          if(btn){ btn.style.transition='transform .2s cubic-bezier(.2,.85,.3,1.2)'; btn.style.transform='translate(0px,-88px) scale(1.05)'; }
+        }catch(err){}
         lockVoice();
         try{ neo.releasePointerCapture(e.pointerId); }catch(err){}
         held=false; ptrId=null;
