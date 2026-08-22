@@ -88,10 +88,6 @@ a.msg-link{color:#7EB6FF;text-decoration:underline;text-underline-offset:2px;cur
   try{
     var D='#0F1419';
     var root=document.documentElement;
-    root.style.background=D;
-    root.style.colorScheme='dark';
-    root.classList.remove('theme-light','light-theme');
-    root.classList.add('theme-dark','night-mode');
     var t=null;
     try{ t=localStorage.getItem('sl_theme'); }catch(e){}
     var preferLight=false;
@@ -100,7 +96,18 @@ a.msg-link{color:#7EB6FF;text-decoration:underline;text-underline-offset:2px;cur
       try{ preferLight=!!(window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches); }catch(e){}
     }
     window.__slPreferLight=preferLight;
-    window.__slLight=false;
+    window.__slLight=!!preferLight;
+    if(preferLight){
+      root.style.background='#F4F6F9';
+      root.style.colorScheme='light';
+      root.classList.remove('theme-dark','night-mode');
+      root.classList.add('theme-light','light-theme');
+    } else {
+      root.style.background=D;
+      root.style.colorScheme='dark';
+      root.classList.remove('theme-light','light-theme');
+      root.classList.add('theme-dark','night-mode');
+    }
   }catch(e){}
 })();
 </script>
@@ -118,44 +125,47 @@ a.msg-link{color:#7EB6FF;text-decoration:underline;text-underline-offset:2px;cur
       try{ preferLight = !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches); }catch(e){}
     }
     window.__slPreferLight = preferLight;
-    // FORCE DARK during boot (prevents iOS white screen)
-    var light = false;
-    window.__slLight = false;
-    var cls = 'theme-dark night-mode';
+    // Apply correct theme IMMEDIATELY (no half dark / half light)
+    var light = !!preferLight;
+    window.__slLight = light;
+    var cls = light ? 'theme-light light-theme' : 'theme-dark night-mode';
     document.documentElement.className = (document.documentElement.className||'').replace(/\b(theme-light|light-theme|theme-dark|night-mode)\b/g,'') + ' ' + cls;
-    document.documentElement.style.colorScheme = 'dark';
-    document.documentElement.style.background = '#0F1419';
+    document.documentElement.style.colorScheme = light ? 'light' : 'dark';
+    document.documentElement.style.background = light ? '#F4F6F9' : '#0F1419';
+    try{
+      document.documentElement.style.setProperty('--bg', light ? '#F4F6F9' : '#0F1419');
+      document.documentElement.style.setProperty('--panel', light ? '#FFFFFF' : '#1A222D');
+      document.documentElement.style.setProperty('--panel-hover', light ? '#EEF1F5' : '#243041');
+      document.documentElement.style.setProperty('--text', light ? '#1A1D21' : '#F4F7FB');
+      document.documentElement.style.setProperty('--muted', light ? '#6B7A90' : '#8B9BB4');
+      document.documentElement.style.setProperty('--line', light ? 'rgba(0,0,0,.08)' : 'rgba(255,255,255,.08)');
+      document.documentElement.style.setProperty('--input-bg', light ? '#F0F2F5' : '#151C27');
+    }catch(e){}
     var m = document.querySelector('meta[name="theme-color"]');
-    if(m) m.setAttribute('content', '#0F1419');
+    if(m) m.setAttribute('content', light ? '#F4F6F9' : '#0F1419');
     function applyBody(){
       try{
         if(!document.body) return;
-        document.body.classList.remove('theme-light','light-theme');
-        document.body.classList.add('theme-dark','night-mode');
-        document.body.style.background = '#0F1419';
-        document.body.style.color = '#F4F7FB';
+        if(window.__slLight){
+          document.body.classList.remove('theme-dark','night-mode');
+          document.body.classList.add('theme-light','light-theme');
+          document.body.style.background = '#F4F6F9';
+          document.body.style.color = '#1A1D21';
+        } else {
+          document.body.classList.remove('theme-light','light-theme');
+          document.body.classList.add('theme-dark','night-mode');
+          document.body.style.background = '#0F1419';
+          document.body.style.color = '#F4F7FB';
+        }
       }catch(e){}
     }
     if(document.body) applyBody();
     else document.addEventListener('DOMContentLoaded', applyBody);
-    // After app ready, optionally apply light if user preferred
     window.__slApplyPreferredTheme = function(){
       try{
-        if(!window.__slPreferLight) return;
-        if(!document.documentElement.classList.contains('sl-ready')) return;
-        window.__slLight = true;
-        document.documentElement.classList.remove('theme-dark','night-mode');
-        document.documentElement.classList.add('theme-light','light-theme');
-        document.documentElement.style.colorScheme = 'light';
-        document.documentElement.style.background = '#F4F6F9';
-        if(document.body){
-          document.body.classList.remove('theme-dark','night-mode');
-          document.body.classList.add('theme-light','light-theme');
-          document.body.style.background = '#F4F6F9';
-          document.body.style.color = '#0F1419';
-        }
-        var m2 = document.querySelector('meta[name="theme-color"]');
-        if(m2) m2.setAttribute('content', '#F4F6F9');
+        applyBody();
+        if(typeof applyTheme==='function') applyTheme();
+        if(typeof applyWallpaperPreset==='function') applyWallpaperPreset();
       }catch(e){}
     };
   }catch(e){}
@@ -1199,6 +1209,25 @@ body.theme-light, html.theme-light, html.light-theme{
 }
 html.theme-light body, html.light-theme body{
   background:var(--bg,#F4F6FB); color:var(--text,#111827);
+}
+
+
+.sl-no-chat-pill{
+  font-size:14px;font-weight:600;color:#2A3340;
+  background:rgba(255,255,255,.82);border:1px solid rgba(0,0,0,.06);
+  padding:10px 16px;border-radius:999px;backdrop-filter:blur(8px);
+  box-shadow:0 4px 20px rgba(0,0,0,.08);z-index:2;
+}
+body:not(.theme-light):not(.light-theme) .sl-no-chat-pill,
+html:not(.theme-light) body .sl-no-chat-pill{
+  color:#E8EEF8;background:rgba(20,28,40,.78);border-color:rgba(255,255,255,.1);
+}
+#chat-active, #messages-list{
+  background-color:transparent;
+}
+#chat-active.theme-doodle-wall,
+.chat-pane.theme-doodle-wall{
+  background-size:cover;background-position:center;background-repeat:no-repeat;
 }
 
 /* ===== Chat wallpaper ===== */
@@ -3635,7 +3664,7 @@ body.theme-light .topbar {
           </div>
         </div>
         <div class="chat-pane" id="chat-pane">
-          <div id="no-chat-state" style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--muted);flex-direction:column;gap:8px"><div style="font-size:18px" data-i18n="choose_chat">Выберите чат</div></div>
+          <div id="no-chat-state" style="flex:1;display:flex;align-items:center;justify-content:center;flex-direction:column;min-height:0;background-size:cover;background-position:center;background-repeat:no-repeat"><div class="sl-no-chat-pill" data-i18n="choose_chat">Выберите чат</div></div>
           <div id="chat-active" style="display:none;flex-direction:column;flex:1;min-height:0;overflow:hidden;position:relative">
             <div class="search-in-chat" id="search-in-chat">
               <input type="text" id="chat-search-input" placeholder="Поиск в чате..." data-i18n-placeholder="ph_search_chat">
@@ -5113,6 +5142,9 @@ async function doLogin(){
       try{
         document.documentElement.classList.remove('sl-booting','sl-on-auth','sl-force-auth');
         document.documentElement.classList.add('sl-ready','sl-force-app');
+    try{ if(window.__slApplyPreferredTheme) window.__slApplyPreferredTheme(); }catch(e){}
+    try{ if(typeof applyTheme==='function') applyTheme(); }catch(e){}
+    try{ if(typeof applyWallpaperPreset==='function') applyWallpaperPreset(); }catch(e){}
         document.body.classList.remove('sl-on-auth');
         const _a=document.getElementById('auth-screen');
         const _app=document.getElementById('app-screen');
@@ -6596,6 +6628,7 @@ async function openChat(partner){
     }
   }catch(e){}
   Promise.resolve().then(function(){ try{ loadMessages(); }catch(e){} });
+  try{ applyWallpaperPreset(); }catch(e){}
   showPinnedBar();
   scrollToBottom(true);
 }
@@ -11545,6 +11578,27 @@ function applyWallpaperPreset(){
     list.style.backgroundPosition = 'center top';
   }
   applyNoChatWallpaper();
+  // Also paint open chat shell (header stays, messages area has wallpaper)
+  try{
+    const chat = document.getElementById('chat-active');
+    const pane = document.querySelector('.chat-pane');
+    [chat, pane].forEach(function(el){
+      if(!el) return;
+      if(w){
+        el.style.backgroundImage = list.style.backgroundImage;
+        el.style.backgroundSize = 'cover';
+        el.style.backgroundRepeat = 'no-repeat';
+        el.style.backgroundPosition = 'center';
+      } else if(isLight){
+        el.style.backgroundImage = 'url('+url+')';
+        el.style.backgroundSize = 'cover';
+        el.style.backgroundRepeat = 'no-repeat';
+        el.style.backgroundPosition = 'center';
+      } else {
+        el.style.backgroundImage = '';
+      }
+    });
+  }catch(e){}
 }
 function applyNoChatWallpaper(){
   try{
