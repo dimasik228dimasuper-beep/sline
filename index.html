@@ -3802,18 +3802,45 @@ let _fbApp = null, _fbAuth = null, _fbDb = null, _fbStorage = null;
         }
       }
       if (this._orFilters) {
-        // very simple or: "col.ilike.%q%,col2.ilike.%q%"
-        const parts = this._orFilters.split(',');
-        const q = (parts[0].match(/%(.+)%/) || [])[1] || '';
-        if (q) {
-          const ql = q.toLowerCase();
-          rows = rows.filter(r => {
-            return parts.some(p => {
-              const col = p.split('.')[0];
-              const val = (r[col] || '').toString().toLowerCase();
-              return val.includes(ql);
+        const orStr = this._orFilters;
+        // Support: and(sender_id.eq.A,receiver_id.eq.B),and(sender_id.eq.B,receiver_id.eq.A)
+        if (/and\(/i.test(orStr)) {
+          const groups = [];
+          const re = /and\(([^)]+)\)/gi;
+          let m;
+          while ((m = re.exec(orStr)) !== null) {
+            const conds = m[1].split(',').map(s => s.trim()).map(s => {
+              const parts = s.split('.');
+              // col.eq.val — val may contain dots rarely
+              const col = parts[0];
+              const op = parts[1];
+              const val = parts.slice(2).join('.');
+              return { col, op, val };
             });
-          });
+            groups.push(conds);
+          }
+          if (groups.length) {
+            rows = rows.filter(r => groups.some(conds =>
+              conds.every(c => {
+                if (c.op === 'eq') return String(r[c.col]) === String(c.val);
+                return true;
+              })
+            ));
+          }
+        } else {
+          // simple or: "col.ilike.%q%,col2.ilike.%q%"
+          const parts = orStr.split(',');
+          const q = (parts[0].match(/%(.+)%/) || [])[1] || '';
+          if (q) {
+            const ql = q.toLowerCase();
+            rows = rows.filter(r => {
+              return parts.some(p => {
+                const col = p.split('.')[0];
+                const val = (r[col] || '').toString().toLowerCase();
+                return val.includes(ql);
+              });
+            });
+          }
         }
       }
       if (this._order) {
@@ -3865,6 +3892,17 @@ let _fbApp = null, _fbAuth = null, _fbDb = null, _fbStorage = null;
             const data = Object.assign({}, item, { id });
             if (!data.created_at) data.created_at = new Date().toISOString();
             await _fbDb.ref(pathFor(self.table) + '/' + id).set(data);
+            // Fast chat index for instant history load
+            try {
+              if (self.table === 'messages') {
+                if (data.group_id) {
+                  await _fbDb.ref('chat_msgs/g_' + data.group_id + '/' + id).set(data);
+                } else if (data.sender_id && data.receiver_id) {
+                  const key = [String(data.sender_id), String(data.receiver_id)].sort().join('_');
+                  await _fbDb.ref('chat_msgs/' + key + '/' + id).set(data);
+                }
+              }
+            } catch (eIdx) {}
             out.push(data);
           }
           let data = Array.isArray(payload) ? out : out[0];
@@ -3914,28 +3952,101 @@ let _fbApp = null, _fbAuth = null, _fbDb = null, _fbStorage = null;
       return chain;
     }
 
-    async update(payload) {
-      try {
-        const rows = await this._fetchAll();
-        for (const r of rows) {
-          await _fbDb.ref(pathFor(this.table) + '/' + r.id).update(payload);
+    // Chainable update: .update(payload).eq('id', x) then await
+    update(payload) {
+      const self = this;
+      const run = async () => {
+        try {
+          // Safety: refuse update with zero filters (would touch entire table)
+          if (!self._filters.length && !self._orFilters && !self._in && !self._neq && !self._isNull) {
+            console.error('[SL] blocked update without filters');
+            return { data: null, error: { message: 'update requires filter' } };
+          }
+          const rows = await self._fetchAll();
+          for (const r of rows) {
+            await _fbDb.ref(pathFor(self.table) + '/' + r.id).update(payload);
+          }
+          return { data: rows.map(r => Object.assign({}, r, payload)), error: null };
+        } catch (e) {
+          return { data: null, error: { message: e.message || String(e) } };
         }
-        return { data: rows.map(r => Object.assign({}, r, payload)), error: null };
-      } catch (e) {
-        return { data: null, error: { message: e.message || String(e) } };
-      }
+      };
+      const chain = {
+        eq(col, val) { self._filters.push({ op: 'eq', col, val }); return chain; },
+        neq(col, val) { self._neq = { col, val }; return chain; },
+        in(col, arr) { self._in = { col, arr: arr || [] }; return chain; },
+        is(col, val) { self._isNull = { col, val }; return chain; },
+        or(str) { self._orFilters = str; return chain; },
+        select() { return chain; },
+        single() { return chain; },
+        then(resolve, reject) { return run().then(resolve, reject); },
+        catch(fn) { return run().catch(fn); }
+      };
+      return chain;
     }
 
-    async delete() {
-      try {
-        const rows = await this._fetchAll();
-        for (const r of rows) {
-          await _fbDb.ref(pathFor(this.table) + '/' + r.id).remove();
+    // Chainable delete: .delete().eq('id', mid) — NEVER delete without filters
+    delete() {
+      const self = this;
+      const run = async () => {
+        try {
+          if (!self._filters.length && !self._orFilters && !self._in && !self._neq && !self._isNull) {
+            console.error('[SL] blocked delete without filters');
+            return { data: null, error: { message: 'delete requires filter' } };
+          }
+          // Fast path: delete by id without loading whole table
+          const idFilter = self._filters.find(f => f.col === 'id' && f.op === 'eq');
+          if (idFilter && self._filters.length === 1 && !self._orFilters && !self._in) {
+            const mid = idFilter.val;
+            let row = null;
+            try {
+              const snap = await _fbDb.ref(pathFor(self.table) + '/' + mid).once('value');
+              row = snap.val();
+              if (row) row = Object.assign({ id: mid }, row);
+            } catch (e) {}
+            await _fbDb.ref(pathFor(self.table) + '/' + mid).remove();
+            if (row && self.table === 'messages') {
+              try {
+                if (row.group_id) await _fbDb.ref('chat_msgs/g_' + row.group_id + '/' + mid).remove();
+                else if (row.sender_id && row.receiver_id) {
+                  const key = [String(row.sender_id), String(row.receiver_id)].sort().join('_');
+                  await _fbDb.ref('chat_msgs/' + key + '/' + mid).remove();
+                }
+              } catch (eIdx) {}
+            }
+            return { data: row ? [row] : [{ id: mid }], error: null };
+          }
+          const rows = await self._fetchAll();
+          for (const r of rows) {
+            await _fbDb.ref(pathFor(self.table) + '/' + r.id).remove();
+            try {
+              if (self.table === 'messages') {
+                const a = r.sender_id, b = r.receiver_id, g = r.group_id;
+                if (g) await _fbDb.ref('chat_msgs/g_' + g + '/' + r.id).remove();
+                else if (a && b) {
+                  const key = [String(a), String(b)].sort().join('_');
+                  await _fbDb.ref('chat_msgs/' + key + '/' + r.id).remove();
+                }
+              }
+            } catch (eIdx) {}
+          }
+          return { data: rows, error: null };
+        } catch (e) {
+          return { data: null, error: { message: e.message || String(e) } };
         }
-        return { data: rows, error: null };
-      } catch (e) {
-        return { data: null, error: { message: e.message || String(e) } };
-      }
+      };
+      const chain = {
+        eq(col, val) { self._filters.push({ op: 'eq', col, val }); return chain; },
+        neq(col, val) { self._neq = { col, val }; return chain; },
+        in(col, arr) { self._in = { col, arr: arr || [] }; return chain; },
+        is(col, val) { self._isNull = { col, val }; return chain; },
+        or(str) { self._orFilters = str; return chain; },
+        select() { return chain; },
+        single() { return chain; },
+        then(resolve, reject) { return run().then(resolve, reject); },
+        catch(fn) { return run().catch(fn); }
+      };
+      return chain;
     }
   }
 
@@ -6603,18 +6714,41 @@ async function loadMessages(){
   if(partnerSnap?.isBot) return;
 
   try{
-    // Load chat history (high limit for full visible history)
-    let q=sb.from('messages').select('id,sender_id,receiver_id,group_id,content,type,file_url,created_at').is('group_id',null).order('created_at',{ascending:false}).limit(500);
-    if(partnerSnap.id===myProfile.id) q=q.eq('sender_id',myProfile.id).eq('receiver_id',myProfile.id);
-    else q=q.or(`and(sender_id.eq.${myProfile.id},receiver_id.eq.${partnerSnap.id}),and(sender_id.eq.${partnerSnap.id},receiver_id.eq.${myProfile.id})`);
-    const {data, error}=await q;
-    // STALE? user already switched chat — do not touch DOM
+    // Instant path: read per-chat index (chat_msgs) — no full table scan
+    let rows = [];
+    let error = null;
+    try{
+      if(window.firebaseDb && partnerSnap && myProfile){
+        const key = [String(myProfile.id), String(partnerSnap.id)].sort().join('_');
+        const snap = await firebaseDb.ref('chat_msgs/' + key).once('value');
+        const val = snap.val() || {};
+        rows = Object.keys(val).map(k => Object.assign({id: k}, val[k]));
+        rows.sort((a,b) => String(a.created_at||'').localeCompare(String(b.created_at||'')));
+      }
+    }catch(eFast){ console.warn('fast load', eFast); }
+    // Fallback: legacy full table query
+    if(!rows.length){
+      let q=sb.from('messages').select('id,sender_id,receiver_id,group_id,content,type,file_url,created_at').is('group_id',null).order('created_at',{ascending:false}).limit(500);
+      if(partnerSnap.id===myProfile.id) q=q.eq('sender_id',myProfile.id).eq('receiver_id',myProfile.id);
+      else q=q.or(`and(sender_id.eq.${myProfile.id},receiver_id.eq.${partnerSnap.id}),and(sender_id.eq.${partnerSnap.id},receiver_id.eq.${myProfile.id})`);
+      const res = await q;
+      error = res.error;
+      rows = (res.data||[]).slice().reverse();
+      // backfill index for next time
+      try{
+        if(window.firebaseDb && rows.length && myProfile){
+          const key = [String(myProfile.id), String(partnerSnap.id)].sort().join('_');
+          const updates = {};
+          rows.forEach(m => { if(m && m.id) updates[m.id] = m; });
+          await firebaseDb.ref('chat_msgs/' + key).update(updates);
+        }
+      }catch(eBf){}
+    }
     if(_gen !== window._slChatGen) return;
     if(activePartner?.id !== partnerSnap.id) return;
     const list=document.getElementById('messages-list');
     if(!list) return;
     if(error){ console.warn('loadMessages error', error); return; }
-    const rows=(data||[]).slice().reverse();
     setCachedMessages(cacheKey, rows);
     paintMessages(rows, false);
     if(!rows.length && partnerSnap && partnerSnap.id!==myProfile?.id){
@@ -6648,8 +6782,25 @@ async function loadGroupMessages(){
   try{
     let rows=[];
     if(activeGroup?.id && activeGroup.id !== NEWS_FALLBACK_ID){
-      const {data}=await sb.from('messages').select('id,sender_id,receiver_id,group_id,content,type,file_url,created_at,profiles:sender_id(username,first_name)').eq('group_id',activeGroup.id).order('created_at',{ascending:false}).limit(500);
-      rows = (data||[]).slice().reverse();
+      try{
+        if(window.firebaseDb){
+          const snap = await firebaseDb.ref('chat_msgs/g_' + activeGroup.id).once('value');
+          const val = snap.val() || {};
+          rows = Object.keys(val).map(k => Object.assign({id:k}, val[k]));
+          rows.sort((a,b)=> String(a.created_at||'').localeCompare(String(b.created_at||'')));
+        }
+      }catch(e){}
+      if(!rows.length){
+        const {data}=await sb.from('messages').select('id,sender_id,receiver_id,group_id,content,type,file_url,created_at,profiles:sender_id(username,first_name)').eq('group_id',activeGroup.id).order('created_at',{ascending:false}).limit(500);
+        rows = (data||[]).slice().reverse();
+        try{
+          if(window.firebaseDb && rows.length){
+            const updates = {};
+            rows.forEach(m => { if(m&&m.id) updates[m.id]=m; });
+            await firebaseDb.ref('chat_msgs/g_' + activeGroup.id).update(updates);
+          }
+        }catch(e){}
+      }
     }
     if(isNews){
       const locals = getNewsLocalMsgs();
@@ -8055,13 +8206,32 @@ function showMsgCtx(e, msg){
             });
           }catch(e){}
         }
-        // DB delete (real uuid messages)
+        // DB delete — single message only
         if(mid && !String(mid).startsWith('news_') && !String(mid).startsWith('local_')){
           try{
             const { error } = await sb.from('messages').delete().eq('id', mid);
             if(error) console.warn('del msg', error);
           }catch(e){ console.warn(e); }
+          // Direct RTDB remove (guaranteed single key)
+          try{
+            if(window.firebaseDb){
+              await firebaseDb.ref('tables/messages/' + mid).remove();
+              if(msg.group_id) await firebaseDb.ref('chat_msgs/g_' + msg.group_id + '/' + mid).remove();
+              else if(msg.sender_id && msg.receiver_id){
+                const key=[String(msg.sender_id),String(msg.receiver_id)].sort().join('_');
+                await firebaseDb.ref('chat_msgs/' + key + '/' + mid).remove();
+              }
+            }
+          }catch(e2){ console.warn('del direct', e2); }
         }
+        try{ if(window.messageStore) messageStore.delete(String(mid)); }catch(e){}
+        try{
+          const ck = typeof chatCacheKey==='function' ? chatCacheKey(activePartner, activeGroup) : null;
+          if(ck && typeof getCachedMessages==='function' && typeof setCachedMessages==='function'){
+            const cur = (getCachedMessages(ck)||[]).filter(m => String(m.id)!==String(mid));
+            setCachedMessages(ck, cur);
+          }
+        }catch(e){}
         showToast('Удалено');
       }
       else if(a==='report'){ reportMessage(msg); }
