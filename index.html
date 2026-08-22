@@ -3794,7 +3794,7 @@ body.theme-light .topbar {
         <p style="font-size:13px;color:var(--muted);margin-bottom:14px;line-height:1.45;text-align:center">Скопируйте — мы потом его не покажем.</p>
         <div id="reg-recovery-key" style="font-family:monospace;font-size:12px;word-break:break-all;background:var(--input-bg);border:1px solid var(--line);border-radius:12px;padding:14px;text-align:center;user-select:all;-webkit-user-select:all;margin-bottom:12px;line-height:1.4"></div>
         <button type="button" class="btn-secondary" id="reg-copy-key" style="margin-top:0">Скопировать ключ</button>
-        <button type="button" class="btn-primary" id="reg-enter-app" style="margin-top:10px">Войти в мессенджер</button>
+        <button type="button" class="btn-primary" id="reg-enter-app" style="margin-top:10px;pointer-events:auto;position:relative;z-index:5" onclick="try{event.preventDefault();event.stopPropagation();if(typeof enterMessengerAfterReg==='function')enterMessengerAfterReg();}catch(e){console.error(e);}">Войти в мессенджер</button>
       </div>
 
       <button type="button" class="btn-secondary" id="reg-back-choice" style="margin-top:10px;border:none;color:var(--muted)">← К выбору</button>
@@ -5579,30 +5579,110 @@ async function doRegisterFinish(){
 }
 
 async function enterMessengerAfterReg(){
-  authMsg('');
+  try{ authMsg('Входим…'); }catch(e){}
+  const btn = document.getElementById('reg-enter-app');
+  try{ if(btn){ btn.disabled = true; btn.classList.add('btn-loading'); } }catch(e){}
+
+  // Must clear guards BEFORE onAuthenticated, otherwise it bails out on step 6
   _awaitingRecoveryKey = false;
-  _regStep = 1;
-  // keep registration avatar for onAuthenticated
+  _regStep = 0;
   try{
     if(window._regAvatarDataUrl) storage.setItem('sl_pending_reg_avatar', window._regAvatarDataUrl);
   }catch(e){}
-  if(_pendingRegUser){
-    const u = _pendingRegUser;
+
+  const unlockBtn = ()=>{ try{ if(btn){ btn.disabled=false; btn.classList.remove('btn-loading'); } }catch(e){} };
+
+  try{
+    // 1) User already created during registration
+    let user = _pendingRegUser || null;
+    let session = _pendingRegSession || null;
+
+    // 2) Prefer active supabase session
+    if(!user && sb){
+      try{
+        const { data } = await sb.auth.getSession();
+        if(data?.session?.user){
+          user = data.session.user;
+          session = data.session;
+        }
+      }catch(e){}
+    }
+
+    // 3) Sign in with the password just used at registration
+    if(!user && sb){
+      const contact = normalizeContact(document.getElementById('reg-contact')?.value) || _pendingRegContact;
+      let password = '';
+      try{ password = document.getElementById('reg-password')?.value || ''; }catch(e){}
+      // recovery map may still hold password for this key
+      if(!password){
+        try{
+          const key = (document.getElementById('reg-recovery-key')?.textContent||'').trim();
+          const rec = key && typeof loadRecoveryRecord==='function' ? loadRecoveryRecord(key) : null;
+          if(rec && rec.password) password = rec.password;
+          if(!contact && rec){
+            // fall through with rec.email
+          }
+        }catch(e){}
+      }
+      const email = (contact && contact.email) || (function(){
+        try{
+          const key = (document.getElementById('reg-recovery-key')?.textContent||'').trim();
+          const rec = key && typeof loadRecoveryRecord==='function' ? loadRecoveryRecord(key) : null;
+          return rec && rec.email;
+        }catch(e){ return null; }
+      })();
+      if(email && password){
+        try{
+          const {data, error} = await sb.auth.signInWithPassword({email, password});
+          if(!error && data?.user){
+            user = data.user;
+            session = data.session || session;
+          } else if(error){
+            console.warn('enterMessenger signIn', error);
+          }
+        }catch(e){ console.warn('enterMessenger signIn', e); }
+      }
+    }
+
     _pendingRegUser = null;
     _pendingRegSession = null;
-    onAuthenticated(u);
-    return;
-  }
-  const contact = normalizeContact(document.getElementById('reg-contact')?.value) || _pendingRegContact;
-  const password = document.getElementById('reg-password')?.value || '';
-  if(contact && password && sb){
+    _awaitingRecoveryKey = false;
+    _regStep = 0;
+
+    if(user){
+      try{ storage.setItem('sl_logged_in','1'); }catch(e){}
+      try{
+        // Force-show app shell immediately so button never feels "dead"
+        document.documentElement.classList.add('sl-force-app','sl-ready');
+        document.documentElement.classList.remove('sl-on-auth','sl-force-auth','sl-booting');
+        const a=document.getElementById('auth-screen'); if(a) a.style.display='none';
+        const app=document.getElementById('app-screen'); if(app){ app.style.display='flex'; app.style.visibility='visible'; }
+      }catch(e){}
+      try{
+        await onAuthenticated(user);
+      }catch(e){
+        console.error('enterMessenger onAuthenticated', e);
+        // still leave app shell visible; onAuthenticated may have partially run
+      }
+      unlockBtn();
+      return;
+    }
+
+    // Could not establish session — send to login with helpful message
+    unlockBtn();
+    authMsg('Аккаунт создан. Войдите с email и паролем.');
+    try{ showAuthPanel('login-form'); }catch(e){}
     try{
-      const {data, error} = await sb.auth.signInWithPassword({email: contact.email, password});
-      if(!error && data?.user){ onAuthenticated(data.user); return; }
+      const contact = normalizeContact(document.getElementById('reg-contact')?.value) || _pendingRegContact;
+      const le = document.getElementById('login-email');
+      if(le && contact && contact.display) le.value = contact.display;
+      else if(le && contact && contact.email) le.value = contact.email;
     }catch(e){}
+  }catch(e){
+    console.error('enterMessengerAfterReg', e);
+    unlockBtn();
+    authMsg('Не удалось войти. Попробуйте ещё раз или войдите вручную.');
   }
-  authMsg('Сохраните ключ и войдите через «Вход»');
-  showAuthPanel('login-form');
 }
 
 function wireAuthUI(){
@@ -5821,14 +5901,44 @@ function wireAuthUI(){
       }catch(e2){ authMsg('Скопируйте ключ вручную'); }
     }
   });
-  document.getElementById('reg-enter-app')?.addEventListener('click', ()=> enterMessengerAfterReg());
+  function bindRegEnterApp(){
+    const b = document.getElementById('reg-enter-app');
+    if(!b || b.dataset.boundEnter==='1') return;
+    b.dataset.boundEnter = '1';
+    b.type = 'button';
+    b.disabled = false;
+    b.style.pointerEvents = 'auto';
+    b.style.opacity = '1';
+    const go = function(ev){
+      try{ ev && ev.preventDefault(); ev && ev.stopPropagation(); }catch(e){}
+      try{ enterMessengerAfterReg(); }catch(e){ console.error(e); authMsg('Ошибка входа'); }
+    };
+    b.addEventListener('click', go);
+    b.addEventListener('pointerup', function(ev){
+      // iOS sometimes drops click; allow pointerup as fallback if not scrolling
+      if(b.dataset.ptrArmed==='1'){ b.dataset.ptrArmed='0'; go(ev); }
+    });
+    b.addEventListener('pointerdown', function(){ b.dataset.ptrArmed='1'; });
+    b.addEventListener('pointercancel', function(){ b.dataset.ptrArmed='0'; });
+  }
+  bindRegEnterApp();
+  // re-bind when showing step 6
+  const _setRegStep = typeof setRegStep === 'function' ? setRegStep : null;
+  if(_setRegStep && !window._slRegEnterPatch){
+    window._slRegEnterPatch = 1;
+    window.setRegStep = function(step){
+      const r = _setRegStep.apply(this, arguments);
+      try{ if(+step === 6) setTimeout(bindRegEnterApp, 0); }catch(e){}
+      return r;
+    };
+  }
 }
 
 async function doRegister(){ return doRegisterFinish(); }
 
 async function onAuthenticated(user){
-  // Don't skip recovery-key screen during registration
-  if(_awaitingRecoveryKey || _regStep === 6){
+  // Don't skip recovery-key screen during registration (only while still on that step)
+  if(_awaitingRecoveryKey && _regStep === 6){
     _pendingRegUser = user || _pendingRegUser;
     return;
   }
