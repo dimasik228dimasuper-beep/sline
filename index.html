@@ -9266,7 +9266,8 @@ try{
   const vb=document.getElementById('voice-btn');
   if(vb){ vb.style.display='none'; vb.setAttribute('aria-hidden','true'); }
 }catch(e){}
-if(circleBtn){
+if(false && circleBtn){
+  // Disabled: Telegram gesture module owns circle-btn (hold / swipe / lock)
   circleBtn.addEventListener('pointerdown', e=>{
     if(e.button!=null && e.button!==0) return;
     e.preventDefault();
@@ -9276,7 +9277,6 @@ if(circleBtn){
     clearTimeout(longPressTimer);
     longPressTimer=setTimeout(()=>{
       _recModeHold=true;
-      // haptic if available
       try{ navigator.vibrate?.(20); }catch(err){}
       if(isRecording){
         try{ togglePauseRecording(); }catch(err){}
@@ -9431,14 +9431,17 @@ async function beginRecording(){
     const R=48, C=2*Math.PI*R;
     wrap.innerHTML=`
       <div class="circle-preview-wrap" id="cpt">
-        <video id="clp" autoplay muted playsinline></video>
+        <video id="clp" autoplay muted playsinline webkit-playsinline x5-playsinline disablepictureinpicture disableremoteplayback></video>
         <div class="circle-progress-ring"><svg viewBox="0 0 100 100">
           <circle cx="50" cy="50" r="${R}"></circle>
           <circle class="prog" id="cprog" cx="50" cy="50" r="${R}" stroke-dasharray="${C}" stroke-dashoffset="${C}"></circle>
         </svg></div>
       </div>`;
     const vid=document.getElementById('clp');
-    vid.srcObject=circleStream;
+    try{ vid.srcObject = new MediaStream(circleStream.getVideoTracks()); }catch(e){ vid.srcObject=circleStream; }
+    try{ vid.muted=true; vid.defaultMuted=true; vid.volume=0; vid.controls=false; vid.playsInline=true;
+      vid.setAttribute('playsinline',''); vid.setAttribute('webkit-playsinline','');
+      vid.disablePictureInPicture=true; vid.disableRemotePlayback=true; }catch(e){}
     vid.muted=true;
     vid.playsInline=true;
     vid.setAttribute('playsinline','');
@@ -33690,6 +33693,164 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
       }
       @keyframes tgBarUp{ from{transform:translateY(100%);opacity:0} to{transform:none;opacity:1} }
 
+      /* Circle overlay — Telegram-like + gesture HUD */
+      #tg-circle-ov{
+        position:fixed; inset:0; z-index:4550;
+        background:rgba(0,0,0,.92);
+        display:flex; flex-direction:column; align-items:center; justify-content:center;
+        animation:tgBarUp .18s ease;
+      }
+      #tg-circle-ov .tg-cl-wrap{
+        width:min(78vw,340px); height:min(78vw,340px);
+        border-radius:50%; overflow:hidden;
+        box-shadow:0 0 0 3px rgba(255,255,255,.15), 0 20px 60px rgba(0,0,0,.55);
+        position:relative;
+        transition: transform .15s ease, box-shadow .15s;
+      }
+      #tg-circle-ov.canceling .tg-cl-wrap{
+        box-shadow:0 0 0 3px rgba(229,57,53,.55), 0 20px 60px rgba(0,0,0,.55);
+      }
+      #tg-circle-ov.locking .tg-cl-wrap{
+        box-shadow:0 0 0 4px rgba(51,144,236,.55), 0 20px 60px rgba(0,0,0,.55);
+      }
+      #tg-circle-ov video{
+        width:100%; height:100%; object-fit:cover; background:#000; display:block;
+        -webkit-playsinline:true;
+        pointer-events:none;
+        /* prevent iOS from promoting to system/live player */
+      }
+      #tg-circle-ov video.mirrored{ transform:scaleX(-1); }
+      #tg-circle-ov video::-webkit-media-controls{ display:none !important; }
+      #tg-circle-ov video::-webkit-media-controls-start-playback-button{ display:none !important; }
+      #tg-circle-ov video::-webkit-media-controls-overlay-play-button{ display:none !important; }
+      #tg-circle-ov .tg-cl-ring{
+        position:absolute; inset:-6px; border-radius:50%;
+        border:3px solid rgba(255,255,255,.2);
+        pointer-events:none;
+      }
+      #tg-circle-ov .tg-cl-ring.rec{
+        border-color:#e53935;
+        animation:tgPulse 1s ease infinite;
+      }
+      #tg-circle-ov .tg-cl-pause{
+        position:absolute; top:calc(50% + min(39vw,170px) + 12px); left:50%;
+        transform:translateX(-50%);
+        width:48px; height:48px; border-radius:50%; border:none;
+        background:rgba(255,255,255,.12); color:#fff;
+        display:none; align-items:center; justify-content:center;
+        z-index:5;
+      }
+      #tg-circle-ov.locked .tg-cl-pause{ display:flex; }
+      #tg-circle-ov .tg-cl-bottom{
+        position:absolute; left:0; right:0; bottom:0;
+        padding:0 10px calc(10px + env(safe-area-inset-bottom,0px));
+        display:flex; align-items:flex-end; gap:8px;
+      }
+      #tg-circle-ov .tg-cl-tools{
+        display:flex; flex-direction:column; gap:8px;
+        margin-bottom:8px;
+      }
+      #tg-circle-ov .tg-cl-tool{
+        width:44px; height:44px; border-radius:50%; border:none;
+        background:rgba(255,255,255,.12); color:#fff;
+        display:flex; align-items:center; justify-content:center;
+      }
+      #tg-circle-ov .tg-cl-tool.on{ background:#F7B955; color:#111; }
+      #tg-circle-ov .tg-cl-tool svg{ width:22px; height:22px; }
+      #tg-circle-ov .tg-cl-mid{
+        flex:1; display:flex; align-items:center; gap:8px;
+        background:rgba(33,33,33,.92); border-radius:24px;
+        padding:12px 14px; margin-bottom:6px;
+        transition: background .15s, transform .12s;
+      }
+      #tg-circle-ov .tg-cl-mid.canceling{ background:rgba(70,18,22,.96); }
+      #tg-circle-ov .tg-cl-dot{
+        width:9px; height:9px; border-radius:50%; background:#e53935;
+        animation:tgPulse 1s ease infinite; flex-shrink:0;
+      }
+      #tg-circle-ov #tg-cl-time{
+        color:#fff; font-size:15px; font-weight:500;
+        font-variant-numeric:tabular-nums; min-width:54px;
+      }
+      #tg-circle-ov .tg-cl-hint{
+        flex:1; text-align:center; color:rgba(255,255,255,.42);
+        font-size:14px; white-space:nowrap;
+        transition: color .12s, transform .12s;
+      }
+      #tg-circle-ov .tg-cl-hint.cancel{ color:#ff5c6a; transform:translateX(-18px); }
+      #tg-circle-ov .tg-cl-cancel{
+        display:none; flex:1; text-align:center;
+        background:none; border:none; color:#5B9CFF;
+        font-size:16px; font-weight:500; padding:10px;
+      }
+      #tg-circle-ov.locked .tg-cl-hint{ display:none; }
+      #tg-circle-ov.locked .tg-cl-cancel{ display:block; }
+      #tg-circle-ov .tg-cl-side{
+        position:relative; width:74px; height:74px;
+        display:flex; align-items:flex-end; justify-content:center;
+        flex-shrink:0;
+      }
+      #tg-circle-ov .tg-cl-lock-rail{
+        position:absolute; bottom:70px; left:50%; transform:translateX(-50%);
+        width:40px; height:88px;
+        display:flex; flex-direction:column; align-items:center;
+        opacity:1; pointer-events:none;
+      }
+      #tg-circle-ov .tg-cl-lock-rail::before{
+        content:''; position:absolute; top:34px; bottom:8px; left:50%;
+        width:2px; transform:translateX(-50%);
+        background:linear-gradient(to top, rgba(255,255,255,.08), rgba(255,255,255,.22));
+      }
+      #tg-circle-ov .tg-cl-lock-ico{
+        width:38px; height:38px; border-radius:50%;
+        background:rgba(33,33,33,.95); border:1px solid rgba(255,255,255,.12);
+        display:flex; align-items:center; justify-content:center;
+        color:rgba(255,255,255,.6); z-index:2;
+        transition: background .15s, color .15s, transform .18s cubic-bezier(.2,.9,.3,1.3), box-shadow .15s;
+      }
+      #tg-circle-ov .tg-cl-lock-ico.armed{
+        background:#3390ec; color:#fff; transform:scale(1.18);
+        box-shadow:0 0 0 6px rgba(51,144,236,.28);
+      }
+      #tg-circle-ov .tg-cl-lock-ico.locked-pop{
+        animation:tgLockPop .35s cubic-bezier(.2,.9,.3,1.4) forwards;
+      }
+      #tg-circle-ov .tg-cl-lock-chev{
+        position:absolute; bottom:4px; left:50%; transform:translateX(-50%);
+        color:rgba(255,255,255,.35); font-size:9px; line-height:.7;
+        animation:tgChev 1s ease infinite;
+      }
+      #tg-circle-ov .tg-cl-btn{
+        width:60px; height:60px; border-radius:50%; border:none;
+        background:#3390ec; color:#fff;
+        display:flex; align-items:center; justify-content:center;
+        box-shadow:0 4px 20px rgba(51,144,236,.5);
+        position:relative; z-index:3; will-change:transform;
+        animation:tgMicIn .2s cubic-bezier(.2,.9,.3,1.25);
+        transition: background .14s;
+      }
+      #tg-circle-ov .tg-cl-btn.canceling{ background:#e53935; }
+      #tg-circle-ov .tg-cl-btn svg{ width:26px; height:26px; }
+      #tg-circle-ov .tg-cl-btn .tg-ico-mic,
+      #tg-circle-ov .tg-cl-btn .tg-ico-send{
+        position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+        transition:opacity .2s, transform .25s cubic-bezier(.2,.9,.3,1.2);
+      }
+      #tg-circle-ov .tg-cl-btn .tg-ico-send{ opacity:0; transform:scale(.4) translateY(8px); }
+      #tg-circle-ov .tg-cl-btn.is-send .tg-ico-mic{ opacity:0; transform:scale(.4) translateY(-8px); }
+      #tg-circle-ov .tg-cl-btn.is-send .tg-ico-send{ opacity:1; transform:scale(1) translateY(0); }
+      #tg-circle-ov.locked .tg-cl-lock-rail{ display:none; }
+      #tg-circle-ov.locked .tg-cl-btn{
+        animation:tgSendLand .32s cubic-bezier(.2,.85,.3,1.25);
+      }
+      /* Front screen flash stronger */
+      #tg-screen-flash{
+        position:fixed; inset:0; z-index:4540;
+        background:#fff; opacity:0.95; pointer-events:none;
+        display:none; transition:opacity .12s;
+      }
+
+
       /* Voice preview bar after release */
       #tg-voice-preview{
         position:fixed; left:0; right:0; bottom:0; z-index:4600;
@@ -33841,31 +34002,41 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
   }
 
   function showCancelAnim(){
-    // Replace paperclip area with trash + throw animation
+    // Hide paperclip, show trash in its place, then throw-away animation
     try{ document.getElementById('tg-attach-trash')?.remove(); }catch(e){}
-    const el=document.createElement('div');
-    el.id='tg-attach-trash';
-    el.innerHTML=TRASH;
-    // position over attach / paperclip button
+    // Composer must be visible so attach position is correct and paperclip can hide
+    try{
+      const comp=document.getElementById('composer');
+      if(comp){ comp.classList.remove('tg-rec-hide'); comp.style.opacity=''; comp.style.pointerEvents=''; }
+    }catch(e){}
+    const clip = document.getElementById('attach-btn')
+      || document.querySelector('#composer #attach-btn, #composer .attach-btn, #composer .composer-attach');
     let left=16, bottom=14;
     try{
-      const att = document.querySelector('#composer .attach-btn, #composer #attach-btn, #composer button[title*="файл"], #composer button[title*="Файл"], #composer .composer-attach, #attach-btn');
-      const clip = att || document.querySelector('#composer button svg')?.closest('button');
       if(clip){
+        // hide paperclip while trash is visible
+        clip.style.visibility='hidden';
+        clip.style.opacity='0';
         const r=clip.getBoundingClientRect();
         left = r.left + r.width/2 - 20;
         bottom = window.innerHeight - r.bottom + (r.height/2 - 20);
-      } else {
-        bottom = 12 + (parseInt(getComputedStyle(document.documentElement).getPropertyValue('env(safe-area-inset-bottom)')||'0',10)||0);
       }
     }catch(e){}
+    const el=document.createElement('div');
+    el.id='tg-attach-trash';
+    el.innerHTML=TRASH;
     el.style.left = left+'px';
     el.style.bottom = bottom+'px';
     document.body.appendChild(el);
-    // force reflow then throw
     void el.offsetWidth;
     el.classList.add('throw');
-    setTimeout(()=>{ try{ el.remove(); }catch(e){} }, 560);
+    setTimeout(()=>{
+      try{ el.remove(); }catch(e){}
+      // restore paperclip
+      try{
+        if(clip){ clip.style.visibility=''; clip.style.opacity=''; }
+      }catch(e){}
+    }, 560);
   }
 
   function buildVoiceHud(){
@@ -33968,21 +34139,9 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
     clearUI();
     voiceLocked=false;
     voiceGesture=null;
-    try{
-      mediaStream = await navigator.mediaDevices.getUserMedia({ audio:true });
-    }catch(e){ toast('Нет доступа к микрофону'); return; }
-    chunks=[];
-    paused=false;
-    recording=true;
-    recStart=Date.now();
-    let mime='audio/webm';
-    try{ if(!MediaRecorder.isTypeSupported(mime)) mime='audio/mp4'; }catch(e){}
-    try{ mediaRec=new MediaRecorder(mediaStream,{mimeType:mime}); }
-    catch(e){ mediaRec=new MediaRecorder(mediaStream); }
-    mediaRec.ondataavailable=e=>{ if(e.data&&e.data.size) chunks.push(e.data); };
-    try{ mediaRec.start(100); }catch(e){ try{ mediaRec.start(); }catch(e2){} }
-
+    // HUD immediately so ordinary hold always shows recording UI
     buildVoiceHud();
+    recStart=Date.now();
     clearInterval(recTimer);
     recTimer=setInterval(()=>{
       if(paused) return;
@@ -33992,6 +34151,21 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
       if(el) el.textContent=s;
       if(el2) el2.textContent=s;
     }, 50);
+    try{
+      mediaStream = await navigator.mediaDevices.getUserMedia({ audio:true });
+    }catch(e){ toast('Нет доступа к микрофону'); clearUI(); return; }
+    if(!document.getElementById('tg-voice-hud')){
+      stopTracks(); return;
+    }
+    chunks=[];
+    paused=false;
+    recording=true;
+    let mime='audio/webm';
+    try{ if(!MediaRecorder.isTypeSupported(mime)) mime='audio/mp4'; }catch(e){}
+    try{ mediaRec=new MediaRecorder(mediaStream,{mimeType:mime}); }
+    catch(e){ mediaRec=new MediaRecorder(mediaStream); }
+    mediaRec.ondataavailable=e=>{ if(e.data&&e.data.size) chunks.push(e.data); };
+    try{ mediaRec.start(100); }catch(e){ try{ mediaRec.start(); }catch(e2){} }
   }
 
   // mode: true/'preview' = open editor; 'direct' = send immediately; false = cancel
@@ -34105,23 +34279,125 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
         if(!screenFlashEl){
           screenFlashEl = document.createElement('div');
           screenFlashEl.id = 'tg-screen-flash';
-          screenFlashEl.style.cssText = 'position:fixed;inset:0;z-index:3990;background:#fff;opacity:0.92;pointer-events:none;transition:opacity .15s';
+          screenFlashEl.style.cssText = 'position:fixed;inset:0;z-index:4540;background:#fff;opacity:0.97;pointer-events:none;transition:opacity .12s';
           document.body.appendChild(screenFlashEl);
         }
         screenFlashEl.style.display = 'block';
-        // bump screen brightness hint via white overlay (front "flash")
+        screenFlashEl.style.opacity = '0.97';
         try{ document.documentElement.style.background = '#fff'; }catch(e){}
+        try{ document.body.style.background = '#fff'; }catch(e){}
       } else {
         if(screenFlashEl){ screenFlashEl.style.display = 'none'; }
         try{ document.documentElement.style.background = ''; }catch(e){}
+        try{ document.body.style.background = ''; }catch(e){}
       }
     }catch(e){}
+  }
+
+  function updateCircleHoldVisual(dx, dy){
+    const ov=document.getElementById('tg-circle-ov');
+    if(!ov || voiceLocked) return;
+    const mid=ov.querySelector('.tg-cl-mid');
+    const hint=ov.querySelector('.tg-cl-hint');
+    const btn=ov.querySelector('.tg-cl-btn');
+    const lockIco=ov.querySelector('.tg-cl-lock-ico');
+    const cx = Math.max(-120, Math.min(20, dx));
+    const cy = Math.max(-110, Math.min(10, dy));
+    const canceling = dx < -40;
+    const locking = dy < -55;
+    ov.classList.toggle('canceling', canceling);
+    ov.classList.toggle('locking', locking && !canceling);
+    if(mid){
+      mid.classList.toggle('canceling', canceling);
+      mid.style.transform = 'translateX(' + Math.max(-30, Math.min(0, dx*0.15)) + 'px)';
+    }
+    if(hint){
+      hint.classList.toggle('cancel', canceling);
+      if(canceling) hint.textContent = 'Отпустите для отмены';
+      else if(locking) hint.textContent = 'Отпустите для фиксации';
+      else hint.innerHTML = '<span class="tg-arr">‹</span> Влево — отмена';
+    }
+    if(btn){
+      btn.classList.toggle('canceling', canceling);
+      const scale = canceling ? 0.88 : (locking ? 1.05 : 1);
+      btn.style.transform = 'translate(' + cx + 'px,' + cy + 'px) scale(' + scale + ')';
+      if(locking && !canceling) btn.classList.add('is-send');
+      else btn.classList.remove('is-send');
+    }
+    if(lockIco) lockIco.classList.toggle('armed', locking && !canceling);
+  }
+
+  function lockCircle(){
+    if(!recording || voiceLocked) return;
+    voiceLocked=true;
+    const ov=document.getElementById('tg-circle-ov');
+    if(!ov) return;
+    const btn=ov.querySelector('.tg-cl-btn');
+    const lockIco=ov.querySelector('.tg-cl-lock-ico');
+    if(btn){
+      btn.style.transition='transform .25s cubic-bezier(.2,.85,.3,1.2)';
+      btn.style.transform='translate(0px,0px) scale(1)';
+      btn.classList.add('is-send');
+    }
+    if(lockIco) lockIco.classList.add('armed','locked-pop');
+    try{ navigator.vibrate?.(20); }catch(e){}
+    setTimeout(function(){
+      ov.classList.add('locked');
+      ov.classList.remove('canceling','locking');
+      // send / cancel on locked UI
+      const sendBtn=ov.querySelector('.tg-cl-btn');
+      const cancelBtn=ov.querySelector('.tg-cl-cancel');
+      if(cancelBtn) cancelBtn.onclick=(e)=>{ e.preventDefault(); e.stopPropagation(); setScreenFlash(false); showCancelAnim(); cancelRec(); };
+      if(sendBtn){
+        sendBtn.onclick=(e)=>{ e.preventDefault(); e.stopPropagation(); finishCircle(); };
+      }
+    }, 220);
   }
 
   async function startCircle(){
     if(recording) return;
     clearUI();
+    voiceLocked=false;
     setScreenFlash(false);
+    // Show overlay immediately (optimistic) so hold always feels instant
+    const ov=document.createElement('div');
+    ov.id='tg-circle-ov';
+    ov.innerHTML=`
+      <div class="tg-cl-wrap">
+        <video id="tg-cl-video" autoplay muted playsinline webkit-playsinline x5-playsinline disablepictureinpicture disableremoteplayback></video>
+        <div class="tg-cl-ring rec"></div>
+      </div>
+      <button type="button" class="tg-cl-pause" id="tg-cl-pause">${PAUSE}</button>
+      <div class="tg-cl-bottom">
+        <div class="tg-cl-tools">
+          <button type="button" class="tg-cl-tool" id="tg-cl-flip" title="Камера">${FLIP}</button>
+          <button type="button" class="tg-cl-tool" id="tg-cl-flash" title="Вспышка">${FLASH}</button>
+        </div>
+        <div class="tg-cl-mid">
+          <span class="tg-cl-dot"></span>
+          <span id="tg-cl-time">0:00,00</span>
+          <span class="tg-cl-hint"><span class="tg-arr">‹</span> Влево — отмена</span>
+          <button type="button" class="tg-cl-cancel" id="tg-cl-cancel">Отмена</button>
+        </div>
+        <div class="tg-cl-side">
+          <div class="tg-cl-lock-rail">
+            <div class="tg-cl-lock-ico">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/></svg>
+            </div>
+            <div class="tg-cl-lock-chev">▲<br>▲</div>
+          </div>
+          <div class="tg-cl-btn" id="tg-cl-btn">
+            <span class="tg-ico-mic">${CIRCLE}</span>
+            <span class="tg-ico-send">${ARROW}</span>
+          </div>
+        </div>
+      </div>`;
+    document.body.appendChild(ov);
+    try{
+      const comp=document.getElementById('composer');
+      if(comp) comp.classList.add('tg-rec-hide');
+    }catch(e){}
+
     try{
       mediaStream = await navigator.mediaDevices.getUserMedia({
         video:{ facingMode: { ideal: facing }, width:{ideal:720}, height:{ideal:720} },
@@ -34130,94 +34406,80 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
     }catch(e){
       try{
         mediaStream = await navigator.mediaDevices.getUserMedia({ video:true, audio:true });
-      }catch(e2){ toast('Нет доступа к камере'); return; }
+      }catch(e2){ toast('Нет доступа к камере'); clearUI(); return; }
+    }
+    // if user already released / cancelled while waiting
+    if(!document.getElementById('tg-circle-ov')){
+      stopTracks(); return;
     }
     chunks=[];
     paused=false;
     recording=true;
     recStart=Date.now();
 
-    const ov=document.createElement('div');
-    ov.id='tg-circle-ov';
-    ov.innerHTML=`
-      <div class="tg-cl-wrap"><video id="tg-cl-video" autoplay muted playsinline></video></div>
-      <button type="button" class="tg-cl-pause" id="tg-cl-pause">${PAUSE}</button>
-      <div class="tg-cl-bottom">
-        <div class="tg-cl-tools">
-          <button type="button" class="tg-cl-tool" id="tg-cl-flip">${FLIP}</button>
-          <button type="button" class="tg-cl-tool" id="tg-cl-flash">${FLASH}</button>
-        </div>
-        <div class="tg-cl-mid">
-          <span class="tg-cl-dot"></span>
-          <span id="tg-cl-time">0:00,00</span>
-          <button type="button" class="tg-cl-cancel" id="tg-cl-cancel">${typeof t==='function'?t('cancel'):'Отмена'}</button>
-        </div>
-        <button type="button" class="tg-cl-send" id="tg-cl-send">${ARROW}</button>
-      </div>`;
-    document.body.appendChild(ov);
     const v=document.getElementById('tg-cl-video');
-    v.srcObject=mediaStream;
+    if(!v){ stopTracks(); clearUI(); return; }
+    // iOS Safari: never put audio+video on the same <video> for live preview —
+    // that triggers "В прямом эфире" / Live badge and hands off to system player.
+    // Preview = video tracks only; audio stays only on MediaRecorder.
+    try{
+      const vtracks = mediaStream.getVideoTracks();
+      const previewStream = new MediaStream(vtracks);
+      v.srcObject = previewStream;
+    }catch(e){
+      v.srcObject = mediaStream;
+    }
     v.muted = true;
+    v.defaultMuted = true;
+    v.volume = 0;
+    v.controls = false;
     v.playsInline = true;
+    v.setAttribute('playsinline','');
+    v.setAttribute('webkit-playsinline','');
+    v.setAttribute('x5-playsinline','');
+    v.setAttribute('x-webkit-airplay','deny');
+    v.setAttribute('disablepictureinpicture','');
+    v.setAttribute('disableremoteplayback','');
+    try{ v.disablePictureInPicture = true; }catch(e){}
+    try{ v.disableRemotePlayback = true; }catch(e){}
+    try{ v.setAttribute('controlslist','nodownload nofullscreen noremoteplayback'); }catch(e){}
+    // Block native fullscreen / AirPlay takeover
+    try{
+      v.addEventListener('webkitbeginfullscreen', function(ev){
+        try{ ev.preventDefault(); }catch(e){}
+        try{ if(v.webkitExitFullscreen) v.webkitExitFullscreen(); }catch(e){}
+      });
+    }catch(e){}
     v.classList.toggle('mirrored', facing==='user');
     try{ await v.play(); }catch(e){}
 
-    // Wait for real video frames before starting MediaRecorder (fixes black/dark circles)
-    await new Promise((resolve)=>{
-      let done=false;
-      const finish=()=>{ if(done) return; done=true; resolve(); };
-      if(v.readyState >= 2) finish();
-      v.addEventListener('loadeddata', finish, {once:true});
-      v.addEventListener('playing', finish, {once:true});
-      setTimeout(finish, 1200);
-    });
-    // Extra frames so first captured frame isn't black
-    await new Promise(r=>setTimeout(r, 250));
-
-    // Continuous canvas pipeline so camera flips don't black out the recording
-    let _tgCanvas = null, _tgRaf = 0;
-    window._tgCircleStopCanvas = function(){
-      if(_tgRaf){ cancelAnimationFrame(_tgRaf); _tgRaf=0; }
-    };
-    window._tgCircleStartCanvas = function(videoEl, face){
-      // Update source without tearing down captureStream
-      window._tgCircleVideo = videoEl;
-      window._tgCircleFace = face;
-      if(!_tgCanvas){
-        _tgCanvas = document.createElement('canvas');
-        _tgCanvas.width = 480; _tgCanvas.height = 480;
+    // Front camera: prepare screen flash helper (user toggles via button; default off)
+    // Canvas loop for stable recording across flips
+    try{
+      if(typeof window._tgCircleStartCanvas==='function'){
+        window._tgCircleStartCanvas(v, facing);
       }
-      if(_tgRaf) return _tgCanvas; // already looping
-      const ctx = _tgCanvas.getContext('2d', {alpha:false});
-      const draw = ()=>{
-        _tgRaf = requestAnimationFrame(draw);
-        const el = window._tgCircleVideo;
-        const f = window._tgCircleFace;
-        if(!el) return;
-        const vw = el.videoWidth|0, vh = el.videoHeight|0;
-        if(el.readyState<2 || vw<2 || vh<2) return; // keep last frame — no black flash
-        try{
-          const scale = Math.max(480/vw, 480/vh);
-          const dw = vw*scale, dh = vh*scale;
-          const dx = (480-dw)/2, dy = (480-dh)/2;
-          ctx.save();
-          if(f==='user'){ ctx.translate(480,0); ctx.scale(-1,1); }
-          ctx.drawImage(el, dx, dy, dw, dh);
-          ctx.restore();
-        }catch(e){}
-      };
-      draw();
-      return _tgCanvas;
-    };
-    const canvas = window._tgCircleStartCanvas(v, facing);
+    }catch(e){}
+
     let recStream = mediaStream;
     try{
-      recStream = canvas.captureStream(30);
-      const at = mediaStream.getAudioTracks()[0];
-      if(at) recStream.addTrack(at);
+      if(typeof window._tgCircleGetCanvasStream==='function'){
+        const cs = window._tgCircleGetCanvasStream();
+        if(cs){
+          recStream = cs;
+          const at = mediaStream.getAudioTracks()[0];
+          if(at && !recStream.getAudioTracks().length) recStream.addTrack(at);
+        }
+      } else if(typeof startCircleCanvasLoop==='function'){
+        const canvas = startCircleCanvasLoop(v);
+        if(canvas && canvas.captureStream){
+          recStream = canvas.captureStream(30);
+          const at = mediaStream.getAudioTracks()[0];
+          if(at) recStream.addTrack(at);
+        }
+      }
     }catch(e){ recStream = mediaStream; }
 
-    // iOS Safari cannot play WebM — prefer mp4/quicktime first
     let mime = '';
     const candidates = [
       'video/mp4',
@@ -34238,20 +34500,17 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
         try{ mediaRec=new MediaRecorder(mediaStream); }catch(e3){ toast('Запись недоступна'); cancelRec(); return; }
       }
     }
-    console.info('[circle] mime', mediaRec.mimeType || mime);
     mediaRec.ondataavailable=e=>{ if(e.data&&e.data.size) chunks.push(e.data); };
     try{ mediaRec.start(200); }catch(e){ toast('Не удалось начать запись'); cancelRec(); return; }
 
     clearInterval(recTimer);
     recTimer=setInterval(()=>{
+      if(paused) return;
       const el=document.getElementById('tg-cl-time');
       if(el) el.textContent=fmt(Date.now()-recStart);
-      // auto-stop at 60s
       if(Date.now()-recStart > 60000){ try{ finishCircle(); }catch(e){} }
     }, 50);
 
-    ov.querySelector('#tg-cl-cancel').onclick=(e)=>{ e.preventDefault(); e.stopPropagation(); setScreenFlash(false); cancelRec(); };
-    ov.querySelector('#tg-cl-send').onclick=(e)=>{ e.preventDefault(); e.stopPropagation(); finishCircle(); };
     ov.querySelector('#tg-cl-pause').onclick=()=>{
       if(!mediaRec) return;
       if(!paused){ try{ mediaRec.pause(); }catch(e){} paused=true; ov.querySelector('#tg-cl-pause').innerHTML=PLAY; }
@@ -34263,96 +34522,47 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
       const next = facing==='user'?'environment':'user';
       setScreenFlash(false);
       try{
-        // Keep ORIGINAL audio track alive — it is shared with MediaRecorder via canvas stream.
-        // Only swap the VIDEO track feeding the preview + canvas.
         const oldVideoTracks = (mediaStream ? mediaStream.getVideoTracks().slice() : []);
-
         let newStream=null;
-        const tryList=[];
         try{
-          const devices=await navigator.mediaDevices.enumerateDevices();
-          const cams=devices.filter(d=>d.kind==='videoinput');
-          if(cams.length>=2){
-            const wantBack=next==='environment';
-            let pick=cams.find(d=>{
-              const L=(d.label||'').toLowerCase();
-              return wantBack ? /back|rear|environment|задн|основн/i.test(L) : /front|user|face|перед/i.test(L);
-            });
-            if(!pick) pick = wantBack ? (cams[1]||cams[0]) : cams[0];
-            if(pick&&pick.deviceId){
-              tryList.push({video:{deviceId:{exact:pick.deviceId}, width:{ideal:720}, height:{ideal:720}}, audio:false});
-            }
-          }
-        }catch(e){}
-        tryList.push(
-          {video:{facingMode:{exact:next}, width:{ideal:720}, height:{ideal:720}}, audio:false},
-          {video:{facingMode:{ideal:next}, width:{ideal:720}, height:{ideal:720}}, audio:false},
-          {video:{facingMode:next}, audio:false},
-          {video:true, audio:false}
-        );
-        let lastErr=null;
-        for(const c of tryList){
-          try{
-            newStream=await navigator.mediaDevices.getUserMedia(c);
-            const vt=newStream.getVideoTracks()[0];
-            if(vt && vt.readyState!=='ended') break;
-            newStream.getTracks().forEach(t=>{ try{t.stop();}catch(e){} });
-            newStream=null;
-          }catch(e){ lastErr=e; newStream=null; }
+          newStream = await navigator.mediaDevices.getUserMedia({
+            video:{ facingMode:{ ideal: next }, width:{ideal:720}, height:{ideal:720} },
+            audio:false
+          });
+        }catch(e){
+          newStream = await navigator.mediaDevices.getUserMedia({ video:true, audio:false });
         }
-        if(!newStream) throw (lastErr||new Error('no cam'));
-
-        // Stop only OLD video tracks (never touch audio — MediaRecorder still uses it)
         oldVideoTracks.forEach(t=>{ try{ t.stop(); }catch(e){} });
-
         facing=next;
-
-        // Merge: keep old audio tracks on mediaStream, replace video
         try{
           if(mediaStream){
             mediaStream.getVideoTracks().forEach(t=>{
               try{ mediaStream.removeTrack(t); }catch(e){}
               try{ t.stop(); }catch(e){}
             });
-            newStream.getVideoTracks().forEach(t=>{
-              try{ mediaStream.addTrack(t); }catch(e){}
-            });
-            // stop unused audio from newStream (we requested audio:false, but just in case)
+            newStream.getVideoTracks().forEach(t=>{ try{ mediaStream.addTrack(t); }catch(e){} });
             newStream.getAudioTracks().forEach(t=>{ try{ t.stop(); }catch(e){} });
-          } else {
-            mediaStream = newStream;
-          }
-        }catch(e){
-          // fallback: replace whole stream but preserve audio reference for recorder
-          mediaStream = newStream;
-        }
-
-        // Update preview video — do NOT touch MediaRecorder / recStream
+          } else mediaStream = newStream;
+        }catch(e){ mediaStream = newStream; }
         try{ v.pause(); }catch(e){}
-        // Use a stream that has the new video for preview
         const previewStream = new MediaStream(mediaStream.getVideoTracks());
         v.srcObject = previewStream;
-        v.muted=true;
+        v.muted=true; v.defaultMuted=true; v.volume=0; v.controls=false;
         v.playsInline=true;
         v.setAttribute('playsinline','');
         v.setAttribute('webkit-playsinline','');
+        v.setAttribute('x5-playsinline','');
+        try{ v.disablePictureInPicture = true; }catch(e){}
+        try{ v.disableRemotePlayback = true; }catch(e){}
         v.classList.toggle('mirrored', facing==='user');
         try{ await v.play(); }catch(e){}
-
-        const t0=Date.now();
-        while(Date.now()-t0<3000){
-          if(v.readyState>=2 && (v.videoWidth|0)>1) break;
-          await new Promise(r=>setTimeout(r,40));
-        }
-        if((v.videoWidth|0)<2){
-          toast('Камера не дала картинку');
-        }
-
-        // Canvas keeps same captureStream → MediaRecorder uninterrupted
         if(typeof window._tgCircleStartCanvas==='function'){
           window._tgCircleStartCanvas(v, facing);
+        } else if(typeof startCircleCanvasLoop==='function'){
+          startCircleCanvasLoop(v);
         }
-        // Do NOT remove/add tracks on mediaRec.stream — that aborts recording on many browsers
+        // reset flash button state
+        try{ ov.querySelector('#tg-cl-flash')?.classList.remove('on'); }catch(e){}
       }catch(e){
         console.warn('tg flip', e);
         toast('Не удалось переключить камеру');
@@ -34366,7 +34576,6 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
         const track=mediaStream?.getVideoTracks()[0];
         const caps=track?.getCapabilities?.()||{};
         if(caps.torch){
-          // rear hardware torch
           const settings=track.getSettings?.()||{};
           const next = !settings.torch;
           await track.applyConstraints({ advanced:[{ torch: next }] });
@@ -34374,20 +34583,25 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
           setScreenFlash(false);
           toast(next ? 'Вспышка вкл' : 'Вспышка выкл');
         } else if(facing === 'user'){
-          // Front camera: screen flash (white overlay) — hardware torch almost never available
+          // Front camera: bright screen flash
+          const el = document.getElementById('tg-screen-flash');
+          const next = !(el && el.style.display === 'block');
+          setScreenFlash(next);
+          ov.querySelector('#tg-cl-flash').classList.toggle('on', next);
+          toast(next ? 'Передняя вспышка вкл' : 'Передняя вспышка выкл');
+        } else {
+          // try screen flash as fallback even on rear if no torch
           const el = document.getElementById('tg-screen-flash');
           const next = !(el && el.style.display === 'block');
           setScreenFlash(next);
           ov.querySelector('#tg-cl-flash').classList.toggle('on', next);
           toast(next ? 'Подсветка экрана вкл' : 'Подсветка экрана выкл');
-        } else {
-          toast('Вспышка недоступна на этой камере');
         }
       }catch(e){ toast('Вспышка недоступна'); }
     };
   }
 
-  function finishCircle(){
+    function finishCircle(){
     if(!recording) return;
     clearInterval(recTimer);
     setScreenFlash(false);
@@ -34488,7 +34702,7 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
 
     neo.addEventListener('pointerdown', e=>{
       if(e.button!=null && e.button!==0) return;
-      if(voiceLocked && recording) return; // locked UI handles itself
+      if(voiceLocked && recording) return;
       e.preventDefault();
       e.stopPropagation();
       if(typeof e.stopImmediatePropagation==='function') e.stopImmediatePropagation();
@@ -34497,39 +34711,63 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
       startX=e.clientX; startY=e.clientY;
       try{ neo.setPointerCapture(e.pointerId); }catch(err){}
       clearTimeout(holdTimer);
+      // start on normal hold (not only after swipe up)
       holdTimer=setTimeout(()=>{
         held=true;
         try{ navigator.vibrate?.(15); }catch(err){}
         if(mode==='voice') startVoice();
         else startCircle();
-      }, 280);
+      }, 180);
     });
 
     neo.addEventListener('pointermove', e=>{
       if(ptrId!=null && e.pointerId!==ptrId) return;
-      if(!held || !recording || voiceLocked || mode!=='voice') return;
+      // allow visual drag as soon as held (even while getUserMedia still pending)
+      if(!held || voiceLocked) return;
       const dx=e.clientX-startX;
       const dy=e.clientY-startY;
-      updateHoldVisual(dx, dy);
-      // lock threshold
-      if(dy < -80 && Math.abs(dx) < 90){
-        gestureDone=true;
-        // snap button up into lock then morph
-        try{
-          const btn=document.getElementById('tg-vh-btn');
-          if(btn){ btn.style.transition='transform .2s cubic-bezier(.2,.85,.3,1.2)'; btn.style.transform='translate(0px,-88px) scale(1.05)'; }
-        }catch(err){}
-        lockVoice();
-        try{ neo.releasePointerCapture(e.pointerId); }catch(err){}
-        held=false; ptrId=null;
-      }
-      // cancel threshold while holding
-      if(dx < -90 && Math.abs(dy) < 80){
-        gestureDone=true;
-        showCancelAnim();
-        cancelRec();
-        try{ neo.releasePointerCapture(e.pointerId); }catch(err){}
-        held=false; ptrId=null;
+      if(mode==='voice'){
+        if(!document.getElementById('tg-voice-hud')) return;
+        updateHoldVisual(dx, dy);
+        if(dy < -80 && Math.abs(dx) < 90){
+          gestureDone=true;
+          try{
+            const b=document.getElementById('tg-vh-btn');
+            if(b){ b.style.transition='transform .2s cubic-bezier(.2,.85,.3,1.2)'; b.style.transform='translate(0px,-88px) scale(1.05)'; }
+          }catch(err){}
+          lockVoice();
+          try{ neo.releasePointerCapture(e.pointerId); }catch(err){}
+          held=false; ptrId=null;
+        }
+        if(dx < -90 && Math.abs(dy) < 80){
+          gestureDone=true;
+          showCancelAnim();
+          cancelRec();
+          try{ neo.releasePointerCapture(e.pointerId); }catch(err){}
+          held=false; ptrId=null;
+        }
+      } else {
+        // circle — same gestures
+        if(!document.getElementById('tg-circle-ov')) return;
+        updateCircleHoldVisual(dx, dy);
+        if(dy < -80 && Math.abs(dx) < 90){
+          gestureDone=true;
+          try{
+            const b=document.querySelector('#tg-circle-ov .tg-cl-btn');
+            if(b){ b.style.transition='transform .2s cubic-bezier(.2,.85,.3,1.2)'; b.style.transform='translate(0px,-88px) scale(1.05)'; }
+          }catch(err){}
+          lockCircle();
+          try{ neo.releasePointerCapture(e.pointerId); }catch(err){}
+          held=false; ptrId=null;
+        }
+        if(dx < -90 && Math.abs(dy) < 80){
+          gestureDone=true;
+          setScreenFlash(false);
+          showCancelAnim();
+          cancelRec();
+          try{ neo.releasePointerCapture(e.pointerId); }catch(err){}
+          held=false; ptrId=null;
+        }
       }
     });
 
@@ -34539,25 +34777,27 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
       try{ if(e&&e.pointerId!=null) neo.releasePointerCapture(e.pointerId); }catch(err){}
       if(gestureDone || voiceLocked){ held=false; ptrId=null; return; }
       if(!held){
-        // short tap → switch mode
         if(recording){ held=false; ptrId=null; return; }
         mode = mode==='voice' ? 'circle' : 'voice';
         try{ localStorage.setItem('sl_tg_rec_mode', mode); }catch(err){}
         updateBtnIcon();
         showModeHint();
-      } else if(recording && mode==='voice'){
-        // released without lock → cancel with animation
+      } else if(held && !voiceLocked){
+        // release without lock → cancel (even if getUserMedia still pending)
+        setScreenFlash(false);
         showCancelAnim();
         cancelRec();
-      } else if(recording && mode==='circle'){
-        // circle: keep until send on overlay (existing)
       }
       held=false; ptrId=null;
     };
     neo.addEventListener('pointerup', end);
     neo.addEventListener('pointercancel', ()=>{
       clearTimeout(holdTimer);
-      if(recording && mode==='voice' && !voiceLocked){ showCancelAnim(); cancelRec(); }
+      if(held && !voiceLocked){
+        setScreenFlash(false);
+        showCancelAnim();
+        cancelRec();
+      }
       held=false; ptrId=null; gestureDone=false;
     });
   }
