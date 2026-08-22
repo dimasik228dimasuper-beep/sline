@@ -44520,8 +44520,44 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
     }
   }, true);
 
-  // ========== Scroll-to-bottom FAB + unread count ==========
+  // ========== Scroll-to-bottom FAB + unread count (only real new msgs) ==========
   var pendingNew = 0;
+  var seenMsgIds = new Set();
+  var activeChatKey = '';
+
+  function chatKey(){
+    try{
+      if(typeof activePartner!=='undefined' && activePartner) return 'u:'+(activePartner.id||activePartner);
+      if(typeof activeGroup!=='undefined' && activeGroup) return 'g:'+(activeGroup.id||activeGroup);
+    }catch(e){}
+    var h=document.querySelector('#chat-header [data-id], #chat-title, .chat-header');
+    return h ? (h.getAttribute('data-id')||h.textContent||'') : location.hash;
+  }
+
+  function resetPending(){
+    pendingNew = 0;
+    updateBadge();
+  }
+
+  function isMsgNode(n){
+    if(!n || n.nodeType!==1) return false;
+    // real message rows only — ignore day separators, typing, loaders, reactions
+    if(n.classList && (
+      n.classList.contains('bubble-row') ||
+      n.classList.contains('message-row') ||
+      n.classList.contains('msg-row') ||
+      n.classList.contains('message')
+    )) return true;
+    if(n.getAttribute && n.getAttribute('data-id') && n.classList && n.classList.contains('bubble-row')) return true;
+    // some builds use data-mid on outer row
+    if(n.matches && n.matches('.bubble-row[data-id], [data-msg-id], .msg[data-id]')) return true;
+    return false;
+  }
+
+  function msgIdOf(n){
+    if(!n || !n.getAttribute) return '';
+    return n.getAttribute('data-id') || n.getAttribute('data-msg-id') || n.getAttribute('data-mid') || n.id || '';
+  }
 
   function ensureFab(){
     var btn=document.getElementById('sl-scroll-bottom');
@@ -44537,8 +44573,7 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
     document.body.appendChild(btn);
     btn.addEventListener('click', function(e){
       e.preventDefault(); e.stopPropagation();
-      pendingNew = 0;
-      updateBadge();
+      resetPending();
       try{
         if(typeof scrollToBottom==='function') scrollToBottom(false);
         else {
@@ -44558,6 +44593,7 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
       b.textContent = pendingNew > 99 ? '99+' : String(pendingNew);
     } else {
       b.style.display='none';
+      b.textContent = '';
     }
   }
   function showFab(){
@@ -44581,38 +44617,79 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
     if(!l) return;
     if(!isNearBottom(l)) showFab();
     else {
-      pendingNew = 0;
-      updateBadge();
+      resetPending();
       hideFab();
     }
   }
-  function onNewMessageInList(){
+  function onNewMessages(nodes){
     var l=document.getElementById('messages-list');
-    if(!l) return;
-    if(!isNearBottom(l)){
-      pendingNew += 1;
+    if(!l || isNearBottom(l)) return;
+    var add = 0;
+    for(var i=0;i<nodes.length;i++){
+      var n = nodes[i];
+      if(!isMsgNode(n)) continue;
+      var id = msgIdOf(n);
+      if(id){
+        if(seenMsgIds.has(id)) continue;
+        seenMsgIds.add(id);
+      }
+      // skip own outgoing if marked (optional — still count as "new below" like TG)
+      add++;
+    }
+    if(add > 0){
+      pendingNew += add;
+      if(pendingNew > 99) pendingNew = 99;
       showFab();
       updateBadge();
     }
   }
+  function seedSeen(){
+    var l=document.getElementById('messages-list');
+    if(!l) return;
+    l.querySelectorAll('.bubble-row[data-id], .bubble-row, [data-msg-id]').forEach(function(n){
+      if(!isMsgNode(n)) return;
+      var id=msgIdOf(n);
+      if(id) seenMsgIds.add(id);
+    });
+  }
   function bindList(){
     var l=document.getElementById('messages-list');
     if(!l) return;
+    var ck = chatKey();
+    if(ck !== activeChatKey){
+      activeChatKey = ck;
+      seenMsgIds = new Set();
+      resetPending();
+      seedSeen();
+    }
     if(!l._slScrollFab){
       l._slScrollFab=1;
       l.addEventListener('scroll', checkScroll, {passive:true});
     }
     if(!l._slMsgObs){
       l._slMsgObs=1;
+      seedSeen();
       var mo=new MutationObserver(function(muts){
-        var added=false;
+        var fresh=[];
         for(var i=0;i<muts.length;i++){
-          if(muts[i].addedNodes && muts[i].addedNodes.length){ added=true; break; }
+          var nodes=muts[i].addedNodes;
+          if(!nodes) continue;
+          for(var j=0;j<nodes.length;j++){
+            var n=nodes[j];
+            if(isMsgNode(n)) fresh.push(n);
+            else if(n.querySelectorAll){
+              // only direct-ish message rows, not every nested node
+              n.querySelectorAll('.bubble-row[data-id], .bubble-row').forEach(function(el){
+                if(isMsgNode(el)) fresh.push(el);
+              });
+            }
+          }
         }
-        if(added) onNewMessageInList();
-        setTimeout(checkScroll, 60);
+        if(fresh.length) onNewMessages(fresh);
+        setTimeout(checkScroll, 80);
       });
-      try{ mo.observe(l, {childList:true, subtree:true}); }catch(e){}
+      // childList only on list itself — not subtree (avoids reaction/tick noise)
+      try{ mo.observe(l, {childList:true, subtree:false}); }catch(e){}
     }
   }
   bindList();
@@ -44620,12 +44697,15 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
 
   document.addEventListener('click', function(e){
     var t=e.target;
-    if(t && t.closest && (t.closest('.contact-item') || t.closest('[data-chat-id]'))){
-      pendingNew=0; updateBadge();
+    if(t && t.closest && (t.closest('.contact-item') || t.closest('[data-chat-id]') || t.closest('.chat-list-item'))){
+      seenMsgIds = new Set();
+      activeChatKey = '';
+      resetPending();
+      hideFab();
     }
   }, true);
 
-  console.log('[SL] rec hold-drag lock + scroll FAB badge ready');
+  console.log('[SL] scroll FAB badge — real messages only');
 })();
 
 </script>
