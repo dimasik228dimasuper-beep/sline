@@ -6414,6 +6414,19 @@ async function loadChats(){
       map.set(pid,{lastMessage:m.content||'',lastAt:m.created_at});
     }
     if(!map.has(myProfile.id)) map.set(myProfile.id,{lastMessage:'Заметки',lastAt:new Date(0).toISOString()});
+    // If almost empty, try Firebase chat index as secondary source
+    try{
+      if(map.size <= 1 && window.firebaseDb && myProfile.id){
+        var me=String(myProfile.id);
+        var snap = await firebaseDb.ref('chat_index/'+me).limitToLast(80).once('value');
+        var val = snap.val()||{};
+        Object.keys(val).forEach(function(pid){
+          if(!pid || map.has(pid)) return;
+          var row = val[pid]||{};
+          map.set(pid, {lastMessage: row.lastMessage||row.content||'', lastAt: row.lastAt||row.created_at||new Date().toISOString()});
+        });
+      }
+    }catch(e){}
     const ids=[...map.keys()];
     let profiles=[];
     if(ids.length){
@@ -6423,8 +6436,8 @@ async function loadChats(){
     }
     contacts=profiles.map(p=>({...p,lastMessage:map.get(p.id)?.lastMessage||'',lastAt:map.get(p.id)?.lastAt, _dmWithMe:true}));
     // ensure self
-    if(!contacts.some(c=>c&&c.id===myProfile.id)){
-      contacts.unshift({...myProfile,lastMessage:'Заметки',lastAt:new Date(0).toISOString(), _dmWithMe:true});
+    if(!contacts.some(c=>c&&String(c.id)===String(myProfile.id))){
+      contacts.unshift({...myProfile,lastMessage:'Заметки',lastAt:new Date(0).toISOString(), _dmWithMe:true, first_name: myProfile.first_name||'Избранное'});
     }
     try{ sanitizeContactsList(); }catch(e){}
     saveCache(contacts);
@@ -6601,6 +6614,25 @@ function renderContactsAndGroups(){
   const list=document.getElementById('contacts-list'); if(!list) return;
   // ALWAYS inject official news channel before building list
   try{ if(typeof injectNewsChannelLocal==='function') injectNewsChannelLocal(); }catch(e){}
+  // Always keep Избранное (self) visible
+  try{
+    if(myProfile && myProfile.id){
+      if(!Array.isArray(contacts)) contacts=[];
+      if(!contacts.some(function(c){ return c && String(c.id)===String(myProfile.id); })){
+        contacts.unshift({
+          id: myProfile.id,
+          username: myProfile.username,
+          first_name: myProfile.first_name || 'Избранное',
+          last_name: myProfile.last_name || '',
+          avatar_url: myProfile.avatar_url,
+          color: myProfile.color,
+          lastMessage: 'Заметки',
+          lastAt: new Date(0).toISOString(),
+          _dmWithMe: true
+        });
+      }
+    }
+  }catch(e){}
   // Restore group/channel avatars from local backup if DB column missing
   try{
     (groups||[]).forEach(g=>{
@@ -45069,15 +45101,39 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
     left:360px; right:0; top:0; bottom:0;
     z-index:7;
     background:var(--bg);
-    overflow:auto;
-    padding:28px 36px 48px;
+    overflow:hidden;
+    padding:0;
   }
-  body.desk-mode-settings #desk-settings-detail{ display:block !important; }
-  #desk-settings-detail .dsd-title{ font-size:22px; font-weight:800; margin:0 0 16px; }
+  body.desk-mode-settings #desk-settings-detail{ display:flex !important; flex-direction:column; }
+  #desk-settings-detail .dsd-title{ font-size:22px; font-weight:800; margin:0; padding:28px 36px 0; }
   #desk-settings-detail .dsd-card{
     background:var(--panel); border:1px solid var(--line);
-    border-radius:16px; padding:16px 18px; margin-bottom:12px; max-width:560px;
+    border-radius:16px; padding:16px 18px; margin:16px 36px; max-width:560px;
   }
+  /* Real settings UI docked into right pane */
+  body.desk-mode-settings #desk-settings-detail .sl-sheet,
+  body.desk-mode-settings #desk-settings-detail .modal-overlay{
+    position:relative !important;
+    inset:auto !important;
+    left:auto !important; right:auto !important; top:auto !important; bottom:auto !important;
+    width:100% !important; height:100% !important; max-width:100% !important;
+    border-radius:0 !important; box-shadow:none !important;
+    background:var(--bg) !important;
+    display:flex !important; flex-direction:column !important;
+    z-index:1 !important;
+    padding:0 !important;
+  }
+  body.desk-mode-settings #desk-settings-detail .modal-overlay .modal{
+    margin:24px auto !important;
+    max-width:560px !important;
+    width:calc(100% - 48px) !important;
+  }
+  body.desk-mode-settings #desk-settings-detail .sl-sheet-body{
+    flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch;
+  }
+  /* Hide full-screen overlays that would cover left menu while docking */
+  body.desk-mode-settings > .sl-sheet.sl-desk-docked,
+  body.desk-mode-settings > .modal-overlay.sl-desk-docked{ /* moved into detail */ }
   body.desk-mode-settings #page-settings .settings-item.sl-desk-active{
     background:rgba(76,124,243,.12);
   }
@@ -45115,53 +45171,65 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
     var page = document.getElementById('page-settings');
     if(!page || page._dsWire) return;
     page._dsWire = 1;
+    // Only highlight — never block real onclick handlers / sheets
     page.addEventListener('click', function(e){
       if(!isDesk() || !document.body.classList.contains('desk-mode-settings')) return;
-      var item = e.target.closest && e.target.closest('.settings-item');
+      var item = e.target.closest && e.target.closest('.settings-item, .settings-profile, #settings-edit-pencil, #settings-qr-btn');
       if(!item) return;
       page.querySelectorAll('.settings-item.sl-desk-active').forEach(function(x){ x.classList.remove('sl-desk-active'); });
-      item.classList.add('sl-desk-active');
-      var label = (item.querySelector('.item-text')||item).textContent.trim();
-      var id = item.id || '';
+      if(item.classList && item.classList.contains('settings-item')) item.classList.add('sl-desk-active');
       var detail = ensureDetail();
-      if(!detail) return;
-
-      // Don't prevent default for items that need real handlers — run them, also show panel
-      function panel(title, html){
-        detail.innerHTML = '<div class="dsd-title">'+title+'</div>'+html;
+      if(detail){
+        detail.innerHTML = '<div class="dsd-title" style="opacity:.5;font-size:14px;font-weight:600">Загрузка…</div>';
       }
-
-      if(id==='settings-language' || /Язык/i.test(label)){
-        e.preventDefault(); e.stopPropagation();
-        panel('Язык приложения', '<div class="dsd-card">'+
-          ['Русский','English','Español','Português (Brasil)',"O'zbekcha"].map(function(l,i){
-            return '<div style="padding:12px 4px;cursor:pointer" class="settings-item">'+(i===0?'✓ ':'')+l+'</div>';
-          }).join('')+
-          '<div style="color:var(--muted);font-size:12px;margin-top:8px">Только на этом устройстве</div></div>');
-        return;
-      }
-      if(id==='settings-notifications' || /Уведомлен/i.test(label)){
-        e.preventDefault(); e.stopPropagation();
-        panel('Уведомления', '<div class="dsd-card"><div style="padding:10px 0">Показывать уведомления</div><div style="padding:10px 0">Звук</div><div style="padding:10px 0">Предпросмотр</div></div>');
-        return;
-      }
-      if(/Оформление|wallpaper|theme/i.test(label+id)){
-        panel(label||'Оформление', '<div class="dsd-card" style="color:var(--muted)">Откройте тему в появившемся окне или нажмите пункт ещё раз.</div>');
-        return;
-      }
-      if(/Устройства/i.test(label) || id==='settings-devices'){
-        panel('Устройства', '<div class="dsd-card" style="color:var(--muted)">Список устройств…</div>');
-        return;
-      }
-      // Profile / edit — let original handler fire
-      if(id==='settings-edit-profile' || id==='settings-edit-pencil' || item.closest('.settings-profile')){
-        panel('Профиль', '<div class="dsd-card" style="color:var(--muted)">Редактор профиля</div>');
-        return;
-      }
-      // Generic: show label, allow original onclick to run (no preventDefault)
-      panel(label||'Настройки', '<div class="dsd-card" style="color:var(--muted)">Раздел «'+label+'»</div>');
-    }, true);
+      // After original handler opens sheet/modal, restyle it into right pane
+      setTimeout(function(){ window.slDeskFitOverlays && window.slDeskFitOverlays(); }, 50);
+      setTimeout(function(){ window.slDeskFitOverlays && window.slDeskFitOverlays(); }, 200);
+      setTimeout(function(){ window.slDeskFitOverlays && window.slDeskFitOverlays(); }, 500);
+    }, false); // bubble — AFTER original handlers
   };
+
+  window.slDeskFitOverlays = function(){
+    if(!isDesk() || !document.body.classList.contains('desk-mode-settings')) return;
+    var detail = ensureDetail();
+    // Move visible sheets into detail pane
+    document.querySelectorAll('.sl-sheet, .modal-overlay').forEach(function(el){
+      try{
+        var st = window.getComputedStyle(el);
+        if(st.display==='none' || st.visibility==='hidden') return;
+        if(el.closest('#page-settings')) return;
+        el.classList.add('sl-desk-docked');
+        if(detail && !detail.contains(el)){
+          // keep in body but CSS positions it; mark docked
+        }
+        if(detail){
+          detail.innerHTML = '';
+          detail.appendChild(el);
+          el.style.position = 'relative';
+          el.style.inset = 'auto';
+          el.style.left = 'auto';
+          el.style.right = 'auto';
+          el.style.top = 'auto';
+          el.style.bottom = 'auto';
+          el.style.width = '100%';
+          el.style.height = '100%';
+          el.style.maxWidth = '100%';
+          el.style.borderRadius = '0';
+          el.style.boxShadow = 'none';
+          el.style.zIndex = '1';
+        }
+      }catch(err){}
+    });
+  };
+
+  // Observe new sheets/modals
+  try{
+    new MutationObserver(function(){
+      if(document.body.classList.contains('desk-mode-settings')){
+        setTimeout(function(){ window.slDeskFitOverlays && window.slDeskFitOverlays(); }, 30);
+      }
+    }).observe(document.body, {childList:true, subtree:true});
+  }catch(e){}
 
   // Fix plus dropdown on desktop — rebind reliably
   function wirePlus(){
