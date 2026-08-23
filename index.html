@@ -6039,6 +6039,32 @@ async function onAuthenticated(user){
   if(_app){ _app.style.display='flex'; _app.style.pointerEvents='auto'; _app.style.visibility='visible'; }
   try{ document.body.classList.remove('in-chat','chats-selecting'); }catch(e){}
   try{ window.myProfile = myProfile; }catch(e){}
+  // Account isolation: wipe previous user's in-memory chat state
+  try{
+    var prev = window._slAuthUid;
+    var now = myProfile && myProfile.id ? String(myProfile.id) : '';
+    if(prev && now && prev !== now){
+      try{ contacts = []; }catch(e){}
+      try{ if(window.messageStore && messageStore.clear) messageStore.clear(); }catch(e){}
+      try{ if(typeof _msgCache!=='undefined' && _msgCache && _msgCache.clear) _msgCache.clear(); }catch(e){}
+      try{ activePartner=null; activeGroup=null; }catch(e){}
+      try{
+        var list=document.getElementById('messages-list');
+        if(list){ list.textContent=''; list.dataset.paintSig=''; list.dataset.ck=''; }
+      }catch(e){}
+      console.log('[SL] account switch wipe', prev, '->', now);
+    }
+    window._slAuthUid = now;
+    // New profile: never restore any chat list from disk
+    if(typeof _slIsNewProfile!=='undefined' && _slIsNewProfile){
+      try{ contacts = [{...myProfile, lastMessage:'Заметки', lastAt:new Date(0).toISOString(), _dmWithMe:true}]; }catch(e){ contacts=[]; }
+      try{
+        var ck='sl_contacts_cache_v2_'+now;
+        localStorage.removeItem(ck);
+      }catch(e){}
+    }
+  }catch(e){}
+
   updateAllUIs();
   try{ if(typeof slMaybeShowThemeOnboarding==='function') slMaybeShowThemeOnboarding(); }catch(e){}
   // inline list spinners only — avoid sticky full-screen overlay on login
@@ -6244,16 +6270,20 @@ function sanitizeContactsList(){
   try{
     if(!myProfile||!myProfile.id||!Array.isArray(contacts)) return;
     const me=String(myProfile.id);
-    // Keep self always; keep others only if they have lastAt (came from a real message) or explicit local pin
+    // Keep self always. Others only if explicitly verified for THIS user.
     let pinned=new Set();
-    try{ (JSON.parse(localStorage.getItem('sl_pinned_chats')||'[]')||[]).forEach(id=>pinned.add(String(id))); }catch(e){}
+    try{
+      const pk='sl_pinned_chats_'+me;
+      const raw=localStorage.getItem(pk)||localStorage.getItem('sl_pinned_chats')||'[]';
+      (JSON.parse(raw)||[]).forEach(id=>pinned.add(String(id)));
+    }catch(e){}
     const before=contacts.length;
     contacts=contacts.filter(function(c){
       if(!c||!c.id) return false;
       if(String(c.id)===me) return true;
-      if(pinned.has(String(c.id))) return true;
-      // must have lastAt from a real message involving me
-      if(c.lastAt) return true;
+      // require explicit flag set only after network-confirmed DM involving me
+      if(c._dmWithMe === true && c.lastAt) return true;
+      if(pinned.has(String(c.id)) && c._dmWithMe === true) return true;
       return false;
     });
     // ensure self present
@@ -6335,10 +6365,10 @@ async function loadChats(){
       const {data:prs}=await sb.from('profiles').select('id,username,first_name,last_name,avatar_url,color,email').in('id',ids);
       profiles=prs||[];
     }
-    contacts=profiles.map(p=>({...p,lastMessage:map.get(p.id)?.lastMessage||'',lastAt:map.get(p.id)?.lastAt}));
+    contacts=profiles.map(p=>({...p,lastMessage:map.get(p.id)?.lastMessage||'',lastAt:map.get(p.id)?.lastAt, _dmWithMe:true}));
     // ensure self
     if(!contacts.some(c=>c&&c.id===myProfile.id)){
-      contacts.unshift({...myProfile,lastMessage:'Заметки',lastAt:new Date(0).toISOString()});
+      contacts.unshift({...myProfile,lastMessage:'Заметки',lastAt:new Date(0).toISOString(), _dmWithMe:true});
     }
     try{ sanitizeContactsList(); }catch(e){}
     saveCache(contacts);
@@ -7290,9 +7320,21 @@ function paintMessages(rows, isGroup){
   const list=document.getElementById('messages-list');
   if(!list) return;
   rows = rows||[];
+  // Privacy: only messages that involve current user (or group membership path)
+  if(!isGroup && typeof msgInvolvesMe==='function'){
+    rows = rows.filter(function(m){ return msgInvolvesMe(m); });
+  } else if(!isGroup && myProfile && myProfile.id){
+    var me=String(myProfile.id);
+    rows = rows.filter(function(m){
+      if(!m) return false;
+      var s=m.sender_id!=null?String(m.sender_id):'';
+      var r=m.receiver_id!=null?String(m.receiver_id):'';
+      return s===me || r===me;
+    });
+  }
   try{
     const last = rows.length ? rows[rows.length-1] : null;
-    const sig = (last && last.id ? String(last.id) : 'empty') + ':' + rows.length + ':' + (isGroup?'g':'d');
+    const sig = (last && last.id ? String(last.id) : 'empty') + ':' + rows.length + ':' + (isGroup?'g':'d') + ':' + (myProfile&&myProfile.id||'');
     if(list.dataset.paintSig === sig && list.childElementCount > 0){
       scrollToBottom(true);
       return;
@@ -13797,7 +13839,7 @@ window.slIsInMyContacts = function(uid){
     if(typeof contacts!=='undefined' && Array.isArray(contacts) && contacts.some(c=>c && c.id===uid)) return true;
   }catch(e){}
   try{
-    const arr=JSON.parse(localStorage.getItem('sl_my_contacts')||'[]');
+    const arr=JSON.parse((localStorage.getItem('sl_my_contacts_'+(myProfile&&myProfile.id||''))||localStorage.getItem('sl_my_contacts'))||'[]');
     if(Array.isArray(arr) && arr.includes(uid)) return true;
   }catch(e){}
   return false;
@@ -13805,7 +13847,7 @@ window.slIsInMyContacts = function(uid){
 window.slMarkInContacts = function(uid){
   if(!uid) return;
   try{
-    let arr=[]; try{arr=JSON.parse(localStorage.getItem('sl_my_contacts')||'[]');}catch(e){}
+    let arr=[]; try{arr=JSON.parse((localStorage.getItem('sl_my_contacts_'+(myProfile&&myProfile.id||''))||localStorage.getItem('sl_my_contacts'))||'[]');}catch(e){}
     if(!Array.isArray(arr)) arr=[];
     if(!arr.includes(uid)){ arr.push(uid); localStorage.setItem('sl_my_contacts', JSON.stringify(arr)); }
   }catch(e){}
@@ -19190,7 +19232,7 @@ async function openFullProfile(profileLike){
   try{
     if(typeof contacts!=='undefined' && Array.isArray(contacts) && contacts.some(c=>c&&c.id===p.id)) _isInContacts=true;
     if(!_isInContacts){
-      const arr=JSON.parse(localStorage.getItem('sl_my_contacts')||'[]');
+      const arr=JSON.parse((localStorage.getItem('sl_my_contacts_'+(myProfile&&myProfile.id||''))||localStorage.getItem('sl_my_contacts'))||'[]');
       if(Array.isArray(arr) && arr.includes(p.id)) _isInContacts=true;
     }
   }catch(e){}
@@ -44807,6 +44849,57 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
   try{
     new MutationObserver(scan).observe(document.documentElement, {childList:true, subtree:true});
   }catch(e){}
+})();
+</script>
+
+
+<script>
+/* SL: strict per-account data isolation */
+(function(){
+  if(window._slAccountIsoV1) return; window._slAccountIsoV1=1;
+
+  function meId(){
+    try{ return (window.myProfile && myProfile.id) ? String(myProfile.id) : (window._slAuthUid||''); }catch(e){ return ''; }
+  }
+
+  // Block opening chats that are not verified DMs for current user
+  var _openChat = window.openChat;
+  if(typeof _openChat==='function'){
+    window.openChat = async function(partner){
+      try{
+        var me = meId();
+        if(partner && partner.id && me && String(partner.id)!==me){
+          if(partner._dmWithMe !== true){
+            // allow only if contacts list has verified entry
+            var ok=false;
+            try{
+              ok = (window.contacts||[]).some(function(c){
+                return c && String(c.id)===String(partner.id) && c._dmWithMe===true;
+              });
+            }catch(e){}
+            if(!ok){
+              console.warn('[SL] blocked openChat — not a verified DM for this account', partner && partner.id);
+              try{ if(typeof showToast==='function') showToast('Нет переписки с этим контактом'); }catch(e){}
+              return;
+            }
+          }
+        }
+      }catch(e){}
+      return _openChat.apply(this, arguments);
+    };
+  }
+
+  // On logout — clear in-memory
+  document.addEventListener('click', function(e){
+    var t=e.target;
+    if(t && t.closest && t.closest('#settings-logout')){
+      try{ contacts=[]; }catch(err){}
+      try{ if(window.messageStore&&messageStore.clear) messageStore.clear(); }catch(err){}
+      try{ if(typeof _msgCache!=='undefined'&&_msgCache.clear) _msgCache.clear(); }catch(err){}
+    }
+  }, true);
+
+  console.log('[SL] account isolation v1');
 })();
 </script>
 
