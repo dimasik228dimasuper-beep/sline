@@ -45136,37 +45136,112 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
     background-color: transparent !important;
   }
 
-  /* Floating header & composer bars on wallpaper */
+  /* ===== PC: Telegram-style floating white header + composer ===== */
   #page-chats .chat-header {
-    margin: 0 0 8px 0;
-    border-radius: 16px;
-    background: rgba(255,255,255,.92) !important;
-    border: 1px solid rgba(0,0,0,.06);
-    box-shadow: 0 4px 18px rgba(15,23,42,.08);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    margin: 0 4px 10px 4px;
+    padding: 8px 14px !important;
+    border-radius: 999px !important;
+    background: #FFFFFF !important;
+    border: none !important;
+    box-shadow: 0 2px 14px rgba(15,23,42,.10);
+    gap: 10px !important;
+    min-height: 52px;
+    box-sizing: border-box;
   }
   body.theme-dark #page-chats .chat-header,
   body:not(.theme-light):not(.light-theme) #page-chats .chat-header {
-    background: rgba(26,34,45,.92) !important;
-    border-color: rgba(255,255,255,.08);
+    background: rgba(32,40,54,.96) !important;
+    box-shadow: 0 2px 16px rgba(0,0,0,.35);
   }
+  #page-chats .chat-header #partner-avatar,
+  #page-chats .chat-header .avatar {
+    width: 40px !important;
+    height: 40px !important;
+    border-radius: 50% !important;
+    flex-shrink: 0;
+  }
+  #page-chats .chat-header .chat-title {
+    font-size: 15px !important;
+    font-weight: 700 !important;
+    line-height: 1.2;
+  }
+  #page-chats .chat-header .chat-status {
+    font-size: 12px !important;
+    opacity: .75;
+  }
+  #page-chats .chat-header .chat-actions {
+    gap: 2px !important;
+  }
+  #page-chats .chat-header .chat-actions .icon-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    color: #5B6B82;
+  }
+  body.theme-dark #page-chats .chat-header .chat-actions .icon-btn,
+  body:not(.theme-light):not(.light-theme) #page-chats .chat-header .chat-actions .icon-btn {
+    color: #C5D0E0;
+  }
+  #page-chats .chat-header .chat-actions .icon-btn:hover {
+    background: rgba(0,0,0,.05);
+  }
+  /* hide back on desktop (already), keep search + call visible */
+  #page-chats .chat-header #video-call-btn { display: none !important; }
+
   #page-chats #composer,
   #page-chats .composer {
-    margin: 8px 0 0 0;
-    border-radius: 16px;
-    background: rgba(255,255,255,.92) !important;
-    border: 1px solid rgba(0,0,0,.06);
-    box-shadow: 0 4px 18px rgba(15,23,42,.08);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    margin: 8px 4px 4px 4px !important;
+    padding: 6px 8px !important;
+    border-radius: 999px !important;
+    background: #FFFFFF !important;
+    border: none !important;
+    box-shadow: 0 2px 14px rgba(15,23,42,.10);
+    gap: 6px !important;
+    align-items: center !important;
+    width: auto !important;
+    max-width: none;
   }
   body.theme-dark #page-chats #composer,
   body.theme-dark #page-chats .composer,
   body:not(.theme-light):not(.light-theme) #page-chats #composer,
   body:not(.theme-light):not(.light-theme) #page-chats .composer {
-    background: rgba(26,34,45,.92) !important;
-    border-color: rgba(255,255,255,.08);
+    background: rgba(32,40,54,.96) !important;
+    box-shadow: 0 2px 16px rgba(0,0,0,.35);
+  }
+  #page-chats .composer .composer-input-shell {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    flex: 1;
+    min-height: 40px;
+  }
+  #page-chats .composer #message-input {
+    background: transparent !important;
+    border: none !important;
+    min-height: 40px !important;
+    padding: 10px 4px !important;
+    font-size: 15px;
+  }
+  #page-chats .composer .composer-actions .icon-btn,
+  #page-chats .composer .composer-side {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    color: #6B7A90;
+  }
+  #page-chats .composer #send-btn.send-btn,
+  #page-chats .composer .send-btn {
+    width: 40px !important;
+    height: 40px !important;
+    border-radius: 50% !important;
+    flex-shrink: 0;
+  }
+  #page-chats .composer #voice-btn,
+  #page-chats .composer #circle-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
   }
 
   #page-chats .sidebar-scroll .contacts {
@@ -45303,6 +45378,363 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
   console.log('[SL] desktop rounded sidebar + resize');
 })();
 </script>
+
+
+<style id="sl-tg-chrome-mobile">
+/* ===== Phone: floating dark header + composer (Telegram-like) ===== */
+@media (max-width: 1024px) {
+  body.in-chat #chat-active,
+  body.in-chat .chat-pane {
+    background: transparent !important;
+  }
+  /* messages area can show wallpaper edge-to-edge */
+  body.in-chat #messages-list {
+    padding-top: 8px !important;
+    padding-bottom: 8px !important;
+  }
+
+  /* Header pill */
+  body.in-chat .chat-header {
+    position: relative;
+    margin: 8px 10px 6px 10px !important;
+    padding: 6px 8px 6px 6px !important;
+    border-radius: 999px !important;
+    background: rgba(28, 32, 40, 0.82) !important;
+    border: 1px solid rgba(255,255,255,.08) !important;
+    box-shadow: 0 6px 22px rgba(0,0,0,.28);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    gap: 8px !important;
+    min-height: 52px;
+    z-index: 20;
+  }
+  body.theme-light.in-chat .chat-header,
+  body.light-theme.in-chat .chat-header {
+    background: rgba(255,255,255,.90) !important;
+    border-color: rgba(0,0,0,.06) !important;
+    box-shadow: 0 4px 18px rgba(15,23,42,.10);
+  }
+
+  /* Back as circle with optional badge */
+  body.in-chat .chat-header .back-btn {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    width: 40px !important;
+    height: 40px !important;
+    min-width: 40px;
+    border-radius: 50% !important;
+    background: rgba(255,255,255,.10) !important;
+    color: #E8EEF8 !important;
+    padding: 0 !important;
+    position: relative;
+    flex-shrink: 0;
+  }
+  body.theme-light.in-chat .chat-header .back-btn,
+  body.light-theme.in-chat .chat-header .back-btn {
+    background: rgba(0,0,0,.06) !important;
+    color: #1A1D21 !important;
+  }
+  body.in-chat .chat-header .back-btn svg {
+    width: 20px;
+    height: 20px;
+  }
+  /* unread badge on back */
+  body.in-chat .chat-header .back-btn .sl-back-badge {
+    position: absolute;
+    top: -3px;
+    right: -3px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 999px;
+    background: #4C7CF3;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 18px;
+    text-align: center;
+    box-shadow: 0 2px 6px rgba(76,124,243,.4);
+  }
+
+  /* Center title block */
+  body.in-chat .chat-header .chat-title {
+    font-size: 15px !important;
+    font-weight: 700 !important;
+    text-align: center;
+  }
+  body.in-chat .chat-header .chat-status {
+    font-size: 11px !important;
+    text-align: center;
+    opacity: .7;
+  }
+  body.in-chat .chat-header > div[style*="min-width"] {
+    text-align: center;
+  }
+
+  /* Avatar large on the right (Telegram style) */
+  body.in-chat .chat-header #partner-avatar,
+  body.in-chat .chat-header .avatar#partner-avatar {
+    width: 44px !important;
+    height: 44px !important;
+    border-radius: 50% !important;
+    order: 5;
+    margin-left: 4px;
+    flex-shrink: 0;
+    box-shadow: 0 2px 8px rgba(0,0,0,.2);
+  }
+  /* move actions before avatar visually via order */
+  body.in-chat .chat-header .chat-actions {
+    order: 4;
+    margin-left: auto !important;
+    gap: 0 !important;
+  }
+  body.in-chat .chat-header .back-btn { order: 1; }
+  body.in-chat .chat-header > div[style*="min-width"] { order: 2; flex: 1; }
+  body.in-chat .chat-header {
+    display: flex !important;
+  }
+  /* hide secondary actions on mobile header — keep call optional, hide video/search clutter */
+  body.in-chat .chat-header #chat-search-btn,
+  body.in-chat .chat-header #video-call-btn,
+  body.in-chat .chat-header #media-btn,
+  body.in-chat .chat-header #invite-btn,
+  body.in-chat .chat-header #group-settings-btn {
+    display: none !important;
+  }
+  body.in-chat .chat-header #call-btn {
+    display: none !important; /* avatar replaces right cluster like ref */
+  }
+
+  /* Composer: separate circles + pill input */
+  body.in-chat #composer,
+  body.in-chat .composer {
+    margin: 6px 10px calc(8px + env(safe-area-inset-bottom, 0px)) 10px !important;
+    padding: 0 !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    gap: 8px !important;
+    align-items: center !important;
+    width: auto !important;
+  }
+  body.in-chat .composer .composer-actions {
+    background: rgba(28, 32, 40, 0.82);
+    border-radius: 50%;
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(255,255,255,.08);
+    box-shadow: 0 4px 14px rgba(0,0,0,.25);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    flex-shrink: 0;
+    gap: 0;
+    padding: 0;
+  }
+  body.theme-light.in-chat .composer .composer-actions,
+  body.light-theme.in-chat .composer .composer-actions {
+    background: rgba(255,255,255,.92);
+    border-color: rgba(0,0,0,.06);
+  }
+  body.in-chat .composer .composer-actions .icon-btn {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    color: #E8EEF8;
+  }
+  body.theme-light.in-chat .composer .composer-actions .icon-btn {
+    color: #1A1D21;
+  }
+  /* only show attach in the left circle; hide extras if any */
+  body.in-chat .composer .composer-actions > :not(#attach-btn):not([id*="attach"]):not(.attach-btn) {
+    display: none !important;
+  }
+
+  body.in-chat .composer .composer-input-shell {
+    flex: 1;
+    min-height: 44px;
+    border-radius: 999px !important;
+    background: rgba(28, 32, 40, 0.82) !important;
+    border: 1px solid rgba(255,255,255,.08) !important;
+    box-shadow: 0 4px 14px rgba(0,0,0,.25);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    padding: 0 6px 0 14px !important;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  body.theme-light.in-chat .composer .composer-input-shell,
+  body.light-theme.in-chat .composer .composer-input-shell {
+    background: rgba(255,255,255,.92) !important;
+    border-color: rgba(0,0,0,.06) !important;
+  }
+  body.in-chat .composer #message-input {
+    background: transparent !important;
+    border: none !important;
+    min-height: 42px !important;
+    padding: 10px 4px !important;
+    color: #E8EEF8;
+    font-size: 16px;
+  }
+  body.theme-light.in-chat .composer #message-input {
+    color: #1A1D21;
+  }
+  body.in-chat .composer #message-input::placeholder {
+    color: rgba(200,210,224,.55);
+  }
+  body.theme-light.in-chat .composer #message-input::placeholder {
+    color: rgba(100,110,130,.55);
+  }
+
+  /* right cluster: sticker inside shell, mic as circle outside */
+  body.in-chat .composer .composer-media-btns,
+  body.in-chat .composer #composer-media-btns {
+    display: flex !important;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+  body.in-chat .composer #circle-btn,
+  body.in-chat .composer #voice-btn,
+  body.in-chat .composer #sticker-btn {
+    width: 44px !important;
+    height: 44px !important;
+    border-radius: 50% !important;
+    background: rgba(28, 32, 40, 0.82) !important;
+    border: 1px solid rgba(255,255,255,.08) !important;
+    color: #E8EEF8 !important;
+    box-shadow: 0 4px 14px rgba(0,0,0,.25);
+    flex-shrink: 0;
+  }
+  body.theme-light.in-chat .composer #circle-btn,
+  body.theme-light.in-chat .composer #voice-btn,
+  body.theme-light.in-chat .composer #sticker-btn {
+    background: rgba(255,255,255,.92) !important;
+    border-color: rgba(0,0,0,.06) !important;
+    color: #1A1D21 !important;
+  }
+  /* sticker stays inside input shell if present there */
+  body.in-chat .composer .composer-input-shell #sticker-btn {
+    width: 36px !important;
+    height: 36px !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+  }
+  body.in-chat .composer .send-btn {
+    width: 44px !important;
+    height: 44px !important;
+    border-radius: 50% !important;
+    flex-shrink: 0;
+  }
+}
+</style>
+<script>
+/* SL: mobile back badge (unread) + ensure attach id */
+(function(){
+  if (window._slTgChromeMobile) return;
+  window._slTgChromeMobile = 1;
+
+  function ensureAttachId(){
+    try{
+      var actions = document.querySelector('#composer .composer-actions');
+      if(!actions) return;
+      var btn = actions.querySelector('button');
+      if(btn && !btn.id) btn.id = 'attach-btn';
+      if(btn) btn.classList.add('attach-btn');
+    }catch(e){}
+  }
+
+  function updateBackBadge(){
+    try{
+      var back = document.getElementById('back-btn');
+      if(!back) return;
+      var badge = back.querySelector('.sl-back-badge');
+      var n = 0;
+      try{
+        // count unread from contacts list badges if available
+        document.querySelectorAll('.contact .badge, .contact-item .badge, .contacts .badge, .unread-badge').forEach(function(el){
+          var t = parseInt((el.textContent||'').replace(/\\D/g,''), 10);
+          if(t>0) n += t;
+        });
+      }catch(e){}
+      if(n > 0){
+        if(!badge){
+          badge = document.createElement('span');
+          badge.className = 'sl-back-badge';
+          back.appendChild(badge);
+        }
+        badge.textContent = n > 99 ? '99+' : String(n);
+        badge.style.display = '';
+      } else if(badge){
+        badge.style.display = 'none';
+      }
+    }catch(e){}
+  }
+
+  function boot(){
+    ensureAttachId();
+    updateBackBadge();
+  }
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+  else boot();
+  setInterval(boot, 2000);
+  document.addEventListener('click', function(){ setTimeout(updateBackBadge, 300); }, true);
+})();
+</script>
+
+
+<style id="sl-tg-chrome-desktop-boost">
+@media (min-width: 1025px) {
+  body.theme-light #page-chats .chat-header,
+  body.light-theme #page-chats .chat-header,
+  body.theme-dark #page-chats .chat-header,
+  #page-chats .chat-header {
+    margin: 0 4px 10px 4px !important;
+    padding: 8px 14px !important;
+    border-radius: 999px !important;
+    border: none !important;
+    border-bottom: none !important;
+    box-shadow: 0 2px 14px rgba(15,23,42,.10) !important;
+    background: #FFFFFF !important;
+  }
+  body.theme-dark #page-chats .chat-header,
+  body:not(.theme-light):not(.light-theme) #page-chats .chat-header {
+    background: rgba(32,40,54,.96) !important;
+    box-shadow: 0 2px 16px rgba(0,0,0,.35) !important;
+  }
+  body.theme-light #page-chats #composer,
+  body.light-theme #page-chats #composer,
+  body.theme-light #page-chats .composer,
+  body.light-theme #page-chats .composer,
+  #page-chats #composer,
+  #page-chats .composer {
+    margin: 8px 4px 4px 4px !important;
+    padding: 6px 8px !important;
+    border-radius: 999px !important;
+    border: none !important;
+    border-top: none !important;
+    box-shadow: 0 2px 14px rgba(15,23,42,.10) !important;
+    background: #FFFFFF !important;
+  }
+  body.theme-dark #page-chats #composer,
+  body.theme-dark #page-chats .composer,
+  body:not(.theme-light):not(.light-theme) #page-chats #composer,
+  body:not(.theme-light):not(.light-theme) #page-chats .composer {
+    background: rgba(32,40,54,.96) !important;
+    box-shadow: 0 2px 16px rgba(0,0,0,.35) !important;
+  }
+  body.theme-light #page-chats .composer .composer-input-shell,
+  body.light-theme #page-chats .composer .composer-input-shell {
+    background: transparent !important;
+    border: none !important;
+  }
+}
+</style>
 
 </body>
 </html>
