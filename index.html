@@ -46342,9 +46342,7 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
     gap: 8px !important;
   }
 
-  /* Shared glass token */
   body.in-chat .composer #attach-btn,
-  body.in-chat .composer .composer-actions,
   body.in-chat .composer .composer-input-shell,
   body.in-chat .composer #circle-btn,
   body.in-chat .composer #voice-btn,
@@ -46353,7 +46351,6 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
     -webkit-backdrop-filter: blur(24px) saturate(1.35) !important;
   }
 
-  /* Attach (paperclip) — glass, not solid white */
   body.in-chat #attach-btn,
   body.in-chat .composer #attach-btn,
   body.theme-light.in-chat #attach-btn,
@@ -46389,7 +46386,6 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
     padding: 0 !important;
   }
 
-  /* Input shell — glass pill */
   body.in-chat .composer .composer-input-shell,
   body.theme-light.in-chat .composer .composer-input-shell,
   body.light-theme.in-chat .composer .composer-input-shell,
@@ -46410,7 +46406,6 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
     box-shadow: 0 2px 14px rgba(0,0,0,.18), inset 0 1px 0 rgba(255,255,255,.08) !important;
   }
 
-  /* Mic / circle */
   body.in-chat #circle-btn,
   body.in-chat .composer #circle-btn,
   body.theme-light.in-chat #circle-btn,
@@ -46435,64 +46430,187 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
     color: rgba(240, 244, 250, 0.92) !important;
   }
 
-  /* Send button stays accent but slightly glass */
   body.in-chat .composer .send-btn {
     border-radius: 50% !important;
     box-shadow: 0 2px 12px rgba(76,124,243,.35) !important;
   }
 
-  /* --- Bottom tabs: iOS 26 floating glass bar --- */
+  /* ========== TG iOS 26 bottom tab bar — exact look ========== */
   .bottom-tabs,
   body.theme-light .bottom-tabs,
-  body.light-theme .bottom-tabs {
-    position: fixed !important;
-    left: 12px !important;
-    right: 12px !important;
-    bottom: calc(10px + env(safe-area-inset-bottom, 0px)) !important;
-    width: auto !important;
-    max-width: none !important;
-    margin: 0 !important;
-    padding: 6px 8px !important;
-    border-radius: 28px !important;
-    background: rgba(255, 255, 255, 0.42) !important;
-    background-image: none !important;
-    border: 1px solid rgba(255, 255, 255, 0.5) !important;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12), inset 0 1px 0 rgba(255,255,255,.4) !important;
-    backdrop-filter: blur(28px) saturate(1.4) !important;
-    -webkit-backdrop-filter: blur(28px) saturate(1.4) !important;
-    z-index: 900 !important;
-    gap: 4px !important;
-  }
+  body.light-theme .bottom-tabs,
   body:not(.theme-light):not(.light-theme) .bottom-tabs {
-    background: rgba(28, 32, 42, 0.55) !important;
-    border-color: rgba(255, 255, 255, 0.12) !important;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255,255,255,.08) !important;
+    position: fixed !important;
+    left: 50% !important;
+    right: auto !important;
+    transform: translateX(-50%) translateY(0) !important;
+    bottom: calc(14px + env(safe-area-inset-bottom, 0px)) !important;
+    width: auto !important;
+    max-width: calc(100vw - 48px) !important;
+    margin: 0 !important;
+    padding: 8px 14px 6px !important;
+    border-radius: 999px !important;
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 2px !important;
+    background: rgba(28, 30, 36, 0.72) !important;
+    background-image: none !important;
+    border: 1px solid rgba(255, 255, 255, 0.10) !important;
+    box-shadow: 0 10px 36px rgba(0, 0, 0, 0.40), inset 0 1px 0 rgba(255,255,255,.08) !important;
+    backdrop-filter: blur(32px) saturate(1.5) !important;
+    -webkit-backdrop-filter: blur(32px) saturate(1.5) !important;
+    z-index: 900 !important;
+    transition: transform 0.28s cubic-bezier(.32,.72,0,1), opacity 0.22s ease !important;
   }
+  body.theme-light .bottom-tabs,
+  body.light-theme .bottom-tabs {
+    background: rgba(255, 255, 255, 0.72) !important;
+    border-color: rgba(0, 0, 0, 0.08) !important;
+    box-shadow: 0 10px 32px rgba(0, 0, 0, 0.12), inset 0 1px 0 rgba(255,255,255,.6) !important;
+  }
+
+  /* hide partially when scrolled to bottom */
+  .bottom-tabs.sl-tabs-down {
+    transform: translateX(-50%) translateY(72%) !important;
+    opacity: 0.92 !important;
+  }
+
   .bottom-tabs .bottom-tab,
   .bottom-tabs button {
+    flex: 0 0 auto !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 2px !important;
+    min-width: 58px !important;
+    padding: 4px 8px 2px !important;
+    margin: 0 !important;
     background: transparent !important;
     border: none !important;
-    border-radius: 22px !important;
-    color: var(--muted, #8A94A6) !important;
+    border-radius: 18px !important;
+    color: rgba(255, 255, 255, 0.92) !important;
+    font-size: 10px !important;
+    font-weight: 500 !important;
+    line-height: 1.15 !important;
+    position: relative !important;
   }
-  .bottom-tabs .bottom-tab.active,
-  .bottom-tabs button.active {
-    background: rgba(255, 255, 255, 0.35) !important;
-    color: var(--accent-a, #4C7CF3) !important;
+  body.theme-light .bottom-tabs .bottom-tab,
+  body.light-theme .bottom-tabs .bottom-tab {
+    color: rgba(30, 34, 42, 0.88) !important;
   }
-  body:not(.theme-light):not(.light-theme) .bottom-tabs .bottom-tab.active,
-  body:not(.theme-light):not(.light-theme) .bottom-tabs button.active {
-    background: rgba(255, 255, 255, 0.1) !important;
+  .bottom-tabs .bottom-tab svg {
+    width: 24px !important;
+    height: 24px !important;
+    fill: none !important;
+    stroke: currentColor !important;
+    stroke-width: 1.9 !important;
+    position: relative !important;
+    z-index: 1 !important;
   }
-  /* room for floating tab bar */
-  .app-pages {
-    padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px)) !important;
+  /* active: blue + soft circular glass under icon */
+  .bottom-tabs .bottom-tab.active {
+    color: #3B82F6 !important;
   }
+  .bottom-tabs .bottom-tab.active::before {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 42px;
+    height: 32px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.14);
+    z-index: 0;
+    pointer-events: none;
+  }
+  body.theme-light .bottom-tabs .bottom-tab.active::before,
+  body.light-theme .bottom-tabs .bottom-tab.active::before {
+    background: rgba(59, 130, 246, 0.12);
+  }
+  .bottom-tabs .bottom-tab .tab-badge {
+    position: absolute !important;
+    top: 0 !important;
+    right: 10px !important;
+    z-index: 2 !important;
+  }
+
   body.in-chat .bottom-tabs {
     display: none !important;
   }
+
+  /* space so last contacts aren't under the pill */
+  .app-pages,
+  #page-chats .sidebar,
+  #contacts-list,
+  .max-chats-list {
+    padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+  body.in-chat .app-pages,
+  body.in-chat #page-chats .sidebar {
+    padding-bottom: 0 !important;
+  }
 }
 </style>
+
+
+<script id="sl-tabs-scroll-hide">
+(function(){
+  if(window._slTabsScrollHide) return; window._slTabsScrollHide=1;
+  function tabs(){ return document.querySelector('.bottom-tabs'); }
+  var lastY=0, down=false, timer=null;
+  function setDown(v){
+    var el=tabs(); if(!el) return;
+    if(v) el.classList.add('sl-tabs-down');
+    else el.classList.remove('sl-tabs-down');
+    down=v;
+  }
+  function onScroll(e){
+    var t=e.target;
+    if(!t || t===document || t===document.documentElement) {
+      t=document.scrollingElement||document.documentElement;
+    }
+    // only when not in chat
+    if(document.body.classList.contains('in-chat')) { setDown(false); return; }
+    var sh=t.scrollHeight||0, st=t.scrollTop||0, ch=t.clientHeight||0;
+    if(sh < ch+40) { setDown(false); return; }
+    var nearBottom = (sh - st - ch) < 90;
+    var scrollingDown = st > lastY + 2;
+    lastY = st;
+    if(nearBottom) setDown(true);
+    else if(st < 40 || !scrollingDown) setDown(false);
+    clearTimeout(timer);
+    timer=setTimeout(function(){
+      // if user stops near bottom keep down; otherwise restore after pause if not near bottom
+      var el=e.target;
+      if(!el||!el.scrollHeight) return;
+      var nb=(el.scrollHeight - el.scrollTop - el.clientHeight) < 90;
+      if(!nb) setDown(false);
+    }, 900);
+  }
+  function bind(){
+    var sels=['#contacts-list','.max-chats-list','#page-chats .sidebar','.chats-scroll','#page-chats .sidebar-scroll','.app-pages'];
+    sels.forEach(function(s){
+      document.querySelectorAll(s).forEach(function(el){
+        if(el.dataset.slTabScroll) return;
+        el.dataset.slTabScroll='1';
+        el.addEventListener('scroll', onScroll, {passive:true});
+      });
+    });
+  }
+  bind();
+  setInterval(bind, 2000);
+  // tap on lowered bar brings it back
+  document.addEventListener('click', function(e){
+    var tb=e.target.closest && e.target.closest('.bottom-tabs');
+    if(tb && tb.classList.contains('sl-tabs-down')) setDown(false);
+  }, true);
+  console.log('[SL] tabs scroll-hide + TG glass bar');
+})();
+</script>
 
 </body>
 </html>
