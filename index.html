@@ -12113,21 +12113,23 @@ function applyWallpaperPreset(){
     url = (typeof slDefaultWallpaperUrl==='function') ? slDefaultWallpaperUrl() : null;
   }
 
+  // Targets for continuous wallpaper
+  var chatPane = document.getElementById('chat-pane') || document.querySelector('.chat-pane');
+  var chatActive = document.getElementById('chat-active');
+
   if(isDesk && layout){
-    // Continuous wallpaper under list + chat
+    // Desktop: wallpaper on layout (under floating list + chat)
     list.style.setProperty('background-image','none','important');
     list.style.setProperty('background-color','transparent','important');
     list.classList.add('has-wall');
     list.classList.remove('theme-doodle-wall');
     if(isGrad) paintGrad(layout, url);
     else if(url){
-      // light desktop photo = cover; dark default = tile
       if(isLight || w) paintEl(layout, url, 'cover', 'no-repeat', 'center center');
       else paintEl(layout, url, '340px auto', 'repeat', 'center top');
     } else {
       clearWallpaper(layout);
     }
-    // empty state transparent
     try{
       var nc=document.getElementById('no-chat-state');
       if(nc){
@@ -12138,31 +12140,31 @@ function applyWallpaperPreset(){
     return;
   }
 
-  // Mobile / narrow: wallpaper only on messages-list (old behavior)
-  try{
-    if(layout) clearWallpaper(layout);
-    ['chat-pane','chat-active','page-chats','no-chat-state'].forEach(function(id){
-      var el = document.getElementById(id) || document.querySelector('.'+id);
-      if(!el) return;
-      if(id!=='no-chat-state') el.style.removeProperty('background-image');
-      el.classList.remove('theme-doodle-wall','has-wall');
-    });
-  }catch(e){}
+  // Mobile: wallpaper on full chat shell so header + composer float over it
+  try{ if(layout) clearWallpaper(layout); }catch(e){}
 
-  if(w){
-    list.classList.remove('theme-doodle-wall');
-    list.classList.add('has-wall');
-    if(isGrad) paintGrad(list, url);
-    else paintEl(list, url, 'cover', 'no-repeat', 'center center');
-    try{ applyNoChatWallpaper(); }catch(e){}
-    return;
-  }
-  list.classList.add('theme-doodle-wall');
+  // paint on chat-pane / chat-active (full area under header & composer)
+  var shell = chatActive || chatPane;
+  list.style.setProperty('background-image','none','important');
+  list.style.setProperty('background-color','transparent','important');
   list.classList.add('has-wall');
-  if(isLight && url){
-    paintEl(list, url, 'cover', 'no-repeat', 'center center');
-  } else if(url){
-    paintEl(list, url, '340px auto', 'repeat', 'center top');
+  list.classList.remove('theme-doodle-wall');
+
+  if(url){
+    if(isGrad){
+      paintGrad(shell, url);
+      if(chatPane && chatPane !== shell) paintGrad(chatPane, url);
+    } else {
+      var size = (isLight || w) ? 'cover' : '340px auto';
+      var rep = (isLight || w) ? 'no-repeat' : 'repeat';
+      paintEl(shell, url, size, rep, 'center center');
+      if(chatPane && chatPane !== shell) paintEl(chatPane, url, size, rep, 'center center');
+    }
+    if(shell) shell.classList.add('has-wall');
+    if(chatPane) chatPane.classList.add('has-wall');
+  } else {
+    clearWallpaper(shell);
+    clearWallpaper(chatPane);
   }
   try{ applyNoChatWallpaper(); }catch(e){}
 }
@@ -45381,41 +45383,60 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
 
 
 <style id="sl-tg-chrome-mobile">
-/* ===== Phone: floating dark header + composer (Telegram-like) ===== */
+/* ===== Phone: TG-style — wallpaper full-bleed, glass header + composer ===== */
 @media (max-width: 1024px) {
+  /* Full chat shell shows wallpaper */
   body.in-chat #chat-active,
-  body.in-chat .chat-pane {
+  body.in-chat .chat-pane,
+  body.in-chat #page-chats .chat-pane,
+  body.theme-light.in-chat #chat-active,
+  body.theme-light.in-chat .chat-pane,
+  body.light-theme.in-chat .chat-pane {
+    background-color: transparent !important;
+    /* wallpaper set via JS on element; don't force none */
+  }
+  body.in-chat #messages-list,
+  body.in-chat #messages-list.has-wall,
+  body.in-chat #messages-list.theme-doodle-wall,
+  body.theme-light.in-chat #messages-list,
+  body.theme-light.in-chat #messages-list.has-wall {
+    background-image: none !important;
+    background-color: transparent !important;
     background: transparent !important;
   }
-  /* messages area can show wallpaper edge-to-edge */
-  body.in-chat #messages-list {
-    padding-top: 8px !important;
-    padding-bottom: 8px !important;
+  body.in-chat .messages {
+    background: transparent !important;
   }
 
-  /* Header pill */
-  body.in-chat .chat-header {
+  /* ---- Header: glass pill floating on wallpaper ---- */
+  body.in-chat .chat-header,
+  body.theme-light.in-chat .chat-header,
+  body.light-theme.in-chat .chat-header {
     position: relative;
     margin: 8px 10px 6px 10px !important;
     padding: 6px 8px 6px 6px !important;
     border-radius: 999px !important;
-    background: rgba(28, 32, 40, 0.82) !important;
-    border: 1px solid rgba(255,255,255,.08) !important;
-    box-shadow: 0 6px 22px rgba(0,0,0,.28);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
+    background: rgba(30, 34, 42, 0.55) !important;
+    background-image: none !important;
+    border: 1px solid rgba(255,255,255,.12) !important;
+    border-bottom: 1px solid rgba(255,255,255,.12) !important;
+    box-shadow: 0 4px 20px rgba(0,0,0,.18);
+    backdrop-filter: blur(20px) saturate(1.2);
+    -webkit-backdrop-filter: blur(20px) saturate(1.2);
     gap: 8px !important;
     min-height: 52px;
     z-index: 20;
+    color: #F4F7FB !important;
   }
+  /* light theme still glass, slightly lighter */
   body.theme-light.in-chat .chat-header,
   body.light-theme.in-chat .chat-header {
-    background: rgba(255,255,255,.90) !important;
-    border-color: rgba(0,0,0,.06) !important;
+    background: rgba(255, 255, 255, 0.55) !important;
+    border-color: rgba(255,255,255,.35) !important;
+    color: #1A1D21 !important;
     box-shadow: 0 4px 18px rgba(15,23,42,.10);
   }
 
-  /* Back as circle with optional badge */
   body.in-chat .chat-header .back-btn {
     display: flex !important;
     align-items: center;
@@ -45424,55 +45445,42 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
     height: 40px !important;
     min-width: 40px;
     border-radius: 50% !important;
-    background: rgba(255,255,255,.10) !important;
-    color: #E8EEF8 !important;
+    background: rgba(255,255,255,.12) !important;
+    color: inherit !important;
     padding: 0 !important;
     position: relative;
     flex-shrink: 0;
+    order: 1;
   }
-  body.theme-light.in-chat .chat-header .back-btn,
-  body.light-theme.in-chat .chat-header .back-btn {
+  body.theme-light.in-chat .chat-header .back-btn {
     background: rgba(0,0,0,.06) !important;
-    color: #1A1D21 !important;
   }
-  body.in-chat .chat-header .back-btn svg {
-    width: 20px;
-    height: 20px;
-  }
-  /* unread badge on back */
+  body.in-chat .chat-header .back-btn svg { width: 20px; height: 20px; }
   body.in-chat .chat-header .back-btn .sl-back-badge {
     position: absolute;
-    top: -3px;
-    right: -3px;
-    min-width: 18px;
-    height: 18px;
-    padding: 0 5px;
+    top: -3px; right: -3px;
+    min-width: 18px; height: 18px; padding: 0 5px;
     border-radius: 999px;
-    background: #4C7CF3;
-    color: #fff;
-    font-size: 11px;
-    font-weight: 700;
-    line-height: 18px;
-    text-align: center;
-    box-shadow: 0 2px 6px rgba(76,124,243,.4);
+    background: #4C7CF3; color: #fff;
+    font-size: 11px; font-weight: 700; line-height: 18px; text-align: center;
   }
-
-  /* Center title block */
   body.in-chat .chat-header .chat-title {
     font-size: 15px !important;
     font-weight: 700 !important;
     text-align: center;
+    color: inherit !important;
   }
   body.in-chat .chat-header .chat-status {
     font-size: 11px !important;
     text-align: center;
-    opacity: .7;
+    opacity: .75;
   }
   body.in-chat .chat-header > div[style*="min-width"] {
     text-align: center;
+    order: 2;
+    flex: 1;
+    min-width: 0;
   }
-
-  /* Avatar large on the right (Telegram style) */
   body.in-chat .chat-header #partner-avatar,
   body.in-chat .chat-header .avatar#partner-avatar {
     width: 44px !important;
@@ -45481,87 +45489,80 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
     order: 5;
     margin-left: 4px;
     flex-shrink: 0;
-    box-shadow: 0 2px 8px rgba(0,0,0,.2);
   }
-  /* move actions before avatar visually via order */
   body.in-chat .chat-header .chat-actions {
     order: 4;
     margin-left: auto !important;
     gap: 0 !important;
   }
-  body.in-chat .chat-header .back-btn { order: 1; }
-  body.in-chat .chat-header > div[style*="min-width"] { order: 2; flex: 1; }
-  body.in-chat .chat-header {
-    display: flex !important;
-  }
-  /* hide secondary actions on mobile header — keep call optional, hide video/search clutter */
+  body.in-chat .chat-header { display: flex !important; }
   body.in-chat .chat-header #chat-search-btn,
   body.in-chat .chat-header #video-call-btn,
   body.in-chat .chat-header #media-btn,
   body.in-chat .chat-header #invite-btn,
-  body.in-chat .chat-header #group-settings-btn {
+  body.in-chat .chat-header #group-settings-btn,
+  body.in-chat .chat-header #call-btn {
     display: none !important;
   }
-  body.in-chat .chat-header #call-btn {
-    display: none !important; /* avatar replaces right cluster like ref */
-  }
 
-  /* Composer: separate circles + pill input */
+  /* ---- Composer: transparent glass pieces on wallpaper ---- */
   body.in-chat #composer,
-  body.in-chat .composer {
+  body.in-chat .composer,
+  body.theme-light.in-chat #composer,
+  body.theme-light.in-chat .composer,
+  body.light-theme.in-chat .composer {
     margin: 6px 10px calc(8px + env(safe-area-inset-bottom, 0px)) 10px !important;
     padding: 0 !important;
     background: transparent !important;
+    background-image: none !important;
     border: none !important;
+    border-top: none !important;
     box-shadow: none !important;
     gap: 8px !important;
     align-items: center !important;
     width: auto !important;
+    z-index: 20;
   }
+
   body.in-chat .composer .composer-actions {
-    background: rgba(28, 32, 40, 0.82);
+    background: rgba(30, 34, 42, 0.55) !important;
     border-radius: 50%;
-    width: 44px;
-    height: 44px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border: 1px solid rgba(255,255,255,.08);
-    box-shadow: 0 4px 14px rgba(0,0,0,.25);
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
+    width: 44px; height: 44px;
+    display: flex; align-items: center; justify-content: center;
+    border: 1px solid rgba(255,255,255,.12);
+    box-shadow: 0 4px 14px rgba(0,0,0,.15);
+    backdrop-filter: blur(20px) saturate(1.2);
+    -webkit-backdrop-filter: blur(20px) saturate(1.2);
     flex-shrink: 0;
-    gap: 0;
-    padding: 0;
+    gap: 0; padding: 0;
   }
-  body.theme-light.in-chat .composer .composer-actions,
-  body.light-theme.in-chat .composer .composer-actions {
-    background: rgba(255,255,255,.92);
-    border-color: rgba(0,0,0,.06);
+  body.theme-light.in-chat .composer .composer-actions {
+    background: rgba(255,255,255,.55) !important;
+    border-color: rgba(255,255,255,.35);
   }
   body.in-chat .composer .composer-actions .icon-btn {
-    width: 44px;
-    height: 44px;
-    border-radius: 50%;
-    color: #E8EEF8;
+    width: 44px; height: 44px; border-radius: 50%;
+    color: #F4F7FB;
   }
   body.theme-light.in-chat .composer .composer-actions .icon-btn {
     color: #1A1D21;
   }
-  /* only show attach in the left circle; hide extras if any */
-  body.in-chat .composer .composer-actions > :not(#attach-btn):not([id*="attach"]):not(.attach-btn) {
+  body.in-chat .composer .composer-actions > :not(#attach-btn):not(.attach-btn) {
     display: none !important;
   }
+  body.in-chat .composer #attach-btn { display: flex !important; }
 
-  body.in-chat .composer .composer-input-shell {
+  body.in-chat .composer .composer-input-shell,
+  body.theme-light.in-chat .composer .composer-input-shell {
     flex: 1;
     min-height: 44px;
     border-radius: 999px !important;
-    background: rgba(28, 32, 40, 0.82) !important;
-    border: 1px solid rgba(255,255,255,.08) !important;
-    box-shadow: 0 4px 14px rgba(0,0,0,.25);
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
+    background: rgba(30, 34, 42, 0.55) !important;
+    background-image: none !important;
+    border: 1px solid rgba(255,255,255,.12) !important;
+    box-shadow: 0 4px 14px rgba(0,0,0,.15);
+    backdrop-filter: blur(20px) saturate(1.2);
+    -webkit-backdrop-filter: blur(20px) saturate(1.2);
     padding: 0 6px 0 14px !important;
     display: flex;
     align-items: center;
@@ -45569,67 +45570,69 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
   }
   body.theme-light.in-chat .composer .composer-input-shell,
   body.light-theme.in-chat .composer .composer-input-shell {
-    background: rgba(255,255,255,.92) !important;
-    border-color: rgba(0,0,0,.06) !important;
+    background: rgba(255,255,255,.55) !important;
+    border-color: rgba(255,255,255,.35) !important;
   }
   body.in-chat .composer #message-input {
     background: transparent !important;
     border: none !important;
     min-height: 42px !important;
     padding: 10px 4px !important;
-    color: #E8EEF8;
+    color: #F4F7FB;
     font-size: 16px;
   }
   body.theme-light.in-chat .composer #message-input {
     color: #1A1D21;
   }
   body.in-chat .composer #message-input::placeholder {
-    color: rgba(200,210,224,.55);
+    color: rgba(220,228,240,.55);
   }
   body.theme-light.in-chat .composer #message-input::placeholder {
-    color: rgba(100,110,130,.55);
+    color: rgba(60,70,90,.45);
   }
 
-  /* right cluster: sticker inside shell, mic as circle outside */
-  body.in-chat .composer .composer-media-btns,
-  body.in-chat .composer #composer-media-btns {
-    display: flex !important;
-    align-items: center;
-    gap: 6px;
-    flex-shrink: 0;
-  }
   body.in-chat .composer #circle-btn,
-  body.in-chat .composer #voice-btn,
-  body.in-chat .composer #sticker-btn {
+  body.in-chat .composer #voice-btn {
     width: 44px !important;
     height: 44px !important;
     border-radius: 50% !important;
-    background: rgba(28, 32, 40, 0.82) !important;
-    border: 1px solid rgba(255,255,255,.08) !important;
-    color: #E8EEF8 !important;
-    box-shadow: 0 4px 14px rgba(0,0,0,.25);
+    background: rgba(30, 34, 42, 0.55) !important;
+    border: 1px solid rgba(255,255,255,.12) !important;
+    color: #F4F7FB !important;
+    box-shadow: 0 4px 14px rgba(0,0,0,.15);
+    backdrop-filter: blur(20px) saturate(1.2);
+    -webkit-backdrop-filter: blur(20px) saturate(1.2);
     flex-shrink: 0;
   }
   body.theme-light.in-chat .composer #circle-btn,
-  body.theme-light.in-chat .composer #voice-btn,
-  body.theme-light.in-chat .composer #sticker-btn {
-    background: rgba(255,255,255,.92) !important;
-    border-color: rgba(0,0,0,.06) !important;
+  body.theme-light.in-chat .composer #voice-btn {
+    background: rgba(255,255,255,.55) !important;
+    border-color: rgba(255,255,255,.35) !important;
     color: #1A1D21 !important;
   }
-  /* sticker stays inside input shell if present there */
   body.in-chat .composer .composer-input-shell #sticker-btn {
     width: 36px !important;
     height: 36px !important;
     background: transparent !important;
     border: none !important;
     box-shadow: none !important;
+    color: inherit;
   }
   body.in-chat .composer .send-btn {
     width: 44px !important;
     height: 44px !important;
     border-radius: 50% !important;
     flex-shrink: 0;
+  }
+
+  /* pinned bar glass too */
+  body.in-chat .pinned-bar {
+    margin: 0 10px 6px;
+    border-radius: 14px;
+    background: rgba(30,34,42,.50) !important;
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255,255,255,.10);
   }
 }
 </style>
@@ -45735,6 +45738,60 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
   }
 }
 </style>
+
+
+<style id="sl-mobile-wall-overlay">
+/* Force mobile chat chrome over wallpaper (beats theme-light solid fills) */
+@media (max-width: 1024px) {
+  body.in-chat .chat-pane.has-wall,
+  body.in-chat #chat-active.has-wall,
+  body.theme-light.in-chat .chat-pane.has-wall,
+  body.theme-light.in-chat #chat-active.has-wall {
+    background-size: cover !important;
+    background-position: center center !important;
+    background-repeat: no-repeat !important;
+    background-color: transparent !important;
+  }
+  body.in-chat .chat-pane.has-wall #messages-list,
+  body.in-chat #chat-active.has-wall #messages-list {
+    background: transparent !important;
+    background-image: none !important;
+  }
+  /* kill solid white bars from theme-light */
+  body.theme-light.in-chat .chat-header,
+  body.light-theme.in-chat .chat-header {
+    background: rgba(255,255,255,.55) !important;
+    border-bottom: none !important;
+  }
+  body.theme-light.in-chat .composer,
+  body.light-theme.in-chat .composer {
+    background: transparent !important;
+    border-top: none !important;
+  }
+}
+</style>
+<script>
+/* Re-apply wallpaper when opening a chat on mobile */
+(function(){
+  if (window._slMobileWallReapply) return;
+  window._slMobileWallReapply = 1;
+  function re(){
+    try{ if (typeof applyWallpaperPreset === 'function') applyWallpaperPreset(); }catch(e){}
+  }
+  document.addEventListener('click', function(e){
+    var t = e.target;
+    if (!t || !t.closest) return;
+    if (t.closest('.contact') || t.closest('.contact-item') || t.closest('[data-chat-id]') || t.id === 'back-btn' || t.closest('#back-btn')) {
+      setTimeout(re, 80);
+      setTimeout(re, 320);
+    }
+  }, true);
+  // when body gets in-chat class
+  try{
+    new MutationObserver(function(){ re(); }).observe(document.body, { attributes:true, attributeFilter:['class'] });
+  }catch(e){}
+})();
+</script>
 
 </body>
 </html>
