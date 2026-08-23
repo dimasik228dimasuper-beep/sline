@@ -46409,10 +46409,10 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
   }
 
   /* ===== Classic bottom bar like screenshot ===== */
-  .bottom-tabs,
-  body.theme-light .bottom-tabs,
-  body.light-theme .bottom-tabs,
-  body:not(.theme-light):not(.light-theme) .bottom-tabs {
+  body:not(.in-chat) .bottom-tabs,
+  body.theme-light:not(.in-chat) .bottom-tabs,
+  body.light-theme:not(.in-chat) .bottom-tabs,
+  body:not(.theme-light):not(.light-theme):not(.in-chat) .bottom-tabs {
     position: fixed !important;
     left: 0 !important;
     right: 0 !important;
@@ -46421,7 +46421,7 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
     width: 100% !important;
     max-width: 100% !important;
     margin: 0 !important;
-    padding: 8px 0 calc(8px + env(safe-area-inset-bottom, 0px)) !important;
+    padding: 6px 0 max(2px, env(safe-area-inset-bottom, 0px)) !important;
     border-radius: 0 !important;
     display: flex !important;
     flex-direction: row !important;
@@ -46438,16 +46438,16 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
     z-index: 900 !important;
     transition: transform 0.28s cubic-bezier(.32,.72,0,1) !important;
   }
-  body.theme-light .bottom-tabs,
-  body.light-theme .bottom-tabs {
+  body.theme-light:not(.in-chat) .bottom-tabs,
+  body.light-theme:not(.in-chat) .bottom-tabs {
     background: #F2F2F7 !important;
     border-top-color: rgba(0,0,0,0.08) !important;
   }
-  .bottom-tabs.sl-tabs-down {
+  body:not(.in-chat) .bottom-tabs.sl-tabs-down {
     transform: translateY(85%) !important;
   }
 
-  .bottom-tabs .bottom-tab {
+  body:not(.in-chat) .bottom-tabs .bottom-tab {
     flex: 1 1 0 !important;
     display: flex !important;
     flex-direction: column !important;
@@ -46455,7 +46455,7 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
     justify-content: center !important;
     gap: 3px !important;
     min-width: 0 !important;
-    padding: 4px 6px 2px !important;
+    padding: 2px 6px 0 !important;
     margin: 0 !important;
     background: transparent !important;
     border: none !important;
@@ -46466,44 +46466,86 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
     line-height: 1.15 !important;
     position: relative !important;
   }
-  body.theme-light .bottom-tabs .bottom-tab {
+  body.theme-light:not(.in-chat) .bottom-tabs .bottom-tab,
+  body.light-theme:not(.in-chat) .bottom-tabs .bottom-tab {
     color: #8E8E93 !important;
   }
-  .bottom-tabs .bottom-tab svg,
-  .bottom-tabs .bottom-tab .tab-ico {
+  body:not(.in-chat) .bottom-tabs .bottom-tab svg,
+  body:not(.in-chat) .bottom-tabs .bottom-tab .tab-ico {
     width: 26px !important;
     height: 26px !important;
     fill: currentColor !important;
     stroke: none !important;
   }
-  .bottom-tabs .bottom-tab.active {
+  body:not(.in-chat) .bottom-tabs .bottom-tab.active {
     color: #3B82F6 !important;
   }
-  .bottom-tabs .bottom-tab.active::before {
+  body:not(.in-chat) .bottom-tabs .bottom-tab.active::before {
     display: none !important;
   }
-  .bottom-tabs .bottom-tab .tab-badge {
+  body:not(.in-chat) .bottom-tabs .bottom-tab .tab-badge {
     position: absolute !important;
     top: 0 !important;
     right: calc(50% - 22px) !important;
     z-index: 2 !important;
   }
 
-  body.in-chat .bottom-tabs {
+  /* Always hide in chat — highest priority */
+  body.in-chat .bottom-tabs,
+  body.in-chat.theme-light .bottom-tabs,
+  body.in-chat.light-theme .bottom-tabs,
+  body.theme-light.in-chat .bottom-tabs,
+  body.light-theme.in-chat .bottom-tabs,
+  body.in-chat:not(.theme-light):not(.light-theme) .bottom-tabs,
+  html body.in-chat .bottom-tabs,
+  body.in-chat #app-screen > .bottom-tabs {
     display: none !important;
+    visibility: hidden !important;
+    height: 0 !important;
+    min-height: 0 !important;
+    max-height: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: hidden !important;
+    pointer-events: none !important;
+    opacity: 0 !important;
+    border: none !important;
   }
 
   .app-pages,
   #page-chats .sidebar,
   #contacts-list,
   .max-chats-list {
-    padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px)) !important;
+    padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px)) !important;
   }
   body.in-chat .app-pages,
   body.in-chat #page-chats .sidebar {
     padding-bottom: 0 !important;
   }
-}
+/* FORCE hide tabs in chat + no extra bottom gap */
+  body.in-chat .bottom-tabs,
+  body.in-chat .bottom-tabs .bottom-tab,
+  html body.in-chat .bottom-tabs {
+    display: none !important;
+    visibility: hidden !important;
+    height: 0 !important;
+    min-height: 0 !important;
+    max-height: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: hidden !important;
+    pointer-events: none !important;
+    opacity: 0 !important;
+    border: none !important;
+  }
+  .bottom-tabs {
+    padding-bottom: max(4px, env(safe-area-inset-bottom, 0px)) !important;
+    padding-top: 6px !important;
+  }
+  body.theme-light .bottom-tabs,
+  body.light-theme .bottom-tabs {
+    padding-bottom: max(4px, env(safe-area-inset-bottom, 0px)) !important;
+  }
 </style>
 
 
@@ -46559,6 +46601,56 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
     if(tb && tb.classList.contains('sl-tabs-down')) setDown(false);
   }, true);
   console.log('[SL] tabs scroll-hide + TG glass bar');
+})();
+</script>
+
+
+<style id="sl-tabs-inchat-fix">
+@media (max-width: 1024px) {
+  body.in-chat .bottom-tabs,
+  body.in-chat.theme-light .bottom-tabs,
+  body.theme-light.in-chat .bottom-tabs,
+  body.in-chat.light-theme .bottom-tabs,
+  body.light-theme.in-chat .bottom-tabs,
+  body.in-chat:not(.theme-light):not(.light-theme) .bottom-tabs,
+  body.in-chat #app-screen > .bottom-tabs {
+    display: none !important;
+    visibility: hidden !important;
+    height: 0 !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    border: none !important;
+    pointer-events: none !important;
+    opacity: 0 !important;
+  }
+}
+</style>
+
+
+<script id="sl-tabs-inchat-hide-js">
+(function(){
+  if(window._slTabsInChatHide) return; window._slTabsInChatHide=1;
+  function sync(){
+    var tb=document.querySelector('.bottom-tabs');
+    if(!tb) return;
+    var inChat=document.body.classList.contains('in-chat');
+    if(inChat){
+      tb.style.setProperty('display','none','important');
+      tb.style.setProperty('visibility','hidden','important');
+      tb.style.setProperty('height','0','important');
+      tb.style.setProperty('padding','0','important');
+    } else {
+      tb.style.removeProperty('display');
+      tb.style.removeProperty('visibility');
+      tb.style.removeProperty('height');
+      tb.style.removeProperty('padding');
+    }
+  }
+  var obs=new MutationObserver(sync);
+  obs.observe(document.body,{attributes:true,attributeFilter:['class']});
+  setInterval(sync,800);
+  sync();
+  console.log('[SL] tabs hide on in-chat');
 })();
 </script>
 
