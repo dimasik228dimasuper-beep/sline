@@ -10157,7 +10157,7 @@ async function openStoriesOrProfile(profileLike){
           name=((o.first||'').trim()+' '+(o.last||'').trim()).trim()||name;
       }
     }catch(e){}
-    if(document.getElementById('sl-story-or-profile-chooser')) return;
+    try{ var _ch=document.getElementById('sl-story-or-profile-chooser'); if(_ch){ var st=window.getComputedStyle(_ch); if(st&&st.display!=='none'&&_ch.offsetParent!==null) return; _ch.remove(); } }catch(e){}
     const hasStories = await userHasActiveStories(uid);
     if(hasStories){
       // Only menu — do not open profile underneath
@@ -19265,19 +19265,9 @@ document.querySelectorAll('.bottom-tab').forEach(t=>{
 });
 
 // Fullscreen profile when tapping avatar / contact
-async async function openFullProfile(profileLike){
-  // Don't open under the story/profile chooser (remove stale overlay if stuck)
-  try{
-    var ch = document.getElementById('sl-story-or-profile-chooser');
-    if(ch){
-      // if chooser is visible, skip; if hidden/stale, remove it
-      var st = window.getComputedStyle(ch);
-      if(st && st.display !== 'none' && st.visibility !== 'hidden' && ch.offsetParent !== null){
-        return;
-      }
-      ch.remove();
-    }
-  }catch(e){}
+async function openFullProfile(profileLike){
+  // Don't open under the story/profile chooser
+  if(document.getElementById('sl-story-or-profile-chooser')) return;
   let p=profileLike||{};
   try{
     const {data}=await sb.from('profiles').select('*').eq('id',profileLike.id).maybeSingle();
@@ -43019,16 +43009,17 @@ body{
 #attach-btn {
   width: 40px !important; height: 40px !important; min-width: 40px !important;
   border-radius: 50% !important;
-  background: #2A2F38 !important;
-  border: none !important; color: #FFF !important;
+  background: rgba(255,255,255,0.25) !important;
+  border: 1px solid rgba(255,255,255,0.35) !important; color: #1A1D21 !important;
   box-shadow: none !important; padding: 0 !important;
   display: flex !important; align-items: center !important; justify-content: center !important;
   flex-shrink: 0 !important;
+  backdrop-filter: blur(20px) saturate(1.3) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(1.3) !important;
 }
 #attach-btn svg { width: 20px !important; height: 20px !important; }
 html.theme-light #attach-btn, body.theme-light #attach-btn {
-  /* glass — do not force solid white */
-  background: rgba(255,255,255,0.42) !important;
+  background: rgba(255,255,255,0.40) !important;
   color: #1A1D21 !important;
   box-shadow: 0 2px 12px rgba(0,0,0,.08), inset 0 1px 0 rgba(255,255,255,.4) !important;
   border: 1px solid rgba(255,255,255,0.5) !important;
@@ -43108,14 +43099,17 @@ html.theme-light #sticker-btn, body.theme-light #sticker-btn { color: #5A4A6A !i
 #circle-btn {
   width: 40px !important; height: 40px !important; min-width: 40px !important;
   border-radius: 50% !important;
-  background: #2A2F38 !important; border: none !important; color: #FFF !important;
+  background: rgba(255,255,255,0.25) !important;
+  border: 1px solid rgba(255,255,255,0.35) !important; color: #1A1D21 !important;
   box-shadow: none !important; padding: 0 !important;
   display: flex !important; align-items: center !important; justify-content: center !important;
   flex-shrink: 0 !important;
+  backdrop-filter: blur(20px) saturate(1.3) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(1.3) !important;
   transition: transform .22s cubic-bezier(.34,1.4,.64,1) !important;
 }
 html.theme-light #circle-btn, body.theme-light #circle-btn {
-  background: rgba(255,255,255,0.42) !important;
+  background: rgba(255,255,255,0.40) !important;
   color: #1A1D21 !important;
   box-shadow: 0 2px 12px rgba(0,0,0,.08), inset 0 1px 0 rgba(255,255,255,.4) !important;
   border: 1px solid rgba(255,255,255,0.5) !important;
@@ -46674,10 +46668,71 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
 </script>
 
 
-<script id="sl-header-info-click">
+<style id="sl-user-tweaks">
+/* Glass paperclip + mic (phone) — theme colors untouched */
+@media (max-width: 1024px) {
+  body.in-chat #attach-btn,
+  body.in-chat .composer #attach-btn,
+  body.theme-light.in-chat #attach-btn,
+  html.theme-light body.in-chat #attach-btn,
+  #composer #attach-btn,
+  #attach-btn {
+    background: rgba(255,255,255,0.38) !important;
+    background-color: rgba(255,255,255,0.38) !important;
+    background-image: none !important;
+    border: 1px solid rgba(255,255,255,0.48) !important;
+    color: rgba(30,36,48,0.88) !important;
+    box-shadow: 0 2px 14px rgba(0,0,0,.08), inset 0 1px 0 rgba(255,255,255,.4) !important;
+    backdrop-filter: blur(28px) saturate(1.4) !important;
+    -webkit-backdrop-filter: blur(28px) saturate(1.4) !important;
+  }
+  body:not(.theme-light):not(.light-theme).in-chat #attach-btn,
+  body:not(.theme-light):not(.light-theme).in-chat .composer #attach-btn {
+    background: rgba(40,46,58,0.42) !important;
+    background-color: rgba(40,46,58,0.42) !important;
+    border-color: rgba(255,255,255,0.16) !important;
+    color: rgba(240,244,250,0.95) !important;
+  }
+  body.in-chat #circle-btn,
+  body.in-chat .composer #circle-btn,
+  #composer #circle-btn,
+  #circle-btn {
+    background: rgba(255,255,255,0.38) !important;
+    background-color: rgba(255,255,255,0.38) !important;
+    border: 1px solid rgba(255,255,255,0.48) !important;
+    color: rgba(30,36,48,0.88) !important;
+    box-shadow: 0 2px 14px rgba(0,0,0,.08), inset 0 1px 0 rgba(255,255,255,.4) !important;
+    backdrop-filter: blur(28px) saturate(1.4) !important;
+    -webkit-backdrop-filter: blur(28px) saturate(1.4) !important;
+  }
+  body:not(.theme-light):not(.light-theme).in-chat #circle-btn {
+    background: rgba(40,46,58,0.42) !important;
+    border-color: rgba(255,255,255,0.16) !important;
+    color: rgba(240,244,250,0.95) !important;
+  }
+}
+</style>
+<script id="sl-user-tweaks-js">
 (function(){
-  if(window._slHeaderInfoClick) return; window._slHeaderInfoClick = 1;
+  if(window._slUserTweaks) return; window._slUserTweaks=1;
 
+  /* --- Glass attach force (inline, beats old #FFF rules) --- */
+  function paintAttach(){
+    ['attach-btn','circle-btn'].forEach(function(id){
+      var el=document.getElementById(id);
+      if(!el) return;
+      var light=document.body.classList.contains('theme-light')||document.body.classList.contains('light-theme')||document.documentElement.classList.contains('theme-light');
+      var bg=light?'rgba(255,255,255,0.22)':'rgba(40,46,58,0.42)';
+      el.style.setProperty('background-color', bg, 'important');
+      el.style.setProperty('background-image', 'none', 'important');
+      el.style.setProperty('backdrop-filter', 'blur(20px)', 'important');
+      el.style.setProperty('-webkit-backdrop-filter', 'blur(20px)', 'important');
+    });
+  }
+  setTimeout(paintAttach, 1500);
+  setInterval(paintAttach, 3000);
+
+  /* --- Click name/avatar → profile info immediately --- */
   function getPartner(){
     try{
       if(typeof activePartner!=='undefined' && activePartner) return activePartner;
@@ -46692,173 +46747,137 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
     }catch(e){}
     return null;
   }
-
   function openInfo(e){
     try{
-      if(e){
-        // ignore clicks on action buttons in header
-        if(e.target.closest && e.target.closest('button, .icon-btn, .header-actions, #chat-menu-btn, .back-btn, #back-btn')) return;
+      if(e && e.target && e.target.closest){
+        if(e.target.closest('button, .icon-btn, .header-actions, #chat-menu-btn, .back-btn, #back-btn, #call-btn, #video-call-btn, #chat-search-btn')) return;
       }
-      var g = getGroup();
+      var g=getGroup();
       if(g){
         if(typeof window.openChannelProfile==='function'){ window.openChannelProfile(g); return; }
         if(typeof openGroupInfo==='function'){ openGroupInfo(g); return; }
       }
-      var p = getPartner();
+      var p=getPartner();
       if(!p){
-        // try build from DOM
-        var nameEl = document.getElementById('chat-partner-name') || document.querySelector('.chat-title, .chat-header .t1');
-        var av = document.getElementById('partner-avatar');
-        p = {
-          id: (av && (av.dataset.uid || av.dataset.id)) || null,
-          first_name: nameEl ? nameEl.textContent.trim() : '',
-          username: nameEl ? nameEl.textContent.trim() : ''
+        var nameEl=document.getElementById('chat-partner-name');
+        var av=document.getElementById('partner-avatar');
+        p={
+          id:(av && (av.dataset.uid||av.dataset.id))||window.currentChatId||null,
+          first_name:nameEl?nameEl.textContent.trim():'',
+          username:nameEl?nameEl.textContent.trim():''
         };
-        if(!p.id && window.currentChatId) p.id = window.currentChatId;
       }
-      if(!p || !p.id){
-        console.warn('[SL] no partner for info');
-        return;
-      }
-      // Prefer full profile sheet
-      if(typeof openFullProfile==='function'){
-        openFullProfile(p);
-        return;
-      }
-      if(typeof window.slOpenChatInfo==='function'){
-        window.slOpenChatInfo();
-        return;
-      }
-      if(typeof openStoriesOrProfile==='function'){
-        openStoriesOrProfile(p);
-      }
+      if(!p||!p.id){ console.warn('[SL] no partner'); return; }
+      // Prefer full profile (not stories chooser)
+      if(typeof openFullProfile==='function'){ openFullProfile(p); return; }
+      if(typeof window.slOpenChatInfo==='function'){ window.slOpenChatInfo(); return; }
+      if(typeof openStoriesOrProfile==='function'){ openStoriesOrProfile(p); }
     }catch(err){ console.warn('[SL] openInfo', err); }
   }
-
-  function isHeaderTarget(t){
-    if(!t || !t.closest) return false;
-    if(t.closest('#partner-avatar, #chat-partner-avatar, #chat-partner-name, #chat-partner-status, .chat-title, .chat-header .t1, .chat-header .t2')) return true;
-    // center of header
-    var h = t.closest('.chat-header');
-    if(h && !t.closest('button, .icon-btn, .back-btn, #back-btn, .header-actions')) return true;
-    return false;
-  }
-
-  document.addEventListener('click', function(e){
-    if(!document.body.classList.contains('in-chat')) return;
-    if(!isHeaderTarget(e.target)) return;
-    e.preventDefault();
-    e.stopPropagation();
-    openInfo(e);
-  }, true);
-
-  // Also bind directly when chat opens
-  function bindDirect(){
+  function bindHeader(){
     ['partner-avatar','chat-partner-avatar','chat-partner-name','chat-partner-status'].forEach(function(id){
-      var el = document.getElementById(id);
-      if(!el || el.dataset.slInfoFinal) return;
-      el.dataset.slInfoFinal = '1';
-      el.style.cursor = 'pointer';
+      var el=document.getElementById(id);
+      if(!el||el.dataset.slInfoTw) return;
+      el.dataset.slInfoTw='1';
+      el.style.cursor='pointer';
       el.addEventListener('click', function(e){
         e.preventDefault(); e.stopPropagation();
         openInfo(e);
       }, true);
     });
   }
-  bindDirect();
-  setInterval(bindDirect, 1500);
-  console.log('[SL] header info click ready');
+  document.addEventListener('click', function(e){
+    if(!document.body.classList.contains('in-chat')) return;
+    var t=e.target;
+    if(!t||!t.closest) return;
+    if(t.closest('#partner-avatar, #chat-partner-avatar, #chat-partner-name, #chat-partner-status, .chat-title')){
+      if(t.closest('button, .back-btn, .icon-btn')) return;
+      e.preventDefault(); e.stopPropagation();
+      openInfo(e);
+    }
+  }, true);
+  bindHeader();
+  setInterval(bindHeader, 1500);
+  console.log('[SL] glass attach + profile click');
 })();
 </script>
 
 
-<style id="sl-attach-glass-final">
-/* Force glass attach + mic on phone (light + dark) */
+<style id="sl-attach-glass-hard">
+/* HARD glass attach — more transparent so wallpaper shows */
 @media (max-width: 1024px) {
-  html.theme-light body.in-chat #attach-btn,
-  html.theme-light body.in-chat .composer #attach-btn,
-  body.theme-light.in-chat #attach-btn,
-  body.theme-light.in-chat .composer #attach-btn,
-  body.light-theme.in-chat #attach-btn,
-  body.in-chat #attach-btn,
-  body.in-chat .composer #attach-btn,
+  #attach-btn,
   #composer #attach-btn,
-  #attach-btn {
-    background: rgba(255, 255, 255, 0.38) !important;
-    background-color: rgba(255, 255, 255, 0.38) !important;
+  .composer #attach-btn,
+  body.in-chat #attach-btn,
+  body.theme-light #attach-btn,
+  body.theme-light.in-chat #attach-btn,
+  html.theme-light #attach-btn,
+  html.theme-light body #attach-btn {
+    background: rgba(255,255,255,0.22) !important;
+    background-color: rgba(255,255,255,0.22) !important;
     background-image: none !important;
-    border: 1px solid rgba(255, 255, 255, 0.5) !important;
-    color: rgba(30, 36, 48, 0.88) !important;
-    box-shadow: 0 2px 14px rgba(0,0,0,.08), inset 0 1px 0 rgba(255,255,255,.45) !important;
-    backdrop-filter: blur(28px) saturate(1.4) !important;
-    -webkit-backdrop-filter: blur(28px) saturate(1.4) !important;
-    opacity: 1 !important;
+    border: 1px solid rgba(255,255,255,0.4) !important;
+    color: rgba(20,28,40,0.85) !important;
+    box-shadow: none !important;
+    backdrop-filter: blur(20px) saturate(1.5) !important;
+    -webkit-backdrop-filter: blur(20px) saturate(1.5) !important;
+    -webkit-appearance: none !important;
+    appearance: none !important;
   }
-  body:not(.theme-light):not(.light-theme).in-chat #attach-btn,
-  body:not(.theme-light):not(.light-theme).in-chat .composer #attach-btn {
-    background: rgba(40, 46, 58, 0.42) !important;
-    background-color: rgba(40, 46, 58, 0.42) !important;
-    border-color: rgba(255,255,255,0.16) !important;
-    color: rgba(240,244,250,0.95) !important;
-  }
-  html.theme-light body.in-chat #circle-btn,
-  body.theme-light.in-chat #circle-btn,
-  body.in-chat #circle-btn,
+  #circle-btn,
   #composer #circle-btn,
-  #circle-btn {
-    background: rgba(255, 255, 255, 0.38) !important;
-    background-color: rgba(255, 255, 255, 0.38) !important;
+  body.in-chat #circle-btn,
+  body.theme-light #circle-btn,
+  html.theme-light #circle-btn {
+    background: rgba(255,255,255,0.22) !important;
+    background-color: rgba(255,255,255,0.22) !important;
     background-image: none !important;
-    border: 1px solid rgba(255, 255, 255, 0.5) !important;
-    color: rgba(30, 36, 48, 0.88) !important;
-    box-shadow: 0 2px 14px rgba(0,0,0,.08), inset 0 1px 0 rgba(255,255,255,.45) !important;
-    backdrop-filter: blur(28px) saturate(1.4) !important;
-    -webkit-backdrop-filter: blur(28px) saturate(1.4) !important;
-  }
-  body:not(.theme-light):not(.light-theme).in-chat #circle-btn {
-    background: rgba(40, 46, 58, 0.42) !important;
-    border-color: rgba(255,255,255,0.16) !important;
-    color: rgba(240,244,250,0.95) !important;
-  }
-  /* input shell same glass */
-  body.in-chat .composer-input-shell,
-  body.theme-light.in-chat .composer-input-shell,
-  html.theme-light body.in-chat .composer-input-shell {
-    background: rgba(255, 255, 255, 0.38) !important;
-    background-color: rgba(255, 255, 255, 0.38) !important;
-    border: 1px solid rgba(255, 255, 255, 0.5) !important;
-    backdrop-filter: blur(28px) saturate(1.4) !important;
-    -webkit-backdrop-filter: blur(28px) saturate(1.4) !important;
+    border: 1px solid rgba(255,255,255,0.4) !important;
+    color: rgba(20,28,40,0.85) !important;
+    box-shadow: none !important;
+    backdrop-filter: blur(20px) saturate(1.5) !important;
+    -webkit-backdrop-filter: blur(20px) saturate(1.5) !important;
   }
 }
 </style>
-<script id="sl-attach-glass-js">
+<script id="sl-attach-glass-hard-js">
 (function(){
-  if(window._slAttachGlass) return; window._slAttachGlass=1;
-  function paint(){
-    var ids=['attach-btn','circle-btn'];
-    ids.forEach(function(id){
-      var el=document.getElementById(id);
-      if(!el) return;
-      var light=document.body.classList.contains('theme-light')||document.body.classList.contains('light-theme')||document.documentElement.classList.contains('theme-light');
-      var bg=light?'rgba(255,255,255,0.38)':'rgba(40,46,58,0.42)';
-      var bd=light?'1px solid rgba(255,255,255,0.5)':'1px solid rgba(255,255,255,0.16)';
-      var col=light?'rgba(30,36,48,0.88)':'rgba(240,244,250,0.95)';
-      el.style.setProperty('background', bg, 'important');
-      el.style.setProperty('background-color', bg, 'important');
-      el.style.setProperty('background-image', 'none', 'important');
-      el.style.setProperty('border', bd, 'important');
-      el.style.setProperty('color', col, 'important');
-      el.style.setProperty('box-shadow', '0 2px 14px rgba(0,0,0,.08), inset 0 1px 0 rgba(255,255,255,.4)', 'important');
-      el.style.setProperty('backdrop-filter', 'blur(28px) saturate(1.4)', 'important');
-      el.style.setProperty('-webkit-backdrop-filter', 'blur(28px) saturate(1.4)', 'important');
-    });
+  if(window._slAttachHard) return; window._slAttachHard=1;
+  var busy=false;
+  function isLight(){
+    return document.body.classList.contains('theme-light')||document.body.classList.contains('light-theme')||document.documentElement.classList.contains('theme-light');
   }
-  paint();
-  setInterval(paint, 1200);
-  var obs=new MutationObserver(paint);
-  obs.observe(document.body,{attributes:true,attributeFilter:['class']});
-  console.log('[SL] attach glass force');
+  function paint(){
+    if(busy) return;
+    busy=true;
+    try{
+      var light=isLight();
+      var bg=light?'rgba(255,255,255,0.22)':'rgba(30,36,48,0.35)';
+      var bd=light?'1px solid rgba(255,255,255,0.4)':'1px solid rgba(255,255,255,0.14)';
+      var col=light?'rgba(20,28,40,0.85)':'rgba(240,244,250,0.95)';
+      ['attach-btn','circle-btn'].forEach(function(id){
+        var el=document.getElementById(id);
+        if(!el) return;
+        // only update via CSSOM properties (no setAttribute) to reduce thrash
+        if(el.style.backgroundColor !== bg){
+          el.style.setProperty('background', bg, 'important');
+          el.style.setProperty('background-color', bg, 'important');
+          el.style.setProperty('background-image', 'none', 'important');
+          el.style.setProperty('border', bd, 'important');
+          el.style.setProperty('box-shadow', 'none', 'important');
+          el.style.setProperty('backdrop-filter', 'blur(20px) saturate(1.5)', 'important');
+          el.style.setProperty('-webkit-backdrop-filter', 'blur(20px) saturate(1.5)', 'important');
+          el.style.setProperty('color', col, 'important');
+        }
+      });
+    }catch(e){}
+    busy=false;
+  }
+  // delayed first paint — don't block boot
+  setTimeout(paint, 1200);
+  setInterval(paint, 2000);
+  console.log('[SL] hard glass attach (safe)');
 })();
 </script>
 
