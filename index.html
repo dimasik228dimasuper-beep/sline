@@ -43027,8 +43027,13 @@ body{
 }
 #attach-btn svg { width: 20px !important; height: 20px !important; }
 html.theme-light #attach-btn, body.theme-light #attach-btn {
-  background: #FFF !important; color: #1A1D21 !important;
-  box-shadow: 0 1px 6px rgba(0,0,0,.1) !important;
+  /* glass — do not force solid white */
+  background: rgba(255,255,255,0.42) !important;
+  color: #1A1D21 !important;
+  box-shadow: 0 2px 12px rgba(0,0,0,.08), inset 0 1px 0 rgba(255,255,255,.4) !important;
+  border: 1px solid rgba(255,255,255,0.5) !important;
+  backdrop-filter: blur(24px) saturate(1.35) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(1.35) !important;
 }
 
 /* hide pending stickers row completely */
@@ -43110,8 +43115,12 @@ html.theme-light #sticker-btn, body.theme-light #sticker-btn { color: #5A4A6A !i
   transition: transform .22s cubic-bezier(.34,1.4,.64,1) !important;
 }
 html.theme-light #circle-btn, body.theme-light #circle-btn {
-  background: #FFF !important; color: #1A1D21 !important;
-  box-shadow: 0 1px 6px rgba(0,0,0,.1) !important;
+  background: rgba(255,255,255,0.42) !important;
+  color: #1A1D21 !important;
+  box-shadow: 0 2px 12px rgba(0,0,0,.08), inset 0 1px 0 rgba(255,255,255,.4) !important;
+  border: 1px solid rgba(255,255,255,0.5) !important;
+  backdrop-filter: blur(24px) saturate(1.35) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(1.35) !important;
 }
 #circle-btn:active, #attach-btn:active, #sticker-btn:active { transform: scale(.88) !important; }
 #circle-btn svg { width: 22px !important; height: 22px !important; }
@@ -46759,6 +46768,97 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
   bindDirect();
   setInterval(bindDirect, 1500);
   console.log('[SL] header info click ready');
+})();
+</script>
+
+
+<style id="sl-attach-glass-final">
+/* Force glass attach + mic on phone (light + dark) */
+@media (max-width: 1024px) {
+  html.theme-light body.in-chat #attach-btn,
+  html.theme-light body.in-chat .composer #attach-btn,
+  body.theme-light.in-chat #attach-btn,
+  body.theme-light.in-chat .composer #attach-btn,
+  body.light-theme.in-chat #attach-btn,
+  body.in-chat #attach-btn,
+  body.in-chat .composer #attach-btn,
+  #composer #attach-btn,
+  #attach-btn {
+    background: rgba(255, 255, 255, 0.38) !important;
+    background-color: rgba(255, 255, 255, 0.38) !important;
+    background-image: none !important;
+    border: 1px solid rgba(255, 255, 255, 0.5) !important;
+    color: rgba(30, 36, 48, 0.88) !important;
+    box-shadow: 0 2px 14px rgba(0,0,0,.08), inset 0 1px 0 rgba(255,255,255,.45) !important;
+    backdrop-filter: blur(28px) saturate(1.4) !important;
+    -webkit-backdrop-filter: blur(28px) saturate(1.4) !important;
+    opacity: 1 !important;
+  }
+  body:not(.theme-light):not(.light-theme).in-chat #attach-btn,
+  body:not(.theme-light):not(.light-theme).in-chat .composer #attach-btn {
+    background: rgba(40, 46, 58, 0.42) !important;
+    background-color: rgba(40, 46, 58, 0.42) !important;
+    border-color: rgba(255,255,255,0.16) !important;
+    color: rgba(240,244,250,0.95) !important;
+  }
+  html.theme-light body.in-chat #circle-btn,
+  body.theme-light.in-chat #circle-btn,
+  body.in-chat #circle-btn,
+  #composer #circle-btn,
+  #circle-btn {
+    background: rgba(255, 255, 255, 0.38) !important;
+    background-color: rgba(255, 255, 255, 0.38) !important;
+    background-image: none !important;
+    border: 1px solid rgba(255, 255, 255, 0.5) !important;
+    color: rgba(30, 36, 48, 0.88) !important;
+    box-shadow: 0 2px 14px rgba(0,0,0,.08), inset 0 1px 0 rgba(255,255,255,.45) !important;
+    backdrop-filter: blur(28px) saturate(1.4) !important;
+    -webkit-backdrop-filter: blur(28px) saturate(1.4) !important;
+  }
+  body:not(.theme-light):not(.light-theme).in-chat #circle-btn {
+    background: rgba(40, 46, 58, 0.42) !important;
+    border-color: rgba(255,255,255,0.16) !important;
+    color: rgba(240,244,250,0.95) !important;
+  }
+  /* input shell same glass */
+  body.in-chat .composer-input-shell,
+  body.theme-light.in-chat .composer-input-shell,
+  html.theme-light body.in-chat .composer-input-shell {
+    background: rgba(255, 255, 255, 0.38) !important;
+    background-color: rgba(255, 255, 255, 0.38) !important;
+    border: 1px solid rgba(255, 255, 255, 0.5) !important;
+    backdrop-filter: blur(28px) saturate(1.4) !important;
+    -webkit-backdrop-filter: blur(28px) saturate(1.4) !important;
+  }
+}
+</style>
+<script id="sl-attach-glass-js">
+(function(){
+  if(window._slAttachGlass) return; window._slAttachGlass=1;
+  function paint(){
+    var ids=['attach-btn','circle-btn'];
+    ids.forEach(function(id){
+      var el=document.getElementById(id);
+      if(!el) return;
+      var light=document.body.classList.contains('theme-light')||document.body.classList.contains('light-theme')||document.documentElement.classList.contains('theme-light');
+      var bg=light?'rgba(255,255,255,0.38)':'rgba(40,46,58,0.42)';
+      var bd=light?'1px solid rgba(255,255,255,0.5)':'1px solid rgba(255,255,255,0.16)';
+      var col=light?'rgba(30,36,48,0.88)':'rgba(240,244,250,0.95)';
+      el.style.setProperty('background', bg, 'important');
+      el.style.setProperty('background-color', bg, 'important');
+      el.style.setProperty('background-image', 'none', 'important');
+      el.style.setProperty('border', bd, 'important');
+      el.style.setProperty('color', col, 'important');
+      el.style.setProperty('box-shadow', '0 2px 14px rgba(0,0,0,.08), inset 0 1px 0 rgba(255,255,255,.4)', 'important');
+      el.style.setProperty('backdrop-filter', 'blur(28px) saturate(1.4)', 'important');
+      el.style.setProperty('-webkit-backdrop-filter', 'blur(28px) saturate(1.4)', 'important');
+    });
+  }
+  paint();
+  setInterval(paint, 1200);
+  var obs=new MutationObserver(paint);
+  obs.observe(document.body,{attributes:true,attributeFilter:['class']});
+  console.log('[SL] attach glass force');
 })();
 </script>
 
