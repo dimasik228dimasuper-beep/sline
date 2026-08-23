@@ -45793,5 +45793,414 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
 })();
 </script>
 
+
+<style id="sl-pc-tg-menu-info">
+/* Hide left nav rail on PC — menu lives in hamburger */
+@media (min-width: 1025px) {
+  .nav-rail,
+  #nav-rail {
+    display: none !important;
+    width: 0 !important;
+    min-width: 0 !important;
+    border: none !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+  }
+  #app-screen { flex-direction: row; }
+
+  /* Search row with hamburger */
+  #page-chats .max-search-box,
+  #page-chats .sidebar-scroll .search-box {
+    display: flex !important;
+    align-items: center;
+    gap: 8px;
+    margin: 10px 12px 8px !important;
+  }
+  #page-chats .max-search-box .search-icon {
+    /* keep inside input */
+  }
+  #sl-burger-btn {
+    flex-shrink: 0;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+  }
+  #sl-burger-btn:hover {
+    background: var(--panel-hover);
+    color: var(--text);
+  }
+  #sl-burger-btn svg { width: 22px; height: 22px; }
+  #page-chats .max-search-box input,
+  #page-chats .search-box input {
+    flex: 1;
+    min-width: 0;
+  }
+
+  /* Main menu dropdown (Telegram-like) */
+  #sl-main-menu {
+    position: absolute;
+    top: 52px;
+    left: 12px;
+    width: 260px;
+    max-height: min(70vh, 480px);
+    overflow-y: auto;
+    background: var(--panel, #fff);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    box-shadow: 0 12px 40px rgba(0,0,0,.18);
+    z-index: 6000;
+    padding: 6px;
+    display: none;
+  }
+  #sl-main-menu.show { display: block; }
+  body.theme-light #sl-main-menu,
+  body.light-theme #sl-main-menu {
+    background: #FFFFFF;
+    box-shadow: 0 12px 40px rgba(15,23,42,.14);
+  }
+  #sl-main-menu .sl-mm-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 11px 12px;
+    border-radius: 10px;
+    border: none;
+    background: transparent;
+    color: var(--text);
+    font-size: 14px;
+    font-weight: 500;
+    width: 100%;
+    text-align: left;
+    cursor: pointer;
+  }
+  #sl-main-menu .sl-mm-item:hover {
+    background: var(--panel-hover, rgba(0,0,0,.05));
+  }
+  #sl-main-menu .sl-mm-item svg {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    color: var(--muted);
+  }
+  #sl-main-menu .sl-mm-item .sl-mm-ico-fill {
+    fill: currentColor;
+    stroke: none;
+  }
+  #sl-main-menu .sl-mm-item .arrow {
+    margin-left: auto;
+    color: var(--muted);
+    font-size: 16px;
+  }
+  #sl-main-menu .sl-mm-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    border-radius: 10px;
+    margin-bottom: 4px;
+  }
+  #sl-main-menu .sl-mm-head .sl-mm-logo {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #4C7CF3, #6D5DF6);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    font-size: 14px;
+  }
+  #sl-main-menu .sl-mm-head .sl-mm-title {
+    font-weight: 700;
+    font-size: 14px;
+  }
+
+  /* Right-side partner info panel on PC */
+  #sl-user-profile.sl-sheet,
+  #sl-channel-profile.sl-sheet {
+    position: fixed !important;
+    top: 12px !important;
+    right: 12px !important;
+    left: auto !important;
+    bottom: 12px !important;
+    inset: 12px 12px 12px auto !important;
+    width: min(380px, 36vw) !important;
+    max-width: 420px !important;
+    height: auto !important;
+    max-height: none !important;
+    border-radius: 16px !important;
+    box-shadow: 0 12px 48px rgba(0,0,0,.22) !important;
+    z-index: 13000 !important;
+    transform: none !important;
+    animation: slInfoSlideIn .22s cubic-bezier(.2,.8,.2,1) !important;
+    overflow: auto !important;
+    background: var(--panel, #1A222D) !important;
+  }
+  body.theme-light #sl-user-profile.sl-sheet,
+  body.light-theme #sl-user-profile.sl-sheet,
+  body.theme-light #sl-channel-profile.sl-sheet {
+    background: #FFFFFF !important;
+  }
+  @keyframes slInfoSlideIn {
+    from { opacity: 0; transform: translateX(24px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+  /* dim chat area slightly when info open */
+  body.sl-info-open #page-chats .chat-pane::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,.08);
+    pointer-events: none;
+    z-index: 3;
+    border-radius: inherit;
+  }
+  body.sl-info-open #page-chats .chat-pane {
+    position: relative;
+  }
+}
+/* hamburger also useful on tablet list */
+@media (max-width: 1024px) {
+  #sl-burger-btn { display: none !important; }
+  #sl-main-menu { display: none !important; }
+}
+</style>
+<script>
+/* SL: PC hamburger main menu + right-side partner info */
+(function(){
+  if (window._slPcTgMenuV1) return;
+  window._slPcTgMenuV1 = 1;
+
+  function isDesktop(){
+    try { return window.matchMedia('(min-width: 1025px)').matches; }
+    catch(e){ return (window.innerWidth||0) >= 1025; }
+  }
+
+  function ensureBurger(){
+    var box = document.querySelector('#page-chats .max-search-box') ||
+              document.querySelector('#page-chats .sidebar-scroll .search-box') ||
+              document.querySelector('.sidebar .search-box');
+    if (!box) return null;
+    var btn = document.getElementById('sl-burger-btn');
+    if (btn) return btn;
+    btn = document.createElement('button');
+    btn.type = 'button';
+    btn.id = 'sl-burger-btn';
+    btn.title = 'Меню';
+    btn.setAttribute('aria-label', 'Меню');
+    btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>';
+    // put before first child (before search icon/input)
+    box.insertBefore(btn, box.firstChild);
+    // make box relative for menu positioning
+    var side = document.getElementById('sidebar');
+    if (side) side.style.position = side.style.position || 'relative';
+    btn.addEventListener('click', function(e){
+      e.preventDefault();
+      e.stopPropagation();
+      toggleMenu();
+    });
+    return btn;
+  }
+
+  function menuHtml(){
+    var name = 'SLine Messenger';
+    try {
+      if (window.myProfile) {
+        var n = (myProfile.first_name || '') + (myProfile.last_name ? ' ' + myProfile.last_name : '');
+        if (n.trim()) name = n.trim();
+      }
+    } catch(e){}
+    return '' +
+      '<div class="sl-mm-head">' +
+        '<div class="sl-mm-logo">S</div>' +
+        '<div class="sl-mm-title">SLine Messenger</div>' +
+      '</div>' +
+      '<button type="button" class="sl-mm-item" data-act="add-account">' +
+        '<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Добавить аккаунт</button>' +
+      '<button type="button" class="sl-mm-item" data-act="profile">' +
+        '<svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>Мой профиль</button>' +
+      '<button type="button" class="sl-mm-item" data-act="saved">' +
+        '<svg viewBox="0 0 24 24"><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z"/></svg>Избранное</button>' +
+      '<button type="button" class="sl-mm-item" data-act="contacts">' +
+        '<svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>Контакты</button>' +
+      '<button type="button" class="sl-mm-item" data-act="wallet">' +
+        '<svg viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="14" rx="2"/><path d="M2 10h20"/><path d="M16 14h2"/></svg>Кошелёк</button>' +
+      '<button type="button" class="sl-mm-item" data-act="settings">' +
+        '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/></svg>Настройки</button>' +
+      '<button type="button" class="sl-mm-item" data-act="more">' +
+        '<svg viewBox="0 0 24 24" class="sl-mm-ico-fill"><circle cx="6" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="18" cy="12" r="1.6"/></svg>Ещё<span class="arrow">›</span></button>';
+  }
+
+  function ensureMenu(){
+    var m = document.getElementById('sl-main-menu');
+    if (m) return m;
+    m = document.createElement('div');
+    m.id = 'sl-main-menu';
+    m.innerHTML = menuHtml();
+    var side = document.getElementById('sidebar') || document.body;
+    side.appendChild(m);
+    m.addEventListener('click', function(e){
+      var item = e.target.closest('[data-act]');
+      if (!item) return;
+      e.preventDefault();
+      e.stopPropagation();
+      var act = item.getAttribute('data-act');
+      closeMenu();
+      handleAct(act);
+    });
+    return m;
+  }
+
+  function toggleMenu(){
+    if (!isDesktop()) return;
+    var m = ensureMenu();
+    m.classList.toggle('show');
+  }
+  function closeMenu(){
+    var m = document.getElementById('sl-main-menu');
+    if (m) m.classList.remove('show');
+  }
+  function handleAct(act){
+    try {
+      if (act === 'settings') {
+        if (typeof switchPage === 'function') switchPage('settings');
+        return;
+      }
+      if (act === 'profile') {
+        if (window.myProfile && typeof openFullProfile === 'function') openFullProfile(myProfile);
+        else if (typeof switchPage === 'function') switchPage('settings');
+        return;
+      }
+      if (act === 'saved' || act === 'favorites') {
+        // try open saved messages / self chat
+        if (window.myProfile && typeof openChat === 'function') {
+          openChat(myProfile);
+        } else if (typeof showToast === 'function') showToast('Избранное');
+        return;
+      }
+      if (act === 'contacts') {
+        var btn = document.getElementById('plus-btn');
+        // open find contact if exists
+        if (typeof openFindContact === 'function') openFindContact();
+        else if (typeof showToast === 'function') showToast('Контакты');
+        return;
+      }
+      if (act === 'wallet') {
+        if (typeof showToast === 'function') showToast('Кошелёк скоро');
+        return;
+      }
+      if (act === 'add-account') {
+        if (typeof showToast === 'function') showToast('Добавление аккаунта');
+        return;
+      }
+      if (act === 'more') {
+        if (typeof switchPage === 'function') switchPage('settings');
+        return;
+      }
+    } catch(err) { console.warn(err); }
+  }
+
+  document.addEventListener('click', function(e){
+    var m = document.getElementById('sl-main-menu');
+    if (!m || !m.classList.contains('show')) return;
+    if (e.target.closest('#sl-main-menu') || e.target.closest('#sl-burger-btn')) return;
+    closeMenu();
+  }, true);
+
+  // ---- Right-side info panel behaviour ----
+  function markInfoOpen(){
+    if (!isDesktop()) return;
+    document.body.classList.add('sl-info-open');
+    var sheet = document.getElementById('sl-user-profile') || document.getElementById('sl-channel-profile');
+    if (sheet) {
+      // ensure close button works and clears class
+      var back = sheet.querySelector('#up-back, .sl-sheet-back, #cp-back');
+      if (back && !back.dataset.slInfoBound) {
+        back.dataset.slInfoBound = '1';
+        back.addEventListener('click', function(){
+          document.body.classList.remove('sl-info-open');
+        });
+      }
+    }
+  }
+  function markInfoClose(){
+    document.body.classList.remove('sl-info-open');
+  }
+
+  // Observe profile sheet mount
+  try {
+    new MutationObserver(function(muts){
+      for (var i=0;i<muts.length;i++){
+        var nodes = muts[i].addedNodes;
+        if (!nodes) continue;
+        for (var j=0;j<nodes.length;j++){
+          var n = nodes[j];
+          if (n && n.id && (n.id === 'sl-user-profile' || n.id === 'sl-channel-profile')) {
+            if (isDesktop()) markInfoOpen();
+          }
+        }
+        var removed = muts[i].removedNodes;
+        if (removed) {
+          for (var k=0;k<removed.length;k++){
+            var r = removed[k];
+            if (r && r.id && (r.id === 'sl-user-profile' || r.id === 'sl-channel-profile')) {
+              markInfoClose();
+            }
+          }
+        }
+      }
+    }).observe(document.body, { childList: true });
+  } catch(e){}
+
+  // Also bind whole header click on desktop (not only avatar/name)
+  function bindHeaderInfo(){
+    var hdr = document.querySelector('#page-chats .chat-header');
+    if (!hdr || hdr.dataset.slInfoHdr) return;
+    hdr.dataset.slInfoHdr = '1';
+    hdr.addEventListener('click', function(e){
+      if (!isDesktop()) return;
+      // ignore action buttons
+      if (e.target.closest('.chat-actions') || e.target.closest('.back-btn') || e.target.closest('button')) return;
+      try {
+        if (window.activePartner && typeof openFullProfile === 'function') openFullProfile(activePartner);
+        else if (window.activeGroup && typeof openGroupInfo === 'function') openGroupInfo(activeGroup);
+        else if (window.activeGroup && typeof openFullProfile === 'function') openFullProfile(activeGroup);
+      } catch(err){}
+    });
+  }
+
+  function boot(){
+    if (isDesktop()) {
+      ensureBurger();
+      ensureMenu();
+      bindHeaderInfo();
+    }
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+  else boot();
+  setTimeout(boot, 500);
+  setTimeout(boot, 2000);
+  window.addEventListener('resize', function(){
+    if (!isDesktop()) closeMenu();
+    else boot();
+  });
+
+  console.log('[SL] PC hamburger menu + right info panel');
+})();
+</script>
+
 </body>
 </html>
