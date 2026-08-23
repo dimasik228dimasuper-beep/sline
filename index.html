@@ -6278,7 +6278,7 @@ function sanitizeContactsList(){
   try{
     if(!myProfile||!myProfile.id||!Array.isArray(contacts)) return;
     const me=String(myProfile.id);
-    // Keep self always. Others only if explicitly verified for THIS user.
+    // Keep self always. Keep real chats (DM flag, last message, or known contact).
     let pinned=new Set();
     try{
       const pk='sl_pinned_chats_'+me;
@@ -6289,9 +6289,18 @@ function sanitizeContactsList(){
     contacts=contacts.filter(function(c){
       if(!c||!c.id) return false;
       if(String(c.id)===me) return true;
-      // require explicit flag set only after network-confirmed DM involving me
-      if(c._dmWithMe === true && c.lastAt) return true;
-      if(pinned.has(String(c.id)) && c._dmWithMe === true) return true;
+      // bots / support always
+      if(c.isBot||c.isUserBot||c.isSupport||c.isBildBot||c.isNews) return true;
+      var id=String(c.id||'');
+      if(id==='support_sline'||id==='bild_bot'||/^bot_/i.test(id)||/_bot$/i.test(id)) return true;
+      // verified DM
+      if(c._dmWithMe === true) return true;
+      // has conversation history
+      if(c.lastAt || c.lastMessage) return true;
+      // pinned
+      if(pinned.has(String(c.id))) return true;
+      // from search / explicitly added
+      if(c._fromSearch) return true;
       return false;
     });
     // ensure self present
@@ -6343,9 +6352,14 @@ async function loadChats(){
   // 1) Instant paint from cache
   const cached=loadCache();
   if(cached && cached.length){
-    contacts=cached;
+    contacts=cached.map(function(x){
+      if(!x) return x;
+      if(x._dmWithMe !== true) x={...x, _dmWithMe:true};
+      return x;
+    });
     try{ sanitizeContactsList(); }catch(e){}
     try{ renderContactsAndGroups(); }catch(e){}
+    try{ _slLoadDone=true; }catch(e){}
   } else {
     list.innerHTML=loaderHTML();
   }
@@ -6378,7 +6392,13 @@ async function loadChats(){
     }catch(timeoutErr){
       console.warn('[SL] loadChats network timeout', timeoutErr);
       data=null;
-      throw timeoutErr; // handled by outer catch → cache/self
+      // If cache already painted contacts, keep them — don't wipe
+      if(Array.isArray(contacts) && contacts.length){
+        try{ renderContactsAndGroups(); }catch(e){}
+        try{ _slFinishLoad(); }catch(e){}
+        return;
+      }
+      throw timeoutErr;
     }
     const map=new Map();
     for(const m of(data||[])){
@@ -47008,20 +47028,31 @@ body:not(.theme-light):not(.light-theme) .page-header {
       if(!list) return;
       var spin=list.querySelector('.sl-loader-inline, .sl-spinner');
       if(!spin) return;
-      // still only spinner after boot — force render
-      if(typeof renderContactsAndGroups==='function'){
-        try{ renderContactsAndGroups(); }catch(e){}
+      // Prefer re-render if we already have contacts in memory
+      if(typeof contacts!=='undefined' && Array.isArray(contacts) && contacts.length){
+        try{ if(typeof renderContactsAndGroups==='function') renderContactsAndGroups(); }catch(e){}
+        return;
       }
-      // if STILL spinner, show empty
+      // try cache
+      try{
+        if(typeof window.slLoadContactsCache==='function'){
+          var cached=window.slLoadContactsCache();
+          if(cached && cached.length && typeof contacts!=='undefined'){
+            contacts=cached.map(function(x){ return x ? Object.assign({}, x, {_dmWithMe:true}) : x; });
+            if(typeof renderContactsAndGroups==='function') renderContactsAndGroups();
+            return;
+          }
+        }
+      }catch(e){}
+      try{ if(typeof renderContactsAndGroups==='function') renderContactsAndGroups(); }catch(e){}
+      // only show empty if still spinner and no contact rows
       if(list.querySelector('.sl-loader-inline, .sl-spinner') && !list.querySelector('.contact')){
         list.innerHTML='<div class="empty-state">Нет чатов</div>';
       }
     }catch(e){}
   }
-  setTimeout(clearEternalLoader, 3500);
-  setTimeout(clearEternalLoader, 7000);
-  setTimeout(clearEternalLoader, 12000);
-  // Theme: ensure dark classes map to TG dark (already applied via CSS)
+  setTimeout(clearEternalLoader, 5000);
+  setTimeout(clearEternalLoader, 10000);
   try{
     var t=localStorage.getItem('sl_theme')||localStorage.getItem('theme')||'';
     if(t==='dark'||t==='night'||t==='night-mode'){
@@ -47031,7 +47062,7 @@ body:not(.theme-light):not(.light-theme) .page-header {
       document.body.classList.remove('theme-light','light-theme');
     }
   }catch(e){}
-  console.log('[SL] loader watchdog + theme ensure');
+  console.log('[SL] loader watchdog (soft)');
 })();
 </script>
 
