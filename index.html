@@ -14630,7 +14630,7 @@ window.openFindBotSheet = function(){
     try{
       const c={
         id:bot.id, username:bot.username, first_name:bot.name||bot.username,
-        color:bot.color||'#4C7CF3', isBot:true, isUserBot:true, userBot:true,
+        color:bot.color||'#4C7CF3', isBot:true, isUserBot:true, userBot:true, _dmWithMe:true,
         rules:bot.rules||[], welcome:bot.welcome||'', description:bot.description||''
       };
       if(typeof contacts!=='undefined' && Array.isArray(contacts) && !contacts.find(x=>x.id===c.id)){
@@ -14691,7 +14691,7 @@ window.openAddContactSheet = function(){
       if(typeof window.slFetchBot==='function'){
         const bot=await window.slFetchBot(q);
         if(bot){
-          const c={id:bot.id,username:bot.username,first_name:bot.name||bot.username,color:bot.color||'#4C7CF3',isBot:true,isUserBot:true,userBot:true,rules:bot.rules||[],welcome:bot.welcome||''};
+          const c={id:bot.id,username:bot.username,first_name:bot.name||bot.username,color:bot.color||'#4C7CF3',isBot:true,isUserBot:true,userBot:true,_dmWithMe:true,rules:bot.rules||[],welcome:bot.welcome||''};
           if(typeof contacts!=='undefined'&&!contacts.find(x=>x.id===c.id)) contacts.unshift(c);
           sheet.remove();
           if(typeof openChat==='function') openChat(c);
@@ -19946,6 +19946,7 @@ const SUPPORT_CONTACT = {
   color: '#4C7CF3',
   isBot: true,
   isSupport: true,
+  _dmWithMe: true,
   lastMessage: 'Напишите нам — поможем',
   lastAt: new Date().toISOString()
 };
@@ -19964,7 +19965,9 @@ function ensureSupportContact(){
   try{
     if(!Array.isArray(contacts)) return;
     if(!contacts.find(c=>c && c.id===SUPPORT_CONTACT.id)){
-      contacts.unshift({...SUPPORT_CONTACT});
+      contacts.unshift({...SUPPORT_CONTACT, _dmWithMe:true});
+    } else {
+      try{ var sc=contacts.find(c=>c&&c.id===SUPPORT_CONTACT.id); if(sc){ sc._dmWithMe=true; sc.isSupport=true; sc.isBot=true; } }catch(e){}
     }
     if(isSupportAdmin()){
       if(!contacts.find(c=>c && c.id==='support_inbox_admin')){
@@ -19975,6 +19978,7 @@ function ensureSupportContact(){
           color:'#F0708A',
           isBot:true,
           isSupportInbox:true,
+          _dmWithMe:true,
           lastMessage: (typeof currentLang!=='undefined'&&currentLang==='en') ? 'User tickets' : 'Обращения пользователей',
           lastAt:new Date().toISOString()
         });
@@ -44961,20 +44965,46 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
   }
 
   // Block opening chats that are not verified DMs for current user
+  // BUT always allow bots, support, system contacts, saved messages
+  function isSystemOrBotPartner(p){
+    if(!p) return false;
+    try{
+      if(p.isBot || p.isUserBot || p.userBot || p.isSupport || p.isSupportInbox) return true;
+      if(p.isBildBot || p.isNews || p.isChannelBot) return true;
+      var id = String(p.id||'');
+      if(id==='support_sline' || id==='support_inbox_admin') return true;
+      if(id==='bild_bot' || id==='sline_news' || id==='news_sline') return true;
+      if(/^bot_/i.test(id) || /_bot$/i.test(id)) return true;
+      if(p.username && (/_bot$/i.test(String(p.username)) || String(p.username)==='support')) return true;
+    }catch(e){}
+    return false;
+  }
   var _openChat = window.openChat;
   if(typeof _openChat==='function'){
     window.openChat = async function(partner){
       try{
         var me = meId();
         if(partner && partner.id && me && String(partner.id)!==me){
+          // System / bots / support — always open
+          if(isSystemOrBotPartner(partner)){
+            return _openChat.apply(this, arguments);
+          }
           if(partner._dmWithMe !== true){
             // allow only if contacts list has verified entry
             var ok=false;
             try{
               ok = (window.contacts||[]).some(function(c){
-                return c && String(c.id)===String(partner.id) && c._dmWithMe===true;
+                return c && String(c.id)===String(partner.id) && (c._dmWithMe===true || isSystemOrBotPartner(c));
               });
             }catch(e){}
+            // also allow if contact exists in list at all (user tapped from chats)
+            if(!ok){
+              try{
+                ok = (window.contacts||[]).some(function(c){
+                  return c && String(c.id)===String(partner.id);
+                });
+              }catch(e){}
+            }
             if(!ok){
               console.warn('[SL] blocked openChat — not a verified DM for this account', partner && partner.id);
               try{ if(typeof showToast==='function') showToast('Нет переписки с этим контактом'); }catch(e){}
