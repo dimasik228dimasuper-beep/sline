@@ -12061,31 +12061,90 @@ function applyWallpaperPreset(){
   const list=document.getElementById('messages-list'); if(!list) return;
   const w=(function(){ try{ var v=storage.getItem(WALLPAPER_KEY); if(v===''||v==='none'||v==='null'){ try{storage.removeItem(WALLPAPER_KEY);}catch(x){} return null; } return v; }catch(e){ return null; } })();
   const isLight = (typeof slIsLightTheme==='function') ? slIsLightTheme() : (document.body.classList.contains('theme-light')||document.documentElement.classList.contains('theme-light'));
-  function paintMsgOnly(url, size, repeat, pos){
+  const isDesk = (function(){ try{ return window.matchMedia('(min-width: 1025px)').matches; }catch(e){ return (window.innerWidth||0)>=1025; } })();
+  const layout = document.querySelector('#page-chats .chats-layout') || document.querySelector('.chats-layout');
+
+  function paintEl(el, url, size, repeat, pos){
+    if(!el) return;
     try{
-      list.style.setProperty('background-image', url ? ('url('+url+')') : 'none', 'important');
-      list.style.setProperty('background-size', size||'cover', 'important');
-      list.style.setProperty('background-repeat', repeat||'no-repeat', 'important');
-      list.style.setProperty('background-position', pos||'center center', 'important');
-      list.style.setProperty('background-color', 'transparent', 'important');
+      if(!url){
+        el.style.removeProperty('background-image');
+        return;
+      }
+      el.style.setProperty('background-image', 'url('+url+')', 'important');
+      el.style.setProperty('background-size', size||'cover', 'important');
+      el.style.setProperty('background-repeat', repeat||'no-repeat', 'important');
+      el.style.setProperty('background-position', pos||'center center', 'important');
+      el.style.setProperty('background-color', 'transparent', 'important');
     }catch(e){}
   }
-  // NEVER put wallpaper on sidebar / chat list / page chrome — only message area
-  try{
-    ['chat-pane','chat-active','page-chats','sidebar','no-chat-state'].forEach(function(id){
-      var el = document.getElementById(id) || document.querySelector('.'+id);
-      if(!el) return;
+  function paintGrad(el, grad){
+    if(!el) return;
+    try{
+      el.style.setProperty('background-image', grad, 'important');
+      el.style.setProperty('background-size','cover','important');
+      el.style.setProperty('background-repeat','no-repeat','important');
+      el.style.setProperty('background-position','center center','important');
+    }catch(e){}
+  }
+  function clearWallpaper(el){
+    if(!el) return;
+    try{
       el.style.removeProperty('background-image');
       el.classList.remove('theme-doodle-wall','has-wall');
-      if(id==='sidebar' || id==='page-chats'){
-        el.style.setProperty('background-image','none','important');
+    }catch(e){}
+  }
+
+  // Sidebar must stay solid (no wallpaper)
+  try{
+    var side=document.getElementById('sidebar') || document.querySelector('.sidebar');
+    if(side){
+      side.style.setProperty('background-image','none','important');
+      side.classList.remove('theme-doodle-wall','has-wall');
+    }
+  }catch(e){}
+
+  // Resolve final url
+  var url = null, isGrad = false;
+  if(w){
+    if(w.startsWith('grad:')){ isGrad = true; url = w.slice(5); }
+    else url = w;
+  } else {
+    url = (typeof slDefaultWallpaperUrl==='function') ? slDefaultWallpaperUrl() : null;
+  }
+
+  if(isDesk && layout){
+    // Continuous wallpaper under list + chat
+    list.style.setProperty('background-image','none','important');
+    list.style.setProperty('background-color','transparent','important');
+    list.classList.add('has-wall');
+    list.classList.remove('theme-doodle-wall');
+    if(isGrad) paintGrad(layout, url);
+    else if(url){
+      // light desktop photo = cover; dark default = tile
+      if(isLight || w) paintEl(layout, url, 'cover', 'no-repeat', 'center center');
+      else paintEl(layout, url, '340px auto', 'repeat', 'center top');
+    } else {
+      clearWallpaper(layout);
+    }
+    // empty state transparent
+    try{
+      var nc=document.getElementById('no-chat-state');
+      if(nc){
+        nc.style.setProperty('background-image','none','important');
+        nc.style.setProperty('background-color','transparent','important');
       }
-    });
-    var pane=document.querySelector('.chat-pane');
-    var side=document.querySelector('.sidebar');
-    [pane, side].forEach(function(el){
+    }catch(e){}
+    return;
+  }
+
+  // Mobile / narrow: wallpaper only on messages-list (old behavior)
+  try{
+    if(layout) clearWallpaper(layout);
+    ['chat-pane','chat-active','page-chats','no-chat-state'].forEach(function(id){
+      var el = document.getElementById(id) || document.querySelector('.'+id);
       if(!el) return;
-      el.style.setProperty('background-image','none','important');
+      if(id!=='no-chat-state') el.style.removeProperty('background-image');
       el.classList.remove('theme-doodle-wall','has-wall');
     });
   }catch(e){}
@@ -12093,27 +12152,17 @@ function applyWallpaperPreset(){
   if(w){
     list.classList.remove('theme-doodle-wall');
     list.classList.add('has-wall');
-    if(w.startsWith('grad:')){
-      try{
-        list.style.setProperty('background-image', w.slice(5), 'important');
-        list.style.setProperty('background-size','cover','important');
-        list.style.setProperty('background-repeat','no-repeat','important');
-        list.style.setProperty('background-position','center center','important');
-      }catch(e){}
-    } else {
-      paintMsgOnly(w, 'cover', 'no-repeat', 'center center');
-    }
+    if(isGrad) paintGrad(list, url);
+    else paintEl(list, url, 'cover', 'no-repeat', 'center center');
     try{ applyNoChatWallpaper(); }catch(e){}
     return;
   }
-  // Default: light theme = photo wallpapers only inside messages; dark = tile
   list.classList.add('theme-doodle-wall');
   list.classList.add('has-wall');
-  const url = (typeof slDefaultWallpaperUrl==='function') ? slDefaultWallpaperUrl() : null;
   if(isLight && url){
-    paintMsgOnly(url, 'cover', 'no-repeat', 'center center');
+    paintEl(list, url, 'cover', 'no-repeat', 'center center');
   } else if(url){
-    paintMsgOnly(url, '340px auto', 'repeat', 'center top');
+    paintEl(list, url, '340px auto', 'repeat', 'center top');
   }
   try{ applyNoChatWallpaper(); }catch(e){}
 }
@@ -12121,7 +12170,13 @@ function applyNoChatWallpaper(){
   try{
     const el = document.getElementById('no-chat-state');
     if(!el) return;
-    // Solid neutral background — no yellow/green wallpaper on empty state / list
+    const isDesk = (function(){ try{ return window.matchMedia('(min-width: 1025px)').matches; }catch(e){ return (window.innerWidth||0)>=1025; } })();
+    // On desktop wallpaper is on .chats-layout — keep empty state transparent
+    if(isDesk){
+      el.style.setProperty('background-image','none','important');
+      el.style.setProperty('background-color','transparent','important');
+      return;
+    }
     el.style.setProperty('background-image','none','important');
     const isLight = (typeof slIsLightTheme==='function') ? slIsLightTheme() : (document.body.classList.contains('theme-light')||document.documentElement.classList.contains('theme-light'));
     el.style.setProperty('background-color', isLight ? '#F4F6F9' : '#0F1419', 'important');
@@ -44931,33 +44986,34 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
 
 
 <style id="sl-desktop-rounded-sidebar">
-/* Desktop: floating rounded chat list + resizable width */
+/* Desktop: continuous wallpaper + floating rounded chat list only */
 @media (min-width: 1025px) {
   :root {
     --sl-sidebar-w: 360px;
   }
-  #page-chats.active {
+  /* Page / layout shows wallpaper */
+  #page-chats.active,
+  #page-chats .chats-layout {
     background: transparent !important;
   }
   #page-chats .chats-layout {
     display: flex;
     flex: 1;
     min-height: 0;
-    gap: 10px;
-    padding: 10px 10px 10px 0;
+    gap: 12px;
+    padding: 12px 12px 12px 0;
     box-sizing: border-box;
-    background: transparent !important;
     overflow: hidden;
+    /* wallpaper painted here by JS */
+    background-size: cover !important;
+    background-position: center center !important;
+    background-repeat: no-repeat !important;
   }
-  /* Left nav rail stays flush; chats area floats */
   .app-pages {
     background: transparent !important;
   }
-  body.theme-light #page-chats .chats-layout,
-  body.light-theme #page-chats .chats-layout,
-  html.theme-light #page-chats .chats-layout {
-    /* wallpaper / page bg shows in gaps */
-  }
+
+  /* Floating chat list card */
   #page-chats .sidebar {
     width: var(--sl-sidebar-w) !important;
     min-width: 260px !important;
@@ -44966,23 +45022,24 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
     height: 100% !important;
     border-radius: 18px !important;
     border: 1px solid var(--line) !important;
-    border-right: 1px solid var(--line) !important;
-    box-shadow: 0 8px 32px rgba(0,0,0,.14), 0 1px 0 rgba(255,255,255,.04) inset;
     overflow: hidden;
     position: relative !important;
     z-index: 5;
+    /* solid panel — no wallpaper bleed */
+    background-image: none !important;
   }
   body.theme-light #page-chats .sidebar,
   body.light-theme #page-chats .sidebar {
     background: #FFFFFF !important;
-    box-shadow: 0 8px 28px rgba(15,23,42,.10), 0 1px 0 rgba(255,255,255,.8) inset;
+    background-image: none !important;
+    box-shadow: 0 8px 28px rgba(15,23,42,.12), 0 1px 0 rgba(255,255,255,.85) inset;
   }
   body.theme-dark #page-chats .sidebar,
   body:not(.theme-light):not(.light-theme) #page-chats .sidebar {
     background: var(--panel) !important;
-    box-shadow: 0 10px 36px rgba(0,0,0,.35);
+    background-image: none !important;
+    box-shadow: 0 10px 36px rgba(0,0,0,.38);
   }
-  /* clip children to radius */
   #page-chats .sidebar-header {
     border-top-left-radius: 18px;
     border-top-right-radius: 18px;
@@ -44991,6 +45048,7 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
     border-bottom-left-radius: 18px;
     border-bottom-right-radius: 18px;
   }
+
   /* Resize handle */
   #sl-sidebar-resizer {
     position: absolute;
@@ -45012,7 +45070,7 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
     width: 3px;
     height: 42px;
     border-radius: 3px;
-    background: rgba(76,124,243,.0);
+    background: rgba(76,124,243,0);
     transition: background .15s, height .15s;
   }
   #page-chats .sidebar:hover #sl-sidebar-resizer::after,
@@ -45021,38 +45079,100 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
     background: rgba(76,124,243,.55);
     height: 56px;
   }
-  body.sl-resizing-sidebar {
-    cursor: col-resize !important;
-    user-select: none !important;
-  }
-  body.sl-resizing-sidebar * {
-    cursor: col-resize !important;
-  }
-  /* Chat pane also rounded card */
+  body.sl-resizing-sidebar { cursor: col-resize !important; user-select: none !important; }
+  body.sl-resizing-sidebar * { cursor: col-resize !important; }
+
+  /* Chat area: NOT a second window — open on wallpaper */
   #page-chats .chat-pane {
     flex: 1 1 auto;
     min-width: 0;
-    border-radius: 18px;
+    border-radius: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    background-image: none !important;
     overflow: hidden;
-    border: 1px solid var(--line);
-    box-shadow: 0 8px 32px rgba(0,0,0,.12);
-    background: var(--bg);
   }
   body.theme-light #page-chats .chat-pane,
   body.light-theme #page-chats .chat-pane {
-    background: #F4F6F9;
-    box-shadow: 0 8px 28px rgba(15,23,42,.08);
+    background: transparent !important;
+    box-shadow: none !important;
   }
-  /* empty state rounded too */
-  #page-chats #no-chat-state {
-    border-radius: 18px;
+  /* messages sit on the shared wallpaper */
+  #page-chats #messages-list,
+  #page-chats #messages-list.theme-doodle-wall,
+  #page-chats #messages-list.has-wall {
+    background-image: none !important;
+    background-color: transparent !important;
   }
-  /* contacts / list items slight inset radius harmony */
+  #page-chats #chat-active {
+    background: transparent !important;
+  }
+  /* empty state also transparent → wallpaper shows */
+  #page-chats #no-chat-state,
+  body.theme-light #page-chats #no-chat-state,
+  body.light-theme #page-chats #no-chat-state {
+    border-radius: 0 !important;
+    background: transparent !important;
+    background-image: none !important;
+    background-color: transparent !important;
+  }
+  body.theme-light #page-chats .chat-pane,
+  body.light-theme #page-chats .chat-pane,
+  body.theme-light #page-chats #chat-active,
+  body.light-theme #page-chats #chat-active {
+    background: transparent !important;
+    background-image: none !important;
+    background-color: transparent !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+  body.theme-light #page-chats #messages-list,
+  body.light-theme #page-chats #messages-list,
+  body.theme-light #page-chats .messages,
+  body.light-theme #page-chats .messages {
+    background: transparent !important;
+    background-image: none !important;
+    background-color: transparent !important;
+  }
+
+  /* Floating header & composer bars on wallpaper */
+  #page-chats .chat-header {
+    margin: 0 0 8px 0;
+    border-radius: 16px;
+    background: rgba(255,255,255,.92) !important;
+    border: 1px solid rgba(0,0,0,.06);
+    box-shadow: 0 4px 18px rgba(15,23,42,.08);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+  body.theme-dark #page-chats .chat-header,
+  body:not(.theme-light):not(.light-theme) #page-chats .chat-header {
+    background: rgba(26,34,45,.92) !important;
+    border-color: rgba(255,255,255,.08);
+  }
+  #page-chats #composer,
+  #page-chats .composer {
+    margin: 8px 0 0 0;
+    border-radius: 16px;
+    background: rgba(255,255,255,.92) !important;
+    border: 1px solid rgba(0,0,0,.06);
+    box-shadow: 0 4px 18px rgba(15,23,42,.08);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+  body.theme-dark #page-chats #composer,
+  body.theme-dark #page-chats .composer,
+  body:not(.theme-light):not(.light-theme) #page-chats #composer,
+  body:not(.theme-light):not(.light-theme) #page-chats .composer {
+    background: rgba(26,34,45,.92) !important;
+    border-color: rgba(255,255,255,.08);
+  }
+
   #page-chats .sidebar-scroll .contacts {
     padding-bottom: 16px !important;
   }
 }
-/* hide resizer on mobile */
 @media (max-width: 1024px) {
   #sl-sidebar-resizer { display: none !important; }
 }
