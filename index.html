@@ -344,10 +344,29 @@ body.chats-selecting .max-folder-tabs .folder-tab[data-can-del="1"] .ft-x{displa
 .search-icon{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--muted);pointer-events:none}
 .sidebar-actions{display:flex;gap:6px}
 .plus-menu{position:relative;flex:0!important;z-index:50}
-.plus-dropdown{display:none!important}
-.plus-dropdown.show{display:none!important}
-.plus-item{padding:10px 14px;border-radius:10px;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:10px;color:var(--text)}
-.plus-item:hover{background:var(--panel-hover)}
+.plus-dropdown{
+  display:none;
+  position:absolute; top:calc(100% + 8px); right:0;
+  min-width:260px;
+  background:var(--panel,#fff);
+  border:1px solid var(--line,rgba(0,0,0,.08));
+  border-radius:14px;
+  box-shadow:0 12px 40px rgba(0,0,0,.18);
+  padding:6px;
+  z-index:6000;
+}
+.plus-dropdown.show{display:block}
+.plus-item{
+  padding:11px 14px;border-radius:10px;font-size:14px;cursor:pointer;
+  display:flex;align-items:center;gap:12px;color:var(--text);
+  white-space:nowrap; user-select:none;
+}
+.plus-item:hover{background:var(--panel-hover,rgba(0,0,0,.05))}
+.plus-item svg{width:20px;height:20px;flex-shrink:0;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;opacity:.9}
+/* Mobile: never show desktop dropdown */
+@media (max-width:1024px){
+  .plus-dropdown, .plus-dropdown.show{ display:none !important; }
+}
 /* stories-bar base above */
 .story-item{display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;flex-shrink:0}
 
@@ -3840,9 +3859,11 @@ body.theme-light .topbar {
               <div class="plus-menu" id="plus-menu">
                 <button type="button" class="max-hdr-btn plus" id="plus-btn" title="Создать" aria-label="Создать">+</button>
                 <div class="plus-dropdown" id="plus-dropdown">
-                  <div class="plus-item" data-action="contact">Новый контакт</div>
-                  <div class="plus-item" data-action="group">Новая группа</div>
-                  <div class="plus-item" data-action="channel">Новый канал</div>
+                  <div class="plus-item" data-action="group"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>Создать группу</div>
+                  <div class="plus-item" data-action="channel"><svg viewBox="0 0 24 24"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>Создать канал</div>
+                  <div class="plus-item" data-action="gcall"><svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.8 19.8 0 01-8.63-3.07 19.5 19.5 0 01-6-6A19.8 19.8 0 012.12 4.18 2 2 0 014.11 2h3a2 2 0 012 1.72c.13.96.36 1.9.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0122 16.92z"/></svg>Создать групповой звонок</div>
+                  <div class="plus-item" data-action="phone"><svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.8 19.8 0 01-8.63-3.07 19.5 19.5 0 01-6-6A19.8 19.8 0 012.12 4.18 2 2 0 014.11 2h3a2 2 0 012 1.72c.13.96.36 1.9.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0122 16.92z"/><path d="M14.05 2a9 9 0 018 7.94"/></svg>Найти по номеру</div>
+                  <div class="plus-item" data-action="link"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>Пригласить по ссылке</div>
                 </div>
               </div>
               <button type="button" class="max-hdr-done" id="chats-done-btn" style="display:none">Готово</button>
@@ -5010,20 +5031,30 @@ function setBtnLoading(btn, on){
 // ========== UI HELPERS ==========
 function switchPage(page){
   checkPipOnLeave();
-  // always reset chat swipes so actions never peek after tab switch
   try{ if(typeof closeAllSwipes==='function') closeAllSwipes(); }catch(e){}
-  document.querySelectorAll('.app-page').forEach(p=>p.classList.remove('active'));
-  document.getElementById('page-'+page)?.classList.add('active');
+  var isDesk = window.innerWidth > 1024;
+  document.querySelectorAll('.nav-rail .nav-item').forEach(t=>t.classList.toggle('active', t.dataset.tab===page));
   document.querySelectorAll('.bottom-tab').forEach(t=>t.classList.remove('active'));
   document.querySelector(`.bottom-tab[data-tab="${page}"]`)?.classList.add('active');
-  document.querySelectorAll('.nav-rail .nav-item').forEach(t=>t.classList.toggle('active', t.dataset.tab===page));
+
+  // Desktop: keep chat pane; swap only left column for calls / settings
+  if(isDesk && (page==='calls' || page==='settings' || page==='chats')){
+    try{
+      if(typeof window.slDesktopSwitch==='function'){
+        window.slDesktopSwitch(page);
+        return;
+      }
+    }catch(e){}
+  }
+
+  document.querySelectorAll('.app-page').forEach(p=>p.classList.remove('active'));
+  document.getElementById('page-'+page)?.classList.add('active');
   if(page!=='chats'){
     document.body.classList.remove('in-chat');
     document.getElementById('sidebar')?.classList.remove('hidden');
   }
   if(page==='calls' && typeof renderCallsList==='function') renderCallsList();
   if(page==='chats'){
-    // re-render ensures clean closed state after tab switch
     try{ if(typeof renderContactsAndGroups==='function') renderContactsAndGroups(); }catch(e){}
   }
 }
@@ -11674,11 +11705,62 @@ function setupTyping(){
 }
 
 // ========== PLUS / CONTACTS ==========
-// Plus opens MAX-style "Начать общение" full screen (not tiny dropdown)
+// PC: Telegram-style dropdown. Mobile: full "Начать общение" sheet.
+function slIsDesktopPlus(){
+  try{
+    if(window.innerWidth <= 1024) return false;
+    if(window.matchMedia && window.matchMedia('(pointer: coarse)').matches && window.innerWidth < 1200) return false;
+  }catch(e){}
+  return true;
+}
+function slWirePlusDropdownItems(){
+  var dd=document.getElementById('plus-dropdown');
+  if(!dd || dd._wired) return;
+  dd._wired=1;
+  dd.querySelectorAll('.plus-item').forEach(function(item){
+    item.addEventListener('click', function(e){
+      e.preventDefault(); e.stopPropagation();
+      var act=item.getAttribute('data-action');
+      try{ dd.classList.remove('show'); }catch(_){}
+      try{
+        if(act==='group'){ window.openCreateGroupFlow&&window.openCreateGroupFlow(); }
+        else if(act==='channel'){ window.openCreateChannelFlow&&window.openCreateChannelFlow(); }
+        else if(act==='gcall'){
+          if(typeof showToast==='function') showToast('Выберите участников группы для звонка');
+          window.openCreateGroupFlow&&window.openCreateGroupFlow();
+        }
+        else if(act==='phone'){
+          if(typeof window.openFindByPhone==='function') window.openFindByPhone();
+          else if(typeof window.openStartChatSheet==='function') window.openStartChatSheet();
+          else if(typeof showToast==='function') showToast('Поиск по номеру');
+        }
+        else if(act==='link'){
+          try{
+            var link = (typeof myProfile!=='undefined'&&myProfile&&myProfile.username)
+              ? ((typeof slSiteOrigin==='function'?slSiteOrigin():location.origin)+'/#/u/'+myProfile.username)
+              : (location.origin+'/#/invite');
+            if(navigator.clipboard) navigator.clipboard.writeText(link);
+            if(typeof showToast==='function') showToast('Ссылка скопирована — отправьте другу');
+          }catch(err){ if(typeof showToast==='function') showToast('Не удалось скопировать'); }
+        }
+        else if(act==='contact'){
+          if(typeof window.openAddContactSheet==='function') window.openAddContactSheet();
+          else if(typeof window.openStartChatSheet==='function') window.openStartChatSheet();
+        }
+      }catch(err){ console.warn('plus action', err); }
+    });
+  });
+}
 try{
   const _pb=document.getElementById('plus-btn');
   if(_pb) _pb.onclick=(e)=>{
     e.preventDefault(); e.stopPropagation();
+    if(slIsDesktopPlus()){
+      slWirePlusDropdownItems();
+      var dd=document.getElementById('plus-dropdown');
+      if(dd) dd.classList.toggle('show');
+      return;
+    }
     try{ document.getElementById('plus-dropdown')?.classList.remove('show'); }catch(_){}
     if(typeof window.openStartChatSheet==='function') window.openStartChatSheet();
   };
@@ -42702,7 +42784,20 @@ body{
     var plus=document.getElementById('plus-btn');
     if(plus&&!plus._nuc){
       plus._nuc=1; plus.style.pointerEvents='auto';
-      var plusFn=function(e){ e.preventDefault(); e.stopPropagation(); try{ if(typeof window.openStartChatSheet==='function') window.openStartChatSheet(); else toast('Меню недоступно'); }catch(err){} };
+      var plusFn=function(e){
+        e.preventDefault(); e.stopPropagation();
+        try{
+          var isDesk = (typeof slIsDesktopPlus==='function') ? slIsDesktopPlus() : (window.innerWidth>1024);
+          if(isDesk){
+            if(typeof slWirePlusDropdownItems==='function') slWirePlusDropdownItems();
+            var dd=document.getElementById('plus-dropdown');
+            if(dd) dd.classList.toggle('show');
+            return;
+          }
+          if(typeof window.openStartChatSheet==='function') window.openStartChatSheet();
+          else if(typeof toast==='function') toast('Меню недоступно');
+        }catch(err){}
+      };
       plus.addEventListener('click',plusFn,true);
       plus.addEventListener('touchend',function(e){ if(plus._tl) return; plus._tl=1; setTimeout(function(){ plus._tl=0; },400); plusFn(e); },{passive:false,capture:true});
     }
@@ -44900,6 +44995,326 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
   }, true);
 
   console.log('[SL] account isolation v1');
+})();
+</script>
+
+
+<style id="sl-desktop-shell-css">
+/* ===== Desktop two-pane shell (MAX-style) ===== */
+@media (min-width:1025px){
+  #app-screen{
+    display:flex !important;
+    flex-direction:row !important;
+  }
+  .nav-rail{
+    display:flex !important;
+    flex-direction:column;
+    width:72px;
+    min-width:72px;
+    flex-shrink:0;
+    border-right:1px solid var(--line);
+    background:var(--panel);
+    z-index:20;
+  }
+  .app-pages{ flex:1; min-width:0; position:relative; }
+  .bottom-tabs{ display:none !important; }
+
+  /* Keep chats page as the shell that holds left+right */
+  #page-chats.active{ display:flex !important; }
+  .chats-layout{ display:flex; flex:1; min-height:0; width:100%; }
+
+  #desktop-left-host{
+    width:360px; min-width:360px; max-width:400px;
+    height:100%; min-height:0;
+    display:flex; flex-direction:column;
+    background:var(--panel);
+    border-right:1px solid var(--line);
+    overflow:hidden;
+    z-index:5;
+  }
+  #desktop-left-host > .sidebar,
+  #desktop-left-host > #page-calls,
+  #desktop-left-host > #page-settings{
+    display:flex !important;
+    flex-direction:column;
+    width:100% !important;
+    min-width:0 !important;
+    height:100% !important;
+    position:relative !important;
+    inset:auto !important;
+    visibility:visible !important;
+    pointer-events:auto !important;
+    overflow:hidden !important;
+    background:var(--panel) !important;
+    z-index:1 !important;
+  }
+  #desktop-left-host > #page-settings{
+    overflow-y:auto !important;
+    display:block !important;
+  }
+  /* When using desktop host, hide original page-calls/settings from app-pages stacking */
+  body.sl-desk-shell #page-calls:not(.sl-in-host),
+  body.sl-desk-shell #page-settings:not(.sl-in-host){
+    display:none !important;
+  }
+  body.sl-desk-shell #page-chats .sidebar:not(.sl-in-host){
+    /* sidebar moved into host */
+  }
+
+  /* Settings master-detail */
+  #settings-detail-pane{
+    display:none;
+    flex:1;
+    min-width:0;
+    height:100%;
+    background:var(--bg);
+    overflow:auto;
+    -webkit-overflow-scrolling:touch;
+  }
+  body.sl-desk-settings #settings-detail-pane{ display:block !important; }
+  body.sl-desk-settings #chat-pane{ display:none !important; }
+  body.sl-desk-settings #no-chat-state{ display:none !important; }
+
+  #settings-detail-pane .sdp-inner{
+    max-width:560px;
+    margin:0 auto;
+    padding:28px 32px 48px;
+  }
+  #settings-detail-pane .sdp-title{
+    font-size:22px; font-weight:800; margin:0 0 18px; color:var(--text);
+  }
+  #settings-detail-pane .sdp-card{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:16px;
+    padding:16px 18px;
+    margin-bottom:14px;
+  }
+  #page-settings .settings-item.sl-desk-active{
+    background:rgba(76,124,243,.12);
+  }
+  #page-settings .settings-item{ cursor:pointer; }
+
+  /* Calls list polish inside host */
+  #desktop-left-host #calls-list{ flex:1; overflow-y:auto; }
+  #desktop-left-host .max-calls-head{ flex-shrink:0; }
+}
+@media (max-width:1024px){
+  #desktop-left-host{ display:none !important; }
+  #settings-detail-pane{ display:none !important; }
+}
+</style>
+<script>
+/* Desktop shell: left column swaps Chats / Calls / Settings; right keeps chat or settings detail */
+(function(){
+  if(window._slDeskShell) return; window._slDeskShell=1;
+
+  function isDesk(){ return window.innerWidth > 1024; }
+
+  function ensureHost(){
+    var layout = document.querySelector('#page-chats .chats-layout');
+    if(!layout) return null;
+    var host = document.getElementById('desktop-left-host');
+    if(!host){
+      host = document.createElement('div');
+      host.id = 'desktop-left-host';
+      layout.insertBefore(host, layout.firstChild);
+    }
+    var detail = document.getElementById('settings-detail-pane');
+    if(!detail){
+      detail = document.createElement('div');
+      detail.id = 'settings-detail-pane';
+      detail.innerHTML = '<div class="sdp-inner"><div class="sdp-title">Настройки</div><div class="sdp-card" style="color:var(--muted)">Выберите пункт слева</div></div>';
+      layout.appendChild(detail);
+    }
+    return host;
+  }
+
+  function parkOriginalPages(){
+    // Keep page-calls / page-settings nodes movable
+  }
+
+  function showInHost(el){
+    var host = ensureHost();
+    if(!host || !el) return;
+    // Move other children back to app-pages if needed
+    var pages = document.querySelector('.app-pages');
+    Array.from(host.children).forEach(function(ch){
+      if(ch === el) return;
+      ch.classList.remove('sl-in-host');
+      if(ch.id === 'sidebar'){
+        var layout = document.querySelector('#page-chats .chats-layout');
+        if(layout) layout.insertBefore(ch, host.nextSibling);
+      } else if(pages){
+        // restore order roughly
+        if(ch.id === 'page-calls'){
+          var pc = document.getElementById('page-chats');
+          if(pc && pc.nextSibling) pages.insertBefore(ch, pc.nextSibling);
+          else pages.appendChild(ch);
+        } else if(ch.id === 'page-settings'){
+          pages.appendChild(ch);
+        }
+      }
+    });
+    el.classList.add('sl-in-host');
+    host.appendChild(el);
+    // show page-chats shell
+    document.querySelectorAll('.app-page').forEach(function(p){ p.classList.remove('active'); });
+    var chats = document.getElementById('page-chats');
+    if(chats) chats.classList.add('active');
+  }
+
+  function openSettingsDetail(title, html){
+    var pane = document.getElementById('settings-detail-pane');
+    if(!pane) return;
+    pane.innerHTML = '<div class="sdp-inner"><div class="sdp-title">'+title+'</div>'+html+'</div>';
+    document.body.classList.add('sl-desk-settings');
+  }
+
+  function wireSettingsMasterDetail(){
+    var page = document.getElementById('page-settings');
+    if(!page || page._deskWire) return;
+    page._deskWire = 1;
+    page.addEventListener('click', function(e){
+      if(!isDesk()) return;
+      var item = e.target.closest && e.target.closest('.settings-item');
+      if(!item) return;
+      // highlight
+      page.querySelectorAll('.settings-item.sl-desk-active').forEach(function(x){ x.classList.remove('sl-desk-active'); });
+      item.classList.add('sl-desk-active');
+
+      var id = item.id || '';
+      var label = (item.querySelector('.item-text') || item).textContent.trim();
+
+      // Profile row (hero / top)
+      if(item.closest('.settings-profile') || id==='settings-edit-profile' || id==='settings-edit-pencil'){
+        // let existing handlers run; also show detail shell
+        var name = (document.getElementById('settings-display-name')||{}).textContent || 'Профиль';
+        var un = (document.getElementById('settings-display-username')||{}).textContent || '';
+        openSettingsDetail('Профиль',
+          '<div class="sdp-card"><div style="font-size:18px;font-weight:700;margin-bottom:6px">'+name+'</div>'+
+          '<div style="color:var(--muted);margin-bottom:14px">'+un+'</div>'+
+          '<button type="button" class="btn-primary" id="sdp-edit-profile">Редактировать</button></div>');
+        setTimeout(function(){
+          var b=document.getElementById('sdp-edit-profile');
+          if(b) b.onclick=function(){ try{ if(typeof openEditProfile==='function') openEditProfile(); }catch(e){} };
+        }, 0);
+        return;
+      }
+
+      // Built-in detail panels for common items
+      if(id==='settings-language' || /Язык/i.test(label)){
+        e.preventDefault(); e.stopPropagation();
+        openSettingsDetail('Язык приложения',
+          '<div class="sdp-card">'+
+          ['Русский','English','Español','Português (Brasil)',"O'zbekcha"].map(function(l,i){
+            return '<div class="settings-item" data-lang="'+l+'" style="border:none;padding:12px 4px;cursor:pointer">'+(i===0?'✓ ':'')+l+'</div>';
+          }).join('')+
+          '<div style="color:var(--muted);font-size:12px;margin-top:8px">Язык меняется только на этом устройстве</div></div>');
+        return;
+      }
+      if(id==='settings-wallpaper' || id==='settings-theme' || /Оформление|тема/i.test(label)){
+        // allow existing UI to open; also frame detail
+        openSettingsDetail(label || 'Оформление',
+          '<div class="sdp-card" style="color:var(--muted)">Настройки оформления открыты. Если окно не появилось — нажмите пункт ещё раз.</div>');
+        return;
+      }
+      if(id==='settings-notifications' || /Уведомления/i.test(label)){
+        e.preventDefault(); e.stopPropagation();
+        openSettingsDetail('Уведомления',
+          '<div class="sdp-card">'+
+          '<div class="settings-item" style="border:none"><span class="item-text">Показывать уведомления</span></div>'+
+          '<div class="settings-item" style="border:none"><span class="item-text">Звук</span></div>'+
+          '<div class="settings-item" style="border:none"><span class="item-text">Предпросмотр сообщений</span></div>'+
+          '</div>');
+        return;
+      }
+      if(id==='settings-devices' || /Устройства/i.test(label)){
+        openSettingsDetail('Устройства',
+          '<div class="sdp-card" style="color:var(--muted)">Список устройств загружается…</div>');
+        return;
+      }
+      // default: show placeholder while existing click handlers may open modals
+      openSettingsDetail(label || 'Настройки',
+        '<div class="sdp-card" style="color:var(--muted)">Раздел «'+label+'». На мобильных откроется полное окно.</div>');
+    }, true);
+  }
+
+  window.slDesktopSwitch = function(page){
+    if(!isDesk()){
+      // fallback — should not be called
+      document.querySelectorAll('.app-page').forEach(function(p){ p.classList.remove('active'); });
+      document.getElementById('page-'+page)?.classList.add('active');
+      return;
+    }
+    document.body.classList.add('sl-desk-shell');
+    document.body.classList.remove('sl-desk-settings');
+    var host = ensureHost();
+    var sidebar = document.getElementById('sidebar');
+    var calls = document.getElementById('page-calls');
+    var settings = document.getElementById('page-settings');
+    var chatPane = document.getElementById('chat-pane');
+    var chatActive = document.getElementById('chat-active');
+
+    if(page==='chats'){
+      if(sidebar) showInHost(sidebar);
+      // restore calls/settings to app-pages
+      document.body.classList.remove('sl-desk-settings');
+      if(chatPane) chatPane.style.display = '';
+      try{ if(typeof renderContactsAndGroups==='function') renderContactsAndGroups(); }catch(e){}
+      return;
+    }
+    if(page==='calls'){
+      if(calls){
+        calls.classList.add('active');
+        showInHost(calls);
+      }
+      if(typeof renderCallsList==='function') renderCallsList();
+      // keep chat visible on the right if it was open
+      if(chatPane) chatPane.style.display = '';
+      if(chatActive && chatActive.style.display!=='none'){
+        document.body.classList.add('in-chat');
+      }
+      return;
+    }
+    if(page==='settings'){
+      if(settings){
+        settings.classList.add('active');
+        showInHost(settings);
+      }
+      document.body.classList.add('sl-desk-settings');
+      wireSettingsMasterDetail();
+      // default detail
+      openSettingsDetail('Настройки',
+        '<div class="sdp-card" style="color:var(--muted)">Выберите раздел в меню слева</div>');
+      return;
+    }
+  };
+
+  // Resize: leave desktop mode cleanly
+  window.addEventListener('resize', function(){
+    if(!isDesk()){
+      document.body.classList.remove('sl-desk-shell','sl-desk-settings');
+      var host = document.getElementById('desktop-left-host');
+      var pages = document.querySelector('.app-pages');
+      var layout = document.querySelector('#page-chats .chats-layout');
+      if(host && pages){
+        Array.from(host.children).forEach(function(ch){
+          ch.classList.remove('sl-in-host');
+          if(ch.id==='sidebar' && layout) layout.insertBefore(ch, host);
+          else pages.appendChild(ch);
+        });
+      }
+    }
+  });
+
+  // Initial desktop: ensure host if already wide
+  if(isDesk()){
+    setTimeout(function(){
+      try{ ensureHost(); if(document.getElementById('sidebar')) window.slDesktopSwitch('chats'); }catch(e){}
+    }, 400);
+  }
+  console.log('[SL] desktop shell ready');
 })();
 </script>
 
