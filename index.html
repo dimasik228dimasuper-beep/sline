@@ -19499,16 +19499,21 @@ async function openFullProfile(profileLike){
 // Unified chat-header info open (user vs channel/group)
 window.slOpenChatInfo = function(){
   try{
-    if(activeGroup){
+    if(typeof activeGroup!=='undefined' && activeGroup){
       if(typeof window.openChannelProfile==='function') window.openChannelProfile(activeGroup);
       else if(typeof openGroupInfo==='function') openGroupInfo(activeGroup);
+      else if(typeof openFullProfile==='function') openFullProfile(activeGroup);
       return;
     }
-    if(activePartner){
-      if(typeof openStoriesOrProfile==='function') openStoriesOrProfile(activePartner);
-      else if(typeof openFullProfile==='function') openFullProfile(activePartner);
+    var partner = (typeof activePartner!=='undefined' && activePartner) ? activePartner : null;
+    if(!partner && window.activePartner) partner = window.activePartner;
+    if(partner){
+      // Always open info profile (not stories chooser) — especially needed on PC right panel
+      if(typeof openFullProfile==='function') openFullProfile(partner);
+      else if(typeof openStoriesOrProfile==='function') openStoriesOrProfile(partner);
+      return;
     }
-  }catch(e){ console.warn(e); }
+  }catch(e){ console.warn('[SL] slOpenChatInfo', e); }
 };
 
 openUserInfo = openFullProfile;
@@ -24071,9 +24076,9 @@ html.sl-tv .composer textarea { min-height: 52px; font-size: 17px; }
 (function(){
   function openPartnerInfo(){
     try{
+      if(typeof window.slOpenChatInfo==='function') return window.slOpenChatInfo();
       if(activePartner){
         if(typeof openFullProfile==='function') openFullProfile(activePartner);
-        else if(typeof openStoriesOrProfile==='function') openStoriesOrProfile(activePartner);
       } else if(activeGroup){
         if(typeof openGroupInfo==='function') openGroupInfo(activeGroup);
         else if(typeof openFullProfile==='function') openFullProfile(activeGroup);
@@ -26335,23 +26340,20 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
   // ---------- 2) Instant profile from header avatar ----------
   function openPartnerInfoFast(){
     try{
+      if(typeof window.slOpenChatInfo==='function') return window.slOpenChatInfo();
       if(activeGroup){
         if(typeof openGroupInfo==='function') return openGroupInfo(activeGroup);
         if(typeof openChannelProfile==='function') return openChannelProfile(activeGroup);
-        if(typeof window.slOpenChatInfo==='function') return window.slOpenChatInfo();
       }
       if(activePartner){
-        // Single path: chooser if stories, else profile — never both
-        if(typeof openStoriesOrProfile==='function') return openStoriesOrProfile(activePartner);
         if(typeof openFullProfile==='function') return openFullProfile(activePartner);
-        if(typeof window.slOpenChatInfo==='function') return window.slOpenChatInfo();
       }
     }catch(e){ console.warn(e); }
   }
   window.slOpenPartnerInstant = openPartnerInfoFast;
 
   function bindHeaderInstant(){
-    const av = document.getElementById('chat-partner-avatar');
+    const av = document.getElementById('partner-avatar') || document.getElementById('chat-partner-avatar');
     if(av && !av.dataset.instantBound){
       av.dataset.instantBound='1';
       av.style.cursor='pointer';
@@ -26360,10 +26362,23 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
         openPartnerInfoFast();
       }, true);
     }
+    const name = document.getElementById('chat-partner-name');
+    if(name && !name.dataset.instantBound){
+      name.dataset.instantBound='1';
+      name.style.cursor='pointer';
+      name.addEventListener('click', (e)=>{
+        e.preventDefault(); e.stopPropagation();
+        openPartnerInfoFast();
+      }, true);
+    }
     const hdr = document.querySelector('.chat-header');
     if(hdr && !hdr.dataset.instantBound){
       hdr.dataset.instantBound='1';
-      // avatar area only via capture above
+      hdr.addEventListener('click', (e)=>{
+        if(e.target.closest('.chat-actions,.back-btn,button')) return;
+        e.preventDefault(); e.stopPropagation();
+        openPartnerInfoFast();
+      }, true);
     }
   }
   bindHeaderInstant();
@@ -46010,7 +46025,17 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
     btn.addEventListener('click', function(e){
       e.preventDefault();
       e.stopPropagation();
-      toggleMenu();
+      // Open settings; menu also available via long-press not needed
+      try{
+        if(typeof switchPage==='function') switchPage('settings');
+        else {
+          document.querySelectorAll('.app-page').forEach(function(p){ p.classList.remove('active'); });
+          var ps=document.getElementById('page-settings');
+          if(ps) ps.classList.add('active');
+        }
+        document.body.classList.remove('in-chat');
+        setTimeout(ensureSettingsBackToChats, 100);
+      }catch(err){ console.warn(err); }
     });
     return btn;
   }
@@ -46198,8 +46223,73 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
     else boot();
   });
 
-  console.log('[SL] PC hamburger menu + right info panel');
+
+  function ensureSettingsBackToChats(){
+    try{
+      var page = document.getElementById('page-settings');
+      if(!page) return;
+      var existing = document.getElementById('sl-settings-to-chats');
+      if(existing) return;
+      var bar = page.querySelector('.max-settings-top') || page.querySelector('.settings-page') || page;
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.id = 'sl-settings-to-chats';
+      btn.textContent = '← К чатам';
+      btn.style.cssText = 'position:sticky;top:0;z-index:30;margin:10px 16px 6px;padding:10px 16px;border-radius:12px;border:1px solid var(--line);background:var(--panel);color:var(--text);font-weight:700;font-size:14px;cursor:pointer;width:calc(100% - 32px);box-sizing:border-box;text-align:left';
+      btn.onclick = function(){
+        try{
+          if(typeof switchPage==='function') switchPage('chats');
+          else {
+            document.querySelectorAll('.app-page').forEach(function(p){ p.classList.remove('active'); });
+            var pc=document.getElementById('page-chats');
+            if(pc) pc.classList.add('active');
+          }
+        }catch(e){}
+      };
+      if(bar.firstChild) bar.insertBefore(btn, bar.firstChild);
+      else bar.appendChild(btn);
+    }catch(e){}
+  }
+  window.ensureSettingsBackToChats = ensureSettingsBackToChats;
+
+  // Strong capture-phase: avatar / name / status → open info
+  function bindInfoClicks(){
+    var av = document.getElementById('partner-avatar');
+    var name = document.getElementById('chat-partner-name');
+    var status = document.getElementById('chat-partner-status');
+    var titleWrap = name ? name.parentElement : null;
+    function go(e){
+      if(e){ e.preventDefault(); e.stopPropagation(); }
+      try{
+        if(typeof window.slOpenChatInfo==='function') window.slOpenChatInfo();
+        else if(window.activePartner && typeof openFullProfile==='function') openFullProfile(window.activePartner);
+        else if(typeof activePartner!=='undefined' && activePartner && typeof openFullProfile==='function') openFullProfile(activePartner);
+      }catch(err){ console.warn(err); }
+    }
+    [av, name, status, titleWrap].forEach(function(el){
+      if(!el || el.dataset.slInfoCap) return;
+      el.dataset.slInfoCap = '1';
+      el.style.cursor = 'pointer';
+      el.addEventListener('click', go, true);
+    });
+    // whole header left zone (except action buttons)
+    var hdr = document.querySelector('#page-chats .chat-header');
+    if(hdr && !hdr.dataset.slInfoCapHdr){
+      hdr.dataset.slInfoCapHdr = '1';
+      hdr.addEventListener('click', function(e){
+        if(e.target.closest('.chat-actions')) return;
+        if(e.target.closest('.back-btn')) return;
+        if(e.target.closest('#chat-search-btn,#call-btn,#video-call-btn,#media-btn')) return;
+        go(e);
+      }, true);
+    }
+  }
+  setInterval(bindInfoClicks, 1500);
+  bindInfoClicks();
+
+  console.log('[SL] PC hamburger → settings + info clicks fixed');
 })();
+
 </script>
 
 </body>
