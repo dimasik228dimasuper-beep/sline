@@ -42800,10 +42800,19 @@ body{
         }catch(e){}
       }
       var byId={}; profiles.forEach(function(p){ byId[p.id]=p; });
-      window.contacts=ids.map(function(id){
+      var built=ids.map(function(id){
         var p=byId[id]||(id===myProfile.id?myProfile:{id:id,username:String(id).slice(0,8)});
-        return Object.assign({},p,{lastMessage:(map.get(id)||{}).lastMessage||'',lastAt:(map.get(id)||{}).lastAt});
+        return Object.assign({},p,{lastMessage:(map.get(id)||{}).lastMessage||'',lastAt:(map.get(id)||{}).lastAt, _dmWithMe:true});
       });
+      // Never replace a richer list with an empty one (network glitch / timeout)
+      if(built.length > 1 || !window.contacts || !window.contacts.length){
+        window.contacts = built;
+      } else {
+        // merge new ids into existing
+        var have={};
+        (window.contacts||[]).forEach(function(c){ if(c&&c.id) have[String(c.id)]=1; });
+        built.forEach(function(c){ if(c&&c.id&&!have[String(c.id)]) window.contacts.push(c); });
+      }
       try{ if(typeof slSaveContactsCache==='function') slSaveContactsCache(); }catch(e){}
       ensureFavorites();
       try{ if(typeof loadGroups==='function') await loadGroups(); }catch(e){}
@@ -42839,24 +42848,56 @@ body{
     wire('settings-edit-profile', openEditProfile);
     wire('settings-edit-pencil', openEditProfile);
     var plus=document.getElementById('plus-btn');
-    if(plus&&!plus._nuc){
+    if(plus){
       plus._nuc=1; plus.style.pointerEvents='auto';
-      var plusFn=function(e){
-        e.preventDefault(); e.stopPropagation();
-        try{
-          var isDesk = (typeof slIsDesktopPlus==='function') ? slIsDesktopPlus() : (window.innerWidth>1024);
-          if(isDesk){
-            if(typeof slWirePlusDropdownItems==='function') slWirePlusDropdownItems();
-            var dd=document.getElementById('plus-dropdown');
-            if(dd) dd.classList.toggle('show');
-            return;
-          }
-          if(typeof window.openStartChatSheet==='function') window.openStartChatSheet();
-          else if(typeof toast==='function') toast('Меню недоступно');
-        }catch(err){}
-      };
-      plus.addEventListener('click',plusFn,true);
-      plus.addEventListener('touchend',function(e){ if(plus._tl) return; plus._tl=1; setTimeout(function(){ plus._tl=0; },400); plusFn(e); },{passive:false,capture:true});
+      if(!plus._slPlusBound){
+        plus._slPlusBound=1;
+        var plusFn=function(e){
+          e.preventDefault(); e.stopPropagation();
+          try{
+            if(window.innerWidth > 1024){
+              var dd=document.getElementById('plus-dropdown');
+              if(dd){
+                if(typeof slWirePlusDropdownItems==='function') slWirePlusDropdownItems();
+                dd.classList.toggle('show');
+                return;
+              }
+            }
+            if(typeof window.openStartChatSheet==='function'){
+              window.openStartChatSheet();
+            } else {
+              // emergency fallback sheet
+              var s=document.getElementById('sl-start-chat-fallback');
+              if(s) s.remove();
+              s=document.createElement('div');
+              s.id='sl-start-chat-fallback';
+              s.className='sl-sheet';
+              s.innerHTML='<div class="sl-sheet-hdr"><button type="button" class="sl-sheet-back" id="scf-back">‹</button><h2>Начать общение</h2><span style="width:40px"></span></div><div class="sl-sheet-body">'+
+                '<div class="sl-action-row" data-a="group">Создать группу</div>'+
+                '<div class="sl-action-row" data-a="channel">Создать канал</div>'+
+                '<div class="sl-action-row" data-a="phone">Найти по номеру</div>'+
+                '<div class="sl-action-row" data-a="link">Пригласить по ссылке</div></div>';
+              document.body.appendChild(s);
+              s.querySelector('#scf-back').onclick=function(){ s.remove(); };
+              s.querySelectorAll('[data-a]').forEach(function(row){
+                row.onclick=function(){
+                  var a=row.getAttribute('data-a'); s.remove();
+                  if(a==='group'&&window.openCreateGroupFlow) window.openCreateGroupFlow();
+                  else if(a==='channel'&&window.openCreateChannelFlow) window.openCreateChannelFlow();
+                  else if(a==='phone'&&window.openFindByPhone) window.openFindByPhone();
+                  else if(a==='link'){
+                    var link=(window.myProfile&&myProfile.username)?(location.origin+'/#/u/'+myProfile.username):(location.origin+'/#/invite');
+                    try{ navigator.clipboard.writeText(link); }catch(e){}
+                    if(typeof showToast==='function') showToast('Ссылка скопирована');
+                  }
+                };
+              });
+            }
+          }catch(err){ console.warn('plus', err); }
+        };
+        plus.addEventListener('click',plusFn,true);
+        plus.addEventListener('touchend',function(e){ if(plus._tl) return; plus._tl=1; setTimeout(function(){ plus._tl=0; },400); plusFn(e); },{passive:false,capture:true});
+      }
     }
     var list=document.getElementById('contacts-list');
     if(list&&!list._nucClick){
@@ -45180,7 +45221,7 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
       if(item.classList && item.classList.contains('settings-item')) item.classList.add('sl-desk-active');
       var detail = ensureDetail();
       if(detail){
-        detail.innerHTML = '<div class="dsd-title" style="opacity:.5;font-size:14px;font-weight:600">Загрузка…</div>';
+        detail.innerHTML = '<div class="dsd-title" style="opacity:.5;font-size:14px;font-weight:600;padding:28px 36px">Откройте пункт меню</div>';
       }
       // After original handler opens sheet/modal, restyle it into right pane
       setTimeout(function(){ window.slDeskFitOverlays && window.slDeskFitOverlays(); }, 50);
@@ -45287,6 +45328,111 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
   };
 
   console.log('[SL] desktop shell v2');
+})();
+</script>
+
+
+<style id="sl-desk-settings-sheets">
+@media (min-width:1025px){
+  body.desk-mode-settings .sl-sheet{
+    position:fixed !important;
+    left:calc(72px + 360px) !important;
+    right:0 !important;
+    top:0 !important;
+    bottom:0 !important;
+    width:auto !important;
+    max-width:none !important;
+    height:100% !important;
+    border-radius:0 !important;
+    z-index:50 !important;
+    animation:none !important;
+  }
+  body.desk-mode-settings .modal-overlay{
+    position:fixed !important;
+    left:calc(72px + 360px) !important;
+    right:0 !important;
+    top:0 !important;
+    bottom:0 !important;
+    width:auto !important;
+    background:rgba(0,0,0,.25) !important;
+    z-index:50 !important;
+  }
+  body.desk-mode-settings .modal-overlay .modal{
+    margin:40px auto !important;
+    max-width:520px !important;
+  }
+  /* hide the empty "Загрузка" detail when a sheet is open */
+  body.desk-mode-settings:has(.sl-sheet) #desk-settings-detail,
+  body.desk-mode-settings:has(.modal-overlay) #desk-settings-detail{
+    opacity:0 !important;
+    pointer-events:none !important;
+  }
+}
+</style>
+<script>
+(function(){
+  // Bulletproof plus + ensure openStartChatSheet exists
+  if(typeof window.openStartChatSheet !== 'function'){
+    window.openStartChatSheet = function(){
+      var prev=document.getElementById('sl-start-chat'); if(prev) prev.remove();
+      var sheet=document.createElement('div');
+      sheet.className='sl-sheet'; sheet.id='sl-start-chat';
+      sheet.innerHTML='<div class="sl-sheet-hdr"><button type="button" class="sl-sheet-back" id="sc-back">‹</button><h2>Начать общение</h2><span style="width:40px"></span></div><div class="sl-sheet-body">'+
+        '<div class="sl-action-row" id="sc-g">Создать группу</div>'+
+        '<div class="sl-action-row" id="sc-c">Создать канал</div>'+
+        '<div class="sl-action-row" id="sc-p">Найти по номеру</div>'+
+        '<div class="sl-action-row" id="sc-l">Пригласить по ссылке</div></div>';
+      document.body.appendChild(sheet);
+      sheet.querySelector('#sc-back').onclick=function(){ sheet.remove(); };
+      sheet.querySelector('#sc-g').onclick=function(){ sheet.remove(); window.openCreateGroupFlow&&window.openCreateGroupFlow(); };
+      sheet.querySelector('#sc-c').onclick=function(){ sheet.remove(); window.openCreateChannelFlow&&window.openCreateChannelFlow(); };
+      sheet.querySelector('#sc-p').onclick=function(){ sheet.remove(); window.openFindByPhone&&window.openFindByPhone(); };
+      sheet.querySelector('#sc-l').onclick=function(){
+        sheet.remove();
+        var link=(window.myProfile&&myProfile.username)?(location.origin+'/#/u/'+myProfile.username):(location.origin+'/#/invite');
+        try{ navigator.clipboard.writeText(link); }catch(e){}
+        if(typeof showToast==='function') showToast('Ссылка скопирована');
+      };
+    };
+  }
+  // Rebind plus without nuclear lock blocking
+  function bindPlus(){
+    var btn=document.getElementById('plus-btn');
+    if(!btn || btn._slV3) return;
+    btn._slV3=1;
+    btn.addEventListener('click', function(e){
+      e.preventDefault(); e.stopPropagation();
+      if(window.innerWidth>1024){
+        var dd=document.getElementById('plus-dropdown');
+        if(dd){ dd.classList.toggle('show'); return; }
+      }
+      if(typeof window.openStartChatSheet==='function') window.openStartChatSheet();
+    }, true);
+  }
+  bindPlus();
+  setTimeout(bindPlus, 1000);
+  setTimeout(bindPlus, 3000);
+
+  // Settings: clear stuck "Загрузка" — on item click, just highlight; sheets open via CSS on the right
+  document.addEventListener('click', function(e){
+    if(!document.body.classList.contains('desk-mode-settings')) return;
+    var item=e.target.closest && e.target.closest('#page-settings .settings-item, #page-settings #settings-edit-pencil');
+    if(!item) return;
+    var detail=document.getElementById('desk-settings-detail');
+    if(detail){
+      detail.innerHTML='<div class="dsd-title" style="padding:28px 36px;color:var(--muted);font-size:14px">Открывается…</div>';
+    }
+  }, true);
+
+  // Force reload chats once after ready
+  setTimeout(function(){
+    try{
+      if(typeof loadChats==='function' && window.myProfile) loadChats();
+      else if(typeof hardReloadChats==='function') hardReloadChats();
+    }catch(e){}
+  }, 1500);
+
+  console.log('[SL] plus+settings hotfix');
 })();
 </script>
 
