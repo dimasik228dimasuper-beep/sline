@@ -2810,9 +2810,7 @@ body.light-theme .circle-record-overlay {
   #page-chats .sidebar{
     position:relative !important;
     transform:none !important;
-    width:320px !important;
-    min-width:320px !important;
-    max-width:380px;
+    /* width controlled by --sl-sidebar-w / resize */
   }
   #page-chats .sidebar.hidden{
     transform:none !important;
@@ -27771,6 +27769,17 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
           <div class="toggle-switch ${night?'on':''}" id="ap-night-tg"></div>
         </div>
         <div class="sl-appear-row" id="ap-size"><span>Размер текста</span><span style="color:var(--muted)">${LS.getItem('sl_font_size')||'15'}pt ›</span></div>
+        <div class="sl-appear-row" id="ap-sidebar-w" style="flex-direction:column;align-items:stretch;gap:8px;cursor:default">
+          <div style="display:flex;align-items:center;justify-content:space-between;width:100%">
+            <span>Ширина списка чатов</span>
+            <span id="ap-sw-val" style="color:var(--muted);font-variant-numeric:tabular-nums">${(typeof slGetSidebarWidth==='function'?slGetSidebarWidth():360)}px</span>
+          </div>
+          <input id="ap-sw-range" type="range" min="260" max="520" step="4" value="${(typeof slGetSidebarWidth==='function'?slGetSidebarWidth():360)}"
+            style="width:100%;accent-color:var(--accent-a,#4C7CF3);cursor:pointer">
+          <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted)">
+            <span>Узкий</span><span>Двойной клик по краю — сброс</span><span>Широкий</span>
+          </div>
+        </div>
       </div>
     </div>`;
     document.body.appendChild(ov);
@@ -27859,6 +27868,23 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
       ov.querySelector('#ap-size span:last-child').textContent=next+'pt ›';
       toast('Размер: '+next+'pt');
     };
+    try{
+      const rng=ov.querySelector('#ap-sw-range');
+      const lab=ov.querySelector('#ap-sw-val');
+      if(rng){
+        const sync=()=>{
+          const v=Number(rng.value)||360;
+          if(typeof window.slSetSidebarWidth==='function') window.slSetSidebarWidth(v);
+          else {
+            try{ localStorage.setItem('sl_sidebar_w', String(v)); }catch(e){}
+            document.documentElement.style.setProperty('--sl-sidebar-w', v+'px');
+          }
+          if(lab) lab.textContent=v+'px';
+        };
+        rng.addEventListener('input', sync);
+        rng.addEventListener('change', sync);
+      }
+    }catch(e){}
   };
 
   // Settings entry
@@ -44900,6 +44926,261 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
   }, true);
 
   console.log('[SL] account isolation v1');
+})();
+</script>
+
+
+<style id="sl-desktop-rounded-sidebar">
+/* Desktop: floating rounded chat list + resizable width */
+@media (min-width: 1025px) {
+  :root {
+    --sl-sidebar-w: 360px;
+  }
+  #page-chats.active {
+    background: transparent !important;
+  }
+  #page-chats .chats-layout {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    gap: 10px;
+    padding: 10px 10px 10px 0;
+    box-sizing: border-box;
+    background: transparent !important;
+    overflow: hidden;
+  }
+  /* Left nav rail stays flush; chats area floats */
+  .app-pages {
+    background: transparent !important;
+  }
+  body.theme-light #page-chats .chats-layout,
+  body.light-theme #page-chats .chats-layout,
+  html.theme-light #page-chats .chats-layout {
+    /* wallpaper / page bg shows in gaps */
+  }
+  #page-chats .sidebar {
+    width: var(--sl-sidebar-w) !important;
+    min-width: 260px !important;
+    max-width: min(560px, 48vw) !important;
+    flex: 0 0 var(--sl-sidebar-w) !important;
+    height: 100% !important;
+    border-radius: 18px !important;
+    border: 1px solid var(--line) !important;
+    border-right: 1px solid var(--line) !important;
+    box-shadow: 0 8px 32px rgba(0,0,0,.14), 0 1px 0 rgba(255,255,255,.04) inset;
+    overflow: hidden;
+    position: relative !important;
+    z-index: 5;
+  }
+  body.theme-light #page-chats .sidebar,
+  body.light-theme #page-chats .sidebar {
+    background: #FFFFFF !important;
+    box-shadow: 0 8px 28px rgba(15,23,42,.10), 0 1px 0 rgba(255,255,255,.8) inset;
+  }
+  body.theme-dark #page-chats .sidebar,
+  body:not(.theme-light):not(.light-theme) #page-chats .sidebar {
+    background: var(--panel) !important;
+    box-shadow: 0 10px 36px rgba(0,0,0,.35);
+  }
+  /* clip children to radius */
+  #page-chats .sidebar-header {
+    border-top-left-radius: 18px;
+    border-top-right-radius: 18px;
+  }
+  #page-chats .sidebar-scroll {
+    border-bottom-left-radius: 18px;
+    border-bottom-right-radius: 18px;
+  }
+  /* Resize handle */
+  #sl-sidebar-resizer {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 8px;
+    height: 100%;
+    cursor: col-resize;
+    z-index: 40;
+    touch-action: none;
+    background: transparent;
+  }
+  #sl-sidebar-resizer::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 3px;
+    height: 42px;
+    border-radius: 3px;
+    background: rgba(76,124,243,.0);
+    transition: background .15s, height .15s;
+  }
+  #page-chats .sidebar:hover #sl-sidebar-resizer::after,
+  #sl-sidebar-resizer:hover::after,
+  body.sl-resizing-sidebar #sl-sidebar-resizer::after {
+    background: rgba(76,124,243,.55);
+    height: 56px;
+  }
+  body.sl-resizing-sidebar {
+    cursor: col-resize !important;
+    user-select: none !important;
+  }
+  body.sl-resizing-sidebar * {
+    cursor: col-resize !important;
+  }
+  /* Chat pane also rounded card */
+  #page-chats .chat-pane {
+    flex: 1 1 auto;
+    min-width: 0;
+    border-radius: 18px;
+    overflow: hidden;
+    border: 1px solid var(--line);
+    box-shadow: 0 8px 32px rgba(0,0,0,.12);
+    background: var(--bg);
+  }
+  body.theme-light #page-chats .chat-pane,
+  body.light-theme #page-chats .chat-pane {
+    background: #F4F6F9;
+    box-shadow: 0 8px 28px rgba(15,23,42,.08);
+  }
+  /* empty state rounded too */
+  #page-chats #no-chat-state {
+    border-radius: 18px;
+  }
+  /* contacts / list items slight inset radius harmony */
+  #page-chats .sidebar-scroll .contacts {
+    padding-bottom: 16px !important;
+  }
+}
+/* hide resizer on mobile */
+@media (max-width: 1024px) {
+  #sl-sidebar-resizer { display: none !important; }
+}
+</style>
+<script>
+/* SL: desktop rounded sidebar + width resize */
+(function(){
+  if (window._slSidebarResizeV1) return;
+  window._slSidebarResizeV1 = 1;
+
+  var KEY = 'sl_sidebar_w';
+  var MIN = 260;
+  var MAX_CAP = 560;
+
+  function isDesktop(){
+    try { return window.matchMedia('(min-width: 1025px)').matches; } catch(e) {
+      return (window.innerWidth || 0) >= 1025;
+    }
+  }
+  function clamp(w){
+    var max = Math.min(MAX_CAP, Math.floor((window.innerWidth || 1200) * 0.48));
+    return Math.max(MIN, Math.min(max, Math.round(w)));
+  }
+  function loadW(){
+    try {
+      var v = parseInt(localStorage.getItem(KEY) || '', 10);
+      if (v && v >= MIN) return clamp(v);
+    } catch(e){}
+    return 360;
+  }
+  function saveW(w){
+    try { localStorage.setItem(KEY, String(w)); } catch(e){}
+  }
+  function applyW(w){
+    w = clamp(w);
+    try {
+      document.documentElement.style.setProperty('--sl-sidebar-w', w + 'px');
+    } catch(e){}
+    var side = document.getElementById('sidebar');
+    if (side && isDesktop()) {
+      side.style.width = w + 'px';
+      side.style.flexBasis = w + 'px';
+      side.style.minWidth = MIN + 'px';
+      side.style.maxWidth = Math.min(MAX_CAP, Math.floor((window.innerWidth||1200)*0.48)) + 'px';
+    }
+    return w;
+  }
+
+  function ensureResizer(){
+    var side = document.getElementById('sidebar');
+    if (!side) return null;
+    var r = document.getElementById('sl-sidebar-resizer');
+    if (r) return r;
+    r = document.createElement('div');
+    r.id = 'sl-sidebar-resizer';
+    r.title = 'Потяните, чтобы изменить ширину';
+    side.appendChild(r);
+
+    var startX = 0, startW = 0, dragging = false;
+
+    function onMove(e){
+      if (!dragging) return;
+      var x = e.clientX != null ? e.clientX : (e.touches && e.touches[0] && e.touches[0].clientX);
+      if (x == null) return;
+      var dx = x - startX;
+      applyW(startW + dx);
+    }
+    function onUp(){
+      if (!dragging) return;
+      dragging = false;
+      document.body.classList.remove('sl-resizing-sidebar');
+      var cur = getComputedStyle(document.documentElement).getPropertyValue('--sl-sidebar-w');
+      var n = parseInt(cur, 10);
+      if (n) saveW(n);
+      window.removeEventListener('pointermove', onMove, true);
+      window.removeEventListener('pointerup', onUp, true);
+      window.removeEventListener('pointercancel', onUp, true);
+    }
+    r.addEventListener('pointerdown', function(e){
+      if (!isDesktop()) return;
+      if (e.button != null && e.button !== 0) return;
+      e.preventDefault();
+      e.stopPropagation();
+      dragging = true;
+      startX = e.clientX;
+      startW = side.getBoundingClientRect().width;
+      document.body.classList.add('sl-resizing-sidebar');
+      try { r.setPointerCapture(e.pointerId); } catch(err){}
+      window.addEventListener('pointermove', onMove, true);
+      window.addEventListener('pointerup', onUp, true);
+      window.addEventListener('pointercancel', onUp, true);
+    });
+
+    // double-click reset
+    r.addEventListener('dblclick', function(e){
+      e.preventDefault();
+      var w = applyW(360);
+      saveW(w);
+    });
+    return r;
+  }
+
+  function boot(){
+    applyW(loadW());
+    ensureResizer();
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', boot);
+  } else {
+    boot();
+  }
+  setTimeout(boot, 400);
+  setTimeout(boot, 1500);
+  window.addEventListener('resize', function(){
+    if (!isDesktop()) return;
+    applyW(loadW());
+  });
+
+  // expose for settings UI
+  window.slGetSidebarWidth = function(){ return loadW(); };
+  window.slSetSidebarWidth = function(w){
+    w = applyW(w);
+    saveW(w);
+    return w;
+  };
+
+  console.log('[SL] desktop rounded sidebar + resize');
 })();
 </script>
 
