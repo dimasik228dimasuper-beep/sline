@@ -4293,17 +4293,25 @@ let _fbApp = null, _fbAuth = null, _fbDb = null, _fbStorage = null;
             ));
           }
         } else {
-          // simple or: "col.ilike.%q%,col2.ilike.%q%"
+          // simple or: "col.ilike.%q%,col2.ilike.%q%" or "col.eq.val"
           const parts = orStr.split(',');
-          const q = (parts[0].match(/%(.+)%/) || [])[1] || '';
-          if (q) {
-            const ql = q.toLowerCase();
+          let ql = '';
+          for(const p of parts){
+            const mm = p.match(/%(.+)%/);
+            if(mm){ ql = mm[1].toLowerCase(); break; }
+          }
+          if (ql) {
             rows = rows.filter(r => {
-              return parts.some(p => {
-                const col = p.split('.')[0];
+              const hitField = parts.some(p => {
+                const bits = p.split('.');
+                const col = bits[0];
+                const op = (bits[1]||'').toLowerCase();
                 const val = (r[col] || '').toString().toLowerCase();
+                if(op==='eq') return val === String(bits.slice(2).join('.')||'').toLowerCase();
                 return val.includes(ql);
               });
+              if(hitField) return true;
+              return [r.username,r.first_name,r.last_name,r.email,r.phone].some(x=>String(x||'').toLowerCase().includes(ql));
             });
           }
         }
@@ -11803,7 +11811,7 @@ document.addEventListener('click',e=>{ if(!e.target.closest('#plus-menu')) try{ 
 function debounce(fn,ms){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),ms); }; }
 
 // ========== SEARCH ==========
-try{ const _si=document.getElementById('search-input'); if(_si) _si.oninput=debounce(()=>{ renderContactsAndGroups(); },200); }catch(e){}
+try{ const _si=document.getElementById('search-input'); if(_si) _si.oninput=debounce(()=>{ renderContactsAndGroups(); try{ const list=document.getElementById('contacts-list'); const q=(_si.value||''); if(list && q.trim().length>=2 && typeof appendGlobalSearchResults==='function') appendGlobalSearchResults(list, q); }catch(e2){} },250); }catch(e){}
 
 // ========== SCROLL ==========
 function scrollToBottom(i=false){ const l=document.getElementById('messages-list'); setTimeout(()=>{ if(i) l.scrollTop=l.scrollHeight; else l.scrollTo({top:l.scrollHeight,behavior:'smooth'}); },60); }
@@ -14121,19 +14129,82 @@ window.slOpenAddContact = function(profile, profileSheet){
 
 async function searchProfilesSafe(q, excludeId, limit, fields){
   fields = fields || ['username','email','phone','first_name','last_name'];
-  let attempt = [...fields];
-  for(let guard=0; guard<fields.length+1; guard++){
-    if(!attempt.length) return {data:[], error:null};
-    const orStr = attempt.map(f=>`${f}.ilike.%${q}%`).join(',');
-    let query = sb.from('profiles').select('*').or(orStr).limit(limit||10);
-    if(excludeId) query = query.neq('id', excludeId);
-    const {data, error} = await query;
-    if(!error) return {data, error:null};
-    const m = (error.message||'').match(/column [\w.]*\.?(\w+) does not exist/i);
-    if(m && attempt.includes(m[1])){ attempt = attempt.filter(f=>f!==m[1]); continue; }
-    return {data:null, error};
+  q = String(q||'').trim().replace(/^@+/, '');
+  limit = limit || 12;
+  excludeId = excludeId != null ? String(excludeId) : null;
+  if(!q) return {data:[], error:null};
+  const byId = new Map();
+  const push = (p)=>{
+    if(!p || !p.id) return;
+    if(excludeId && String(p.id)===excludeId) return;
+    byId.set(String(p.id), Object.assign({id:String(p.id)}, p));
+  };
+  const ql = q.toLowerCase();
+  const endPrefix = q + String.fromCharCode(0xf8ff);
+
+  // A) Indexed RTDB: exact + prefix on username
+  try{
+    const db = window.firebaseDb || (typeof _fbDb!=='undefined' ? _fbDb : null);
+    if(db){
+      const ref = db.ref('tables/profiles');
+      try{
+        const snap = await ref.orderByChild('username').equalTo(q).limitToFirst(limit).once('value');
+        snap.forEach(ch=>{ const v=ch.val(); if(v) push(Object.assign({id:ch.key}, v)); });
+      }catch(e){}
+      if(!byId.size){
+        try{
+          const snap = await ref.orderByChild('username').equalTo(ql).limitToFirst(limit).once('value');
+          snap.forEach(ch=>{ const v=ch.val(); if(v) push(Object.assign({id:ch.key}, v)); });
+        }catch(e){}
+      }
+      try{
+        const snap = await ref.orderByChild('username').startAt(q).endAt(endPrefix).limitToFirst(limit).once('value');
+        snap.forEach(ch=>{ const v=ch.val(); if(v) push(Object.assign({id:ch.key}, v)); });
+      }catch(e){}
+    }
+  }catch(e){}
+
+  // B) Shim or(ilike) full-scan filter
+  try{
+    let attempt = [...fields];
+    for(let guard=0; guard<fields.length+1; guard++){
+      if(!attempt.length) break;
+      const orStr = attempt.map(f=>f+'.ilike.%'+q+'%').join(',');
+      let query = sb.from('profiles').select('*').or(orStr).limit(limit);
+      if(excludeId) query = query.neq('id', excludeId);
+      const {data, error} = await query;
+      if(error){
+        const mm = (error.message||'').match(/column [\w.]*\.?(\w+) does not exist/i);
+        if(mm && attempt.includes(mm[1])){ attempt = attempt.filter(f=>f!==mm[1]); continue; }
+        break;
+      }
+      (data||[]).forEach(push);
+      break;
+    }
+  }catch(e){}
+
+  // C) Fallback: scan up to 500 profiles client-side
+  if(byId.size < 3){
+    try{
+      const db = window.firebaseDb || (typeof _fbDb!=='undefined' ? _fbDb : null);
+      if(db){
+        const snap = await db.ref('tables/profiles').limitToFirst(500).once('value');
+        snap.forEach(ch=>{
+          const v = ch.val(); if(!v || typeof v!=='object') return;
+          const blob = [v.username,v.first_name,v.last_name,v.email,v.phone].map(x=>String(x||'').toLowerCase()).join(' ');
+          if(blob.indexOf(ql)!==-1) push(Object.assign({id:ch.key}, v));
+        });
+      }
+    }catch(e){}
   }
-  return {data:[], error:null};
+
+  let rows = Array.from(byId.values());
+  rows.sort((a,b)=>{
+    const ae = String(a.username||'').toLowerCase()===ql ? 0 : 1;
+    const be = String(b.username||'').toLowerCase()===ql ? 0 : 1;
+    return ae-be;
+  });
+  return {data: rows.slice(0, limit), error:null};
 }
 
 // ---------- Verified badge ----------
@@ -17606,8 +17677,8 @@ async function appendGlobalSearchResults(list, q){
     data=res.data;
   }catch(e){ return; }
   if((document.getElementById('search-input')?.value||'').trim()!==q) return; // stale response, query changed
-  const knownIds=new Set(contacts.map(c=>c.id));
-  const fresh=(data||[]).filter(p=>!knownIds.has(p.id));
+  const knownIds=new Set((contacts||[]).map(c=>String(c&&c.id)));
+  const fresh=(data||[]).filter(p=>p && p.id && !knownIds.has(String(p.id)));
   if(!fresh.length) return;
   const header=document.createElement('div');
   header.style.cssText='margin:12px 12px 4px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:1px';
@@ -24985,18 +25056,41 @@ html.sl-tv .composer textarea { min-height: 52px; font-size: 17px; }
       const prev = byId.get(String(g.id));
       byId.set(String(g.id), prev ? {...prev, ...g} : {...g, type:'channel'});
     };
-    // A) try public filter
+    // A) Direct RTDB: type === channel (indexed)
     try{
-      const {data}=await sb.from('groups').select('id,name,username,description,avatar_url,is_public,type,color,owner_id').eq('type','channel').eq('is_public',true).limit(200);
+      const db = window.firebaseDb || (typeof _fbDb!=='undefined' ? _fbDb : null);
+      if(db){
+        try{
+          const snap = await db.ref('tables/groups').orderByChild('type').equalTo('channel').limitToFirst(300).once('value');
+          snap.forEach(ch=>{ const v=ch.val(); if(v) add(Object.assign({id:ch.key}, v, {type:'channel'})); });
+        }catch(e1){
+          // no index — full scan capped
+          try{
+            const snap = await db.ref('tables/groups').limitToFirst(400).once('value');
+            snap.forEach(ch=>{
+              const v=ch.val(); if(!v) return;
+              if(v.type==='channel' || v.username || v.is_public) add(Object.assign({id:ch.key}, v));
+            });
+          }catch(e2){}
+        }
+        // also is_public === true
+        try{
+          const snap = await db.ref('tables/groups').orderByChild('is_public').equalTo(true).limitToFirst(200).once('value');
+          snap.forEach(ch=>{ const v=ch.val(); if(v) add(Object.assign({id:ch.key}, v)); });
+        }catch(e3){}
+      }
+    }catch(e){}
+    // B) Shim queries (QueryBuilder)
+    try{
+      const {data}=await sb.from('groups').select('*').eq('type','channel').limit(300);
+      (data||[]).forEach(g=> add({...g, type:'channel', is_public: !!(g.is_public||g.username||isPubCh(g))}));
+    }catch(e){}
+    try{
+      const {data}=await sb.from('groups').select('*').eq('is_public', true).limit(200);
       (data||[]).forEach(add);
     }catch(e){}
-    // B) all channels (schema/RLS may ignore is_public)
-    try{
-      const {data}=await sb.from('groups').select('id,name,username,description,avatar_url,is_public,type,color,owner_id').eq('type','channel').limit(200);
-      (data||[]).forEach(g=>{ if(isPubCh(g) || g.username || g.is_public!==false) add({...g, is_public: !!(g.is_public||g.username||isPubCh(g))}); });
-    }catch(e){}
-    // C) my groups that are public
-    try{ (groups||[]).forEach(g=>{ if(isPubCh(g) || (g.type==='channel' && (g.is_public||g.username))) add(g); }); }catch(e){}
+    // C) my groups that are public/channels
+    try{ (groups||[]).forEach(g=>{ if(isPubCh(g) || (g && g.type==='channel')) add(g); }); }catch(e){}
     // D) local meta keys
     try{
       for(let i=0;i<localStorage.length;i++){
@@ -25005,20 +25099,23 @@ html.sl-tv .composer textarea { min-height: 52px; font-size: 17px; }
           const id=k.slice('sl_group_meta_'.length);
           try{
             const meta=JSON.parse(localStorage.getItem(k)||'{}');
-            if(meta.is_public || meta.username){
-              let base = (groups||[]).find(x=>String(x.id)===String(id)) || {id, name: meta.username||'Канал', type:'channel'};
+            if(meta.is_public || meta.username || meta.type==='channel'){
+              let base = (groups||[]).find(x=>String(x.id)===String(id)) || {id, name: meta.name||meta.username||'Канал', type:'channel'};
               add({...base, ...meta, type:'channel', is_public:true});
             }
           }catch(e){}
         }
       }
     }catch(e){}
-    // E) public directory
+    // E) public directory cache
     try{
       const dir=JSON.parse(localStorage.getItem('sl_public_dir')||'[]');
-      dir.forEach(add);
+      (dir||[]).forEach(add);
     }catch(e){}
-    let all=[...byId.values()].filter(g=>isPubCh(g) || g.username || g.is_public);
+    // Accept any channel-like row (don't over-filter — empty catalog was the bug)
+    let all=[...byId.values()].filter(g=> g && (g.type==='channel' || isPubCh(g) || g.username || g.is_public));
+    // persist for next open
+    try{ localStorage.setItem('sl_public_dir', JSON.stringify(all.slice(0,200))); }catch(e){}
     // dedupe by username prefer
     function paint(q=''){
       q=q.trim().toLowerCase();
@@ -47098,6 +47195,67 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
   }
   setTimeout(paint, 1000);
   setInterval(paint, 2500);
+})();
+</script>
+
+<style id="sl-dark-icons-force">
+/* Dark mode: force visible icons on attach / circle / mic buttons */
+@media (max-width: 1024px) {
+  body:not(.theme-light):not(.light-theme).in-chat #attach-btn,
+  body:not(.theme-light):not(.light-theme).in-chat .composer #attach-btn,
+  body:not(.theme-light):not(.light-theme).in-chat #circle-btn,
+  body:not(.theme-light):not(.light-theme).in-chat .composer #circle-btn,
+  body:not(.theme-light):not(.light-theme).in-chat #voice-btn,
+  body:not(.theme-light):not(.light-theme).in-chat .composer #voice-btn {
+    color: #F4F7FB !important;
+  }
+  body:not(.theme-light):not(.light-theme).in-chat #attach-btn svg,
+  body:not(.theme-light):not(.light-theme).in-chat #circle-btn svg,
+  body:not(.theme-light):not(.light-theme).in-chat #voice-btn svg,
+  body:not(.theme-light):not(.light-theme).in-chat #attach-btn svg path,
+  body:not(.theme-light):not(.light-theme).in-chat #circle-btn svg circle,
+  body:not(.theme-light):not(.light-theme).in-chat #circle-btn svg path,
+  body:not(.theme-light):not(.light-theme).in-chat #voice-btn svg path {
+    stroke: #F4F7FB !important;
+    color: #F4F7FB !important;
+    fill: none !important;
+    opacity: 1 !important;
+  }
+}
+</style>
+<script id="sl-dark-icons-force-js">
+(function(){
+  if (window._slDarkIconsForce) return;
+  window._slDarkIconsForce = 1;
+  function forceIconColor(){
+    try {
+      var light = document.body.classList.contains('theme-light') ||
+                  document.body.classList.contains('light-theme') ||
+                  document.documentElement.classList.contains('theme-light');
+      var color = light ? 'rgba(30,36,48,0.88)' : '#F4F7FB';
+      ['attach-btn', 'circle-btn', 'voice-btn'].forEach(function(id){
+        var el = document.getElementById(id);
+        if (!el) return;
+        el.style.setProperty('color', color, 'important');
+        var svg = el.querySelector('svg');
+        if (svg) {
+          svg.style.setProperty('stroke', color, 'important');
+          svg.style.setProperty('color', color, 'important');
+          svg.querySelectorAll('path, circle, line, polyline, rect').forEach(function(n){
+            n.style.setProperty('stroke', color, 'important');
+            n.setAttribute('stroke', color);
+          });
+        }
+      });
+    } catch(e){}
+  }
+  forceIconColor();
+  setTimeout(forceIconColor, 800);
+  setInterval(forceIconColor, 2500);
+  try {
+    new MutationObserver(forceIconColor).observe(document.body, { attributes: true, attributeFilter: ['class'] });
+    new MutationObserver(forceIconColor).observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+  } catch(e){}
 })();
 </script>
 
