@@ -3748,6 +3748,20 @@ body.theme-light .topbar {
         <input type="hidden" id="reg-contact" value="">
       </div>
 
+      <!-- Step 1b: Email verification code -->
+      <div class="reg-step" data-step="1b" style="display:none">
+        <div style="text-align:center;margin-bottom:8px;font-size:28px">✉️</div>
+        <p style="font-size:14px;font-weight:700;margin-bottom:8px;text-align:center">Подтверждение email</p>
+        <p id="reg-verify-hint" style="font-size:13px;color:var(--muted);margin-bottom:14px;line-height:1.45;text-align:center">Мы отправили код на вашу почту</p>
+        <div class="field">
+          <label>Код из письма</label>
+          <input type="text" id="reg-email-code" placeholder="123456" inputmode="numeric" autocomplete="one-time-code" maxlength="8" style="text-align:center;font-size:22px;letter-spacing:6px;font-weight:700">
+        </div>
+        <button type="button" class="btn-primary" id="reg-verify-code-btn">Подтвердить</button>
+        <button type="button" class="btn-secondary" id="reg-resend-code" style="margin-top:8px">Отправить код ещё раз</button>
+        <button type="button" class="btn-secondary" id="reg-back-verify" style="margin-top:8px;border:none;color:var(--muted)">← Назад</button>
+      </div>
+
       <!-- Step 2: Avatar + name -->
       <div class="reg-step" data-step="2" style="display:none">
         <div style="text-align:center;margin-bottom:16px">
@@ -5236,7 +5250,7 @@ function normalizeContact(raw){
 }
 
 function showAuthPanel(which){
-  ['auth-choice','login-form','register-form','forgot-form'].forEach(id=>{
+  ['auth-choice','login-form','login-verify-form','register-form','forgot-form'].forEach(id=>{
     const el = document.getElementById(id);
     if(!el) return;
     if(id===which){
@@ -5307,18 +5321,90 @@ function findRecoveryRecord(key){
   return null;
 }
 
+
+/* ===== Email verification via Resend (api/send-code) ===== */
+window._slEmailVerified = false;
+function slGenEmailCode(){
+  return String(Math.floor(100000 + Math.random() * 900000));
+}
+function slSavePendingCode(email, code){
+  try{
+    sessionStorage.setItem('sl_email_verify', JSON.stringify({
+      email: String(email).toLowerCase(),
+      code: String(code),
+      exp: Date.now() + 15 * 60 * 1000
+    }));
+  }catch(e){}
+}
+function slLoadPendingCode(){
+  try{
+    const o = JSON.parse(sessionStorage.getItem('sl_email_verify')||'null');
+    if(!o || !o.exp || o.exp < Date.now()) return null;
+    return o;
+  }catch(e){ return null; }
+}
+function slClearPendingCode(){
+  try{ sessionStorage.removeItem('sl_email_verify'); }catch(e){}
+}
+/** Send code. Returns {ok, skipped, error}. skipped=true → limit/quota → continue without code */
+async function slSendEmailCode(email){
+  email = String(email||'').trim().toLowerCase();
+  if(!email) return { ok:false, error:'no email' };
+  const code = slGenEmailCode();
+  slSavePendingCode(email, code);
+  window._slEmailVerified = false;
+  try{
+    const r = await fetch('/api/send-code', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, code })
+    });
+    let data = {};
+    try{ data = await r.json(); }catch(e){}
+    // Success only if HTTP 2xx and not marked skip
+    if(r.ok && !data.skip){
+      return { ok:true, skipped:false };
+    }
+    // ANY error / limit / non-OK → skip verification without code
+    window._slEmailVerified = true;
+    slClearPendingCode();
+    return { ok:true, skipped:true, error: data.error || ('HTTP '+r.status) };
+  }catch(e){
+    // Network / CORS / any throw → skip
+    window._slEmailVerified = true;
+    slClearPendingCode();
+    return { ok:true, skipped:true, error: String(e.message||e) };
+  }
+}
+function slCheckEmailCode(input){
+  const pending = slLoadPendingCode();
+  if(!pending){
+    // nothing pending (skipped or expired) — accept
+    return { ok:true, skipped:true };
+  }
+  const c = String(input||'').replace(/\s+/g,'').trim();
+  if(c && c === String(pending.code)){
+    window._slEmailVerified = true;
+    slClearPendingCode();
+    return { ok:true };
+  }
+  return { ok:false, error:'wrong' };
+}
+
+
 function setRegStep(step){
   // Never leave recovery-key screen until user confirms
-  if(_awaitingRecoveryKey && step !== 6 && step < 6){
+  if(_awaitingRecoveryKey && step !== 6 && step !== '1b' && step < 6){
     step = 6;
   }
   _regStep = step;
   const form = document.getElementById('register-form');
-  if(form && step >= 1){
+  if(form && (step >= 1 || step === '1b')){
     try{ form.style.display = 'block'; }catch(e){}
   }
   document.querySelectorAll('#register-form .reg-step').forEach(el=>{
-    const show = (+el.dataset.step === step);
+    const ds = el.dataset.step;
+    const show = (String(ds) === String(step)) || (+ds === step);
     el.style.display = show ? 'block' : 'none';
   });
   document.querySelectorAll('#reg-progress .reg-dot').forEach(d=>{
@@ -5403,6 +5489,32 @@ async function doLogin(){
       else authMsg(/invalid|credentials|email/i.test(msg) ? 'Неверный логин или пароль' : (msg || 'Неверный логин или пароль'));
       setBtnLoading(btn, false);
       clearTimeout(unlock);
+      return;
+    }
+    // Email login → send code; any send error → skip code and enter app
+    const loginEmail = (data.user.email || contact.email || '').toLowerCase();
+    const isEmailLogin = !!(loginEmail && loginEmail.includes('@') && !contact.isPhone);
+    if(isEmailLogin){
+      clearTimeout(unlock);
+      setBtnLoading(btn, false);
+      window._pendingLoginUser = data.user;
+      window._pendingLoginEmail = loginEmail;
+      authMsg('Отправляем код…');
+      const sendRes = await slSendEmailCode(loginEmail);
+      if(sendRes.skipped || !sendRes.ok){
+        authMsg('');
+        try{
+          await withTimeout(Promise.resolve(onAuthenticated(data.user)), 15000, 'app load timeout');
+        }catch(eAuth){
+          console.warn('onAuthenticated', eAuth);
+        }
+        return;
+      }
+      const hint = document.getElementById('login-verify-hint');
+      if(hint) hint.textContent = 'Код отправлен на '+loginEmail;
+      authMsg('');
+      try{ showAuthPanel('login-verify-form'); }catch(e){}
+      try{ document.getElementById('login-email-code').value=''; document.getElementById('login-email-code').focus(); }catch(e){}
       return;
     }
     try{
@@ -5775,6 +5887,49 @@ function wireAuthUI(){
   document.getElementById('reg-back-choice')?.addEventListener('click', ()=> showAuthPanel('auth-choice'));
 
   document.getElementById('login-btn')?.addEventListener('click', e=>{ e.preventDefault(); doLogin(); });
+  document.getElementById('login-verify-code-btn')?.addEventListener('click', async ()=>{
+    const input = document.getElementById('login-email-code')?.value || '';
+    const r = slCheckEmailCode(input);
+    if(!r.ok){ authMsg('Неверный код'); return; }
+    authMsg('');
+    const user = window._pendingLoginUser;
+    if(!user){ authMsg('Сессия истекла — войдите снова'); try{ showAuthPanel('login-form'); }catch(e){} return; }
+    const btn = document.getElementById('login-verify-code-btn');
+    try{ if(typeof setBtnLoading==='function') setBtnLoading(btn, true); }catch(e){}
+    try{
+      await onAuthenticated(user);
+    }catch(e){ console.warn(e); authMsg('Ошибка входа'); }
+    finally{
+      try{ if(typeof setBtnLoading==='function') setBtnLoading(btn, false); }catch(e){}
+      window._pendingLoginUser = null;
+    }
+  });
+  document.getElementById('login-resend-code')?.addEventListener('click', async ()=>{
+    const email = window._pendingLoginEmail;
+    if(!email){ authMsg('Нет email'); return; }
+    authMsg('Отправляем…');
+    const res = await slSendEmailCode(email);
+    if(res.skipped || !res.ok){
+      authMsg('Письмо не отправлено — входим без кода');
+      const user = window._pendingLoginUser;
+      if(user){
+        try{ await onAuthenticated(user); }catch(e){}
+        window._pendingLoginUser = null;
+      }
+      return;
+    }
+    authMsg('Код отправлен повторно');
+  });
+  document.getElementById('login-verify-back')?.addEventListener('click', async ()=>{
+    window._pendingLoginUser = null;
+    window._pendingLoginEmail = null;
+    slClearPendingCode();
+    try{ if(sb?.auth?.signOut) await sb.auth.signOut(); }catch(e){}
+    try{ showAuthPanel('login-form'); }catch(e){}
+  });
+  document.getElementById('login-email-code')?.addEventListener('keydown', (e)=>{
+    if(e.key==='Enter'){ e.preventDefault(); document.getElementById('login-verify-code-btn')?.click(); }
+  });
   document.getElementById('login-password')?.addEventListener('keydown', e=>{ if(e.key==='Enter') doLogin(); });
   document.getElementById('login-email')?.addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('login-password')?.focus(); });
 
@@ -5917,14 +6072,58 @@ function wireAuthUI(){
     r.readAsDataURL(f);
   });
 
-  document.getElementById('reg-next-1')?.addEventListener('click', ()=>{
+  document.getElementById('reg-next-1')?.addEventListener('click', async ()=>{
     const contact = buildContactFromReg();
     if(!contact){ authMsg(window._regMode==='email'?'Введите email':'Введите номер телефона'); return; }
     const password = document.getElementById('reg-password')?.value || '';
     const password2 = document.getElementById('reg-password2')?.value || '';
     if(password.length < 6){ authMsg('Пароль не короче 6 символов'); return; }
     if(password !== password2){ authMsg('Пароли не совпадают'); return; }
+    // Phone path — no email code
+    if(window._regMode !== 'email' || !contact.email){
+      window._slEmailVerified = true;
+      setRegStep(2);
+      return;
+    }
+    const btn = document.getElementById('reg-next-1');
+    try{ if(typeof setBtnLoading==='function') setBtnLoading(btn, true); }catch(e){}
+    authMsg('Отправляем код…');
+    const res = await slSendEmailCode(contact.email);
+    try{ if(typeof setBtnLoading==='function') setBtnLoading(btn, false); }catch(e){}
+    if(res.skipped || !res.ok){
+      authMsg('Письмо не отправлено — продолжаем без кода');
+      window._slEmailVerified = true;
+      setRegStep(2);
+      return;
+    }
+    const hint = document.getElementById('reg-verify-hint');
+    if(hint) hint.textContent = 'Код отправлен на '+contact.email;
+    authMsg('');
+    setRegStep('1b');
+  });
+  document.getElementById('reg-verify-code-btn')?.addEventListener('click', ()=>{
+    const input = document.getElementById('reg-email-code')?.value || '';
+    const r = slCheckEmailCode(input);
+    if(!r.ok){ authMsg('Неверный код'); return; }
+    authMsg('');
     setRegStep(2);
+  });
+  document.getElementById('reg-resend-code')?.addEventListener('click', async ()=>{
+    const contact = buildContactFromReg();
+    if(!contact?.email){ authMsg('Нет email'); return; }
+    authMsg('Отправляем…');
+    const res = await slSendEmailCode(contact.email);
+    if(res.skipped || !res.ok){
+      authMsg('Письмо не отправлено — продолжаем без кода');
+      window._slEmailVerified = true;
+      setRegStep(2);
+      return;
+    }
+    authMsg('Код отправлен повторно');
+  });
+  document.getElementById('reg-back-verify')?.addEventListener('click', ()=> setRegStep(1));
+  document.getElementById('reg-email-code')?.addEventListener('keydown', (e)=>{
+    if(e.key==='Enter'){ e.preventDefault(); document.getElementById('reg-verify-code-btn')?.click(); }
   });
   document.getElementById('reg-next-2')?.addEventListener('click', ()=>{
     const first = (document.getElementById('reg-firstname')?.value||'').trim();
@@ -22779,38 +22978,6 @@ function scheduleBirthdayAfterAppReady(){
       };
     }
   }, 800);
-
-  // ========== Email verification setting ==========
-  setTimeout(()=>{
-    const host=document.getElementById('settings-2fa')?.parentNode;
-    if(!host || document.getElementById('settings-email-verify')) return;
-    const row=document.createElement('div');
-    row.className='settings-item';
-    row.id='settings-email-verify';
-    row.innerHTML=`<svg viewBox="0 0 24 24"><path d="M4 4h16v16H4z" fill="none" stroke="currentColor"/><path d="M4 7l8 6 8-6" fill="none" stroke="currentColor"/></svg>
-      <span class="item-text">Подтверждение email</span>
-      <span id="settings-email-verify-badge" style="margin-left:auto;font-size:11px;color:var(--muted)">${storage.getItem('sl_email_verify_on')==='1'?'Вкл.':'Выкл.'}</span>`;
-    host.appendChild(row);
-    row.onclick=async()=>{
-      const on=storage.getItem('sl_email_verify_on')==='1';
-      if(on){
-        storage.setItem('sl_email_verify_on','0');
-        showToast('Подтверждение email выключено');
-      } else {
-        storage.setItem('sl_email_verify_on','1');
-        showToast('Включено: при входе может запрашиваться письмо');
-        try{
-          if(myProfile?.email && sb?.auth?.resend){
-            await sb.auth.resend({ type:'signup', email: myProfile.email });
-            showToast('Письмо отправлено на '+myProfile.email);
-          }
-        }catch(e){
-          showToast('Запросите письмо подтверждения в письме при регистрации');
-        }
-      }
-      document.getElementById('settings-email-verify-badge').textContent=storage.getItem('sl_email_verify_on')==='1'?'Вкл.':'Выкл.';
-    };
-  }, 1000);
 
   // ========== Real transcription improvement ==========
   /* old transcribeVoiceMsg removed */ window.transcribeVoiceMsg = async function(msg){ return window._slTranscribeImpl && window._slTranscribeImpl(msg); };
