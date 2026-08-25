@@ -6494,11 +6494,10 @@ async function loadGroups(){
       if(g.type==='channel' && g.username && g.is_public==null) g.is_public=true;
     });
   }catch(e){}
-  // Always show official news channel
+  // News channel only if subscribed / publisher — otherwise findable via search
   try{
-    if(typeof ensureNewsChannelVisible==='function') ensureNewsChannelVisible();
-    else injectNewsChannelLocal();
-  }catch(e){ try{ injectNewsChannelLocal(); }catch(e2){} }
+    if(typeof injectNewsChannelLocal==='function') injectNewsChannelLocal(false);
+  }catch(e){}
   renderContactsAndGroups();
 }
 const NEWS_FALLBACK_ID = 'a1000000-0000-4000-8000-000000000001';
@@ -6515,46 +6514,69 @@ function isNewsChannel(g){
 function getNewsLocalMsgs(){ try{return JSON.parse(storage.getItem(NEWS_MSGS_KEY)||'[]');}catch(e){return[];} }
 function setNewsLocalMsgs(a){ storage.setItem(NEWS_MSGS_KEY, JSON.stringify(a.slice(-300))); }
 
-function injectNewsChannelLocal(){
+function makeNewsChannelObject(){
+  const cachedId = storage.getItem('sl_news_real_id') || NEWS_FALLBACK_ID;
+  const isPub = isNewsPublisher();
+  return {
+    id: cachedId,
+    name: NEWS_NAME,
+    type: 'channel',
+    username: NEWS_USERNAME,
+    is_public: true,
+    comments_enabled: false,
+    color: '#4C7CF3',
+    owner_id: isPub ? myProfile?.id : null,
+    myRole: isPub ? 'admin' : 'member',
+    _verified: true,
+    _news: true,
+    _localOnly: cachedId===NEWS_FALLBACK_ID,
+    description: 'Официальные новости SLine'
+  };
+}
+/** News is NOT auto-added to chat list. Only appears when user subscribed or searches. */
+function isNewsSubscribed(){
+  try{ return storage.getItem('sl_news_joined')==='1'; }catch(e){ return false; }
+}
+function setNewsSubscribed(v){
+  try{ storage.setItem('sl_news_joined', v?'1':'0'); }catch(e){}
+}
+function injectNewsChannelLocal(force){
   const cachedId = storage.getItem('sl_news_real_id') || NEWS_FALLBACK_ID;
   const isPub = isNewsPublisher();
   if(!Array.isArray(groups)) groups=[];
   // Prefer real DB channel if already in list
-  let existing = groups.find(g=>g && (g.username===NEWS_USERNAME || g.name===NEWS_NAME));
+  let existing = groups.find(g=>g && (g.username===NEWS_USERNAME || g.name===NEWS_NAME || g._news));
   if(existing){
     existing._verified = true;
     existing._news = true;
     if(isPub) existing.myRole = existing.myRole||'admin';
     storage.setItem('sl_news_real_id', existing.id);
-    const i=groups.indexOf(existing);
-    if(i>0){ groups.splice(i,1); groups.unshift(existing); }
+    // Do not pin to top automatically
     return existing;
   }
-  if(!groups.some(g=>g && (g.id===cachedId || g._news))){
-    groups.unshift({
-      id: cachedId,
-      name: NEWS_NAME,
-      type: 'channel',
-      username: NEWS_USERNAME,
-      is_public: true,
-      comments_enabled: false,
-      color: '#4C7CF3',
-      owner_id: isPub ? myProfile?.id : null,
-      myRole: isPub ? 'admin' : 'member',
-      _verified: true,
-      _news: true,
-      _localOnly: cachedId===NEWS_FALLBACK_ID,
-      description: 'Официальные новости SLine'
-    });
-  } else {
-    const i=groups.findIndex(g=>g && (g.username===NEWS_USERNAME||g.name===NEWS_NAME||g.id===cachedId||g._news));
-    if(i>=0){ const g=groups[i]; g._verified=true; g._news=true; if(i>0){ groups.splice(i,1); groups.unshift(g);} }
+  // Only inject into groups list if user joined or publisher or force
+  if(force || isPub || isNewsSubscribed()){
+    if(!groups.some(g=>g && (g.id===cachedId || g._news))){
+      groups.push(makeNewsChannelObject());
+    }
+    return groups.find(g=>g && (g._news || g.username===NEWS_USERNAME || g.name===NEWS_NAME));
   }
-  return groups[0];
+  // Not in list by default
+  return makeNewsChannelObject();
+}
+function getNewsForSearch(){
+  // Always available for search results
+  if(!Array.isArray(groups)) groups=[];
+  let existing = groups.find(g=>g && (g.username===NEWS_USERNAME || g.name===NEWS_NAME || g._news));
+  if(existing){ existing._verified=true; existing._news=true; return existing; }
+  return makeNewsChannelObject();
 }
 window.injectNewsChannelLocal = injectNewsChannelLocal;
-window.ensureNewsChannelVisible = injectNewsChannelLocal;
+window.ensureNewsChannelVisible = function(){ return injectNewsChannelLocal(true); };
 window.isNewsChannel = isNewsChannel;
+window.getNewsForSearch = getNewsForSearch;
+window.setNewsSubscribed = setNewsSubscribed;
+window.isNewsSubscribed = isNewsSubscribed;
 
 // Resolve / create real news channel in database (valid UUID)
 async function resolveNewsChannelReal(){
@@ -6593,20 +6615,26 @@ async function resolveNewsChannelReal(){
       storage.setItem('sl_news_real_id', ch.id);
       try{ await sb.from('groups').update({comments_enabled:false, name: NEWS_NAME}).eq('id', ch.id); }catch(e){}
       ch.comments_enabled = false;
-      try{
-        await sb.from('group_members').upsert({
-          group_id: ch.id, user_id: myProfile.id, role: isNewsPublisher()?'admin':'member'
-        }, {onConflict:'group_id,user_id'});
-      }catch(e){
-        try{ await sb.from('group_members').insert({group_id:ch.id,user_id:myProfile.id,role:isNewsPublisher()?'admin':'member'}); }catch(e2){}
+      // Join membership only for publisher or after user subscribed (opened channel)
+      if(isNewsPublisher() || (typeof isNewsSubscribed==='function' && isNewsSubscribed())){
+        try{
+          await sb.from('group_members').upsert({
+            group_id: ch.id, user_id: myProfile.id, role: isNewsPublisher()?'admin':'member'
+          }, {onConflict:'group_id,user_id'});
+        }catch(e){
+          try{ await sb.from('group_members').insert({group_id:ch.id,user_id:myProfile.id,role:isNewsPublisher()?'admin':'member'}); }catch(e2){}
+        }
       }
       ch._verified=true; ch._news=true; ch.myRole=isNewsPublisher()?'admin':'member';
-      // replace synthetic in list
+      // Only put into chat list if subscribed or publisher
+      const show = isNewsPublisher() || (typeof isNewsSubscribed==='function' && isNewsSubscribed());
       groups = (groups||[]).filter(g=>!(g && (g.id===NEWS_FALLBACK_ID || (g._news && g.id!==ch.id))));
-      if(!groups.some(g=>g && g.id===ch.id)) groups.unshift(ch);
-      else {
-        const i=groups.findIndex(g=>g.id===ch.id);
-        if(i>0){ const [x]=groups.splice(i,1); groups.unshift(x); }
+      if(show){
+        if(!groups.some(g=>g && g.id===ch.id)) groups.push(ch);
+        else {
+          const i=groups.findIndex(g=>g.id===ch.id);
+          if(i>=0) groups[i] = {...groups[i], ...ch, _verified:true, _news:true};
+        }
       }
       return ch;
     }
@@ -6618,8 +6646,8 @@ window.resolveNewsChannelReal = resolveNewsChannelReal;
 
 function renderContactsAndGroups(){
   const list=document.getElementById('contacts-list'); if(!list) return;
-  // ALWAYS inject official news channel before building list
-  try{ if(typeof injectNewsChannelLocal==='function') injectNewsChannelLocal(); }catch(e){}
+  // News channel is NOT forced into the list. Only if user joined / publisher.
+  try{ if(typeof injectNewsChannelLocal==='function') injectNewsChannelLocal(false); }catch(e){}
   // Restore group/channel avatars from local backup if DB column missing
   try{
     (groups||[]).forEach(g=>{
@@ -6636,18 +6664,21 @@ function renderContactsAndGroups(){
   const showArchive = activeFolder==='Архив';
   const srcContacts = showArchive ? contacts.filter(c=>archive.includes(c.id)) : contacts.filter(c=>!archive.includes(c.id));
   let srcGroups = showArchive ? groups.filter(g=>archive.includes(g.id)) : groups.filter(g=>!archive.includes(g.id));
-  // Never hide news channel unless searching something else
+  // Hide unsubscribed news from main list (unless publisher)
   const NEWS_NAME='SLine новости';
-  if(!srcGroups.some(g=>g && (g.name===NEWS_NAME || g.username==='sline'))){
-    try{ injectNewsChannelLocal(); srcGroups = showArchive ? groups.filter(g=>archive.includes(g.id)) : groups.filter(g=>!archive.includes(g.id)); }catch(e){}
+  if(!(typeof isNewsPublisher==='function' && isNewsPublisher()) && !(typeof isNewsSubscribed==='function' && isNewsSubscribed())){
+    srcGroups = srcGroups.filter(g=>!(g && (g.name===NEWS_NAME || g.username==='sline' || g._news)));
   }
-  // Pin news first
-  srcGroups = [...srcGroups].sort((a,b)=>{
-    const an=(a.name===NEWS_NAME||a.username==='sline')?0:1;
-    const bn=(b.name===NEWS_NAME||b.username==='sline')?0:1;
-    return an-bn;
-  });
-  (q?srcGroups.filter(g=>(g.name||'').toLowerCase().includes(q) || 'sline новости'.includes(q) || 'новости'.includes(q)):srcGroups).forEach(g=>items.push({type:'group',data:g,unread:unread[g.id]||0}));
+  // Search: always can find official news channel
+  if(q && (NEWS_NAME.toLowerCase().includes(q) || 'sline'.includes(q) || 'новости'.includes(q) || q.includes('news') || q.includes('sline'))){
+    try{
+      const news = (typeof getNewsForSearch==='function') ? getNewsForSearch() : null;
+      if(news && !srcGroups.some(g=>g && (g.id===news.id || g.username==='sline' || g._news))){
+        srcGroups = [news, ...srcGroups];
+      }
+    }catch(e){}
+  }
+  (q?srcGroups.filter(g=>(g.name||'').toLowerCase().includes(q) || (g.username||'').toLowerCase().includes(q) || (g._news && ('sline новости'.includes(q) || 'новости'.includes(q) || 'sline'.includes(q)))):srcGroups).forEach(g=>items.push({type:'group',data:g,unread:unread[g.id]||0}));
   (q?srcContacts.filter(p=>{
     if(p.isBildBot||p.id==='bild_bot') return false;
     let localN='';
@@ -7095,6 +7126,8 @@ async function openGroup(group){
       const real = await resolveNewsChannelReal();
       if(real && real.id) group = {...group, ...real};
     }catch(e){}
+    // Opening news from search = subscribe, then it stays in chat list
+    try{ if(typeof setNewsSubscribed==='function') setNewsSubscribed(true); }catch(e){}
   }
 
   checkPipOnLeave();
@@ -9414,8 +9447,19 @@ async function _sendMessageInner(type='text', fileUrl=null, content=null){
           });
           // Free closed-app push via ntfy
           const preview = data.type==='text' ? (data.content||'').slice(0,80) : (data.type||'message');
-          sendWebPushToUser(peerId, myProfile.first_name||myProfile.username||'SLine', preview, {tag:'sl-msg'});
-          sendNtfyPush(peerId, myProfile.first_name||myProfile.username||'SLine', preview, {tags:'speech_balloon', priority:'high'});
+          const _ptitle = myProfile.first_name||myProfile.username||'SLine';
+          try{ sendWebPushToUser(peerId, _ptitle, preview, {tag:'sl-msg'}); }catch(e){}
+          try{ sendNtfyPush(peerId, _ptitle, preview, {tags:'speech_balloon', priority:'high'}); }catch(e){}
+          // Also tell our SW (helps when app is backgrounded but SW alive)
+          try{
+            if(navigator.serviceWorker?.controller){
+              navigator.serviceWorker.controller.postMessage({
+                type:'sl-show-notification',
+                title: _ptitle,
+                options: { body: preview, tag: 'sl-msg-'+peerId, data: { url: './', peerId: peerId } }
+              });
+            }
+          }catch(e){}
         }
         if(activeGroup){
           const ch = sb.channel('gmsg-'+activeGroup.id);
@@ -15795,7 +15839,11 @@ async function sendWebPushToUser(userId, title, body, opts={}){
 
 /** Optional ntfy fallback (only if user chose it — others need nothing) */
 async function sendNtfyPush(receiverId, title, body, opts={}){
-  if(storage.getItem('sl_ntfy_fallback')!=='1') return; // off by default — no extra apps
+  // On by default when Web Push relay URL is empty (closed PWA still gets alerts)
+  const ntfyOn = storage.getItem('sl_ntfy_fallback');
+  const pushRelay = (typeof PUSH_FN_URL==='string' && PUSH_FN_URL.length>8);
+  if(ntfyOn==='0') return; // user explicitly disabled
+  if(ntfyOn!=='1' && pushRelay) return; // relay available → ntfy optional
   if(!receiverId) return;
   try{
     const headers={'Title':String(title||'SLine').slice(0,100),'Priority':opts.urgent?'urgent':(opts.priority||'default'),'Tags':opts.tags||'speech_balloon','Content-Type':'text/plain; charset=utf-8'};
@@ -26436,8 +26484,10 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
     syncNotifPref();
     try{
       if(!('Notification' in window)) return;
+      // Always re-register SW + refresh push sub when granted
       if(Notification.permission==='granted'){
         storage.setItem(NOTIF_PREF_KEY,'1');
+        try{ if(typeof registerSW==='function') registerSW(); }catch(e){}
         try{ if(typeof subscribeWebPush==='function') subscribeWebPush().catch(()=>{}); }catch(e){}
         return;
       }
@@ -29333,7 +29383,7 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
 
   // Soften: do NOT auto-mark every chat as secret (causes encrypt errors)
   try{
-    window.slE2EAlways = function(){ return false; };
+    /* keep slE2EAlways from settings */
     // keep preference stored but ignore for forcing
   }catch(e){}
 
@@ -29601,7 +29651,7 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
         }
       });
       // stop adding secret badges
-      try{ window.slE2EAlways = function(){ return false; }; }catch(e){}
+      try{ /* keep slE2EAlways from settings */ }catch(e){}
       try{ if(activePartner) activePartner.isSecret=false; }catch(e){}
     }catch(e){}
   }
