@@ -4722,7 +4722,7 @@ body.theme-light .topbar {
             <div class="stories-bar" id="stories-bar"></div>
             <div class="search-box max-search-box" id="search-box-open-tg" role="button">
               <span class="search-icon"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg></span>
-              <input type="text" id="search-input" placeholder="Поиск" data-i18n-placeholder="ph_search" readonly inputmode="search" autocomplete="off">
+              <input type="text" id="search-input" placeholder="Поиск" data-i18n-placeholder="ph_search" inputmode="search" autocomplete="off">
             </div>
             <div class="folder-tabs max-folder-tabs" id="folder-tabs"></div>
             <div class="contacts" id="contacts-list"><div class="sl-loader-inline" data-i18n="loading"><div class="sl-spinner"></div></div></div>
@@ -41361,8 +41361,10 @@ window.slGetDisplayName = function(p){
 
 
 <script>
-/* ========== MAX stories collapse animation (scroll-linked morph) ========== */
+/* ========== MAX stories collapse animation (DISABLED — TG anim elsewhere) ========== */
 (function(){
+  return; // disabled
+
   const MAX_H = 108;
   const RANGE = 130;
 
@@ -50084,6 +50086,399 @@ img.sl-gif-img{
   }, true);
   setInterval(fixState, 2000);
   console.log('[SL] DM not channel gate');
+})();
+</script>
+
+
+<script id="sl-tg-chats-ui-fix">
+(function(){
+  if(window._slTgAnimV6) return; window._slTgAnimV6=1;
+
+  var RANGE = 80;
+  var STORY_H = 100;
+
+  function css(){
+    var s=document.getElementById('sl-tg-stories-anim-css');
+    if(s) s.remove();
+    s=document.createElement('style');
+    s.id='sl-tg-stories-anim-css';
+    s.textContent=`
+#page-chats .sidebar-header.max-chats-hdr{
+  display:flex!important;
+  align-items:center!important;
+  justify-content:flex-end!important;
+  position:relative!important;
+  min-height:48px!important;
+  padding-top:calc(6px + env(safe-area-inset-top,0px))!important;
+  padding-bottom:6px!important;
+  overflow:visible!important;
+  z-index:80!important;
+  background:var(--panel,#0d111a)!important;
+  flex-shrink:0!important;
+  border-bottom:none!important;
+}
+#max-chats-title{
+  position:absolute!important;
+  left:50%!important;
+  top:50%!important;
+  transform:translate(-50%,-50%)!important;
+  font-size:17px!important;
+  font-weight:700!important;
+  letter-spacing:-.2px!important;
+  opacity:1!important;
+  visibility:visible!important;
+  pointer-events:none!important;
+  z-index:12!important;
+  margin:0!important;
+  white-space:nowrap!important;
+  color:var(--text,#fff)!important;
+  display:block!important;
+}
+#max-chats-title.is-gone{
+  opacity:1!important;visibility:visible!important;
+  transform:translate(-50%,-50%)!important;
+}
+#sl-chats-title-chip{display:none!important;opacity:0!important;pointer-events:none!important}
+
+/* chips that receive the "moved" story avatars */
+#sl-tg-peer-chips{
+  position:absolute!important;
+  left:50%!important;
+  top:50%!important;
+  transform:translate(calc(-50% - 40px), -50%);
+  display:flex!important;
+  flex-direction:row!important;
+  align-items:center!important;
+  z-index:13!important;
+  opacity:0;
+  pointer-events:none;
+  will-change:opacity;
+}
+#sl-tg-peer-chips.show{opacity:1!important;pointer-events:auto!important}
+#sl-tg-peer-chips .sl-peer-chip{
+  width:26px;height:26px;border-radius:50%;
+  border:2px solid var(--panel,#0d111a);
+  overflow:hidden;background:#3a3a3c;
+  margin-left:-9px;box-sizing:border-box;
+  box-shadow:0 1px 3px rgba(0,0,0,.4);
+  flex-shrink:0;
+}
+#sl-tg-peer-chips .sl-peer-chip:first-child{margin-left:0}
+#sl-tg-peer-chips .sl-peer-chip img{width:100%;height:100%;object-fit:cover;display:block}
+
+#page-chats .max-chats-actions,
+#page-chats .plus-menu{
+  display:flex!important;margin-left:auto!important;z-index:50!important;
+  opacity:1!important;visibility:visible!important;position:relative!important;
+}
+#page-chats #plus-btn{
+  display:inline-flex!important;width:36px!important;height:36px!important;
+  border-radius:50%!important;background:#3B82F6!important;color:#fff!important;
+  font-size:22px!important;font-weight:600!important;
+  align-items:center!important;justify-content:center!important;
+  opacity:1!important;visibility:visible!important;z-index:51!important;border:none!important;
+}
+
+#sl-stories-wrap{
+  flex-shrink:0!important;
+  overflow:hidden!important;
+  max-height:${STORY_H}px;
+  opacity:1;
+  background:var(--panel,#0d111a);
+  will-change:max-height,opacity;
+  z-index:20;
+  position:relative;
+}
+#sl-stories-wrap.is-collapsed{pointer-events:none!important}
+#sl-stories-wrap #stories-bar,
+#sl-stories-wrap #stories-bar.stories-bar{
+  display:flex!important;
+  gap:12px;
+  padding:6px 14px 8px!important;
+  margin:0!important;
+  overflow-x:auto!important;
+  overflow-y:hidden!important;
+  max-height:none!important;
+  height:auto!important;
+  opacity:1!important;
+  transform:none!important;
+  background:transparent!important;
+  border:none!important;
+  box-sizing:border-box!important;
+  -webkit-overflow-scrolling:touch;
+  scrollbar-width:none;
+}
+#sl-stories-wrap #stories-bar::-webkit-scrollbar{display:none}
+#sl-stories-wrap .story-item{
+  flex-shrink:0;width:64px;
+  display:flex;flex-direction:column;align-items:center;gap:3px;
+  will-change:transform,opacity;
+  position:relative;
+}
+#sl-stories-wrap .story-item span{
+  font-size:11px;max-width:64px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:center;
+}
+
+#sidebar-scroll{
+  overflow-y:auto!important;
+  -webkit-overflow-scrolling:touch;
+  overscroll-behavior-y:contain;
+  flex:1;min-height:0;
+}
+#page-chats .max-search-box{
+  position:relative;z-index:4;
+  background:var(--panel,#0d111a);
+}
+@media (min-width:1025px){
+  #page-chats .max-search-box{display:flex!important;align-items:center!important;gap:10px!important}
+  #sl-burger-btn{flex-shrink:0;position:relative!important}
+}
+`;
+    document.head.appendChild(s);
+  }
+
+  function forceTitle(){
+    var t=document.getElementById('max-chats-title');
+    if(!t) return;
+    t.classList.remove('is-gone');
+    t.style.setProperty('opacity','1','important');
+    t.style.setProperty('visibility','visible','important');
+    t.style.setProperty('transform','translate(-50%, -50%)','important');
+    t.style.setProperty('display','block','important');
+  }
+
+  function ensureChips(){
+    var h=document.querySelector('#page-chats .sidebar-header');
+    if(!h) return null;
+    var el=document.getElementById('sl-tg-peer-chips');
+    if(!el){
+      el=document.createElement('div');
+      el.id='sl-tg-peer-chips';
+      h.appendChild(el);
+    }
+    return el;
+  }
+
+  function fillChips(){
+    var el=ensureChips();
+    if(!el) return;
+    var bar=document.getElementById('stories-bar');
+    if(!bar){ el.innerHTML=''; return; }
+    var html='', n=0;
+    bar.querySelectorAll('.story-item').forEach(function(it){
+      if(n>=3) return;
+      if(it.id==='add-story-btn-bar') return;
+      if(it.classList.contains('sl-interesting-item')) return;
+      var src='';
+      var img=it.querySelector('img');
+      if(img && img.src) src=img.src;
+      if(!src){
+        var av=it.querySelector('.avatar, .story-ring > div, .story-ring > .avatar');
+        if(av){
+          if(av.tagName==='IMG') src=av.src||'';
+          else {
+            var bg=(av.style&&av.style.backgroundImage)||'';
+            if(!bg||bg==='none') try{bg=getComputedStyle(av).backgroundImage;}catch(e){}
+            var m=String(bg||'').match(/url\(["']?([^"')]+)/);
+            if(m) src=m[1];
+          }
+        }
+      }
+      if(!src) return;
+      html+='<div class="sl-peer-chip"><img src="'+String(src).replace(/"/g,'')+'" alt=""></div>';
+      n++;
+    });
+    el.innerHTML=html;
+  }
+
+  function restructure(){
+    var sc=document.getElementById('sidebar-scroll');
+    var bar=document.getElementById('stories-bar');
+    if(!sc||!bar) return false;
+    if(bar.parentElement && bar.parentElement.id==='sl-stories-wrap') return true;
+    var wrap=document.getElementById('sl-stories-wrap');
+    if(!wrap){
+      wrap=document.createElement('div');
+      wrap.id='sl-stories-wrap';
+    }
+    if(bar.parentElement===sc){
+      sc.parentNode.insertBefore(wrap, sc);
+      wrap.appendChild(bar);
+    } else if(bar.parentElement!==wrap){
+      wrap.appendChild(bar);
+      if(!wrap.parentNode) sc.parentNode.insertBefore(wrap, sc);
+    }
+    return true;
+  }
+
+  function lerp(a,b,t){return a+(b-a)*t;}
+  function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
+  function easeOut(t){return 1-Math.pow(1-t,3);}
+
+  /* Target position: chips area in header (approx center of title row, left of «Чаты») */
+  function getChipTarget(i, total){
+    var chips=document.getElementById('sl-tg-peer-chips');
+    var title=document.getElementById('max-chats-title');
+    var header=document.querySelector('#page-chats .sidebar-header');
+    if(!header||!title) return {x:0,y:-70};
+    var hr=header.getBoundingClientRect();
+    var tr=title.getBoundingClientRect();
+    // chips sit left of title center
+    var baseX = (tr.left + tr.width/2) - hr.left - 40 - (total-1-i)*9;
+    var baseY = (tr.top + tr.height/2) - hr.top;
+    return {x:baseX, y:baseY};
+  }
+
+  function apply(p){
+    p=clamp(p,0,1);
+    forceTitle();
+    var wrap=document.getElementById('sl-stories-wrap');
+    var bar=document.getElementById('stories-bar');
+    var chips=ensureChips();
+    var header=document.querySelector('#page-chats .sidebar-header');
+    var e=easeOut(p);
+    var eFast=easeOut(clamp(p*1.15,0,1));
+
+    // collapse the stories container height (space frees up)
+    if(wrap){
+      var h=STORY_H*(1-e);
+      wrap.style.maxHeight=h.toFixed(1)+'px';
+      wrap.style.opacity=String(Math.max(0, 1 - Math.max(0,(p-0.75)/0.25)));
+      if(p>0.95){
+        wrap.classList.add('is-collapsed');
+        wrap.style.maxHeight='0px';
+        wrap.style.opacity='0';
+      } else {
+        wrap.classList.remove('is-collapsed');
+      }
+    }
+
+    // MOVE story items toward header chips (not just shrink)
+    if(bar && header){
+      var items=Array.prototype.slice.call(bar.querySelectorAll('.story-item'));
+      // only move real peer stories (skip add / interesting)
+      var movers=[];
+      items.forEach(function(it){
+        if(it.id==='add-story-btn-bar') return;
+        if(it.classList.contains('sl-interesting-item')) return;
+        movers.push(it);
+      });
+      var take=movers.slice(0,3);
+      var hr=header.getBoundingClientRect();
+
+      items.forEach(function(it){
+        var isMover=take.indexOf(it)>=0;
+        var idx=take.indexOf(it);
+        if(isMover && p>0.02){
+          var ir=it.getBoundingClientRect();
+          // current center relative to header
+          var cx=ir.left+ir.width/2 - hr.left;
+          var cy=ir.top+ir.height/2 - hr.top;
+          var target=getChipTarget(idx, take.length);
+          var dx=(target.x - cx)*e;
+          var dy=(target.y - cy)*e;
+          // keep ring size reasonably readable while flying; scale down late
+          var sc=lerp(1, 0.42, eFast);
+          it.style.transform='translate('+dx.toFixed(1)+'px,'+dy.toFixed(1)+'px) scale('+sc.toFixed(3)+')';
+          it.style.opacity=String(Math.max(0, 1 - Math.max(0,(p-0.55)/0.4)));
+          it.style.zIndex='30';
+          var sp=it.querySelector('span');
+          if(sp) sp.style.opacity=String(Math.max(0,1-e*2.5));
+        } else {
+          // non-movers just fade/move up slightly and disappear
+          it.style.transform='translateY('+(-18*e).toFixed(1)+'px) scale('+lerp(1,0.6,e).toFixed(3)+')';
+          it.style.opacity=String(Math.max(0,1-eFast*1.2));
+          it.style.zIndex='';
+          var sp2=it.querySelector('span');
+          if(sp2) sp2.style.opacity=String(Math.max(0,1-e*2));
+        }
+      });
+    }
+
+    // header chips fade in as stories arrive
+    if(chips){
+      var chipP=clamp((p-0.45)/0.4,0,1);
+      var ce=easeOut(chipP);
+      if(chipP>0.02){
+        chips.classList.add('show');
+        chips.style.opacity=String(ce);
+      } else {
+        chips.classList.remove('show');
+        chips.style.opacity='0';
+      }
+    }
+
+    try{
+      var btn=document.getElementById('plus-btn');
+      if(btn){btn.style.opacity='1';btn.style.visibility='visible';btn.style.display='inline-flex';}
+    }catch(err){}
+  }
+
+  var locked=false;
+
+  function onScroll(){
+    var sc=document.getElementById('sidebar-scroll');
+    if(!sc) return;
+    var y=sc.scrollTop||0;
+    if(y>=RANGE){
+      locked=true;
+      apply(1);
+      return;
+    }
+    if(locked){
+      if(y<=4){ locked=false; apply(0); }
+      else apply(1);
+      return;
+    }
+    apply(y/RANGE);
+  }
+
+  function bind(){
+    var sc=document.getElementById('sidebar-scroll');
+    if(!sc||sc._slTgV6) return;
+    sc._slTgV6=1;
+    var tick=false;
+    sc.addEventListener('scroll',function(){
+      if(tick) return;
+      tick=true;
+      requestAnimationFrame(function(){tick=false;onScroll();});
+    },{passive:true});
+    sc.addEventListener('touchend',function(){setTimeout(onScroll,40);},{passive:true});
+    onScroll();
+  }
+
+  function boot(){
+    css();
+    restructure();
+    forceTitle();
+    try{var c=document.getElementById('sl-chats-title-chip');if(c)c.remove();}catch(e){}
+    fillChips();
+    bind();
+    apply(0);
+    setTimeout(function(){restructure();fillChips();forceTitle();},300);
+    setTimeout(fillChips,900);
+    setTimeout(fillChips,1800);
+  }
+
+  try{
+    if(typeof loadStories==='function' && !loadStories._slTgV6){
+      var _o=loadStories;
+      window.loadStories=loadStories=async function(){
+        var r=await _o.apply(this,arguments);
+        setTimeout(function(){restructure();fillChips();forceTitle();},60);
+        setTimeout(fillChips,350);
+        return r;
+      };
+      loadStories._slTgV6=1;
+    }
+  }catch(e){}
+
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',function(){setTimeout(boot,60);});
+  else setTimeout(boot,60);
+  setTimeout(boot,400);
+  setTimeout(boot,1200);
+  console.log('[SL] TG anim v6 — stories MOVE into header chips');
 })();
 </script>
 
