@@ -9973,59 +9973,225 @@ async function uploadDataUrlToStorage(dataUrl, folder, filename){
   if(!f) return { ok:false, error:'Bad data URL' };
   return uploadFileToStorage(f, folder);
 }
+/** Firebase Storage fallback */
+async function uploadFileToFirebaseStorage(file, folder, contentType){
+  try{
+    const storage = (typeof _fbStorage !== 'undefined' && _fbStorage)
+      || (typeof firebase !== 'undefined' && firebase.storage && firebase.storage())
+      || null;
+    if(!storage) return { ok:false, error:'Firebase Storage unavailable' };
+    const uid = (myProfile && myProfile.id) || (firebase.auth && firebase.auth().currentUser && firebase.auth().currentUser.uid) || 'anon';
+    const rawExt = (file.name && file.name.includes('.')) ? file.name.split('.').pop() : 'bin';
+    const ext = String(rawExt).toLowerCase().replace(/[^a-z0-9]/g,'').slice(0,12) || 'bin';
+    const path = (folder||'chat') + '/' + uid + '/' + Date.now() + '_' + Math.random().toString(36).slice(2,9) + '.' + ext;
+    const ref = storage.ref().child(path);
+    const meta = { contentType: contentType || file.type || 'application/octet-stream', cacheControl: 'public,max-age=3600' };
+    const snap = await ref.put(file, meta);
+    let url = '';
+    try{ url = await snap.ref.getDownloadURL(); }catch(e1){
+      try{ url = await ref.getDownloadURL(); }catch(e2){}
+    }
+    if(!url) return { ok:false, error:'Firebase: no download URL' };
+    return { ok:true, url: url, bucket: 'firebase', path: path, via: 'firebase' };
+  }catch(e){
+    console.warn('[SL] Firebase Storage upload', e);
+    const m = String(e && (e.message || e.code) || e);
+    return { ok:false, error: m.slice(0,120) };
+  }
+}
+window.uploadFileToFirebaseStorage = uploadFileToFirebaseStorage;
+
+/** Free public hosts — work from browser without B2 CORS / Firebase Blaze */
+async function uploadFileToGofile(file){
+  try{
+    const srvRes = await fetch('https://api.gofile.io/servers', { method:'GET' });
+    if(!srvRes.ok) throw new Error('gofile servers '+srvRes.status);
+    const srvJson = await srvRes.json();
+    const servers = (srvJson && srvJson.data && srvJson.data.servers) || [];
+    if(!servers.length) throw new Error('gofile no servers');
+    const server = servers[0].name;
+    const fd = new FormData();
+    fd.append('file', file, file.name || 'file.bin');
+    const upRes = await fetch('https://' + server + '.gofile.io/uploadFile', { method:'POST', body: fd });
+    if(!upRes.ok) throw new Error('gofile upload '+upRes.status);
+    const upJson = await upRes.json();
+    if(!upJson || upJson.status !== 'ok' || !upJson.data) throw new Error('gofile bad response');
+    const d = upJson.data;
+    // Prefer direct content link if present
+    const url = d.directLink || d.downloadPage || (d.fileId ? ('https://gofile.io/d/' + d.fileId) : null);
+    if(!url) throw new Error('gofile no url');
+    return { ok:true, url: String(url), bucket:'gofile', path: d.fileId || '', via:'gofile' };
+  }catch(e){
+    console.warn('[SL] gofile', e);
+    return { ok:false, error: String(e && e.message || e).slice(0,100) };
+  }
+}
+
+async function uploadFileToCatbox(file){
+  try{
+    const fd = new FormData();
+    fd.append('reqtype', 'fileupload');
+    fd.append('fileToUpload', file, file.name || 'file.bin');
+    const res = await fetch('https://catbox.moe/user/api.php', { method:'POST', body: fd });
+    if(!res.ok) throw new Error('catbox '+res.status);
+    const text = (await res.text()).trim();
+    if(!/^https?:\/\//i.test(text)) throw new Error('catbox: '+text.slice(0,80));
+    return { ok:true, url: text, bucket:'catbox', path:'', via:'catbox' };
+  }catch(e){
+    console.warn('[SL] catbox', e);
+    return { ok:false, error: String(e && e.message || e).slice(0,100) };
+  }
+}
+
+async function uploadFileToLitterbox(file){
+  try{
+    const fd = new FormData();
+    fd.append('reqtype', 'fileupload');
+    fd.append('time', '72h');
+    fd.append('fileToUpload', file, file.name || 'file.bin');
+    const res = await fetch('https://litterbox.catbox.moe/resources/internals/api.php', { method:'POST', body: fd });
+    if(!res.ok) throw new Error('litterbox '+res.status);
+    const text = (await res.text()).trim();
+    if(!/^https?:\/\//i.test(text)) throw new Error('litterbox: '+text.slice(0,80));
+    return { ok:true, url: text, bucket:'litterbox', path:'', via:'litterbox' };
+  }catch(e){
+    console.warn('[SL] litterbox', e);
+    return { ok:false, error: String(e && e.message || e).slice(0,100) };
+  }
+}
+
+async function uploadFileTo0x0(file){
+  try{
+    const fd = new FormData();
+    fd.append('file', file, file.name || 'file.bin');
+    const res = await fetch('https://0x0.st', { method:'POST', body: fd });
+    if(!res.ok) throw new Error('0x0 '+res.status);
+    const text = (await res.text()).trim();
+    if(!/^https?:\/\//i.test(text)) throw new Error('0x0: '+text.slice(0,80));
+    return { ok:true, url: text, bucket:'0x0', path:'', via:'0x0' };
+  }catch(e){
+    console.warn('[SL] 0x0', e);
+    return { ok:false, error: String(e && e.message || e).slice(0,100) };
+  }
+}
+
+async function uploadFileToTmpfiles(file){
+  try{
+    const fd = new FormData();
+    fd.append('file', file, file.name || 'file.bin');
+    const res = await fetch('https://tmpfiles.org/api/v1/upload', { method:'POST', body: fd });
+    if(!res.ok) throw new Error('tmpfiles '+res.status);
+    const j = await res.json();
+    let url = j && j.data && j.data.url;
+    if(!url) throw new Error('tmpfiles no url');
+    // tmpfiles returns page URL — convert to direct if possible
+    url = String(url).replace('tmpfiles.org/', 'tmpfiles.org/dl/');
+    return { ok:true, url: url, bucket:'tmpfiles', path:'', via:'tmpfiles' };
+  }catch(e){
+    console.warn('[SL] tmpfiles', e);
+    return { ok:false, error: String(e && e.message || e).slice(0,100) };
+  }
+}
+
+window.uploadFileToGofile = uploadFileToGofile;
+window.uploadFileToCatbox = uploadFileToCatbox;
+
 async function uploadFileToStorage(file, folder){
-  if(!sb?.storage) return { ok:false, error:'Storage unavailable' };
-  const uid = myProfile?.id || 'anon';
+  if(!file) return { ok:false, error:'No file' };
+  const uid = (typeof myProfile !== 'undefined' && myProfile && myProfile.id) || 'anon';
   const rawExt = (file.name && file.name.includes('.')) ? file.name.split('.').pop() : '';
   const ext = (rawExt || ((file.type||'').includes('mp4')?'mp4':(file.type||'').includes('webm')?'webm':(file.type||'').includes('quicktime')?'mov':'bin')).toLowerCase().replace(/[^a-z0-9]/g,'').slice(0,12) || 'bin';
-  const path = `${folder||'chat'}/${uid}/${Date.now()}_${Math.random().toString(36).slice(2,9)}.${ext}`;
-  // Map common installers / archives to sensible MIME (helps some CDNs)
+  const path = (folder||'chat') + '/' + uid + '/' + Date.now() + '_' + Math.random().toString(36).slice(2,9) + '.' + ext;
   let contentType = file.type || '';
   if(!contentType || contentType === 'application/octet-stream'){
     const low = String(file.name||'').toLowerCase();
     if(low.endsWith('.apk')) contentType = 'application/vnd.android.package-archive';
-    else if(low.endsWith('.exe') || low.endsWith('.msi')) contentType = 'application/octet-stream';
     else if(low.endsWith('.zip')) contentType = 'application/zip';
     else if(low.endsWith('.pdf')) contentType = 'application/pdf';
     else contentType = 'application/octet-stream';
   }
-  // B2 shim ignores bucket name — try once (internal retries already in b2UploadFile)
-  const buckets = (window.B2_CONFIG) ? ['media'] : ['media','chat-media','uploads','videos','public'];
-  let lastErr = null;
-  for(const bucket of buckets){
+
+  const errors = [];
+
+  // 1) B2 (may fail on CORS)
+  if(typeof sb !== 'undefined' && sb && sb.storage){
     try{
-      const { data, error } = await sb.storage.from(bucket).upload(path, file, {
+      const { data, error } = await sb.storage.from('media').upload(path, file, {
         contentType: contentType,
         cacheControl: '3600',
         upsert: false
       });
-      if(error){ lastErr = error; continue; }
-      if(data?.publicUrl) return { ok:true, url: data.publicUrl, bucket, path: data.path || path };
-      const key = data?.path || path;
-      const { data: pub } = sb.storage.from(bucket).getPublicUrl(key);
-      if(pub?.publicUrl) return { ok:true, url: pub.publicUrl, bucket, path: key };
-      try{
-        const { data: signed } = await sb.storage.from(bucket).createSignedUrl(key, 60*60*24*365);
-        if(signed?.signedUrl) return { ok:true, url: signed.signedUrl, bucket, path: key };
-      }catch(e){}
-    }catch(e){ lastErr = e; }
+      if(!error && data){
+        if(data.publicUrl) return { ok:true, url: data.publicUrl, bucket:'media', path: data.path||path, via:'b2' };
+        const key = data.path || path;
+        try{
+          const { data: pub } = sb.storage.from('media').getPublicUrl(key);
+          if(pub && pub.publicUrl) return { ok:true, url: pub.publicUrl, bucket:'media', path:key, via:'b2' };
+        }catch(e){}
+        try{
+          const { data: signed } = await sb.storage.from('media').createSignedUrl(key, 60*60*24*365);
+          if(signed && signed.signedUrl) return { ok:true, url: signed.signedUrl, bucket:'media', path:key, via:'b2' };
+        }catch(e){}
+      }
+      if(error) errors.push('B2: ' + String(error.message||error).slice(0,80));
+    }catch(e){
+      errors.push('B2: ' + String(e && e.message || e).slice(0,80));
+    }
   }
-  const msg = String(lastErr?.message||lastErr||'');
-  if(/Failed to fetch|NetworkError|Load failed|CORS/i.test(msg))
-    return { ok:false, error: (typeof currentLang!=='undefined'&&currentLang==='en'
-      ? 'Upload blocked by network/CORS. Private bucket is OK — only CORS rules are needed (free).'
-      : 'Загрузка заблокирована (сеть/CORS). Публичный бакет не нужен — достаточно CORS-правил (бесплатно).') };
-  if(/unauthorized|401|403|permission/i.test(msg))
-    return { ok:false, error: (typeof currentLang!=='undefined'&&currentLang==='en'
-      ? 'B2 access denied. Check application key permissions (writeFiles, writeBuckets).'
-      : 'Нет доступа к B2. Проверьте права ключа (writeFiles, writeBuckets).') };
-  if(/no buckets|not found|bucket/i.test(msg) && !/CORS/i.test(msg))
-    return { ok:false, error: (typeof currentLang!=='undefined'&&currentLang==='en'
-      ? 'B2 bucket not found. Create a private bucket (public not required).'
-      : 'Бакет B2 не найден. Создайте private-бакет (публичный не нужен).') };
-  // Prefer the already-localized message from b2UploadFile
-  if(msg && msg.length < 180) return { ok:false, error: msg };
-  return { ok:false, error: (typeof currentLang!=='undefined'&&currentLang==='en'?'Upload failed':'Не удалось загрузить файл') };
+
+  // 2) Firebase Storage (needs Blaze)
+  try{
+    const fb = await uploadFileToFirebaseStorage(file, folder || 'chat', contentType);
+    if(fb && fb.ok && fb.url) return fb;
+    if(fb && fb.error) errors.push('FB: ' + fb.error);
+  }catch(e){
+    errors.push('FB: ' + String(e && e.message || e).slice(0,60));
+  }
+
+  // 3) Public free hosts (no B2 CORS, no Firebase card)
+  const publicHosts = [
+    uploadFileToGofile,
+    uploadFileToCatbox,
+    uploadFileToLitterbox,
+    uploadFileToTmpfiles,
+    uploadFileTo0x0
+  ];
+  for(const fn of publicHosts){
+    try{
+      const r = await fn(file);
+      if(r && r.ok && r.url){
+        console.log('[SL] uploaded via', r.via, r.url);
+        return r;
+      }
+      if(r && r.error) errors.push((r.via||'host') + ': ' + r.error);
+    }catch(e){
+      errors.push(String(e && e.message || e).slice(0,60));
+    }
+  }
+
+  // 4) Inline data URL for smaller files
+  const maxInline = 2.5 * 1024 * 1024;
+  if(file.size && file.size <= maxInline){
+    try{
+      const dataUrl = await new Promise((res,rej)=>{
+        const r = new FileReader();
+        r.onload = ()=>res(r.result);
+        r.onerror = rej;
+        r.readAsDataURL(file);
+      });
+      if(dataUrl) return { ok:true, url: dataUrl, bucket:'inline', path:path, via:'dataurl' };
+    }catch(e){
+      errors.push('dataurl: ' + String(e && e.message || e).slice(0,40));
+    }
+  }
+
+  console.warn('[SL] all upload backends failed', errors);
+  return {
+    ok: false,
+    error: (typeof currentLang !== 'undefined' && currentLang === 'en')
+      ? ('Upload failed. ' + errors.slice(0,2).join(' | '))
+      : ('Не удалось загрузить файл. ' + errors.slice(0,2).join(' | '))
+  };
 }
 
 async function prepareMediaForUpload(file, kind, quality){
