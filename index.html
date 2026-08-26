@@ -383,15 +383,127 @@ body.chats-selecting .max-folder-tabs .folder-tab[data-can-del="1"] .ft-x{displa
 .contact-meta .unread-badge{align-self:flex-end}
 .pinned-badge{font-size:10px;color:var(--mint);margin-left:4px}
 
-/* ===== Chat row swipe actions (iOS Mail track) ===== */
+
+/* ===== MAX-style swipe actions (working) ===== */
+#contacts-list, .contacts, .sidebar-scroll .contacts{
+  overflow-x: hidden !important;
+}
+.sidebar-scroll .contacts,
+#contacts-list.contacts,
+#contacts-list{
+  touch-action: pan-y !important;
+}
+.sw-clip{
+  width:100%!important;
+  max-width:100%!important;
+  overflow:hidden!important;
+  position:relative!important;
+  background:var(--tg-chat-bg,#000)!important;
+  touch-action: pan-y !important;
+  border-radius:0!important;
+  margin:0!important;
+  isolation:isolate;
+}
+.sw-actions{
+  position:absolute!important;
+  top:0!important; bottom:0!important;
+  display:flex!important;
+  align-items:stretch!important;
+  z-index:0!important;
+  visibility:hidden;
+  pointer-events:none;
+}
+.sw-clip.is-swiping .sw-actions,
+.sw-clip[data-open] .sw-actions{
+  visibility:visible!important;
+  pointer-events:auto;
+}
+.sw-actions-right{ right:0!important; left:auto!important; }
+.sw-actions-left{ left:0!important; right:auto!important; }
+.sw-act{
+  width:78px!important;
+  min-width:78px!important;
+  flex:0 0 78px!important;
+  display:flex!important;
+  flex-direction:column!important;
+  align-items:center!important;
+  justify-content:center!important;
+  gap:6px!important;
+  border:none!important;
+  color:#fff!important;
+  font-size:12px!important;
+  font-weight:600!important;
+  line-height:1.15!important;
+  padding:0 6px!important;
+  cursor:pointer!important;
+  -webkit-tap-highlight-color:transparent!important;
+  border-radius:0!important;
+  height:100%!important;
+}
+.sw-act svg{
+  width:24px!important; height:24px!important;
+  stroke:#fff!important; fill:none!important; stroke-width:2!important;
+  pointer-events:none!important;
+}
+.sw-act span{ pointer-events:none!important; text-align:center!important; }
+.sw-act.mute{ background:#F5A623!important; }
+.sw-act.delete, .sw-act.del{ background:#E53955!important; }
+.sw-act.unread{ background:#2A6AF0!important; }
+.sw-act.pin{ background:#2ECC71!important; }
+.sw-front, .sw-clip .contact.sw-front, .sw-clip .sw-front.contact{
+  position:relative!important;
+  z-index:2!important;
+  width:100%!important;
+  box-sizing:border-box!important;
+  background:var(--tg-chat-bg,#000)!important;
+  transform:translate3d(0,0,0);
+  transition:transform .22s cubic-bezier(.2,.8,.2,1);
+  will-change:transform;
+  /* critical: allow JS to handle horizontal gesture */
+  touch-action: manipulation !important;
+  border-radius:0!important;
+  margin:0!important;
+}
+html.theme-light .sw-front,
+body.theme-light .sw-front,
+html.light-theme .sw-front,
+body.light-theme .sw-front{
+  background:#fff!important;
+}
+.sw-front.swiping{ transition:none!important; }
+
+/* SWIPE TRANSFORM MUST WIN — no scale/center animations on row */
+.sw-clip{animation:none!important}
+.sw-front,
+.sw-clip .sw-front,
+.contact.sw-front,
+.sw-clip .contact{
+  animation:none!important;
+  transform:translate3d(0,0,0);
+  transform-origin:0 50%!important;
+}
+.sw-front.holding,
+.contact.holding,
+.sw-front:active,
+.contact:active{
+  transform:none!important; /* JS sets translate3d inline */
+  opacity:.95!important;
+}
+.sw-front.swiping{
+  transition:none!important;
+  animation:none!important;
+}
+
+
+/* ===== Chat row swipe actions (MAX / Telegram style) ===== */
 .sw-clip{
   width:100%;
   max-width:100%;
   overflow:hidden;
-  border-radius:12px;
-  margin:0 0 2px;
+  border-radius:0;
+  margin:0;
   position:relative;
-  background:var(--panel);
+  background:var(--tg-chat-bg,#000);
   isolation:isolate;
   touch-action:pan-y;
   -webkit-user-select:none;
@@ -399,32 +511,62 @@ body.chats-selecting .max-folder-tabs .folder-tab[data-can-del="1"] .ft-x{displa
 }
 .sw-clip .sw-front,
 .sw-clip .contact{
-  touch-action:pan-y;
+  touch-action:pan-x pan-y;
 }
 .sw-actions{
   position:absolute;
-  right:0; top:0; bottom:0;
-  width:216px;
+  top:0; bottom:0;
   display:flex;
   align-items:stretch;
   z-index:0;
   visibility:hidden;
 }
+.sw-actions-right{
+  right:0;
+  flex-direction:row;
+}
+.sw-actions-left{
+  left:0;
+  flex-direction:row;
+}
 .sw-clip.is-swiping .sw-actions,
 .sw-clip[data-open] .sw-actions{visibility:visible}
+.sw-act{
+  width:76px;
+  min-width:76px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:4px;
+  color:#fff;
+  font-size:11px;
+  font-weight:600;
+  cursor:pointer;
+  border:none;
+  padding:0 4px;
+  line-height:1.15;
+  text-align:center;
+}
+.sw-act svg{width:22px;height:22px;stroke:#fff;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.sw-act.mute{background:#F5A623}
+.sw-act.delete{background:#E53935}
+.sw-act.unread{background:#2A6AF0}
+.sw-act.pin{background:#2ECC71}
 .sw-front{
   position:relative;
   z-index:1;
   width:100%;
   box-sizing:border-box;
-  background:var(--panel)!important;
-  border-radius:12px;
+  background:var(--tg-chat-bg,#000)!important;
+  border-radius:0;
   transform:translate3d(0,0,0);
-  transition:transform .18s ease;
+  transition:transform .2s cubic-bezier(.2,.8,.2,1);
+  will-change:transform;
 }
 .sw-front.swiping{transition:none}
-.sw-front.holding{opacity:.72;transform:scale(.98);transition:opacity .15s,transform .15s}
-.sw-front.active{background:var(--panel-hover)!important;box-shadow:inset 3px 0 0 var(--accent-a)}
+.sw-front.holding{opacity:.9;transition:opacity .15s}
+.sw-front.active{background:var(--tg-chat-row-active,rgba(255,255,255,.08))!important;box-shadow:none}
 body.theme-light .sw-front,
 body.theme-light .sw-clip,
 body.beta-oled .sw-front,
@@ -2572,13 +2714,14 @@ body.theme-light,body{transition:background-color .35s ease}
 
 /* Contacts list */
 .contact{animation:contactIn .28s cubic-bezier(.2,.8,.2,1) both}
+.sw-front.contact,.contact.sw-front{animation:none!important}
 .contact:nth-child(1){animation-delay:.02s}
 .contact:nth-child(2){animation-delay:.04s}
 .contact:nth-child(3){animation-delay:.06s}
 .contact:nth-child(4){animation-delay:.08s}
 .contact:nth-child(5){animation-delay:.1s}
 .contact:nth-child(n+6){animation-delay:.12s}
-@keyframes contactIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
+@keyframes contactIn{from{opacity:0}to{opacity:1}}
 .contact.removing{animation:contactOut .28s ease forwards;pointer-events:none}
 @keyframes contactOut{to{opacity:0;transform:translateX(-40px);height:0;padding:0;margin:0}}
 
@@ -4109,7 +4252,8 @@ body::before {
   background: var(--panel-hover) !important;
 }
 .contact:active, .sw-front:active {
-  transform: scale(.985);
+  /* no scale — breaks swipe */
+  opacity: .95;
 }
 .sw-front.active {
   box-shadow: inset 3px 0 0 var(--accent-a), 0 0 0 1px rgba(91,140,255,.12) !important;
@@ -7695,113 +7839,188 @@ function renderContactsAndGroups(){
     row.classList.add('sw-front');
     clip.appendChild(row);
 
-    /* ===== Row click + long-press menu (3s) — no swipe ===== */
+    /* Left actions (swipe right → reveal): Не прочитан + Закрепить */
+    const actL = document.createElement('div');
+    actL.className = 'sw-actions sw-actions-left';
+    actL.innerHTML = `
+      <button type="button" class="sw-act unread" data-a="unread">
+        <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+        <span>Не прочитан</span>
+      </button>
+      <button type="button" class="sw-act pin" data-a="pin">
+        <svg viewBox="0 0 24 24"><path d="M12 17v5M9 3h6l-1 7h3l-5 6-5-6h3L9 3z"/></svg>
+        <span>Закрепить</span>
+      </button>`;
+    /* Right actions (swipe left → reveal): Откл. звук + Удалить */
+    const actR = document.createElement('div');
+    actR.className = 'sw-actions sw-actions-right';
+    actR.innerHTML = `
+      <button type="button" class="sw-act mute" data-a="mute">
+        <svg viewBox="0 0 24 24"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M23 9l-6 6M17 9l6 6"/></svg>
+        <span>Откл. звук</span>
+      </button>
+      <button type="button" class="sw-act delete" data-a="del">
+        <svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>
+        <span>Удалить</span>
+      </button>`;
+    clip.insertBefore(actL, row);
+    clip.insertBefore(actR, row);
+
+    /* ===== Swipe + click + long-press ===== */
     (function(clip, row, data, type){
+      const MAX_L = 156;
+      const MAX_R = 156;
+      let startX=0, startY=0, curX=0, opened=0, mode=null, dragging=false;
+      let pressTimer=null, didLongPress=false, suppressClick=false;
+      let pid=null;
+
       function isSelectMode(){
-        return document.body.classList.contains('chats-selecting');
+        try{ return document.body.classList.contains('chats-selecting'); }catch(e){ return false; }
       }
 
-      let pressTimer=null;
-      let pressStart=0;
-      let pressX=0, pressY=0;
-      let didLongPress=false;
-      let activePointer=null;
-      const LONG_MS=3000;
-      const MOVE_TOL=24; // px — finger tremor / micro-scroll
+      function setX(x, animate){
+        curX = x;
+        if(animate) row.classList.remove('swiping');
+        else row.classList.add('swiping');
+        row.style.setProperty('transform', 'translate3d(' + x + 'px,0,0)', 'important'); row.style.setProperty('animation', 'none', 'important');
+        if(Math.abs(x) > 2){
+          clip.classList.add('is-swiping');
+          clip.dataset.open = x>0 ? 'left' : 'right';
+          actL.style.visibility = x>2 ? 'visible' : 'hidden';
+          actR.style.visibility = x<-2 ? 'visible' : 'hidden';
+          actL.style.pointerEvents = x>2 ? 'auto' : 'none';
+          actR.style.pointerEvents = x<-2 ? 'auto' : 'none';
+        } else {
+          clip.classList.remove('is-swiping');
+          delete clip.dataset.open;
+          actL.style.visibility = 'hidden';
+          actR.style.visibility = 'hidden';
+        }
+      }
+
+      function close(animate){
+        opened = 0;
+        setX(0, animate !== false);
+        row.classList.remove('swiping');
+      }
+      clip._swClose = close;
+
+      function snap(){
+        if(curX > MAX_L * 0.35){ opened = MAX_L; setX(MAX_L, true); }
+        else if(curX < -MAX_R * 0.35){ opened = -MAX_R; setX(-MAX_R, true); }
+        else { opened = 0; close(true); }
+      }
 
       function clearPress(){
         if(pressTimer){ clearTimeout(pressTimer); pressTimer=null; }
         row.classList.remove('holding');
       }
 
-      function fireLongPress(){
-        pressTimer=null;
-        didLongPress=true;
-        row.classList.remove('holding');
-        try{ navigator.vibrate && navigator.vibrate([20,40,20]); }catch(err){}
-        showChatCtx({clientX:pressX, clientY:pressY, pageX:pressX, pageY:pressY}, type, data);
-      }
-
-      function onDown(clientX, clientY, pointerId){
+      function onStart(clientX, clientY, e){
         if(isSelectMode()) return;
-        clearPress();
-        didLongPress=false;
-        pressX=clientX; pressY=clientY;
-        pressStart=Date.now();
-        activePointer=pointerId;
-        row.classList.add('holding');
-        pressTimer=setTimeout(fireLongPress, LONG_MS);
-      }
-
-      function onMove(clientX, clientY){
-        if(!pressTimer) return;
-        if(Math.abs(clientX-pressX)>MOVE_TOL || Math.abs(clientY-pressY)>MOVE_TOL){
+        try{
+          document.querySelectorAll('#contacts-list .sw-clip').forEach(function(c){
+            if(c!==clip && typeof c._swClose==='function') c._swClose();
+          });
+        }catch(err){}
+        startX = clientX;
+        startY = clientY;
+        mode = null;
+        dragging = true;
+        didLongPress = false;
+        suppressClick = false;
+        row.classList.add('swiping');
+        pressTimer = setTimeout(function(){
+          if(!dragging || mode==='h') return;
+          didLongPress = true;
+          suppressClick = true;
           clearPress();
-        }
+          try{ if(typeof showChatCtx==='function') showChatCtx({clientX:startX,clientY:startY}, type, data); }catch(err){}
+        }, 520);
+        row.classList.add('holding');
       }
 
-      function onUp(){
-        clearPress();
-        activePointer=null;
-      }
-
-      // Pointer Events (iOS 13+, Android, desktop)
-      clip.addEventListener('pointerdown', function(e){
-        if(e.pointerType==='mouse' && e.button!==0) return;
-        if(e.target.closest && e.target.closest('.sw-act')) return;
-        onDown(e.clientX, e.clientY, e.pointerId);
-      });
-      clip.addEventListener('pointermove', function(e){
-        if(activePointer!==null && e.pointerId!==activePointer) return;
-        onMove(e.clientX, e.clientY);
-      });
-      clip.addEventListener('pointerup', function(e){
-        if(activePointer!==null && e.pointerId!==activePointer) return;
-        // if held long enough but timer somehow missed, still open
-        if(!didLongPress && pressStart && (Date.now()-pressStart)>=LONG_MS){
-          fireLongPress();
-        }
-        onUp();
-      });
-      clip.addEventListener('pointercancel', onUp);
-      clip.addEventListener('pointerleave', function(e){
-        // only cancel if primary pointer left the row during hold
-        if(activePointer!==null && e.pointerId===activePointer){
-          // don't cancel on leave for touch — finger may jitter; only for mouse
-          if(e.pointerType==='mouse') onUp();
-        }
-      });
-
-      // Fallback touch for very old WebViews without PointerEvent
-      if(!window.PointerEvent){
-        row.addEventListener('touchstart', function(e){
-          if(e.touches.length!==1) return;
-          onDown(e.touches[0].clientX, e.touches[0].clientY, 'touch');
-        }, {passive:true});
-        row.addEventListener('touchmove', function(e){
-          if(e.touches.length!==1) return;
-          onMove(e.touches[0].clientX, e.touches[0].clientY);
-        }, {passive:true});
-        row.addEventListener('touchend', function(){
-          if(!didLongPress && pressStart && (Date.now()-pressStart)>=LONG_MS){
-            fireLongPress();
+      function onMove(clientX, clientY, e){
+        if(!dragging) return;
+        const dx = clientX - startX;
+        const dy = clientY - startY;
+        if(!mode){
+          if(Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+          if(Math.abs(dx) > Math.abs(dy) * 1.05){
+            mode = 'h';
+            clearPress();
+            suppressClick = true;
+          } else {
+            mode = 'v';
+            clearPress();
+            dragging = false;
+            row.classList.remove('swiping');
+            // restore if was mid-drag
+            if(opened) setX(opened, true);
+            else setX(0, true);
+            return;
           }
-          onUp();
-        }, {passive:true});
-        row.addEventListener('touchcancel', onUp, {passive:true});
+        }
+        if(mode !== 'h') return;
+        if(e && e.cancelable) e.preventDefault();
+        suppressClick = true;
+        let x = opened + dx;
+        if(x > MAX_L) x = MAX_L + (x - MAX_L) * 0.15;
+        if(x < -MAX_R) x = -MAX_R + (x + MAX_R) * 0.15;
+        setX(x, false);
       }
+
+      function onEnd(){
+        if(!dragging) return;
+        dragging = false;
+        clearPress();
+        row.classList.remove('swiping');
+        if(mode === 'h'){
+          snap();
+          suppressClick = true;
+          setTimeout(function(){ suppressClick = false; }, 300);
+        }
+        mode = null;
+      }
+
+      // Pointer events
+      row.addEventListener('pointerdown', function(e){
+        if(e.button!=null && e.button!==0) return;
+        if(e.target.closest && e.target.closest('.sw-act')) return;
+        pid = e.pointerId;
+        try{ row.setPointerCapture(e.pointerId); }catch(err){}
+        onStart(e.clientX, e.clientY, e);
+      });
+      row.addEventListener('pointermove', function(e){
+        if(pid!=null && e.pointerId!==pid) return;
+        onMove(e.clientX, e.clientY, e);
+      }, {passive:false});
+      row.addEventListener('pointerup', function(e){
+        if(pid!=null && e.pointerId!==pid) return;
+        pid=null;
+        onEnd();
+      });
+      row.addEventListener('pointercancel', function(){ pid=null; onEnd(); });
+
+      // Touch fallback (older iOS / some WebViews)
+      row.addEventListener('touchstart', function(e){
+        if(!e.touches || !e.touches[0]) return;
+        if(e.target.closest && e.target.closest('.sw-act')) return;
+        onStart(e.touches[0].clientX, e.touches[0].clientY, e);
+      }, {passive:true});
+      row.addEventListener('touchmove', function(e){
+        if(!e.touches || !e.touches[0]) return;
+        onMove(e.touches[0].clientX, e.touches[0].clientY, e);
+      }, {passive:false});
+      row.addEventListener('touchend', function(){ onEnd(); }, {passive:true});
+      row.addEventListener('touchcancel', function(){ onEnd(); }, {passive:true});
 
       row.addEventListener('click', function(e){
-        if(didLongPress || window._slCtxOpened){
-          e.preventDefault(); e.stopPropagation();
-          didLongPress=false;
-          return;
-        }
+        if(suppressClick || didLongPress){ e.preventDefault(); e.stopPropagation(); return; }
+        if(opened !== 0){ close(true); e.preventDefault(); e.stopPropagation(); return; }
         if(isSelectMode()){
-          e.preventDefault(); e.stopPropagation();
-          const id=String(data.id);
-          if(clip.classList.contains('selected')){ clip.classList.remove('selected'); }
-          else { clip.classList.add('selected'); }
+          const id = String(data.id);
+          clip.classList.toggle('selected');
           try{
             if(window._selectedChats){
               if(window._selectedChats.has(id)) window._selectedChats.delete(id);
@@ -7812,47 +8031,74 @@ function renderContactsAndGroups(){
           }catch(err){}
           return;
         }
-        const menu=document.getElementById('ctx-menu');
-        if(menu && menu.style.display==='block'){
-          e.preventDefault(); e.stopPropagation();
-          return;
-        }
-        if(type==='group') openGroup(data); else openChat(data);
-      });
+        if(type==='group'){ if(typeof openGroup==='function') openGroup(data); }
+        else if(typeof openChat==='function') openChat(data);
+      }, true);
 
-      const av=row.querySelector('.avatar');
-      if(av && type==='user'){
-        av.addEventListener('click', async function(e){
-          if(didLongPress || window._slCtxOpened){
-            e.preventDefault(); e.stopPropagation();
-            return;
-          }
-          if(document.body.classList.contains('chats-selecting')){
-            e.preventDefault();
-            e.stopPropagation();
-            const id=String(data.id);
-            if(clip.classList.contains('selected')){ clip.classList.remove('selected'); }
-            else { clip.classList.add('selected'); }
-            try{
-              if(window._selectedChats){
-                if(window._selectedChats.has(id)) window._selectedChats.delete(id);
-                else window._selectedChats.add(id);
-                const cnt=document.getElementById('chat-sel-count');
-                if(cnt) cnt.textContent=window._selectedChats.size+' выбрано';
-              }
-            }catch(err){}
-            return;
-          }
-          e.stopPropagation();
-          // Tap avatar in chat list → open chat (not profile)
-          openChat(data);
-        });
-      }
       row.addEventListener('contextmenu', function(e){
         e.preventDefault(); e.stopPropagation();
         clearPress();
         didLongPress=true;
-        showChatCtx(e, type, data);
+        if(typeof showChatCtx==='function') showChatCtx(e, type, data);
+      });
+
+      function doAction(a){
+        close(true);
+        try{
+          if(a==='mute'){
+            const muted = JSON.parse(storage.getItem('sl_muted')||'{}');
+            const cur = muted[data.id];
+            const isMuted = cur===-1 || (cur&&cur>Date.now());
+            if(isMuted) delete muted[data.id];
+            else muted[data.id] = -1;
+            storage.setItem('sl_muted', JSON.stringify(muted));
+            if(typeof showToast==='function') showToast(isMuted?'Звук включён':'Уведомления выключены');
+            if(typeof renderContactsAndGroups==='function') renderContactsAndGroups();
+          } else if(a==='del'){
+            if(typeof window.slDeleteChat==='function') window.slDeleteChat(type, data);
+            else if(typeof deleteChat==='function') deleteChat(data);
+            else {
+              try{
+                if(type==='group'){ window.groups = (window.groups||[]).filter(g=>String(g.id)!==String(data.id)); }
+                else { window.contacts = (window.contacts||[]).filter(c=>String(c.id)!==String(data.id)); }
+                if(typeof renderContactsAndGroups==='function') renderContactsAndGroups();
+              }catch(err){}
+              if(typeof showToast==='function') showToast('Чат удалён');
+            }
+          } else if(a==='unread'){
+            try{
+              const u = JSON.parse(storage.getItem('sl_unread')||'{}');
+              u[data.id] = Math.max(1, u[data.id]||1);
+              storage.setItem('sl_unread', JSON.stringify(u));
+              if(window.unread) window.unread[data.id] = u[data.id];
+            }catch(err){}
+            if(typeof renderContactsAndGroups==='function') renderContactsAndGroups();
+            if(typeof showToast==='function') showToast('Отмечено как непрочитанное');
+          } else if(a==='pin'){
+            try{
+              let pins = JSON.parse(storage.getItem('sl_pinned_chats')||'[]');
+              const id = String(data.id);
+              if(pins.includes(id)) pins = pins.filter(x=>x!==id);
+              else pins = [id].concat(pins.filter(x=>x!==id));
+              storage.setItem('sl_pinned_chats', JSON.stringify(pins));
+            }catch(err){}
+            if(typeof renderContactsAndGroups==='function') renderContactsAndGroups();
+            if(typeof showToast==='function') showToast('Готово');
+          }
+        }catch(err){ console.warn('sw-act', err); }
+      }
+
+      actL.addEventListener('click', function(e){
+        const b = e.target.closest('[data-a]');
+        if(!b) return;
+        e.preventDefault(); e.stopPropagation();
+        doAction(b.getAttribute('data-a'));
+      });
+      actR.addEventListener('click', function(e){
+        const b = e.target.closest('[data-a]');
+        if(!b) return;
+        e.preventDefault(); e.stopPropagation();
+        doAction(b.getAttribute('data-a'));
       });
     })(clip, row, data, type);
 
@@ -8862,11 +9108,17 @@ function buildMessageBody(msg, replyHtml, bodyText){
       <div class="call-msg-txt"><div class="call-msg-title">${title}</div><div class="call-msg-sub">${sub}</div></div>
     </div>`;
   }
-  if(msg.type==='image'){
-    const cap=(msg.content||'').trim();
+  if(msg.type==='image' || msg.type==='gif'){
+    const rawCap=(msg.content||'').trim();
     const src=msg.file_url||msg.media_url||'';
     if(!src) return `<div class="media-with-caption sl-media-card" style="padding:12px;color:var(--muted)">🖼 Медиа недоступно — откройте чат ещё раз</div>`;
-    return `<div class="media-with-caption sl-media-card"><img src="${src}" loading="lazy" class="sl-media-img" onerror="this.replaceWith(Object.assign(document.createElement('div'),{textContent:'🖼 Не загрузилось',style:'padding:12px;color:var(--muted)'}))">${cap?`<div class="media-caption">${formatInlineTokens(cap)}</div>`:''}</div>`;
+    const isGif = msg.type==='gif' || msg._isGif || /\.gif(\?|$)/i.test(src) || /media\.tenor\.com|giphy\.com|tenor\.com/i.test(src);
+    let cap = isGif ? '' : rawCap;
+
+    const badge = isGif ? `<span class="sl-gif-badge">GIF</span>` : '';
+    const cardCls = isGif ? 'media-with-caption sl-media-card is-gif' : 'media-with-caption sl-media-card';
+    const imgCls = isGif ? 'sl-media-img sl-gif-img' : 'sl-media-img';
+    return `<div class="${cardCls}">${badge}<img src="${src}" loading="lazy" class="${imgCls}" alt="" onerror="this.replaceWith(Object.assign(document.createElement('div'),{textContent:'🖼 Не загрузилось',style:'padding:12px;color:var(--muted)'}))">${cap?`<div class="media-caption">${formatInlineTokens(cap)}</div>`:''}</div>`;
   }
   if(msg.type==='video'){
     const cap=(msg.content||'').trim();
@@ -9638,6 +9890,20 @@ async function prepareMediaForUpload(file, kind, quality){
   // quality: 'original' | 'compress' | undefined (default compress for images)
   const mode = quality || 'compress';
 
+  if(file && (file.type==='image/gif' || /\.gif$/i.test(file.name||''))){
+    try{
+      const up = await uploadFileToStorage(file, kind==='story'?'stories':(kind==='post'?'posts':'chat'));
+      if(up.ok && up.url) return { ok:true, type:'image', dataUrl: up.url, bytes: file.size, via:'storage', quality:'original', isGif:true };
+    }catch(e){ console.warn('gif storage', e); }
+    if(file.size <= 4*1024*1024){
+      try{
+        const dataUrl = await readFileAsDataURL(file);
+        return { ok:true, type:'image', dataUrl, bytes:dataUrlBytes(dataUrl), via:'data', quality:'original', isGif:true };
+      }catch(e){}
+    }
+    return { ok:false, error: 'GIF слишком большой' };
+  }
+
   // Images
   if(file.type.startsWith('image/')){
     if(mode === 'original'){
@@ -10085,9 +10351,19 @@ function showMsgCtx(e, msg){
         const mid = msg.id;
         const isNews = activeGroup && typeof isNewsChannel==='function' && isNewsChannel(activeGroup);
         const canPub = typeof isNewsPublisher==='function' && isNewsPublisher();
-        const rowEl = document.querySelector(`.bubble-row[data-id="${mid}"]`);
-        if(rowEl && typeof window.slAnimateDeleteMsg==='function'){ await window.slAnimateDeleteMsg(rowEl); }
-        else { try{ rowEl?.remove(); }catch(e){} }
+        // Instant UI remove (no wait for animation / network)
+        try{
+          document.querySelectorAll('.bubble-row[data-id="'+String(mid).replace(/"/g,'')+'"]').forEach(function(el){ el.remove(); });
+        }catch(e){}
+        try{ if(window.messageStore) messageStore.delete(String(mid)); }catch(e){}
+        try{
+          const ck = typeof chatCacheKey==='function' ? chatCacheKey(activePartner, activeGroup) : null;
+          if(ck && typeof getCachedMessages==='function' && typeof setCachedMessages==='function'){
+            const cur = (getCachedMessages(ck)||[]).filter(m => String(m.id)!==String(mid));
+            setCachedMessages(ck, cur);
+          }
+        }catch(e){}
+        const rowEl = null;
         // Local news storage
         if(isNews){
           try{
@@ -10105,32 +10381,25 @@ function showMsgCtx(e, msg){
             });
           }catch(e){}
         }
-        // DB delete — single message only
+        // DB delete in background — UI already removed
         if(mid && !String(mid).startsWith('news_') && !String(mid).startsWith('local_')){
-          try{
-            const { error } = await sb.from('messages').delete().eq('id', mid);
-            if(error) console.warn('del msg', error);
-          }catch(e){ console.warn(e); }
-          // Direct RTDB remove (guaranteed single key)
-          try{
-            if(window.firebaseDb){
-              await firebaseDb.ref('tables/messages/' + mid).remove();
-              if(msg.group_id) await firebaseDb.ref('chat_msgs/g_' + msg.group_id + '/' + mid).remove();
-              else if(msg.sender_id && msg.receiver_id){
-                const key=[String(msg.sender_id),String(msg.receiver_id)].sort().join('_');
-                await firebaseDb.ref('chat_msgs/' + key + '/' + mid).remove();
+          (async function(){
+            try{
+              const { error } = await sb.from('messages').delete().eq('id', mid);
+              if(error) console.warn('del msg', error);
+            }catch(e){ console.warn(e); }
+            try{
+              if(window.firebaseDb){
+                await firebaseDb.ref('tables/messages/' + mid).remove();
+                if(msg.group_id) await firebaseDb.ref('chat_msgs/g_' + msg.group_id + '/' + mid).remove();
+                else if(msg.sender_id && msg.receiver_id){
+                  const key=[String(msg.sender_id),String(msg.receiver_id)].sort().join('_');
+                  await firebaseDb.ref('chat_msgs/' + key + '/' + mid).remove();
+                }
               }
-            }
-          }catch(e2){ console.warn('del direct', e2); }
+            }catch(e2){ console.warn('del direct', e2); }
+          })();
         }
-        try{ if(window.messageStore) messageStore.delete(String(mid)); }catch(e){}
-        try{
-          const ck = typeof chatCacheKey==='function' ? chatCacheKey(activePartner, activeGroup) : null;
-          if(ck && typeof getCachedMessages==='function' && typeof setCachedMessages==='function'){
-            const cur = (getCachedMessages(ck)||[]).filter(m => String(m.id)!==String(mid));
-            setCachedMessages(ck, cur);
-          }
-        }catch(e){}
         showToast('Удалено');
       }
       else if(a==='report'){ reportMessage(msg); }
@@ -10403,21 +10672,11 @@ async function _sendMessageInner(type='text', fileUrl=null, content=null){
               setTimeout(()=>sb.removeChannel(ch), 1200);
             }
           });
-          // Free closed-app push via ntfy
+          // Push only TO the peer — never show a local notification for our own send
           const preview = data.type==='text' ? (data.content||'').slice(0,80) : (data.type||'message');
           const _ptitle = myProfile.first_name||myProfile.username||'SLine';
           try{ sendWebPushToUser(peerId, _ptitle, preview, {tag:'sl-msg'}); }catch(e){}
           try{ sendNtfyPush(peerId, _ptitle, preview, {tags:'speech_balloon', priority:'high'}); }catch(e){}
-          // Also tell our SW (helps when app is backgrounded but SW alive)
-          try{
-            if(navigator.serviceWorker?.controller){
-              navigator.serviceWorker.controller.postMessage({
-                type:'sl-show-notification',
-                title: _ptitle,
-                options: { body: preview, tag: 'sl-msg-'+peerId, data: { url: './', peerId: peerId } }
-              });
-            }
-          }catch(e){}
         }
         if(activeGroup){
           const ch = sb.channel('gmsg-'+activeGroup.id);
@@ -12750,7 +13009,7 @@ function handleIncomingMessage(msg){
       scrollToBottom();
       if(msg.sender_id !== myProfile.id) clearUnread(activeGroup.id);
       try{ if(msg.created_at) _chatPollSince = msg.created_at; }catch(e){}
-    } else if(msg.sender_id !== myProfile.id){
+    } else if(String(msg.sender_id) !== String(myProfile.id)){
       incUnread(msg.group_id);
       notifyIncomingMessage(msg);
     }
@@ -12772,7 +13031,7 @@ function handleIncomingMessage(msg){
       try{ sendReadReceipt(activePartner.id); }catch(e){}
     }
     try{ if(msg.created_at) _chatPollSince = msg.created_at; }catch(e){}
-  } else if(msg.receiver_id === myProfile.id && msg.sender_id !== myProfile.id){
+  } else if(String(msg.receiver_id) === String(myProfile.id) && String(msg.sender_id) !== String(myProfile.id)){
     incUnread(msg.sender_id);
     notifyIncomingMessage(msg);
   }
@@ -17204,6 +17463,11 @@ function slTouchNotifCursorNow(){
 })();
 function notifyIncomingMessage(msg, opts={}){
   if(!msg || !myProfile) return;
+  // NEVER notify about my own messages (fixes self-echo notifications)
+  try{
+    if(msg.sender_id != null && String(msg.sender_id) === String(myProfile.id)) return;
+    if(msg.sender_id === 'me') return;
+  }catch(e){}
   const mid=msg.id!=null?String(msg.id):'';
   // Dedup: already notified (push while offline / previous catch-up)
   if(mid && slWasNotified(mid) && !opts.force) return;
@@ -20949,10 +21213,12 @@ if(_gsBtn){
 const _nim = notifyIncomingMessage;
 notifyIncomingMessage = function(msg){
   try{
+    // never notify for own messages
+    if(msg && myProfile && msg.sender_id != null && String(msg.sender_id)===String(myProfile.id)) return;
     const q=JSON.parse(storage.getItem('sl_quiet')||'[]');
-    if(q.includes(msg.sender_id)) return; // silent
+    if(q.includes(msg.sender_id) || q.includes(String(msg.sender_id))) return; // silent
   }catch(e){}
-  return _nim(msg);
+  return _nim.apply(this, arguments);
 };
 
 
@@ -21073,8 +21339,7 @@ loadStories = async function(){
 // Message removing animation helper
 window.animateRemoveMessage = function(row){
   if(!row) return;
-  row.classList.add('removing');
-  setTimeout(()=>row.remove(),250);
+  try{ row.remove(); }catch(e){}
 };
 
 // Social FAB rotate on open create tab
@@ -33484,7 +33749,12 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
     }
 
     if(activeTab==='gif'){
-      body.innerHTML=`<div class="tg-stk-empty">GIF скоро — пока отправьте стикер или эмодзи</div>`;
+      body.innerHTML = `<div class="sl-inline-gif" id="sl-inline-gif-root">
+        <div class="sl-igif-search"><input type="search" id="sl-igif-q" placeholder="Поиск GIF" autocomplete="off"></div>
+        <div id="sl-igif-cats" class="sl-igif-cats"></div>
+        <div id="sl-igif-grid" class="sl-igif-grid"></div>
+      </div>`;
+      try{ if(typeof window.slMountInlineGif==='function') window.slMountInlineGif(body); }catch(e){ console.warn(e); }
       return;
     }
 
@@ -34172,7 +34442,12 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
     if(!body) return;
 
     if(activeTab==='gif'){
-      body.innerHTML=`<div class="tg2-empty">GIF — скоро<br><span style="font-size:12px;opacity:.6">Пока отправьте стикер</span></div>`;
+      body.innerHTML = `<div class="sl-inline-gif" id="sl-inline-gif-root">
+        <div class="sl-igif-search"><input type="search" id="sl-igif-q" placeholder="Поиск GIF" autocomplete="off"></div>
+        <div id="sl-igif-cats" class="sl-igif-cats"></div>
+        <div id="sl-igif-grid" class="sl-igif-grid"></div>
+      </div>`;
+      try{ if(typeof window.slMountInlineGif==='function') window.slMountInlineGif(body); }catch(e){ console.warn(e); }
       return;
     }
     if(activeTab==='emoji'){
@@ -35002,6 +35277,10 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
           <span class="tg-att-ico blue"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg></span>
           <span class="tg-att-label">Галерея</span>
         </button>
+        <button type="button" class="tg-att-item" data-a="gif">
+          <span class="tg-att-ico pink"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="3"/><path d="M7 9h3v6H7zM12 9h2.5a2 2 0 010 4H12v2M16.5 9H19"/></svg></span>
+          <span class="tg-att-label">GIF</span>
+        </button>
         <button type="button" class="tg-att-item" data-a="article">
           <span class="tg-att-ico purple"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg></span>
           <span class="tg-att-label">Статья</span>
@@ -35045,6 +35324,14 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
 
     const map = {
       gallery: openGallery,
+      gif: function(){
+        closeMenu();
+        try{
+          if(typeof window.slOpenGifPanel==='function') window.slOpenGifPanel();
+          else if(typeof window.openGifPanel==='function') window.openGifPanel();
+          else toast('GIF недоступны');
+        }catch(e){ toast('GIF недоступны'); }
+      },
       article: openArticle,
       gift: openGift,
       wallet: openWallet,
@@ -41574,8 +41861,11 @@ window.slGetDisplayName = function(p){
 }
 
 /* ===== 1. Chat list ===== */
-.sw-clip,.contact{
+.sw-clip{
   animation:slContactIn .34s ${SPRING} both;
+}
+.sw-front, .sw-clip .sw-front, .contact.sw-front{
+  animation:none!important;
 }
 .sw-clip:nth-child(1),.contact:nth-child(1){animation-delay:.02s}
 .sw-clip:nth-child(2),.contact:nth-child(2){animation-delay:.04s}
@@ -41583,13 +41873,10 @@ window.slGetDisplayName = function(p){
 .sw-clip:nth-child(4),.contact:nth-child(4){animation-delay:.08s}
 .sw-clip:nth-child(5),.contact:nth-child(5){animation-delay:.1s}
 .sw-clip:nth-child(n+6),.contact:nth-child(n+6){animation-delay:.12s}
-@keyframes slContactIn{
-  from{opacity:0;transform:translateY(12px) scale(.98)}
-  to{opacity:1;transform:none}
-}
+@keyframes slContactIn{from{opacity:0}to{opacity:1}}
 .sw-clip.pinned-chat .sw-front,
 .contact.pinned-chat{
-  animation:slPinPop .45s ${SPRING_BOUNCE} both;
+  /* animation:slPinPop disabled — transform conflicts with swipe */
 }
 @keyframes slPinPop{
   0%{transform:scale(1)}
@@ -41624,9 +41911,9 @@ window.slGetDisplayName = function(p){
   100%{transform:scale(1);opacity:1}
 }
 .sw-front.holding,.contact.holding{
-  transition:transform .15s ease, opacity .15s;
-  transform:scale(.97);
-  opacity:.85;
+  transition:opacity .15s;
+  opacity:.9;
+  /* no transform:scale — breaks swipe translateX */
 }
 
 /* ===== 2. Stories ===== */
@@ -44424,8 +44711,42 @@ html.theme-light #circle-btn, body.theme-light #circle-btn {
   display: none !important; flex-direction: column !important;
   max-height: min(55vh, 480px) !important; overflow: hidden !important;
 }
-#sl-tg-stk-panel.show { display: flex !important; }
+/* Open: INPUT on top, PANEL strictly UNDER it */
+#sl-tg-stk-panel.show {
+  display: flex !important;
+  position: fixed !important;
+  left: 0 !important; right: 0 !important;
+  bottom: 0 !important;
+  top: auto !important;
+  height: min(42vh, 380px) !important;
+  max-height: min(42vh, 380px) !important;
+  z-index: 60 !important;
+  border-radius: 16px 16px 0 0 !important;
+}
+body.sl-stk-open #composer,
+body.sl-stk-open .composer {
+  position: fixed !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: min(42vh, 380px) !important;
+  top: auto !important;
+  margin: 0 !important;
+  z-index: 70 !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+/* same for other sticker panels if shown */
+#tg-stk-panel.show, #tg2-panel.show, #sticker-panel.show,
+.tg-stk-panel.show, .tg2-panel.show, .sticker-panel.show {
+  position: fixed !important;
+  left: 0 !important; right: 0 !important;
+  bottom: 0 !important;
+  height: min(42vh, 380px) !important;
+  max-height: min(42vh, 380px) !important;
+  z-index: 60 !important;
+}
 html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
+
 .sl-tg-stk-top { display: flex; align-items: center; gap: 6px; padding: 10px 10px 6px; flex-shrink: 0; overflow-x: auto; }
 .sl-tg-stk-ico { width: 36px; height: 36px; border-radius: 10px; border: none; background: transparent; color: var(--muted,#8B9BB4); display: flex; align-items: center; justify-content: center; flex-shrink: 0; cursor: pointer; font-size: 18px; }
 .sl-tg-stk-search { display: flex; align-items: center; gap: 8px; margin: 0 12px 8px; padding: 8px 12px; background: rgba(255,255,255,.06); border-radius: 12px; flex-shrink: 0; }
@@ -44696,27 +45017,44 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
     if(tab === 'emoji') {
       body.innerHTML = `<div class="sl-tg-stk-sec">ПОПУЛЯРНЫЕ ЭМОДЗИ</div><div class="sl-tg-stk-row">${EMOJIS.slice(0,12).map(e=>`<span class="sl-em" data-em="${e}">${e}</span>`).join('')}</div><div class="sl-tg-stk-sec">НЕДАВНИЕ</div><div class="sl-tg-stk-grid">${EMOJIS.map(e=>`<span class="sl-em" data-em="${e}">${e}</span>`).join('')}</div>`;
     } else if(tab === 'gif') {
-      body.innerHTML = `<div style="padding:40px;text-align:center;color:var(--muted)">GIF — скоро</div>`;
+      body.innerHTML = `<div class="sl-inline-gif" id="sl-inline-gif-root">
+        <div class="sl-igif-search"><input type="search" id="sl-igif-q" placeholder="Поиск GIF" autocomplete="off"></div>
+        <div id="sl-igif-cats" class="sl-igif-cats"></div>
+        <div id="sl-igif-grid" class="sl-igif-grid"></div>
+      </div>`;
+      try{ if(typeof window.slMountInlineGif==='function') window.slMountInlineGif(body); }catch(e){ console.warn(e); }
     } else {
       let packHtml = '';
       try {
         try{ if(typeof window.slEnsureStickerPacks==='function') window.slEnsureStickerPacks(); }catch(e){}
+        try{ if(typeof window.slRegisterNewsBunny==='function') window.slRegisterNewsBunny(); }catch(e){}
+        function packImgs(pack){
+          const raw = (pack && pack.stickers) ? pack.stickers : (Array.isArray(pack) ? pack : []);
+          return raw.map(function(u){
+            if(!u) return '';
+            if(typeof u === 'string') return u;
+            return u.url || u.src || '';
+          }).filter(Boolean);
+        }
         if(typeof STICKER_PACKS !== 'undefined' && STICKER_PACKS) {
           const seen = new Set();
-          Object.keys(STICKER_PACKS).forEach(k => {
-            if(['newsStickers','newsEmoji','Bunny'].includes(k)) return; // skip aliases
+          const prefer = ['news','bunny','News','Bunny'];
+          const keys = prefer.concat(Object.keys(STICKER_PACKS).filter(function(k){ return prefer.indexOf(k) < 0; }));
+          keys.forEach(function(k) {
+            if(['newsStickers','newsEmoji'].indexOf(k) >= 0) return;
+            if(!STICKER_PACKS[k]) return;
             const pack = STICKER_PACKS[k];
-            const imgs = (pack.stickers || []);
+            const imgs = packImgs(pack);
             if(!imgs.length) return;
-            const name = pack.name || k;
-            if(seen.has(name)) return;
-            seen.add(name);
-            packHtml += `<div class="sl-tg-stk-sec">${name} · ${imgs.length}</div><div class="sl-tg-stk-grid">${imgs.map(u=>`<img src="${u}" data-url="${u}" loading="lazy" style="width:64px;height:64px;object-fit:contain;border-radius:14px;cursor:pointer;background:rgba(0,0,0,.25)">`).join('')}</div>`;
+            const name = (pack && pack.name) ? pack.name : k;
+            if(seen.has(String(name).toLowerCase())) return;
+            seen.add(String(name).toLowerCase());
+            packHtml += '<div class="sl-tg-stk-sec">'+name+' · '+imgs.length+'</div><div class="sl-tg-stk-grid">'+imgs.map(function(u){ return '<img src="'+u+'" data-url="'+u+'" loading="lazy" style="width:64px;height:64px;object-fit:contain;border-radius:14px;cursor:pointer;background:rgba(0,0,0,.25)">'; }).join('')+'</div>';
           });
         }
-      } catch(e) {}
+      } catch(e) { console.warn(e); }
       if(!packHtml) {
-        packHtml = `<div class="sl-tg-stk-sec">ПОПУЛЯРНЫЕ PREMIUM-СТИКЕРЫ</div><div class="sl-tg-stk-row">${PREMIUM.map(e=>`<span class="sl-em" data-em="${e}">${e}</span>`).join('')}</div><div class="sl-tg-stk-sec">ИЗБРАННЫЕ СТИКЕРЫ</div><div class="sl-tg-stk-row">${FAV_EM.map(e=>`<span class="sl-em" data-em="${e}">${e}</span>`).join('')}</div><div class="sl-tg-stk-sec">ЭМОДЗИ</div><div class="sl-tg-stk-grid">${EMOJIS.map(e=>`<span class="sl-em" data-em="${e}">${e}</span>`).join('')}</div>`;
+        packHtml = '<div class="sl-tg-stk-sec">ПОПУЛЯРНЫЕ PREMIUM-СТИКЕРЫ</div><div class="sl-tg-stk-row">'+PREMIUM.map(function(e){ return '<span class="sl-em" data-em="'+e+'">'+e+'</span>'; }).join('')+'</div>';
       }
       body.innerHTML = packHtml;
     }
@@ -44978,19 +45316,8 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
   if(window._slDelAnim) return; window._slDelAnim=1;
   window.slAnimateDeleteMsg = function(row){
     return new Promise(function(resolve){
-      try{
-        if(!row||!row.parentNode){ resolve(); return; }
-        row.style.transition='opacity .28s ease, transform .28s ease, max-height .32s ease, margin .32s ease';
-        row.style.overflow='hidden';
-        row.style.maxHeight=row.offsetHeight+'px';
-        row.offsetHeight;
-        row.style.opacity='0';
-        row.style.transform='scale(.94) translateY(10px)';
-        row.style.maxHeight='0';
-        row.style.marginTop='0';
-        row.style.marginBottom='0';
-        setTimeout(function(){ try{row.remove();}catch(e){} resolve(); }, 320);
-      }catch(e){ try{row.remove();}catch(err){} resolve(); }
+      try{ if(row) row.remove(); }catch(e){}
+      resolve();
     });
   };
   // Hook del if not already
@@ -45782,6 +46109,8 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
     }
   }, true);
 
+  window.slRegisterNewsBunny = register;
+  try{ register(); }catch(e){}
   console.log('[SL] News+Bunny V5', NEWS.length, BUNNY.length);
 })();
 
@@ -49183,6 +49512,541 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
   window.slPublishMiniApp = publishApp;
 
   console.log('[SL] Mini Apps ready — search «Create App»');
+})();
+</script>
+
+
+<!-- sl-swipe-max-v2 removed: conflicted with built-in swipe -->
+
+
+<script id="sl-gif-feature-js">
+(function(){
+  if(window._slGifFeatureV4) return;
+  window._slGifFeatureV4 = 1;
+
+  const TENOR_V2 = 'https://tenor.googleapis.com/v2';
+  const TENOR_KEY = 'AIzaSyCZt6SSh5VgVPzD9fhyzG1DprdPRhtoaR4';
+  const TENOR_CLIENT = 'tenor_web';
+  const CATS = [
+    { id:'trending', label:'🔥 В тренде', q:null },
+    { id:'love', label:'❤️', q:'love' },
+    { id:'lol', label:'😂', q:'lol' },
+    { id:'ok', label:'👍', q:'ok' },
+    { id:'sad', label:'😢', q:'sad' },
+    { id:'wow', label:'😮', q:'wow' },
+    { id:'dance', label:'💃', q:'dance' },
+    { id:'yes', label:'✅', q:'yes' },
+    { id:'no', label:'❌', q:'no' },
+    { id:'hi', label:'👋', q:'hello' },
+    { id:'thanks', label:'🙏', q:'thank you' },
+    { id:'clap', label:'👏', q:'clap' }
+  ];
+
+  function toast(m){
+    try{ if(typeof showToast==='function') showToast(m); else if(typeof window.toast==='function') window.toast(m); }catch(e){}
+  }
+  function hasOpenChat(){
+    try{ if(typeof activePartner!=='undefined' && activePartner) return true; }catch(e){}
+    try{ if(typeof activeGroup!=='undefined' && activeGroup) return true; }catch(e){}
+    try{ if(window.activePartner || window.activeGroup) return true; }catch(e){}
+    try{ if(document.body && document.body.classList.contains('in-chat')) return true; }catch(e){}
+    try{
+      const pane = document.getElementById('chat-active');
+      if(pane && getComputedStyle(pane).display!=='none' && pane.offsetHeight>0) return true;
+    }catch(e){}
+    return false;
+  }
+
+  if(!document.getElementById('sl-gif-css')){
+    const st=document.createElement('style');
+    st.id='sl-gif-css';
+    st.textContent = `
+/* ===== GIF picker grid (separate square tiles) ===== */
+.sl-inline-gif{ display:flex; flex-direction:column; min-height:0; height:100%; }
+.sl-igif-search{ padding:8px 10px 4px; flex-shrink:0; }
+.sl-igif-search input{
+  width:100%; box-sizing:border-box; padding:10px 12px; border-radius:12px; border:none;
+  background:rgba(120,120,128,.16); color:inherit; font-size:14px; outline:none;
+}
+.sl-igif-cats, .sl-gif-cats{
+  display:flex; gap:6px; padding:4px 10px 8px; overflow-x:auto; flex-shrink:0; scrollbar-width:none;
+}
+.sl-igif-cats::-webkit-scrollbar, .sl-gif-cats::-webkit-scrollbar{ display:none; }
+.sl-igif-cat, .sl-gif-cat{
+  flex:0 0 auto; padding:7px 12px; border-radius:999px; border:none; cursor:pointer;
+  background:rgba(120,120,128,.16); color:inherit; font-size:13px; font-weight:600;
+}
+.sl-igif-cat.on, .sl-gif-cat.on{ background:#3B82F6; color:#fff; }
+
+.sl-igif-grid, .sl-gif-grid, #sl-igif-grid, #sl-gif-grid{
+  display:grid !important;
+  grid-template-columns:repeat(2, minmax(0, 1fr)) !important;
+  gap:8px !important;
+  padding:0 10px 14px !important;
+  overflow-y:auto !important;
+  -webkit-overflow-scrolling:touch;
+  align-content:start !important;
+  flex:1;
+  min-height:160px;
+  max-height:48vh;
+}
+@media(min-width:420px){
+  .sl-igif-grid, .sl-gif-grid, #sl-igif-grid, #sl-gif-grid{
+    grid-template-columns:repeat(3, minmax(0, 1fr)) !important;
+  }
+}
+.sl-gif-cell{
+  position:relative !important;
+  width:100% !important;
+  aspect-ratio:1 / 1 !important;
+  height:auto !important;
+  min-height:0 !important;
+  border-radius:14px !important;
+  overflow:hidden !important;
+  background:#111 !important;
+  cursor:pointer !important;
+  border:none !important;
+  padding:0 !important;
+  margin:0 !important;
+  display:block !important;
+  isolation:isolate;
+}
+.sl-gif-cell img{
+  position:absolute !important;
+  inset:0 !important;
+  width:100% !important;
+  height:100% !important;
+  object-fit:cover !important;
+  display:block !important;
+  margin:0 !important;
+  border:none !important;
+  border-radius:0 !important;
+  max-width:none !important;
+  max-height:none !important;
+}
+.sl-gif-empty, .sl-gif-load{
+  grid-column:1 / -1; text-align:center; padding:36px 16px; opacity:.65; font-size:14px;
+}
+.sl-gif-spin{
+  width:28px; height:28px; border:3px solid rgba(255,255,255,.15);
+  border-top-color:#3B82F6; border-radius:50%; margin:0 auto 10px;
+  animation:slGifSpin .7s linear infinite;
+}
+@keyframes slGifSpin{ to{ transform:rotate(360deg) } }
+
+/* ===== Sheet from attach ===== */
+#sl-gif-panel{
+  position:fixed; left:0; right:0; bottom:0; z-index:12050;
+  max-height:min(72vh,560px);
+  background:var(--panel,#1c1f2e); color:var(--text,#fff);
+  border-radius:18px 18px 0 0;
+  box-shadow:0 -12px 40px rgba(0,0,0,.45);
+  display:flex; flex-direction:column;
+  padding-bottom:env(safe-area-inset-bottom,0px);
+  transform:translateY(110%); transition:transform .28s cubic-bezier(.2,.8,.2,1);
+  font-family:system-ui,-apple-system,sans-serif;
+}
+#sl-gif-panel.open{ transform:translateY(0); }
+#sl-gif-backdrop{
+  position:fixed; inset:0; z-index:12040; background:rgba(0,0,0,.5);
+  opacity:0; pointer-events:none; transition:opacity .2s;
+}
+#sl-gif-backdrop.show{ opacity:1; pointer-events:auto; }
+.sl-gif-handle{ width:36px; height:4px; border-radius:2px; background:rgba(128,128,128,.35); margin:10px auto 6px; }
+.sl-gif-top{ display:flex; align-items:center; gap:8px; padding:4px 12px 10px; }
+.sl-gif-top input{
+  flex:1; min-width:0; padding:11px 14px; border-radius:14px; border:none;
+  background:rgba(120,120,128,.16); color:inherit; font-size:15px; outline:none;
+}
+.sl-gif-close{
+  width:40px; height:40px; border:none; border-radius:12px; cursor:pointer;
+  background:rgba(120,120,128,.2); color:inherit; font-size:18px;
+}
+
+/* ===== Chat bubble: separate GIF card + badge ===== */
+.sl-media-card.is-gif{
+  position:relative !important;
+  display:inline-block !important;
+  max-width:min(280px,72vw) !important;
+  padding:0 !important;
+  margin:2px 0 !important;
+  border-radius:16px !important;
+  overflow:hidden !important;
+  background:transparent !important;
+  border:none !important;
+  vertical-align:bottom;
+}
+.sl-media-card.is-gif .sl-gif-img,
+img.sl-gif-img{
+  display:block !important;
+  width:100% !important;
+  max-width:min(280px,72vw) !important;
+  max-height:320px !important;
+  height:auto !important;
+  object-fit:contain !important;
+  border-radius:16px !important;
+  margin:0 !important;
+  background:#111;
+}
+.sl-gif-badge{
+  position:absolute !important;
+  top:8px !important;
+  left:8px !important;
+  z-index:3 !important;
+  padding:3px 8px !important;
+  border-radius:8px !important;
+  background:rgba(0,0,0,.55) !important;
+  color:#fff !important;
+  font-size:11px !important;
+  font-weight:700 !important;
+  letter-spacing:.04em !important;
+  line-height:1.2 !important;
+  pointer-events:none !important;
+  backdrop-filter:blur(6px);
+  -webkit-backdrop-filter:blur(6px);
+}
+.bubble:has(.sl-media-card.is-gif){
+  background:transparent !important;
+  border:none !important;
+  box-shadow:none !important;
+  padding:2px !important;
+}
+.bubble:has(.sl-media-card.is-gif) .bubble-time{
+  position:absolute; right:8px; bottom:8px;
+  background:rgba(0,0,0,.45); color:#fff; border-radius:8px;
+  padding:2px 6px; margin:0;
+}
+.sl-media-card.is-gif .media-caption{ display:none !important; }
+`;
+    document.head.appendChild(st);
+  }
+
+  async function fetchTenor(path, params){
+    const u = new URL(TENOR_V2 + '/' + path);
+    u.searchParams.set('key', TENOR_KEY);
+    u.searchParams.set('client_key', TENOR_CLIENT);
+    u.searchParams.set('limit', '24');
+    u.searchParams.set('media_filter', 'minimal');
+    Object.keys(params||{}).forEach(k=>{
+      if(params[k]!=null && params[k]!=='') u.searchParams.set(k, params[k]);
+    });
+    const r = await fetch(u.toString());
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    return r.json();
+  }
+
+  function pickUrl(item){
+    try{
+      const m = item.media_formats || {};
+      for(const k of ['tinygif','nanogif','gif','mediumgif']){
+        if(m[k] && m[k].url) return m[k].url;
+      }
+    }catch(e){}
+    return null;
+  }
+
+  async function sendGif(url){
+    closeGifPanel();
+    try{
+      document.getElementById('sl-tg-stk-panel')?.classList.remove('show');
+      document.getElementById('tg2-panel')?.classList.remove('show','open');
+      document.getElementById('tg-stk-panel')?.classList.remove('show','open');
+    }catch(e){}
+    if(!hasOpenChat()){ toast('Откройте чат'); return; }
+    try{
+      if(typeof sendMessage==='function'){
+        // no caption text
+        await sendMessage('image', url, '');
+      } else toast('Отправка недоступна');
+    }catch(err){
+      console.warn(err);
+      toast('Не удалось отправить GIF');
+    }
+  }
+
+  function fillGrid(grid, results, reset){
+    if(reset) grid.innerHTML = '';
+    try{
+      grid.style.cssText = 'display:grid;grid-template-columns:'+(window.innerWidth>=420?'1fr 1fr 1fr':'1fr 1fr')+';gap:8px;padding:0 10px 14px;margin:0;overflow-y:auto;align-content:start;width:100%;box-sizing:border-box;flex:1;min-height:0';
+    }catch(e){}
+    results.forEach(item=>{
+      const url = pickUrl(item);
+      if(!url) return;
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'sl-gif-cell';
+      btn.style.cssText = 'position:relative;display:block;width:100%;height:0;padding-bottom:100%;margin:0;border:none;border-radius:14px;overflow:hidden;background:#0d0f14;cursor:pointer;box-sizing:border-box';
+      const img = document.createElement('img');
+      img.loading = 'lazy';
+      img.alt = '';
+      img.src = url;
+      img.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;display:block;margin:0;border:none;max-width:none;max-height:none';
+      btn.appendChild(img);
+      btn.onclick = () => sendGif(url);
+      grid.appendChild(btn);
+    });
+  }
+
+  window.slMountInlineGif = function(host){
+    const root = (host && host.querySelector) ? (host.querySelector('#sl-inline-gif-root')||host) : host;
+    if(!root) return;
+    const qEl = root.querySelector('#sl-igif-q');
+    const catsEl = root.querySelector('#sl-igif-cats');
+    const grid = root.querySelector('#sl-igif-grid');
+    if(!grid) return;
+    let state = { q:'', cat:'trending', pos:'', loading:false, done:false, timer:null };
+
+    function paintCats(){
+      if(!catsEl) return;
+      catsEl.innerHTML = '';
+      CATS.forEach(c=>{
+        const b=document.createElement('button');
+        b.type='button'; b.className='sl-igif-cat'+(c.id===state.cat?' on':'');
+        b.textContent=c.label;
+        b.onclick=()=>{
+          state.cat=c.id; state.pos=''; state.done=false;
+          if(c.q){ state.q=c.q; if(qEl) qEl.value=c.q; }
+          else { state.q=''; if(qEl) qEl.value=''; }
+          catsEl.querySelectorAll('.sl-igif-cat').forEach(x=>x.classList.toggle('on', x===b));
+          load(true);
+        };
+        catsEl.appendChild(b);
+      });
+    }
+
+    async function load(reset){
+      if(state.loading) return;
+      if(reset){ state.pos=''; state.done=false; }
+      if(state.done && !reset) return;
+      state.loading=true;
+      if(reset) grid.innerHTML='<div class="sl-gif-load"><div class="sl-gif-spin"></div>Загрузка…</div>';
+      try{
+        const q = state.q || (CATS.find(c=>c.id===state.cat)||{}).q;
+        const data = q
+          ? await fetchTenor('search', { q:q, pos:state.pos||undefined })
+          : await fetchTenor('featured', { pos:state.pos||undefined });
+        const results = (data && data.results) || [];
+        fillGrid(grid, results, reset);
+        if(data && data.next) state.pos=String(data.next); else state.done=true;
+        if(!grid.querySelector('.sl-gif-cell')) grid.innerHTML='<div class="sl-gif-empty">Ничего не найдено</div>';
+      }catch(err){
+        console.warn('[SL GIF]', err);
+        if(reset) grid.innerHTML='<div class="sl-gif-empty">Ошибка загрузки GIF</div>';
+      }
+      state.loading=false;
+    }
+
+    if(qEl && !qEl.dataset.wired){
+      qEl.dataset.wired='1';
+      qEl.addEventListener('input', function(){
+        state.q=this.value.trim();
+        clearTimeout(state.timer);
+        state.timer=setTimeout(()=>load(true), 300);
+      });
+    }
+    if(grid && !grid.dataset.scrollWired){
+      grid.dataset.scrollWired='1';
+      grid.addEventListener('scroll', function(){
+        if(grid.scrollTop + grid.clientHeight > grid.scrollHeight - 80) load(false);
+      }, {passive:true});
+    }
+    paintCats();
+    load(true);
+  };
+
+  function ensurePanel(){
+    let bd=document.getElementById('sl-gif-backdrop');
+    if(!bd){
+      bd=document.createElement('div');
+      bd.id='sl-gif-backdrop';
+      bd.onclick=closeGifPanel;
+      document.body.appendChild(bd);
+    }
+    let p=document.getElementById('sl-gif-panel');
+    if(p) return p;
+    p=document.createElement('div');
+    p.id='sl-gif-panel';
+    p.innerHTML=`
+      <div class="sl-gif-handle"></div>
+      <div class="sl-gif-top">
+        <input type="search" id="sl-gif-q" placeholder="Поиск GIF" autocomplete="off">
+        <button type="button" class="sl-gif-close" id="sl-gif-x">✕</button>
+      </div>
+      <div class="sl-gif-cats" id="sl-gif-cats"></div>
+      <div class="sl-gif-grid" id="sl-gif-grid"></div>`;
+    document.body.appendChild(p);
+    p.querySelector('#sl-gif-x').onclick=closeGifPanel;
+    return p;
+  }
+
+  let sheetState={ q:'', cat:'trending', pos:'', loading:false, done:false, timer:null };
+
+  async function loadSheet(reset){
+    const grid=document.getElementById('sl-gif-grid');
+    if(!grid) return;
+    if(sheetState.loading) return;
+    if(reset){ sheetState.pos=''; sheetState.done=false; }
+    if(sheetState.done && !reset) return;
+    sheetState.loading=true;
+    if(reset) grid.innerHTML='<div class="sl-gif-load"><div class="sl-gif-spin"></div>Загрузка…</div>';
+    try{
+      const q = sheetState.q || (CATS.find(c=>c.id===sheetState.cat)||{}).q;
+      const data = q
+        ? await fetchTenor('search', { q:q, pos:sheetState.pos||undefined })
+        : await fetchTenor('featured', { pos:sheetState.pos||undefined });
+      fillGrid(grid, (data&&data.results)||[], reset);
+      if(data&&data.next) sheetState.pos=String(data.next); else sheetState.done=true;
+      if(!grid.querySelector('.sl-gif-cell')) grid.innerHTML='<div class="sl-gif-empty">Ничего не найдено</div>';
+    }catch(err){
+      console.warn(err);
+      if(reset) grid.innerHTML='<div class="sl-gif-empty">Ошибка загрузки GIF</div>';
+    }
+    sheetState.loading=false;
+  }
+
+  function closeGifPanel(){
+    document.getElementById('sl-gif-panel')?.classList.remove('open');
+    document.getElementById('sl-gif-backdrop')?.classList.remove('show');
+  }
+
+  function openGifPanel(){
+    try{
+      document.getElementById('tg-attach-backdrop')?.remove();
+      document.getElementById('tg-attach-sheet')?.remove();
+    }catch(e){}
+    const p=ensurePanel();
+    document.getElementById('sl-gif-backdrop').classList.add('show');
+    requestAnimationFrame(()=>p.classList.add('open'));
+    const cats=p.querySelector('#sl-gif-cats');
+    if(cats && !cats.dataset.built){
+      cats.dataset.built='1';
+      CATS.forEach(c=>{
+        const b=document.createElement('button');
+        b.type='button'; b.className='sl-gif-cat'; b.dataset.id=c.id; b.textContent=c.label;
+        b.onclick=()=>{
+          sheetState.cat=c.id;
+          if(c.q){ sheetState.q=c.q; p.querySelector('#sl-gif-q').value=c.q; }
+          else { sheetState.q=''; p.querySelector('#sl-gif-q').value=''; }
+          cats.querySelectorAll('.sl-gif-cat').forEach(x=>x.classList.toggle('on', x.dataset.id===c.id));
+          loadSheet(true);
+        };
+        cats.appendChild(b);
+      });
+      const grid=p.querySelector('#sl-gif-grid');
+      grid.addEventListener('scroll', function(){
+        if(grid.scrollTop+grid.clientHeight>grid.scrollHeight-80) loadSheet(false);
+      }, {passive:true});
+      p.querySelector('#sl-gif-q').addEventListener('input', function(){
+        sheetState.q=this.value.trim();
+        clearTimeout(sheetState.timer);
+        sheetState.timer=setTimeout(()=>loadSheet(true), 300);
+      });
+    }
+    sheetState.q=''; sheetState.cat='trending';
+    p.querySelector('#sl-gif-q').value='';
+    p.querySelectorAll('.sl-gif-cat').forEach(x=>x.classList.toggle('on', x.dataset.id==='trending'));
+    loadSheet(true);
+  }
+  window.openGifPanel = openGifPanel;
+  window.slOpenGifPanel = openGifPanel;
+
+  function injectGifButton(sheet){
+    if(!sheet) return;
+    if(!sheet.querySelector('[data-a="gif"]')){
+      const scroll = sheet.querySelector('.tg-att-scroll');
+      if(scroll){
+        const btn=document.createElement('button');
+        btn.type='button'; btn.className='tg-att-item'; btn.dataset.a='gif';
+        btn.innerHTML=`<span class="tg-att-ico pink" style="background:#EC4899"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#fff" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="3"/><path d="M7 9h3v6H7zM12 9h2.5a2 2 0 010 4H12v2M16.5 9H19"/></svg></span><span class="tg-att-label">GIF</span>`;
+        const gal=scroll.querySelector('[data-a="gallery"]');
+        if(gal) gal.after(btn); else scroll.prepend(btn);
+      }
+    }
+    sheet.querySelectorAll('[data-a="gif"]').forEach(btn=>{
+      if(btn.dataset.slGifBound) return;
+      btn.dataset.slGifBound='1';
+      btn.addEventListener('click', function(e){
+        e.preventDefault(); e.stopPropagation();
+        try{ document.getElementById('tg-attach-backdrop')?.remove(); }catch(err){}
+        try{ sheet.remove(); }catch(err){}
+        openGifPanel();
+      }, true);
+    });
+  }
+  try{
+    new MutationObserver(function(muts){
+      muts.forEach(function(m){
+        m.addedNodes && m.addedNodes.forEach(function(n){
+          if(!n || n.nodeType!==1) return;
+          if(n.id==='tg-attach-sheet') injectGifButton(n);
+          else if(n.querySelector){
+            const s=n.querySelector('#tg-attach-sheet');
+            if(s) injectGifButton(s);
+          }
+        });
+      });
+    }).observe(document.body,{childList:true,subtree:true});
+  }catch(e){}
+
+  document.addEventListener('click', function(e){
+    const t = e.target && e.target.closest && e.target.closest('[data-tab="gif"]');
+    if(!t) return;
+    setTimeout(function(){
+      ['sl-tg-stk-body','tg2-body','tg-stk-body'].forEach(function(id){
+        const body=document.getElementById(id);
+        if(!body) return;
+        if(body.querySelector('#sl-igif-grid')){
+          try{ window.slMountInlineGif(body); }catch(err){}
+          return;
+        }
+        body.innerHTML = `<div class="sl-inline-gif" id="sl-inline-gif-root">
+          <div class="sl-igif-search"><input type="search" id="sl-igif-q" placeholder="Поиск GIF" autocomplete="off"></div>
+          <div id="sl-igif-cats" class="sl-igif-cats"></div>
+          <div id="sl-igif-grid" class="sl-igif-grid"></div>
+        </div>`;
+        try{ window.slMountInlineGif(body); }catch(err){}
+      });
+    }, 40);
+  }, true);
+
+  console.log('[SL] GIF v4 — grid + no caption + GIF badge');
+})();
+</script>
+
+
+<script id="sl-stk-layout-js">
+(function(){
+  if(window._slStkLayout) return; window._slStkLayout=1;
+  function sync(){
+    try{
+      var open = !!document.querySelector('#sl-tg-stk-panel.show, #tg-stk-panel.show, #tg2-panel.show, #sticker-panel.show');
+      document.body.classList.toggle('sl-stk-open', open);
+    }catch(e){}
+  }
+  try{
+    new MutationObserver(sync).observe(document.body,{subtree:true,attributes:true,attributeFilter:['class'],childList:true});
+  }catch(e){}
+  setInterval(sync, 800);
+  sync();
+
+  /* square GIF cells if grid fills without inline styles */
+  var _fg = window.slMountInlineGif;
+  /* patch fillGrid via prototype-less intercept when GIF panel mounts */
+  document.addEventListener('click', function(e){
+    var t = e.target && e.target.closest && e.target.closest('[data-tab="gif"]');
+    if(!t) return;
+    setTimeout(function(){
+      var grid = document.getElementById('sl-igif-grid');
+      if(!grid) return;
+      grid.style.cssText = 'display:grid;grid-template-columns:'+(window.innerWidth>=420?'1fr 1fr 1fr':'1fr 1fr')+';gap:8px;padding:0 10px 14px;overflow-y:auto;align-content:start;width:100%;box-sizing:border-box;flex:1;min-height:0';
+      grid.querySelectorAll('.sl-gif-cell').forEach(function(btn){
+        btn.style.cssText = 'position:relative;display:block;width:100%;height:0;padding-bottom:100%;margin:0;border:none;border-radius:14px;overflow:hidden;background:#0d0f14;cursor:pointer;box-sizing:border-box';
+        var img = btn.querySelector('img');
+        if(img) img.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;display:block;margin:0;border:none;max-width:none;max-height:none';
+      });
+    }, 300);
+  }, true);
+  console.log('[SL] stk layout under input');
 })();
 </script>
 
