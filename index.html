@@ -10085,6 +10085,147 @@ function openSendQualityDialog(file){
 }
 
 /** Unified entry: pick quality → prepare → caption → send */
+/** Show message immediately with pending clock, upload in background, then finalize */
+async function sendFileOptimistic(file, mType, caption, quality){
+  if(!myProfile?.id || (!activePartner && !activeGroup)) return;
+  const localId = 'local_'+Date.now()+'_'+Math.random().toString(36).slice(2,7);
+  let blobUrl = '';
+  try{
+    if(mType==='image' || mType==='video') blobUrl = URL.createObjectURL(file);
+  }catch(e){}
+  const optMsg = {
+    id: localId,
+    sender_id: myProfile.id,
+    content: caption || (mType==='file' ? (file.name||'Файл') : ''),
+    type: mType || 'file',
+    file_url: blobUrl || '',
+    created_at: new Date().toISOString(),
+    _pending: true
+  };
+  if(activeGroup){ optMsg.group_id = activeGroup.id; optMsg.receiver_id = null; }
+  else { optMsg.receiver_id = activePartner.id; optMsg.group_id = null; }
+  try{
+    renderMessage(optMsg, !!activeGroup);
+    scrollToBottom();
+    const row0 = document.querySelector('.bubble-row[data-id="'+localId+'"]');
+    if(row0 && typeof setMsgStatus==='function') setMsgStatus(row0, 'pending');
+  }catch(e){ console.warn('[SL] optimistic render', e); }
+
+  try{
+    // Upload while bubble already visible with clock
+    const prep = await prepareMediaForUpload(file, 'chat', quality || 'original');
+    if(!prep || !prep.ok){
+      throw new Error((prep && prep.error) || 'Ошибка загрузки файла');
+    }
+    const realUrl = prep.dataUrl;
+    // Refresh media in optimistic bubble to real URL
+    try{
+      const row = document.querySelector('.bubble-row[data-id="'+localId+'"]');
+      if(row && realUrl){
+        row.querySelectorAll('img.sl-media-img, img.sl-gif-img').forEach(function(img){ img.src = realUrl; });
+        row.querySelectorAll('video.sl-media-vid').forEach(function(v){ try{ v.src = realUrl; }catch(e){} });
+        const btn = row.querySelector('.sl-file-btn');
+        if(btn){ btn.href = realUrl; btn.setAttribute('href', realUrl); }
+        const card = row.querySelector('.sl-file-card');
+        if(card){ card.setAttribute('data-url', realUrl); }
+        try{ const stored = messageStore.get(String(localId)); if(stored){ stored.file_url = realUrl; messageStore.set(String(localId), stored); } }catch(e){}
+      }
+    }catch(e){}
+
+    const payload = {
+      sender_id: myProfile.id,
+      content: caption || (mType==='file' ? (file.name||'Файл') : ''),
+      type: mType || 'file',
+      file_url: realUrl
+    };
+    if(activeGroup){ payload.group_id = activeGroup.id; payload.receiver_id = null; }
+    else { payload.receiver_id = activePartner.id; payload.group_id = null; }
+
+    if(!navigator.onLine){
+      const q = getOfflineQ();
+      q.push({...payload, _localId: localId});
+      setOfflineQ(q);
+      updateConnectionStatus();
+      return;
+    }
+
+    let data = null, error = null;
+    try{
+      const res = await sb.from('messages').insert(payload).select().single();
+      data = res && res.data; error = res && res.error;
+    }catch(eIns){
+      try{
+        const res2 = await (window.slDirectInsert ? window.slDirectInsert('messages', payload) : Promise.resolve({data:null,error:{message:String(eIns)}}));
+        data = res2.data; error = res2.error;
+      }catch(e2){ error = {message: e2.message||String(e2)}; }
+    }
+    if(error){
+      const msg = String(error.message||error);
+      if(/payload|too large|413|row-level|value too long|bytes/i.test(msg))
+        showToast(currentLang==='en'?'Server rejected the file. Use Storage bucket "media".':'Сервер отклонил файл. Нужен бакет Storage «media».');
+      else showToast(typeof friendlyError==='function' ? friendlyError(error) : msg);
+      const failRow = document.querySelector('.bubble-row[data-id="'+localId+'"]');
+      if(failRow && typeof setMsgStatus==='function') setMsgStatus(failRow, 'failed');
+      return;
+    }
+    if(data){
+      const localRow = document.querySelector('.bubble-row[data-id="'+localId+'"]');
+      if(localRow){
+        localRow.dataset.id = data.id;
+        const bub = localRow.querySelector('.bubble');
+        if(bub) bub.dataset.id = data.id;
+        localRow.classList.remove('sending','pending-msg');
+        try{ messageStore.delete(String(localId)); messageStore.set(String(data.id), data); }catch(e){}
+        if(data.created_at) localRow.dataset.created = data.created_at;
+        if(typeof setMsgStatus==='function') setMsgStatus(localRow, 'sent');
+      } else {
+        renderMessage(data, !!activeGroup);
+      }
+      try{
+        const ck = chatCacheKey(activePartner, activeGroup);
+        if(ck){
+          const cur = getCachedMessages(ck) || [];
+          if(!cur.some(m=>String(m.id)===String(data.id))){ cur.push(data); setCachedMessages(ck, cur); }
+        }
+      }catch(e){}
+      try{
+        const peerId = activeGroup ? null : activePartner?.id;
+        if(peerId && peerId !== myProfile.id){
+          const ch = sb.channel('inbox-'+peerId);
+          ch.subscribe(st=>{
+            if(st==='SUBSCRIBED'){
+              ch.send({type:'broadcast', event:'new_msg', payload:data});
+              setTimeout(()=>sb.removeChannel(ch), 1200);
+            }
+          });
+          const preview = data.type==='text' ? (data.content||'').slice(0,80) : (data.type||'message');
+          const _ptitle = myProfile.first_name||myProfile.username||'SLine';
+          try{ sendWebPushToUser(peerId, _ptitle, preview, {tag:'sl-msg'}); }catch(e){}
+          try{ sendNtfyPush(peerId, _ptitle, preview, {tags:'speech_balloon', priority:'high'}); }catch(e){}
+        }
+        if(activeGroup){
+          const ch = sb.channel('gmsg-'+activeGroup.id);
+          ch.subscribe(st=>{
+            if(st==='SUBSCRIBED'){
+              ch.send({type:'broadcast', event:'new_msg', payload:data});
+              setTimeout(()=>sb.removeChannel(ch), 1200);
+            }
+          });
+        }
+      }catch(e){}
+      try{ if(activeGroup) loadGroups(); else loadChats(); }catch(e){}
+    }
+  }catch(err){
+    console.warn('[SL] sendFileOptimistic', err);
+    const failRow = document.querySelector('.bubble-row[data-id="'+localId+'"]');
+    if(failRow && typeof setMsgStatus==='function') setMsgStatus(failRow, 'failed');
+    showToast(typeof friendlyError==='function' ? friendlyError(err) : String(err&&err.message||err));
+  }finally{
+    if(blobUrl){ try{ URL.revokeObjectURL(blobUrl); }catch(e){} }
+  }
+}
+window.sendFileOptimistic = sendFileOptimistic;
+
 async function sendChatFiles(fileList){
   const files = Array.from(fileList||[]).filter(Boolean);
   if(!files.length) return;
@@ -10094,36 +10235,38 @@ async function sendChatFiles(fileList){
   }
   for(const f of files){
     try{
-      const isMedia = (f.type||'').startsWith('image/') || (f.type||'').startsWith('video/');
+      const isImg = (f.type||'').startsWith('image/');
+      const isVid = (f.type||'').startsWith('video/') || /\.(mp4|mov|webm|mkv|m4v)$/i.test(f.name||'');
+      const isMedia = isImg || isVid;
       let quality = 'original';
+      // Quality dialog only for photos/videos — documents (apk, exe, zip…) send immediately
       if(isMedia){
         quality = await openSendQualityDialog(f);
         if(!quality) continue; // cancelled
-      } else {
-        // documents: quick confirm with only "send as is"
-        quality = await openSendQualityDialog(f);
-        if(!quality) continue;
       }
-      showLoader();
-      const prep = await prepareMediaForUpload(f, 'chat', quality);
-      hideLoader();
-      if(!prep || !prep.ok){
-        showToast((prep && prep.error) || 'Ошибка');
-        continue;
-      }
-      const mType = prep.type==='video' ? 'video' : (prep.type==='image' ? 'image' : 'file');
-      if(mType==='image' || mType==='video'){
-        let caption = '';
-        if(typeof openMediaCaptionComposer==='function'){
-          caption = await openMediaCaptionComposer(prep.dataUrl, mType, f.name);
-          if(caption===null) continue;
+      let mType = isVid ? 'video' : (isImg ? 'image' : 'file');
+      let caption = '';
+      if(isMedia){
+        // Caption on local preview (no wait for upload)
+        let previewUrl = '';
+        try{ previewUrl = URL.createObjectURL(f); }catch(e){}
+        try{
+          if(typeof openMediaCaptionComposer==='function'){
+            const c = await openMediaCaptionComposer(previewUrl || '', mType, f.name);
+            if(c===null){ try{ if(previewUrl) URL.revokeObjectURL(previewUrl); }catch(e){} continue; }
+            caption = c || '';
+          }
+        }finally{
+          try{ if(previewUrl) URL.revokeObjectURL(previewUrl); }catch(e){}
         }
-        await sendMessage(mType, prep.dataUrl, caption||'');
       } else {
-        await sendMessage('file', prep.dataUrl, f.name||'file');
+        caption = f.name || 'Файл';
+        mType = 'file';
       }
+      // Instant bubble + clock while uploading
+      await sendFileOptimistic(f, mType, caption, quality);
     }catch(err){
-      hideLoader();
+      try{ hideLoader(); }catch(e){}
       showToast(typeof friendlyError==='function' ? friendlyError(err) : String(err));
     }
   }
@@ -12111,7 +12254,10 @@ function openMediaCaptionComposer(dataUrl, mediaType, fileName){
 window.openMediaCaptionComposer = openMediaCaptionComposer;
 
 document.getElementById('photo-input').onchange=async function(e){
-  const f=e.target.files[0]; if(!f) return; e.target.value='';
+  const list = e.target.files; e.target.value='';
+  if(!list || !list.length) return;
+  if(typeof sendChatFiles==='function'){ await sendChatFiles(list); return; }
+  const f=list[0];
   if(!activePartner && !activeGroup){ showToast(t('open_chat_first')); return; }
   const type = f.type.startsWith('video/') ? 'video' : 'image';
   try{
@@ -12131,7 +12277,7 @@ document.getElementById('photo-input').onchange=async function(e){
     }
     hideLoader();
     const caption = await openMediaCaptionComposer(dataUrl, type, f.name);
-    if(caption===null) return; // cancelled
+    if(caption===null) return;
     await sendMessage(type, dataUrl, caption||'');
   }catch(err){
     hideLoader();
@@ -12139,7 +12285,11 @@ document.getElementById('photo-input').onchange=async function(e){
   }
 };
 document.getElementById('file-input').onchange=async function(e){
-  const f=e.target.files[0]; if(!f) return; e.target.value='';
+  const list = e.target.files; e.target.value='';
+  if(!list || !list.length) return;
+  // Prefer unified path: documents appear immediately with pending clock, no quality dialog
+  if(typeof sendChatFiles==='function'){ await sendChatFiles(list); return; }
+  const f=list[0];
   if(!activePartner && !activeGroup){ showToast(t('open_chat_first')); return; }
   try{
     showLoader();
