@@ -5562,9 +5562,16 @@ let _fbApp = null, _fbAuth = null, _fbDb = null, _fbStorage = null;
   }
 
   async function sha1Hex(blob) {
-    const buf = await blob.arrayBuffer();
-    const hash = await crypto.subtle.digest('SHA-1', buf);
-    return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+    try{
+      // Large files: avoid loading entire file into RAM when possible
+      if(blob && blob.size > 12*1024*1024) return 'do_not_verify';
+      const buf = await blob.arrayBuffer();
+      const hash = await crypto.subtle.digest('SHA-1', buf);
+      return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+    }catch(e){
+      console.warn('[SL] sha1 failed, skip verify', e);
+      return 'do_not_verify';
+    }
   }
 
   // Private bucket: temporary download URL (valid ~7 days)
@@ -5595,36 +5602,75 @@ let _fbApp = null, _fbAuth = null, _fbDb = null, _fbStorage = null;
   }
 
   async function b2UploadFile(fileName, file, contentType) {
-    const up = await b2GetUploadUrl();
-    const auth = await b2Authorize();
-    const sha = await sha1Hex(file);
     const encodedName = fileName.split('/').map(encodeURIComponent).join('/');
-    const res = await fetch(up.uploadUrl, {
-      method: 'POST',
-      headers: {
-        Authorization: up.authorizationToken,
-        'X-Bz-File-Name': encodedName,
-        'Content-Type': contentType || file.type || 'b2/x-auto',
-        'Content-Length': String(file.size),
-        'X-Bz-Content-Sha1': sha
-      },
-      body: file
-    });
-    if (!res.ok) {
-      _b2UploadCache = null;
-      const t = await res.text().catch(() => '');
-      throw new Error('B2 upload failed: ' + res.status + ' ' + t.slice(0, 200));
+    const ct = contentType || (file && file.type) || 'application/octet-stream';
+    let sha = 'do_not_verify';
+    try{ sha = await sha1Hex(file); }catch(e){ sha = 'do_not_verify'; }
+    let lastErr = null;
+    // Retry: network/CORS/expired upload URL are common for large APKs
+    for(let attempt = 0; attempt < 3; attempt++){
+      try{
+        if(attempt > 0){
+          _b2UploadCache = null; // force fresh upload URL
+          await new Promise(r => setTimeout(r, 400 * attempt));
+        }
+        const up = await b2GetUploadUrl();
+        const auth = await b2Authorize();
+        let res;
+        try{
+          res = await fetch(up.uploadUrl, {
+            method: 'POST',
+            headers: {
+              Authorization: up.authorizationToken,
+              'X-Bz-File-Name': encodedName,
+              'Content-Type': ct,
+              'Content-Length': String(file.size),
+              'X-Bz-Content-Sha1': sha
+            },
+            body: file
+          });
+        }catch(netErr){
+          // TypeError: Failed to fetch
+          lastErr = netErr;
+          _b2UploadCache = null;
+          console.warn('[SL] B2 fetch attempt', attempt+1, netErr);
+          continue;
+        }
+        if (!res.ok) {
+          _b2UploadCache = null;
+          const t = await res.text().catch(() => '');
+          // 401/408/503 → retry with new URL
+          if(res.status === 401 || res.status === 408 || res.status === 429 || res.status >= 500){
+            lastErr = new Error('B2 upload failed: ' + res.status + ' ' + t.slice(0, 120));
+            continue;
+          }
+          throw new Error('B2 upload failed: ' + res.status + ' ' + t.slice(0, 200));
+        }
+        const data = await res.json();
+        let publicUrl;
+        try {
+          publicUrl = await b2GetAuthorizedDownloadUrl(fileName, 60 * 60 * 24 * 7);
+        } catch (e) {
+          console.warn('[SL] download auth failed, fallback URL', e);
+          publicUrl = auth.downloadUrl + '/file/' + _b2BucketName + '/' + encodedName;
+        }
+        return { path: fileName, fileId: data.fileId, publicUrl };
+      }catch(e){
+        lastErr = e;
+        _b2UploadCache = null;
+        const m = String(e && e.message || e);
+        // Only retry network-like errors
+        if(!/Failed to fetch|NetworkError|Load failed|network|timeout|401|408|429|50[0-9]/i.test(m)){
+          throw e;
+        }
+        console.warn('[SL] B2 upload retry', attempt+1, m);
+      }
     }
-    const data = await res.json();
-    // Private bucket → authorized URL (no need for Public / card)
-    let publicUrl;
-    try {
-      publicUrl = await b2GetAuthorizedDownloadUrl(fileName, 60 * 60 * 24 * 7);
-    } catch (e) {
-      console.warn('[SL] download auth failed, fallback URL', e);
-      publicUrl = auth.downloadUrl + '/file/' + _b2BucketName + '/' + encodedName;
+    const msg = String(lastErr && (lastErr.message || lastErr) || 'Upload failed');
+    if(/Failed to fetch|NetworkError|Load failed/i.test(msg)){
+      throw new Error('Не удалось загрузить файл (сеть/CORS). Проверьте интернет и CORS бакета B2.');
     }
-    return { path: fileName, fileId: data.fileId, publicUrl };
+    throw (lastErr instanceof Error ? lastErr : new Error(msg));
   }
 
   const storageShim = {
@@ -5883,7 +5929,18 @@ let currentPlaybackSpeed = 1;
 
 function colorFor(id){ let s=0; for(const c of String(id||'')) s+=c.charCodeAt(0); return palette[s%palette.length]; }
 function escapeHtml(s){ const d=document.createElement('div'); d.textContent=s||''; return d.innerHTML; }
-function friendlyError(e){ if(!e) return 'Ошибка'; const m=e.message||''; if(m.includes('foreign key')) return 'Пользователь/группа не найдены'; return String(m).slice(0,100); }
+function friendlyError(e){
+  if(!e) return 'Ошибка';
+  const m = String(e.message || e || '');
+  if(m.includes('foreign key')) return 'Пользователь/группа не найдены';
+  if(/Failed to fetch|NetworkError|Load failed|network/i.test(m))
+    return 'Нет связи с хранилищем. Проверьте интернет или CORS B2.';
+  if(/B2 authorize|B2 get_upload/i.test(m))
+    return 'Ошибка доступа к хранилищу B2';
+  if(/B2 upload failed/i.test(m))
+    return 'Сервер отклонил файл. Попробуйте ещё раз.';
+  return m.slice(0,120);
+}
 function getUnread(){ try{return JSON.parse(storage.getItem(UNREAD_KEY)||'{}');}catch(e){return{};} }
 function setUnread(id,c){ const u=getUnread(); if(c<=0) delete u[id]; else u[id]=c; storage.setItem(UNREAD_KEY,JSON.stringify(u)); }
 function incUnread(id){
@@ -9854,19 +9911,29 @@ async function uploadFileToStorage(file, folder){
   if(!sb?.storage) return { ok:false, error:'Storage unavailable' };
   const uid = myProfile?.id || 'anon';
   const rawExt = (file.name && file.name.includes('.')) ? file.name.split('.').pop() : '';
-  const ext = (rawExt || (file.type.includes('mp4')?'mp4':file.type.includes('webm')?'webm':file.type.includes('quicktime')?'mov':'bin')).toLowerCase().slice(0,8);
+  const ext = (rawExt || ((file.type||'').includes('mp4')?'mp4':(file.type||'').includes('webm')?'webm':(file.type||'').includes('quicktime')?'mov':'bin')).toLowerCase().replace(/[^a-z0-9]/g,'').slice(0,12) || 'bin';
   const path = `${folder||'chat'}/${uid}/${Date.now()}_${Math.random().toString(36).slice(2,9)}.${ext}`;
-  const buckets = ['media','chat-media','uploads','videos','public'];
+  // Map common installers / archives to sensible MIME (helps some CDNs)
+  let contentType = file.type || '';
+  if(!contentType || contentType === 'application/octet-stream'){
+    const low = String(file.name||'').toLowerCase();
+    if(low.endsWith('.apk')) contentType = 'application/vnd.android.package-archive';
+    else if(low.endsWith('.exe') || low.endsWith('.msi')) contentType = 'application/octet-stream';
+    else if(low.endsWith('.zip')) contentType = 'application/zip';
+    else if(low.endsWith('.pdf')) contentType = 'application/pdf';
+    else contentType = 'application/octet-stream';
+  }
+  // B2 shim ignores bucket name — try once (internal retries already in b2UploadFile)
+  const buckets = (window.B2_CONFIG) ? ['media'] : ['media','chat-media','uploads','videos','public'];
   let lastErr = null;
   for(const bucket of buckets){
     try{
       const { data, error } = await sb.storage.from(bucket).upload(path, file, {
-        contentType: file.type || 'application/octet-stream',
+        contentType: contentType,
         cacheControl: '3600',
         upsert: false
       });
       if(error){ lastErr = error; continue; }
-      // Firebase shim returns publicUrl directly on upload
       if(data?.publicUrl) return { ok:true, url: data.publicUrl, bucket, path: data.path || path };
       const key = data?.path || path;
       const { data: pub } = sb.storage.from(bucket).getPublicUrl(key);
@@ -9878,6 +9945,10 @@ async function uploadFileToStorage(file, folder){
     }catch(e){ lastErr = e; }
   }
   const msg = String(lastErr?.message||lastErr||'');
+  if(/Failed to fetch|NetworkError|Load failed/i.test(msg))
+    return { ok:false, error: (typeof currentLang!=='undefined'&&currentLang==='en'
+      ? 'Network error while uploading. Check internet / B2 CORS.'
+      : 'Нет связи с хранилищем. Проверьте интернет или CORS в Backblaze B2.') };
   if(/bucket|not found|404|unauthorized|permission|authorize|B2/i.test(msg))
     return { ok:false, error: (typeof currentLang!=='undefined'&&currentLang==='en'
       ? 'B2 error: create a public bucket and set CORS in Backblaze'
@@ -10085,10 +10156,14 @@ function openSendQualityDialog(file){
 }
 
 /** Unified entry: pick quality → prepare → caption → send */
+/** Keep original File for retry after failed upload */
+window._slPendingFiles = window._slPendingFiles || {};
+
 /** Show message immediately with pending clock, upload in background, then finalize */
 async function sendFileOptimistic(file, mType, caption, quality){
   if(!myProfile?.id || (!activePartner && !activeGroup)) return;
   const localId = 'local_'+Date.now()+'_'+Math.random().toString(36).slice(2,7);
+  try{ window._slPendingFiles[localId] = { file:file, mType:mType, caption:caption, quality:quality||'original' }; }catch(e){}
   let blobUrl = '';
   try{
     if(mType==='image' || mType==='video') blobUrl = URL.createObjectURL(file);
@@ -10169,6 +10244,7 @@ async function sendFileOptimistic(file, mType, caption, quality){
       return;
     }
     if(data){
+      try{ delete window._slPendingFiles[localId]; }catch(e){}
       const localRow = document.querySelector('.bubble-row[data-id="'+localId+'"]');
       if(localRow){
         localRow.dataset.id = data.id;
@@ -10844,20 +10920,28 @@ async function _sendMessageInner(type='text', fileUrl=null, content=null){
 function retryFailedMessage(row, msg){
   if(!row || !msg) return;
   setMsgStatus(row, 'pending');
-  const text = (msg.content||'').replace(/^↪ [^\n]*\n/, '');
-  // re-send via main path
   try{
+    const mid = String(msg.id||row.dataset.id||'');
+    const pending = (window._slPendingFiles && (window._slPendingFiles[mid] || window._slPendingFiles[msg.id])) || null;
+    if(pending && pending.file && typeof sendFileOptimistic==='function'){
+      try{ row.remove(); messageStore.delete(mid); }catch(e){}
+      try{ delete window._slPendingFiles[mid]; }catch(e){}
+      sendFileOptimistic(pending.file, pending.mType||msg.type||'file', pending.caption!=null?pending.caption:(msg.content||''), pending.quality||'original');
+      return;
+    }
     const input=document.getElementById('message-input');
     if(input && msg.type==='text'){
-      // remove failed bubble and resend
       row.remove();
       messageStore.delete(String(msg.id));
       input.value = msg.content||'';
       sendMessage('text');
-    } else {
+    } else if(msg.file_url && !String(msg.file_url).startsWith('blob:')){
       row.remove();
       messageStore.delete(String(msg.id));
       sendMessage(msg.type||'text', msg.file_url, msg.content);
+    } else {
+      showToast('Не удалось повторить. Выберите файл снова.');
+      setMsgStatus(row, 'failed');
     }
   }catch(e){ setMsgStatus(row, 'failed'); }
 }
