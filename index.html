@@ -22315,16 +22315,25 @@ renderMessage = function(msg, isGroup=false){
   return r;
 };
 
-// Channel: non-admins cannot write even if somehow shown
+// Channel: non-admins cannot write — ONLY in real channel view (not DM/contact)
 const _sendCh = sendMessage;
 sendMessage = async function(type='text', fileUrl=null, content=null){
-  if(activeGroup?.type==='channel'){
-    const isAdmin = activeGroup.myRole==='admin' || activeGroup.owner_id===myProfile?.id;
-    if(!isAdmin){
-      showToast(currentLang==='en'?'Only admins can post in channels':'В канале пишут только админы');
-      return;
+  try{
+    // Private chat / contact: never treat as channel
+    if(activePartner && !activeGroup){
+      return _sendCh.apply(this, arguments);
     }
-  }
+    // Only block when the open chat is a channel and user is not admin
+    if(activeGroup && String(activeGroup.type||'')==='channel' && !activePartner){
+      const isAdmin = activeGroup.myRole==='admin'
+        || String(activeGroup.owner_id||'')===String(myProfile?.id||'')
+        || String(activeGroup.created_by||'')===String(myProfile?.id||'');
+      if(!isAdmin){
+        showToast(currentLang==='en'?'Only admins can post in channels':'В канале пишут только админы');
+        return;
+      }
+    }
+  }catch(e){}
   return _sendCh.apply(this, arguments);
 };
 
@@ -50047,6 +50056,34 @@ img.sl-gif-img{
     }, 300);
   }, true);
   console.log('[SL] stk layout under input');
+})();
+</script>
+
+
+<script id="sl-dm-not-channel-js">
+(function(){
+  if(window._slDmNotCh) return; window._slDmNotCh=1;
+  // If UI is a private chat (partner header) but activeGroup still set, clear it
+  function fixState(){
+    try{
+      if(typeof activePartner!=='undefined' && activePartner && typeof activeGroup!=='undefined' && activeGroup){
+        // DM open — group must not block send
+        if(document.getElementById('chat-active') && document.body.classList.contains('in-chat')){
+          var title = (document.getElementById('chat-partner-name')||{}).textContent||'';
+          // prefer partner chat: clear channel lock
+          if(activePartner.id && String(activeGroup.type||'')==='channel'){
+            activeGroup = null;
+          }
+        }
+      }
+    }catch(e){}
+  }
+  document.addEventListener('click', function(e){
+    var t = e.target && e.target.closest && e.target.closest('#send-btn, .send-btn, #composer, .composer');
+    if(t) fixState();
+  }, true);
+  setInterval(fixState, 2000);
+  console.log('[SL] DM not channel gate');
 })();
 </script>
 
