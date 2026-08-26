@@ -5533,10 +5533,69 @@ let _fbApp = null, _fbAuth = null, _fbDb = null, _fbStorage = null;
     // prefer configured name, else first bucket
     let b = buckets.find(x => x.bucketName === _b2BucketName);
     if (!b && buckets.length) b = buckets[0];
-    if (!b) throw new Error('B2: no buckets found. Create a public bucket in Backblaze.');
+    if (!b) throw new Error('B2: бакет не найден. Создайте private-бакет sline-media (публичный не нужен).');
     _b2BucketId = b.bucketId;
     _b2BucketName = b.bucketName;
     return _b2BucketId;
+  }
+
+  let _b2CorsReady = false;
+  /** CORS on private bucket is FREE — public type not required. Auto-apply once. */
+  async function b2EnsureCors() {
+    if (_b2CorsReady) return true;
+    try {
+      const auth = await b2Authorize();
+      const bucketId = await b2ResolveBucket();
+      // Read current bucket info
+      const listRes = await fetch(auth.apiUrl + '/b2api/v2/b2_list_buckets', {
+        method: 'POST',
+        headers: { Authorization: auth.authorizationToken, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accountId: auth.accountId, bucketId: bucketId })
+      });
+      let existing = [];
+      if (listRes.ok) {
+        const ld = await listRes.json();
+        const b = (ld.buckets || []).find(x => x.bucketId === bucketId) || (ld.buckets || [])[0];
+        if (b && Array.isArray(b.corsRules)) existing = b.corsRules;
+      }
+      // Already has a permissive rule?
+      const has = existing.some(r => {
+        const ops = (r.allowedOperations || []).join(' ');
+        return /b2_upload/i.test(ops) && (r.allowedOrigins || []).some(o => o === '*' || (typeof location !== 'undefined' && location.origin && o.indexOf(location.origin) === 0));
+      });
+      if (has) { _b2CorsReady = true; return true; }
+      const origin = (typeof location !== 'undefined' && location.origin) ? location.origin : '*';
+      const rule = {
+        corsRuleName: 'slineBrowserUpload',
+        allowedOrigins: origin === 'null' || !origin ? ['*'] : [origin, '*'],
+        allowedOperations: ['b2_upload', 'b2_download', 'b2_share'],
+        allowedHeaders: ['authorization', 'content-type', 'content-length', 'x-bz-file-name', 'x-bz-content-sha1', 'x-bz-info-*', '*'],
+        exposeHeaders: ['x-bz-content-sha1', 'x-bz-file-name', 'x-bz-file-id'],
+        maxAgeSeconds: 3600
+      };
+      // Keep other rules (max 100, usually few)
+      const corsRules = existing.filter(r => r.corsRuleName !== 'slineBrowserUpload').concat([rule]).slice(0, 99);
+      const upRes = await fetch(auth.apiUrl + '/b2api/v2/b2_update_bucket', {
+        method: 'POST',
+        headers: { Authorization: auth.authorizationToken, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          accountId: auth.accountId,
+          bucketId: bucketId,
+          corsRules: corsRules
+        })
+      });
+      if (!upRes.ok) {
+        const t = await upRes.text().catch(() => '');
+        console.warn('[SL] B2 CORS update failed (private bucket is OK, need CORS rule):', upRes.status, t.slice(0, 200));
+        return false;
+      }
+      console.log('[SL] B2 CORS rule applied (private bucket, free)');
+      _b2CorsReady = true;
+      return true;
+    } catch (e) {
+      console.warn('[SL] b2EnsureCors', e);
+      return false;
+    }
   }
 
   async function b2GetUploadUrl() {
@@ -5606,13 +5665,17 @@ let _fbApp = null, _fbAuth = null, _fbDb = null, _fbStorage = null;
     const ct = contentType || (file && file.type) || 'application/octet-stream';
     let sha = 'do_not_verify';
     try{ sha = await sha1Hex(file); }catch(e){ sha = 'do_not_verify'; }
+    // Private bucket is fine — only CORS (free) is needed for browser uploads
+    try{ await b2EnsureCors(); }catch(e){}
     let lastErr = null;
     // Retry: network/CORS/expired upload URL are common for large APKs
     for(let attempt = 0; attempt < 3; attempt++){
       try{
         if(attempt > 0){
           _b2UploadCache = null; // force fresh upload URL
-          await new Promise(r => setTimeout(r, 400 * attempt));
+          // After network fail, re-try applying CORS once
+          if(attempt === 1){ try{ _b2CorsReady = false; await b2EnsureCors(); }catch(e){} }
+          await new Promise(r => setTimeout(r, 500 * attempt));
         }
         const up = await b2GetUploadUrl();
         const auth = await b2Authorize();
@@ -5624,7 +5687,6 @@ let _fbApp = null, _fbAuth = null, _fbDb = null, _fbStorage = null;
               Authorization: up.authorizationToken,
               'X-Bz-File-Name': encodedName,
               'Content-Type': ct,
-              'Content-Length': String(file.size),
               'X-Bz-Content-Sha1': sha
             },
             body: file
@@ -5668,7 +5730,7 @@ let _fbApp = null, _fbAuth = null, _fbDb = null, _fbStorage = null;
     }
     const msg = String(lastErr && (lastErr.message || lastErr) || 'Upload failed');
     if(/Failed to fetch|NetworkError|Load failed/i.test(msg)){
-      throw new Error('Не удалось загрузить файл (сеть/CORS). Проверьте интернет и CORS бакета B2.');
+      throw new Error('Загрузка заблокирована (сеть/CORS). Публичный бакет не нужен — в B2 добавьте CORS-правило (бесплатно).');
     }
     throw (lastErr instanceof Error ? lastErr : new Error(msg));
   }
@@ -5824,7 +5886,9 @@ let _fbApp = null, _fbAuth = null, _fbDb = null, _fbStorage = null;
   window.NEON_CONNECTION_STRING = NEON_CONNECTION_STRING;
   window.b2UploadFile = b2UploadFile; // direct access if needed
 
-  console.log('[SL] sb shim ready: Firebase Auth + RTDB | B2 media | Neon config present');
+  // Pre-warm CORS on private bucket (free, no public type needed)
+  try{ setTimeout(function(){ try{ b2EnsureCors(); }catch(e){} }, 2500); }catch(e){}
+  console.log('[SL] sb shim ready: Firebase Auth + RTDB | B2 media (private OK) | Neon config present');
 })();
 
 
@@ -5933,12 +5997,14 @@ function friendlyError(e){
   if(!e) return 'Ошибка';
   const m = String(e.message || e || '');
   if(m.includes('foreign key')) return 'Пользователь/группа не найдены';
-  if(/Failed to fetch|NetworkError|Load failed|network/i.test(m))
-    return 'Нет связи с хранилищем. Проверьте интернет или CORS B2.';
+  if(/Failed to fetch|NetworkError|Load failed|network|CORS/i.test(m))
+    return 'Загрузка заблокирована (сеть/CORS). Публичный бакет не нужен.';
   if(/B2 authorize|B2 get_upload/i.test(m))
     return 'Ошибка доступа к хранилищу B2';
   if(/B2 upload failed/i.test(m))
     return 'Сервер отклонил файл. Попробуйте ещё раз.';
+  if(/публичный бакет/i.test(m))
+    return m; // already localized
   return m.slice(0,120);
 }
 function getUnread(){ try{return JSON.parse(storage.getItem(UNREAD_KEY)||'{}');}catch(e){return{};} }
@@ -9945,15 +10011,21 @@ async function uploadFileToStorage(file, folder){
     }catch(e){ lastErr = e; }
   }
   const msg = String(lastErr?.message||lastErr||'');
-  if(/Failed to fetch|NetworkError|Load failed/i.test(msg))
+  if(/Failed to fetch|NetworkError|Load failed|CORS/i.test(msg))
     return { ok:false, error: (typeof currentLang!=='undefined'&&currentLang==='en'
-      ? 'Network error while uploading. Check internet / B2 CORS.'
-      : 'Нет связи с хранилищем. Проверьте интернет или CORS в Backblaze B2.') };
-  if(/bucket|not found|404|unauthorized|permission|authorize|B2/i.test(msg))
+      ? 'Upload blocked by network/CORS. Private bucket is OK — only CORS rules are needed (free).'
+      : 'Загрузка заблокирована (сеть/CORS). Публичный бакет не нужен — достаточно CORS-правил (бесплатно).') };
+  if(/unauthorized|401|403|permission/i.test(msg))
     return { ok:false, error: (typeof currentLang!=='undefined'&&currentLang==='en'
-      ? 'B2 error: create a public bucket and set CORS in Backblaze'
-      : 'Ошибка B2: создайте публичный бакет и настройте CORS в Backblaze') };
-  return { ok:false, error: msg || (typeof currentLang!=='undefined'&&currentLang==='en'?'Upload failed':'Не удалось загрузить файл') };
+      ? 'B2 access denied. Check application key permissions (writeFiles, writeBuckets).'
+      : 'Нет доступа к B2. Проверьте права ключа (writeFiles, writeBuckets).') };
+  if(/no buckets|not found|bucket/i.test(msg) && !/CORS/i.test(msg))
+    return { ok:false, error: (typeof currentLang!=='undefined'&&currentLang==='en'
+      ? 'B2 bucket not found. Create a private bucket (public not required).'
+      : 'Бакет B2 не найден. Создайте private-бакет (публичный не нужен).') };
+  // Prefer the already-localized message from b2UploadFile
+  if(msg && msg.length < 180) return { ok:false, error: msg };
+  return { ok:false, error: (typeof currentLang!=='undefined'&&currentLang==='en'?'Upload failed':'Не удалось загрузить файл') };
 }
 
 async function prepareMediaForUpload(file, kind, quality){
