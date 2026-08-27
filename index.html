@@ -6390,12 +6390,39 @@ function showAuthPanel(which){
   if(sub){
     if(which==='auth-choice') sub.textContent = 'Современный мессенджер';
     else if(which==='login-form') sub.textContent = 'Вход в аккаунт';
+    else if(which==='login-verify-form') sub.textContent = 'Подтверждение email';
     else if(which==='forgot-form') sub.textContent = 'Восстановление доступа';
     else if(which==='register-form') sub.textContent = 'Регистрация';
   }
   authMsg('');
   const backChoice = document.getElementById('reg-back-choice');
   if(backChoice) backChoice.style.display = (which==='register-form' && _regStep < 6) ? 'block' : 'none';
+  // Persist panel so reload / return from mail keeps the same screen
+  try{
+    if(typeof slSaveAuthFlow === 'function'){
+      if(which==='auth-choice'){
+        // only clear if not mid-verify
+        const p = (typeof slLoadPendingCode==='function') ? slLoadPendingCode() : null;
+        if(!p) slClearAuthFlow && slClearAuthFlow();
+      } else {
+        const patch = { panel: which };
+        if(which==='login-verify-form') patch.phase = 'login_verify';
+        if(which==='register-form'){
+          patch.regStep = (typeof _regStep!=='undefined') ? _regStep : 1;
+          if(String(_regStep)==='1b') patch.phase = 'reg_verify';
+        }
+        try{
+          const le = document.getElementById('login-email');
+          if(le && le.value) patch.loginEmail = le.value.trim();
+        }catch(e){}
+        try{
+          const re = document.getElementById('reg-email') || document.getElementById('reg-contact');
+          if(re && re.value) patch.regEmail = re.value.trim();
+        }catch(e){}
+        slSaveAuthFlow(patch);
+      }
+    }
+  }catch(e){}
 }
 
 function generateRecoveryKey(){
@@ -6444,30 +6471,132 @@ function findRecoveryRecord(key){
 }
 
 
-/* ===== Email verification via Resend (api/send-code) ===== */
+/* ===== Email verification via Resend (api/send-code) + durable auth UI state ===== */
 window._slEmailVerified = false;
 function slGenEmailCode(){
   return String(Math.floor(100000 + Math.random() * 900000));
 }
+function _slAuthStoreSet(k, v){
+  try{ sessionStorage.setItem(k, v); }catch(e){}
+  try{ localStorage.setItem(k, v); }catch(e){}
+  try{ if(typeof storage!=='undefined' && storage) storage.setItem(k, v); }catch(e){}
+}
+function _slAuthStoreGet(k){
+  try{ const a=sessionStorage.getItem(k); if(a!=null) return a; }catch(e){}
+  try{ const b=localStorage.getItem(k); if(b!=null) return b; }catch(e){}
+  try{ if(typeof storage!=='undefined' && storage){ const c=storage.getItem(k); if(c!=null) return c; } }catch(e){}
+  return null;
+}
+function _slAuthStoreDel(k){
+  try{ sessionStorage.removeItem(k); }catch(e){}
+  try{ localStorage.removeItem(k); }catch(e){}
+  try{ if(typeof storage!=='undefined' && storage) storage.removeItem(k); }catch(e){}
+}
 function slSavePendingCode(email, code){
-  try{
-    sessionStorage.setItem('sl_email_verify', JSON.stringify({
-      email: String(email).toLowerCase(),
-      code: String(code),
-      exp: Date.now() + 15 * 60 * 1000
-    }));
-  }catch(e){}
+  const payload = JSON.stringify({
+    email: String(email).toLowerCase(),
+    code: String(code),
+    exp: Date.now() + 15 * 60 * 1000
+  });
+  _slAuthStoreSet('sl_email_verify', payload);
 }
 function slLoadPendingCode(){
   try{
-    const o = JSON.parse(sessionStorage.getItem('sl_email_verify')||'null');
-    if(!o || !o.exp || o.exp < Date.now()) return null;
+    const raw = _slAuthStoreGet('sl_email_verify');
+    const o = raw ? JSON.parse(raw) : null;
+    if(!o || !o.exp || o.exp < Date.now()){
+      if(o) _slAuthStoreDel('sl_email_verify');
+      return null;
+    }
     return o;
   }catch(e){ return null; }
 }
 function slClearPendingCode(){
-  try{ sessionStorage.removeItem('sl_email_verify'); }catch(e){}
+  _slAuthStoreDel('sl_email_verify');
 }
+/** Persist which auth screen user is on (survives reload / return from email app) */
+function slSaveAuthFlow(state){
+  try{
+    const prev = slLoadAuthFlow() || {};
+    const next = Object.assign({}, prev, state||{}, { savedAt: Date.now() });
+    _slAuthStoreSet('sl_auth_flow', JSON.stringify(next));
+  }catch(e){}
+}
+function slLoadAuthFlow(){
+  try{
+    const raw = _slAuthStoreGet('sl_auth_flow');
+    if(!raw) return null;
+    const o = JSON.parse(raw);
+    if(!o || !o.savedAt) return null;
+    // expire incomplete flows after 2 hours
+    if(Date.now() - o.savedAt > 2 * 60 * 60 * 1000){
+      slClearAuthFlow();
+      return null;
+    }
+    return o;
+  }catch(e){ return null; }
+}
+function slClearAuthFlow(){
+  _slAuthStoreDel('sl_auth_flow');
+}
+function slRestoreAuthFlowUI(){
+  try{
+    const flow = slLoadAuthFlow();
+    if(!flow || !flow.panel) return false;
+    // If we still need email code, force verify screens
+    const pending = slLoadPendingCode();
+    if(flow.panel === 'login-verify-form' || (flow.phase === 'login_verify' && pending)){
+      if(pending && pending.email){
+        window._pendingLoginEmail = pending.email;
+        const hint = document.getElementById('login-verify-hint');
+        if(hint) hint.textContent = 'Код отправлен на ' + pending.email;
+      }
+      if(typeof showAuthPanel === 'function') showAuthPanel('login-verify-form');
+      try{ const inp=document.getElementById('login-email-code'); if(inp){ inp.value=''; setTimeout(()=>inp.focus(), 200); } }catch(e){}
+      return true;
+    }
+    if(flow.panel === 'register-form' || flow.phase === 'reg_verify' || flow.regStep === '1b' || flow.regStep === 1){
+      const step = (pending && (flow.regStep === '1b' || flow.phase === 'reg_verify')) ? '1b' : (flow.regStep || 1);
+      try{ window._regStep = step; }catch(e){}
+      if(typeof showAuthPanel === 'function') showAuthPanel('register-form');
+      if(typeof setRegStep === 'function') setRegStep(step);
+      if(step === '1b' && pending && pending.email){
+        const hint = document.getElementById('reg-verify-hint');
+        if(hint) hint.textContent = 'Код отправлен на ' + pending.email;
+        try{ const inp=document.getElementById('reg-email-code'); if(inp){ inp.value=''; setTimeout(()=>inp.focus(), 200); } }catch(e){}
+      }
+      // restore email field if saved
+      try{
+        if(flow.regEmail){
+          const em = document.getElementById('reg-email') || document.getElementById('reg-contact');
+          if(em && !em.value) em.value = flow.regEmail;
+        }
+        if(flow.loginEmail){
+          const le = document.getElementById('login-email');
+          if(le && !le.value) le.value = flow.loginEmail;
+        }
+      }catch(e){}
+      return true;
+    }
+    if(flow.panel === 'login-form'){
+      if(typeof showAuthPanel === 'function') showAuthPanel('login-form');
+      try{
+        if(flow.loginEmail){
+          const le = document.getElementById('login-email');
+          if(le && !le.value) le.value = flow.loginEmail;
+        }
+      }catch(e){}
+      return true;
+    }
+    return false;
+  }catch(e){
+    console.warn('slRestoreAuthFlowUI', e);
+    return false;
+  }
+}
+window.slRestoreAuthFlowUI = slRestoreAuthFlowUI;
+window.slSaveAuthFlow = slSaveAuthFlow;
+window.slClearAuthFlow = slClearAuthFlow;
 /** Send code. Returns {ok, skipped, error}. skipped=true → limit/quota → continue without code */
 async function slSendEmailCode(email){
   email = String(email||'').trim().toLowerCase();
@@ -6544,6 +6673,17 @@ function setRegStep(step){
       }
     }
   }
+  try{
+    if(typeof slSaveAuthFlow === 'function'){
+      const patch = { panel: 'register-form', regStep: step };
+      if(String(step)==='1b') patch.phase = 'reg_verify';
+      try{
+        const re = document.getElementById('reg-email') || document.getElementById('reg-contact');
+        if(re && re.value) patch.regEmail = re.value.trim();
+      }catch(e){}
+      slSaveAuthFlow(patch);
+    }
+  }catch(e){}
 }
 
 function setAuthMethod(m){ authMethod = m || 'email'; }
@@ -6652,6 +6792,13 @@ async function doLogin(){
       const hint = document.getElementById('login-verify-hint');
       if(hint) hint.textContent = 'Код отправлен на '+loginEmail;
       authMsg('');
+      try{
+        if(typeof slSaveAuthFlow==='function'){
+          slSaveAuthFlow({ panel:'login-verify-form', phase:'login_verify', loginEmail: loginEmail });
+        }
+        // Keep soft marker that password auth succeeded — session may already be live
+        try{ storage.setItem('sl_pending_login_email', loginEmail); }catch(e){}
+      }catch(e){}
       try{ showAuthPanel('login-verify-form'); }catch(e){}
       try{ document.getElementById('login-email-code').value=''; document.getElementById('login-email-code').focus(); }catch(e){}
       return;
@@ -7051,7 +7198,17 @@ function wireAuthUI(){
     const r = slCheckEmailCode(input);
     if(!r.ok){ authMsg('Неверный код'); return; }
     authMsg('');
-    const user = window._pendingLoginUser;
+    try{ if(typeof slClearAuthFlow==='function') slClearAuthFlow(); }catch(e){}
+    let user = window._pendingLoginUser;
+    if(!user){
+      // After reload: session may still be in Firebase
+      try{
+        if(sb && sb.auth && sb.auth.getSession){
+          const {data} = await sb.auth.getSession();
+          if(data?.session?.user) user = data.session.user;
+        }
+      }catch(e){}
+    }
     if(!user){ authMsg('Сессия истекла — войдите снова'); try{ showAuthPanel('login-form'); }catch(e){} return; }
     const btn = document.getElementById('login-verify-code-btn');
     try{ if(typeof setBtnLoading==='function') setBtnLoading(btn, true); }catch(e){}
@@ -7258,6 +7415,11 @@ function wireAuthUI(){
     const hint = document.getElementById('reg-verify-hint');
     if(hint) hint.textContent = 'Код отправлен на '+contact.email;
     authMsg('');
+    try{
+      if(typeof slSaveAuthFlow==='function'){
+        slSaveAuthFlow({ panel:'register-form', phase:'reg_verify', regStep:'1b', regEmail: contact.email });
+      }
+    }catch(e){}
     setRegStep('1b');
   });
   document.getElementById('reg-verify-code-btn')?.addEventListener('click', ()=>{
@@ -7265,6 +7427,11 @@ function wireAuthUI(){
     const r = slCheckEmailCode(input);
     if(!r.ok){ authMsg('Неверный код'); return; }
     authMsg('');
+    try{
+      if(typeof slSaveAuthFlow==='function'){
+        slSaveAuthFlow({ panel:'register-form', phase:'reg_profile', regStep:2 });
+      }
+    }catch(e){}
     setRegStep(2);
   });
   document.getElementById('reg-resend-code')?.addEventListener('click', async ()=>{
@@ -7375,7 +7542,11 @@ async function onAuthenticated(user){
     _pendingRegUser = user || _pendingRegUser;
     return;
   }
+  try{ if(typeof slClearAuthFlow==='function') slClearAuthFlow(); }catch(e){}
+  try{ if(typeof slClearPendingCode==='function') slClearPendingCode(); }catch(e){}
+  try{ storage.removeItem('sl_pending_login_email'); }catch(e){}
   try{ storage.setItem('sl_logged_in','1'); }catch(e){}
+  try{ localStorage.setItem('sl_logged_in','1'); }catch(e){}
   try{
     document.documentElement.classList.add('sl-force-app','sl-ready');
     document.documentElement.classList.remove('sl-on-auth','sl-force-auth','sl-booting');
@@ -23164,13 +23335,41 @@ function scheduleBirthdayAfterAppReady(){
 // ========== SESSION RESTORE (no login flash) ==========
 (async function bootstrapAuth(){
   function showAuth(){
-    try{ storage.removeItem('sl_logged_in'); }catch(e){}
+    // Do NOT wipe sl_logged_in here if we only failed a transient session read —
+    // only clear when we are sure there is no session (caller decides).
     document.documentElement.classList.remove('sl-booting');
     document.documentElement.classList.add('sl-ready');
     const a=document.getElementById('auth-screen');
     const app=document.getElementById('app-screen');
     if(a) a.style.display='flex';
     if(app) app.style.display='none';
+    // Restore mid-flow screens (email code / registration step) after reload
+    try{
+      setTimeout(function(){
+        try{
+          if(typeof slRestoreAuthFlowUI==='function'){
+            const restored = slRestoreAuthFlowUI();
+            if(!restored && typeof showAuthPanel==='function'){
+              // default choice only if nothing pending
+              const p = (typeof slLoadPendingCode==='function') ? slLoadPendingCode() : null;
+              if(p && p.email){
+                // pending code but no flow — prefer login verify if email matches login, else reg
+                const flow = (typeof slLoadAuthFlow==='function') ? slLoadAuthFlow() : null;
+                if(flow && flow.phase==='reg_verify'){
+                  showAuthPanel('register-form');
+                  if(typeof setRegStep==='function') setRegStep('1b');
+                } else {
+                  window._pendingLoginEmail = p.email;
+                  showAuthPanel('login-verify-form');
+                  const hint = document.getElementById('login-verify-hint');
+                  if(hint) hint.textContent = 'Код отправлен на ' + p.email;
+                }
+              }
+            }
+          }
+        }catch(e){ console.warn('restore auth ui', e); }
+      }, 50);
+    }catch(e){}
   }
   function showAppShell(){
     const a=document.getElementById('auth-screen');
@@ -23186,17 +23385,56 @@ function scheduleBirthdayAfterAppReady(){
     }catch(e){}
     return;
   }
+  // Ensure Firebase is up before reading session (fixes "always register again")
+  try{
+    if((!sb || !window.sb) && typeof window.slEnsureFirebase==='function'){
+      await window.slEnsureFirebase();
+    }
+  }catch(e){ console.warn('bootstrap ensure firebase', e); }
   if(!sb){ showAuth(); return; }
   try{
-    // Wait for Firebase restored session — open chats immediately if logged in
-    const {data, error} = await sb.auth.getSession();
-    if(data?.session?.user){
+    // Give Firebase a moment to hydrate LOCAL persistence (IndexedDB)
+    try{
+      await new Promise(function(r){ setTimeout(r, 120); });
+    }catch(e){}
+    let sessionUser = null;
+    try{
+      const {data, error} = await sb.auth.getSession();
+      if(data?.session?.user) sessionUser = data.session.user;
+    }catch(e){ console.warn('getSession', e); }
+    // Retry once — IndexedDB restore can lag on first paint
+    if(!sessionUser){
+      try{
+        await new Promise(function(r){ setTimeout(r, 350); });
+        const {data} = await sb.auth.getSession();
+        if(data?.session?.user) sessionUser = data.session.user;
+      }catch(e){}
+    }
+    // If mid email-verify after password login, stay on code screen even if session exists
+    try{
+      const flow = (typeof slLoadAuthFlow==='function') ? slLoadAuthFlow() : null;
+      const pending = (typeof slLoadPendingCode==='function') ? slLoadPendingCode() : null;
+      if(sessionUser && flow && (flow.phase==='login_verify' || flow.panel==='login-verify-form') && pending){
+        window._pendingLoginUser = sessionUser;
+        window._pendingLoginEmail = pending.email || flow.loginEmail || sessionUser.email;
+        showAuth();
+        return;
+      }
+      if(flow && (flow.phase==='reg_verify' || flow.regStep==='1b') && pending){
+        // registration not finished — never auto-enter
+        showAuth();
+        return;
+      }
+    }catch(e){}
+    if(sessionUser){
       try{ storage.setItem('sl_logged_in','1'); }catch(e){}
+      try{ localStorage.setItem('sl_logged_in','1'); }catch(e){}
+      try{ if(typeof slClearAuthFlow==='function') slClearAuthFlow(); }catch(e){}
       showAppShell();
       document.documentElement.classList.remove('sl-booting','sl-on-auth','sl-force-auth');
       document.documentElement.classList.add('sl-ready','sl-force-app');
       hideLoader(true);
-      await onAuthenticated(data.session.user);
+      await onAuthenticated(sessionUser);
       try{ scheduleBirthdayAfterAppReady(); }catch(e){}
     } else {
       try{ storage.removeItem('sl_logged_in'); }catch(e){}
@@ -23211,13 +23449,21 @@ function scheduleBirthdayAfterAppReady(){
     sb.auth.onAuthStateChange(async (event, session)=>{
       if(event==='SIGNED_OUT'){
         try{ storage.removeItem('sl_logged_in'); }catch(e){}
+        try{ localStorage.removeItem('sl_logged_in'); }catch(e){}
         if(!document.getElementById('auth-screen') || document.getElementById('auth-screen').style.display==='none'){
-          // only reload if we were inside the app
           if(myProfile) location.reload();
         }
       } else if((event==='SIGNED_IN' || event==='TOKEN_REFRESHED') && session?.user){
         try{ storage.setItem('sl_logged_in','1'); }catch(e){}
-        // During registration we must show recovery key first — do not auto-enter app
+        try{ localStorage.setItem('sl_logged_in','1'); }catch(e){}
+        // Mid email-verify or recovery key — do not jump into app
+        try{
+          const flow = (typeof slLoadAuthFlow==='function') ? slLoadAuthFlow() : null;
+          if(flow && (flow.phase==='login_verify' || flow.phase==='reg_verify' || flow.panel==='login-verify-form')){
+            window._pendingLoginUser = session.user;
+            return;
+          }
+        }catch(e){}
         if(_awaitingRecoveryKey || _regStep === 6 || _pendingRegUser){
           if(! _pendingRegUser) _pendingRegUser = session.user;
           return;
