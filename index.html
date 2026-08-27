@@ -193,7 +193,7 @@ a.msg-link{color:#7EB6FF;text-decoration:underline;text-underline-offset:2px;cur
   --bg:#000000; --panel:#000000; --panel-hover:#1c1c1e; --line:rgba(255,255,255,.1); --text:#FFFFFF; --muted:#8e8e93;
   --accent-a:#5B8CFF; --accent-b:#7B6CFF; --mint:#3EE0C6; --danger:#FF6B81;
   --safe-bottom:env(safe-area-inset-bottom,0px); --safe-top:env(safe-area-inset-top,0px); --input-bg:#151C27;
-  --bubble-me:linear-gradient(135deg,#5B8CFF 0%,#6B7BFF 100%);
+  --bubble-me:linear-gradient(135deg,var(--accent-a,#5B8CFF) 0%,var(--accent-b,#6B7BFF) 100%);
   --bubble-them:#1c1c1e;
   --radius:16px; --radius-sm:12px; --radius-lg:22px;
   --shadow-sm:0 2px 8px rgba(0,0,0,.18); --shadow-md:0 8px 28px rgba(0,0,0,.28);
@@ -658,7 +658,7 @@ body.beta-oled .sw-clip{background:var(--panel)!important}
   position:absolute;right:10px;bottom:calc(8px + var(--safe-bottom));
   box-shadow:0 6px 20px color-mix(in srgb, var(--accent-a,#4C7CF3) 45%, transparent), inset 0 1px 0 rgba(255,255,255,.25);
 }
-.send-btn svg{width:22px;height:22px;margin-left:1px;filter:drop-shadow(0 1px 1px rgba(0,0,0,.2))}
+.send-btn svg{width:22px;height:22px;margin-left:2px;margin-top:-1px;filter:drop-shadow(0 1px 1px rgba(0,0,0,.2));stroke:currentColor;fill:none}
 .send-btn:active{transform:scale(.92)!important;box-shadow:0 2px 10px rgba(76,124,243,.35)}
 .composer.has-text .send-btn{opacity:1;transform:scale(1);pointer-events:auto;position:relative;right:auto;bottom:auto}
 .send-btn.visible{opacity:1;transform:scale(1);pointer-events:auto}
@@ -3342,7 +3342,7 @@ html.light-theme {
   --muted: #6B7A90 !important;
   --input-bg: #F0F2F5 !important;
   --bubble-them: #FFFFFF !important;
-  --bubble-me: linear-gradient(135deg,#4C7CF3 0%,#6D5DF6 100%) !important;
+  --bubble-me: linear-gradient(135deg, var(--accent-a,#4C7CF3) 0%, var(--accent-b,#6D5DF6) 100%) !important;
   background: #F4F6F9 !important;
   color: #1A1D21 !important;
 }
@@ -4276,7 +4276,7 @@ body::before {
   transition: transform .15s ease !important;
 }
 .bubble.me {
-  background: linear-gradient(135deg, #5B8CFF 0%, #6B7BFF 55%, #7B6CFF 100%) !important;
+  background: linear-gradient(135deg, var(--accent-a, #5B8CFF) 0%, var(--accent-b, #6B7BFF) 55%, var(--accent-a, #7B6CFF) 100%) !important;
   color: #fff !important;
   border-bottom-right-radius: 6px !important;
 }
@@ -4764,7 +4764,7 @@ body.theme-light .topbar {
                 <button class="icon-btn composer-side" id="circle-btn" title="Кружок · тап = сменить, зажать = запись" data-i18n-title="tt_circle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" id="circle-btn-icon"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5"/></svg></button>
                 <button class="icon-btn composer-side" id="voice-btn" title="Голосовое" style="display:none!important" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4"/></svg></button>
               </div>
-              <button class="send-btn" id="send-btn" title="Отправить"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3.4 20.6L20.85 12.7a.8.8 0 000-1.4L3.4 3.4a.75.75 0 00-1.07.84l1.8 6.84c.1.38.42.65.81.7L14 12l-9.06.22a.9.9 0 00-.81.7L2.33 19.76a.75.75 0 001.07.84z"/></svg></button>
+              <button class="send-btn" id="send-btn" title="Отправить"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5"/><path d="M5 12l7-7 7 7"/></svg></button>
             </div>
             <div id="channel-subscribe-bar" aria-hidden="true" style="display:none;flex-shrink:0;padding:10px 16px;padding-bottom:calc(10px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--line);background:var(--panel);align-items:center;justify-content:center">
               <button type="button" id="channel-subscribe-btn" style="width:100%;max-width:420px;padding:13px 20px;border:none;border-radius:14px;font-weight:700;font-size:15px;cursor:pointer;color:#fff;background:linear-gradient(135deg,#3B82F6,#4C7CF3);box-shadow:0 4px 16px rgba(59,130,246,.35)">Подписаться</button>
@@ -11643,7 +11643,7 @@ function renderRecActions(){
     <button class="rec-btn stop" id="rpause">${recIsPaused
       ? '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z" fill="#fff" stroke="none"/></svg>'
       : '<svg viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" fill="#fff" stroke="none"/><rect x="14" y="5" width="4" height="14" fill="#fff" stroke="none"/></svg>'}</button>
-    <button class="rec-btn send" id="rsend"><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></button>`;
+    <button class="rec-btn send" id="rsend"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="M5 12l7-7 7 7"/></svg></button>`;
   document.getElementById('rcancel').onclick=cancelRecording;
   document.getElementById('rpause').onclick=togglePauseRecording;
   document.getElementById('rflash')?.addEventListener('click', (e)=>{ e.stopPropagation(); toggleCircleTorch(); });
@@ -19687,7 +19687,7 @@ async function buildPostCard(p){
     ${p.hashtags?`<div class="post-hashtags">${escapeHtml(p.hashtags)}</div>`:''}
     <div class="post-comments-wrap" data-commentswrap style="display:none">
       <div data-commentslist></div>
-      <div class="post-comment-input-row"><input type="text" placeholder="${currentLang==='en'?'Add a comment...':'Написать комментарий...'}" data-commentinput><button class="icon-btn" data-commentsend><svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg></button></div>
+      <div class="post-comment-input-row"><input type="text" placeholder="${currentLang==='en'?'Add a comment...':'Написать комментарий...'}" data-commentinput><button class="icon-btn" data-commentsend><svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round" aria-hidden="true"><path d="M12 19V5"/><path d="M5 12l7-7 7 7"/></svg></button></div>
     </div>`;
   renderAvatarInto(el.querySelector('[data-authorbtn].avatar'), author.avatar_url, (name||'?')[0].toUpperCase(), author.color||colorFor(author.id));
   el.querySelectorAll('[data-authorbtn]').forEach(x=>x.onclick=async()=>{ if(await userHasActiveStories(author.id)) openStoryViewer(author.id, author.first_name||author.username||''); else openAuthorOverlay(author.id, 'post'); });
@@ -20865,7 +20865,7 @@ function openVideoComments(post, commentsArr, countEl){
   const ov=document.createElement('div'); ov.className='modal-overlay';
   ov.innerHTML=`<div class="modal"><button class="close-x" id="vc-x">×</button><h3>${currentLang==='en'?'Comments':'Комментарии'}</h3>
     <div id="vc-list" style="max-height:260px;overflow-y:auto;margin-bottom:10px"></div>
-    <div class="post-comment-input-row"><input class="cd-input" id="vc-input" placeholder="${currentLang==='en'?'Add a comment...':'Комментарий...'}"><button class="icon-btn" id="vc-send"><svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg></button></div></div>`;
+    <div class="post-comment-input-row"><input class="cd-input" id="vc-input" placeholder="${currentLang==='en'?'Add a comment...':'Комментарий...'}"><button class="icon-btn" id="vc-send"><svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round" aria-hidden="true"><path d="M12 19V5"/><path d="M5 12l7-7 7 7"/></svg></button></div></div>`;
   document.body.appendChild(ov);
   ov.querySelector('#vc-x').onclick=()=>ov.remove();
   const listEl=ov.querySelector('#vc-list');
@@ -30018,7 +30018,32 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
     const nb = Math.round(b + (t-b)*k);
     return '#'+[nr,ng,nb].map(x=>x.toString(16).padStart(2,'0')).join('');
   }
-  window.slApplyAccent = function(accent, opts){
+  
+  window.slSendIconSVG = function(size){
+    size = size || 22;
+    return '<svg viewBox="0 0 24 24" width="'+size+'" height="'+size+'" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5"/><path d="M5 12l7-7 7 7"/></svg>';
+  };
+  window.slEnsureSendIcons = function(){
+    try{
+      var nodes = document.querySelectorAll('#send-btn, .send-btn, [data-commentsend], #vc-send, #tg-vh-send');
+      nodes.forEach(function(btn){
+        if(!btn || btn.dataset.planeIcon==='2') return;
+        // only replace if looks like a send control
+        var isSend = btn.id==='send-btn' || btn.classList.contains('send-btn') || btn.id==='vc-send' || btn.hasAttribute('data-commentsend') || btn.id==='tg-vh-send';
+        if(!isSend) return;
+        btn.innerHTML = window.slSendIconSVG(btn.id==='send-btn'||btn.classList.contains('send-btn')?22:16);
+        btn.dataset.planeIcon = '2';
+      });
+    }catch(e){}
+  };
+  document.addEventListener('DOMContentLoaded', function(){ window.slEnsureSendIcons(); });
+  setTimeout(function(){ try{ window.slEnsureSendIcons(); }catch(e){} }, 500);
+  setTimeout(function(){ try{ window.slEnsureSendIcons(); }catch(e){} }, 2000);
+  try{
+    new MutationObserver(function(){ try{ window.slEnsureSendIcons(); }catch(e){} }).observe(document.documentElement,{childList:true,subtree:true});
+  }catch(e){}
+
+window.slApplyAccent = function(accent, opts){
     if(!accent) return;
     accent = String(accent).trim();
     if(accent[0]!=='#') accent = '#'+accent;
@@ -30034,11 +30059,36 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
     root.style.setProperty('--accent-dark', dark);
     const rgb = slHexToRgb(accent);
     root.style.setProperty('--accent-rgb', rgb.r+','+rgb.g+','+rgb.b);
-    // Dynamic stylesheet overrides hardcoded blues
+    // Dynamic stylesheet — always at END of body so it wins over earlier !important rules
     let st = document.getElementById('sl-accent-live');
-    if(!st){ st=document.createElement('style'); st.id='sl-accent-live'; document.head.appendChild(st); }
+    if(!st){
+      st = document.createElement('style');
+      st.id = 'sl-accent-live';
+      (document.body || document.documentElement).appendChild(st);
+    } else if(st.parentNode !== document.body && document.body){
+      document.body.appendChild(st);
+    }
+    const grad = `linear-gradient(135deg, ${accent} 0%, ${b} 55%, ${dark} 100%)`;
+    const gradMe = `linear-gradient(135deg, ${accent} 0%, ${b} 100%)`;
+    root.style.setProperty('--bubble-me', gradMe);
     st.textContent = `
-:root{ --accent-a:${accent} !important; --accent-b:${b} !important; }
+html, :root, body{
+  --accent-a:${accent} !important;
+  --accent-b:${b} !important;
+  --bubble-me:${gradMe} !important;
+}
+.bubble.me,
+.bubble-row.me .bubble,
+#messages-list .bubble.me,
+.messages .bubble.me,
+.sl-ai-bubble.me{
+  background: ${gradMe} !important;
+  background-image: ${gradMe} !important;
+  background-color: ${accent} !important;
+}
+.bubble.me:not(.bubble-circle):not(.bubble-big-emoji){
+  background: ${gradMe} !important;
+}
 .send-btn, #send-btn{
   background: linear-gradient(145deg, ${b} 0%, ${accent} 45%, ${dark} 100%) !important;
   box-shadow: 0 6px 20px rgba(${rgb.r},${rgb.g},${rgb.b},.45), inset 0 1px 0 rgba(255,255,255,.25) !important;
@@ -30050,9 +30100,6 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
   background: linear-gradient(135deg, ${accent}, ${b}) !important;
   border-color: ${accent} !important;
 }
-.bubble.me{
-  background: linear-gradient(135deg, ${accent}, ${b}) !important;
-}
 .bottom-tab.active, .msg-link, a.msg-link{ color: ${accent} !important; }
 .composer-input-shell:focus-within{
   border-color: rgba(${rgb.r},${rgb.g},${rgb.b},.55) !important;
@@ -30060,9 +30107,17 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
 }
 .max-folder-tabs .folder-tab.active::after{ background: ${accent} !important; }
 .sl-igif-cat.on, .sl-gif-cat.on{ background: ${accent} !important; }
-.avatar{ background: ${accent} !important; }
+.avatar:not(.has-photo){ background: ${accent} !important; }
 .story-ring{ background: linear-gradient(135deg, ${accent}, ${b}) !important; }
+.rec-btn.send{ background: linear-gradient(135deg, ${accent}, ${b}) !important; box-shadow: 0 8px 24px rgba(${rgb.r},${rgb.g},${rgb.b},.45) !important; }
 `;
+    // Live paint existing my-bubbles (in case of inline styles)
+    try{
+      document.querySelectorAll('.bubble.me:not(.bubble-circle):not(.bubble-big-emoji), .bubble-row.me .bubble:not(.bubble-circle)').forEach(function(el){
+        el.style.setProperty('background', gradMe, 'important');
+        el.style.setProperty('background-image', gradMe, 'important');
+      });
+    }catch(e){}
     // Send button live
     try{
       const btn = document.getElementById('send-btn');
@@ -36423,7 +36478,7 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
     document.head.appendChild(st);
   }
 
-  const ARROW = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>`;
+  const ARROW = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="M5 12l7-7 7 7"/></svg>`;
   const MIC = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4"/></svg>`;
   const CIRCLE = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5"/></svg>`;
   const TRASH = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>`;
@@ -50148,17 +50203,16 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
 .sl-igif-grid, .sl-gif-grid, #sl-igif-grid, #sl-gif-grid{
   display:grid !important;
   grid-template-columns:repeat(2, minmax(0, 1fr)) !important;
-  gap:10px !important;
-  padding:8px 12px 16px !important;
+  grid-auto-rows:minmax(140px, auto) !important;
+  gap:8px !important;
+  padding:8px 12px 20px !important;
   overflow-y:auto !important;
   overflow-x:hidden !important;
   -webkit-overflow-scrolling:touch;
   align-content:start !important;
-  align-items:stretch !important;
-  justify-items:stretch !important;
   flex:1 1 auto !important;
-  min-height:180px !important;
-  max-height:min(52vh, 420px) !important;
+  min-height:220px !important;
+  max-height:min(55vh, 480px) !important;
   width:100% !important;
   box-sizing:border-box !important;
   position:relative !important;
@@ -50171,39 +50225,31 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
 .sl-gif-cell{
   position:relative !important;
   width:100% !important;
-  max-width:100% !important;
-  aspect-ratio:1 / 1 !important;
-  height:auto !important;
-  min-height:0 !important;
+  height:140px !important;
+  min-height:140px !important;
+  max-height:none !important;
   border-radius:14px !important;
   overflow:hidden !important;
-  background:#0d0f14 !important;
+  background:#12151c !important;
   cursor:pointer !important;
   border:none !important;
   padding:0 !important;
   margin:0 !important;
   display:block !important;
-  isolation:isolate !important;
+  box-sizing:border-box !important;
   transform:none !important;
   float:none !important;
-  grid-column:auto !important;
-  grid-row:auto !important;
-  align-self:stretch !important;
-  box-sizing:border-box !important;
 }
 .sl-gif-cell img{
   position:absolute !important;
-  top:0 !important; left:0 !important; right:0 !important; bottom:0 !important;
+  top:0 !important; left:0 !important;
   width:100% !important;
   height:100% !important;
   object-fit:cover !important;
   display:block !important;
   margin:0 !important;
   border:none !important;
-  border-radius:0 !important;
-  max-width:none !important;
-  max-height:none !important;
-  transform:none !important;
+  border-radius:14px !important;
   pointer-events:none !important;
 }
 .sl-gif-empty, .sl-gif-load{
@@ -50348,9 +50394,14 @@ img.sl-gif-img{
 
   function fillGrid(grid, results, reset){
     if(reset) grid.innerHTML = '';
+    var colCount = window.innerWidth >= 420 ? 3 : 2;
+    var gap = 8;
+    var pad = 24; // left+right padding
+    var gw = grid.clientWidth || grid.offsetWidth || (window.innerWidth - 32);
+    if(gw < 100) gw = Math.min(window.innerWidth, 420) - 32;
+    var cell = Math.max(120, Math.floor((gw - pad - gap * (colCount - 1)) / colCount));
     try{
-      var cols = window.innerWidth >= 420 ? '1fr 1fr 1fr' : '1fr 1fr';
-      grid.style.cssText = 'display:grid;grid-template-columns:'+cols+';gap:10px;padding:8px 12px 16px;margin:0;overflow-y:auto;overflow-x:hidden;align-content:start;align-items:stretch;justify-items:stretch;width:100%;box-sizing:border-box;flex:1;min-height:180px;max-height:min(52vh,420px);position:relative';
+      grid.style.cssText = 'display:grid;grid-template-columns:repeat('+colCount+',minmax(0,1fr));grid-auto-rows:'+cell+'px;gap:'+gap+'px;padding:8px 12px 20px;margin:0;overflow-y:auto;overflow-x:hidden;align-content:start;width:100%;box-sizing:border-box;flex:1;min-height:'+Math.min(cell*2+gap, 280)+'px;max-height:min(55vh,480px);position:relative';
     }catch(e){}
     results.forEach(item=>{
       const url = pickUrl(item);
@@ -50358,14 +50409,13 @@ img.sl-gif-img{
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'sl-gif-cell';
-      // aspect-ratio only — NEVER height:0 + padding-bottom (causes stacked pile)
-      btn.style.cssText = 'position:relative;display:block;width:100%;aspect-ratio:1/1;height:auto;min-height:0;margin:0;padding:0;border:none;border-radius:14px;overflow:hidden;background:#0d0f14;cursor:pointer;box-sizing:border-box;transform:none;float:none';
+      btn.style.cssText = 'position:relative;display:block;width:100%;height:'+cell+'px;min-height:'+cell+'px;margin:0;padding:0;border:none;border-radius:14px;overflow:hidden;background:#12151c;cursor:pointer;box-sizing:border-box';
       const img = document.createElement('img');
       img.loading = 'lazy';
-      img.alt = '';
+      img.alt = 'GIF';
       img.src = url;
       img.draggable = false;
-      img.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;display:block;margin:0;border:none;max-width:none;max-height:none;transform:none;pointer-events:none';
+      img.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;display:block;margin:0;border:none;border-radius:14px;pointer-events:none';
       btn.appendChild(img);
       btn.onclick = () => sendGif(url);
       grid.appendChild(btn);
@@ -50600,13 +50650,13 @@ img.sl-gif-img{
 
 
 <style id="sl-gif-grid-fix">
-/* Force GIF tiles in a real grid — no card-stack pile */
+/* GIF tiles: fixed square height so they never collapse to stripes */
 #sl-igif-grid, #sl-gif-grid, .sl-igif-grid, .sl-gif-grid{
   display:grid !important;
   grid-template-columns:repeat(2,minmax(0,1fr)) !important;
-  gap:10px !important;
+  grid-auto-rows:minmax(140px, auto) !important;
+  gap:8px !important;
   align-content:start !important;
-  align-items:stretch !important;
   position:relative !important;
   overflow-x:hidden !important;
 }
@@ -50621,31 +50671,24 @@ img.sl-gif-img{
 .sl-gif-grid > .sl-gif-cell{
   position:relative !important;
   width:100% !important;
-  aspect-ratio:1/1 !important;
-  height:auto !important;
-  min-height:0 !important;
-  max-height:none !important;
+  height:140px !important;
+  min-height:140px !important;
   padding:0 !important;
   margin:0 !important;
-  float:none !important;
-  transform:none !important;
-  top:auto !important; left:auto !important; right:auto !important; bottom:auto !important;
-  inset:auto !important;
-  grid-column:auto !important;
-  grid-row:auto !important;
   overflow:hidden !important;
   border-radius:14px !important;
+  background:#12151c !important;
 }
 #sl-igif-grid > .sl-gif-cell > img,
 #sl-gif-grid > .sl-gif-cell > img,
 .sl-igif-grid > .sl-gif-cell > img,
 .sl-gif-grid > .sl-gif-cell > img{
   position:absolute !important;
-  inset:0 !important;
+  top:0 !important; left:0 !important;
   width:100% !important; height:100% !important;
   object-fit:cover !important;
-  transform:none !important;
   margin:0 !important;
+  border-radius:14px !important;
 }
 </style>
 <script id="sl-stk-layout-js">
@@ -50672,12 +50715,15 @@ img.sl-gif-img{
     setTimeout(function(){
       var grid = document.getElementById('sl-igif-grid');
       if(!grid) return;
-      var cols = window.innerWidth>=420?'1fr 1fr 1fr':'1fr 1fr';
-      grid.style.cssText = 'display:grid;grid-template-columns:'+cols+';gap:10px;padding:8px 12px 16px;overflow-y:auto;overflow-x:hidden;align-content:start;align-items:stretch;width:100%;box-sizing:border-box;flex:1;min-height:180px;max-height:min(52vh,420px);position:relative';
+      var colCount = window.innerWidth>=420?3:2;
+      var gap = 8;
+      var gw = grid.clientWidth || grid.offsetWidth || (window.innerWidth-32);
+      var cell = Math.max(120, Math.floor((gw - 24 - gap*(colCount-1)) / colCount));
+      grid.style.cssText = 'display:grid;grid-template-columns:repeat('+colCount+',minmax(0,1fr));grid-auto-rows:'+cell+'px;gap:'+gap+'px;padding:8px 12px 20px;overflow-y:auto;overflow-x:hidden;align-content:start;width:100%;box-sizing:border-box;flex:1;min-height:'+Math.min(cell*2+gap,280)+'px;max-height:min(55vh,480px);position:relative';
       grid.querySelectorAll('.sl-gif-cell').forEach(function(btn){
-        btn.style.cssText = 'position:relative;display:block;width:100%;aspect-ratio:1/1;height:auto;min-height:0;margin:0;padding:0;border:none;border-radius:14px;overflow:hidden;background:#0d0f14;cursor:pointer;box-sizing:border-box;transform:none;float:none';
+        btn.style.cssText = 'position:relative;display:block;width:100%;height:'+cell+'px;min-height:'+cell+'px;margin:0;padding:0;border:none;border-radius:14px;overflow:hidden;background:#12151c;cursor:pointer;box-sizing:border-box';
         var img = btn.querySelector('img');
-        if(img) img.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;display:block;margin:0;border:none;max-width:none;max-height:none;transform:none;pointer-events:none';
+        if(img) img.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;display:block;margin:0;border:none;border-radius:14px;pointer-events:none';
       });
     }, 300);
   }, true);
