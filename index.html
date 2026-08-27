@@ -4552,6 +4552,18 @@ body.theme-light .topbar {
       <button type="button" class="btn-secondary" id="login-back-choice" style="margin-top:8px;border:none;color:var(--muted)">← Назад</button>
     </div>
 
+    <div id="login-verify-form" style="display:none">
+      <p style="font-size:14px;font-weight:700;margin-bottom:8px;text-align:center">Подтверждение email</p>
+      <p id="login-verify-hint" style="font-size:13px;color:var(--muted);margin-bottom:14px;line-height:1.45;text-align:center">Мы отправили код на вашу почту</p>
+      <div class="field">
+        <label>Код из письма</label>
+        <input type="text" id="login-email-code" placeholder="123456" inputmode="numeric" autocomplete="one-time-code" maxlength="8" style="text-align:center;font-size:22px;letter-spacing:6px;font-weight:700">
+      </div>
+      <button type="button" class="btn-primary" id="login-verify-code-btn">Подтвердить</button>
+      <button type="button" class="btn-secondary" id="login-resend-code" style="margin-top:10px">Отправить код ещё раз</button>
+      <button type="button" class="btn-secondary" id="login-verify-back" style="margin-top:8px;border:none;color:var(--muted)">← Назад</button>
+    </div>
+
     <div id="forgot-form" style="display:none">
       <p style="font-size:13px;color:var(--muted);margin-bottom:14px;line-height:1.45">Введите ключ восстановления, который вы получили при регистрации.</p>
       <div class="field"><label>Ключ восстановления</label><input type="text" id="forgot-key" placeholder="sline_key_…" autocomplete="off" spellcheck="false" style="font-family:monospace;font-size:13px"></div>
@@ -6372,6 +6384,31 @@ function normalizeContact(raw){
 }
 
 function showAuthPanel(which){
+  // Ensure login-verify-form exists (older builds were missing the markup)
+  try{
+    if(!document.getElementById('login-verify-form')){
+      const loginForm = document.getElementById('login-form');
+      const wrap = document.createElement('div');
+      wrap.id = 'login-verify-form';
+      wrap.style.display = 'none';
+      wrap.innerHTML = '<p style="font-size:14px;font-weight:700;margin-bottom:8px;text-align:center">Подтверждение email</p>'
+        +'<p id="login-verify-hint" style="font-size:13px;color:var(--muted);margin-bottom:14px;line-height:1.45;text-align:center">Мы отправили код на вашу почту</p>'
+        +'<div class="field"><label>Код из письма</label>'
+        +'<input type="text" id="login-email-code" placeholder="123456" inputmode="numeric" autocomplete="one-time-code" maxlength="8" style="text-align:center;font-size:22px;letter-spacing:6px;font-weight:700"></div>'
+        +'<button type="button" class="btn-primary" id="login-verify-code-btn">Подтвердить</button>'
+        +'<button type="button" class="btn-secondary" id="login-resend-code" style="margin-top:10px">Отправить код ещё раз</button>'
+        +'<button type="button" class="btn-secondary" id="login-verify-back" style="margin-top:8px;border:none;color:var(--muted)">← Назад</button>';
+      if(loginForm && loginForm.parentNode){
+        loginForm.parentNode.insertBefore(wrap, loginForm.nextSibling);
+      } else {
+        const card = document.querySelector('.auth-card');
+        if(card) card.appendChild(wrap);
+      }
+      // wire buttons if handlers already defined via delegation-style rebind
+      try{ if(typeof window._slWireLoginVerify==='function') window._slWireLoginVerify(); }catch(e){}
+    }
+  }catch(e){ console.warn('ensure login-verify-form', e); }
+
   ['auth-choice','login-form','login-verify-form','register-form','forgot-form'].forEach(id=>{
     const el = document.getElementById(id);
     if(!el) return;
@@ -6380,10 +6417,12 @@ function showAuthPanel(which){
       el.style.visibility = 'visible';
       el.style.pointerEvents = 'auto';
       el.style.opacity = '1';
+      el.removeAttribute('hidden');
     } else {
       el.style.display = 'none';
       el.style.visibility = 'hidden';
       el.style.pointerEvents = 'none';
+      el.style.opacity = '0';
     }
   });
   const sub = document.getElementById('auth-sub-text');
@@ -6401,9 +6440,8 @@ function showAuthPanel(which){
   try{
     if(typeof slSaveAuthFlow === 'function'){
       if(which==='auth-choice'){
-        // only clear if not mid-verify
         const p = (typeof slLoadPendingCode==='function') ? slLoadPendingCode() : null;
-        if(!p) slClearAuthFlow && slClearAuthFlow();
+        if(!p){ try{ slClearAuthFlow(); }catch(e){} }
       } else {
         const patch = { panel: which };
         if(which==='login-verify-form') patch.phase = 'login_verify';
@@ -7193,59 +7231,78 @@ function wireAuthUI(){
   document.getElementById('reg-back-choice')?.addEventListener('click', ()=> showAuthPanel('auth-choice'));
 
   document.getElementById('login-btn')?.addEventListener('click', e=>{ e.preventDefault(); doLogin(); });
-  document.getElementById('login-verify-code-btn')?.addEventListener('click', async ()=>{
-    const input = document.getElementById('login-email-code')?.value || '';
-    const r = slCheckEmailCode(input);
-    if(!r.ok){ authMsg('Неверный код'); return; }
-    authMsg('');
-    try{ if(typeof slClearAuthFlow==='function') slClearAuthFlow(); }catch(e){}
-    let user = window._pendingLoginUser;
-    if(!user){
-      // After reload: session may still be in Firebase
-      try{
-        if(sb && sb.auth && sb.auth.getSession){
-          const {data} = await sb.auth.getSession();
-          if(data?.session?.user) user = data.session.user;
+  window._slWireLoginVerify = function(){
+    const codeBtn = document.getElementById('login-verify-code-btn');
+    if(codeBtn && !codeBtn.dataset.slWired){
+      codeBtn.dataset.slWired = '1';
+      codeBtn.addEventListener('click', async ()=>{
+        const input = document.getElementById('login-email-code')?.value || '';
+        const r = slCheckEmailCode(input);
+        if(!r.ok){ authMsg('Неверный код'); return; }
+        authMsg('');
+        try{ if(typeof slClearAuthFlow==='function') slClearAuthFlow(); }catch(e){}
+        let user = window._pendingLoginUser;
+        if(!user){
+          try{
+            if(sb && sb.auth && sb.auth.getSession){
+              const {data} = await sb.auth.getSession();
+              if(data?.session?.user) user = data.session.user;
+            }
+          }catch(e){}
         }
-      }catch(e){}
+        if(!user){ authMsg('Сессия истекла — войдите снова'); try{ showAuthPanel('login-form'); }catch(e){} return; }
+        const btn = document.getElementById('login-verify-code-btn');
+        try{ if(typeof setBtnLoading==='function') setBtnLoading(btn, true); }catch(e){}
+        try{
+          await onAuthenticated(user);
+        }catch(e){ console.warn(e); authMsg('Ошибка входа'); }
+        finally{
+          try{ if(typeof setBtnLoading==='function') setBtnLoading(btn, false); }catch(e){}
+          window._pendingLoginUser = null;
+        }
+      });
     }
-    if(!user){ authMsg('Сессия истекла — войдите снова'); try{ showAuthPanel('login-form'); }catch(e){} return; }
-    const btn = document.getElementById('login-verify-code-btn');
-    try{ if(typeof setBtnLoading==='function') setBtnLoading(btn, true); }catch(e){}
-    try{
-      await onAuthenticated(user);
-    }catch(e){ console.warn(e); authMsg('Ошибка входа'); }
-    finally{
-      try{ if(typeof setBtnLoading==='function') setBtnLoading(btn, false); }catch(e){}
-      window._pendingLoginUser = null;
+    const resend = document.getElementById('login-resend-code');
+    if(resend && !resend.dataset.slWired){
+      resend.dataset.slWired = '1';
+      resend.addEventListener('click', async ()=>{
+        const email = window._pendingLoginEmail;
+        if(!email){ authMsg('Нет email'); return; }
+        authMsg('Отправляем…');
+        const res = await slSendEmailCode(email);
+        if(res.skipped || !res.ok){
+          authMsg('Письмо не отправлено — входим без кода');
+          const user = window._pendingLoginUser;
+          if(user){
+            try{ await onAuthenticated(user); }catch(e){}
+            window._pendingLoginUser = null;
+          }
+          return;
+        }
+        authMsg('Код отправлен повторно');
+      });
     }
-  });
-  document.getElementById('login-resend-code')?.addEventListener('click', async ()=>{
-    const email = window._pendingLoginEmail;
-    if(!email){ authMsg('Нет email'); return; }
-    authMsg('Отправляем…');
-    const res = await slSendEmailCode(email);
-    if(res.skipped || !res.ok){
-      authMsg('Письмо не отправлено — входим без кода');
-      const user = window._pendingLoginUser;
-      if(user){
-        try{ await onAuthenticated(user); }catch(e){}
+    const back = document.getElementById('login-verify-back');
+    if(back && !back.dataset.slWired){
+      back.dataset.slWired = '1';
+      back.addEventListener('click', async ()=>{
         window._pendingLoginUser = null;
-      }
-      return;
+        window._pendingLoginEmail = null;
+        try{ if(typeof slClearPendingCode==='function') slClearPendingCode(); }catch(e){}
+        try{ if(typeof slClearAuthFlow==='function') slClearAuthFlow(); }catch(e){}
+        try{ if(sb?.auth?.signOut) await sb.auth.signOut(); }catch(e){}
+        try{ showAuthPanel('login-form'); }catch(e){}
+      });
     }
-    authMsg('Код отправлен повторно');
-  });
-  document.getElementById('login-verify-back')?.addEventListener('click', async ()=>{
-    window._pendingLoginUser = null;
-    window._pendingLoginEmail = null;
-    slClearPendingCode();
-    try{ if(sb?.auth?.signOut) await sb.auth.signOut(); }catch(e){}
-    try{ showAuthPanel('login-form'); }catch(e){}
-  });
-  document.getElementById('login-email-code')?.addEventListener('keydown', (e)=>{
-    if(e.key==='Enter'){ e.preventDefault(); document.getElementById('login-verify-code-btn')?.click(); }
-  });
+    const codeInp = document.getElementById('login-email-code');
+    if(codeInp && !codeInp.dataset.slWired){
+      codeInp.dataset.slWired = '1';
+      codeInp.addEventListener('keydown', (e)=>{
+        if(e.key==='Enter'){ e.preventDefault(); document.getElementById('login-verify-code-btn')?.click(); }
+      });
+    }
+  };
+  try{ window._slWireLoginVerify(); }catch(e){}
   document.getElementById('login-password')?.addEventListener('keydown', e=>{ if(e.key==='Enter') doLogin(); });
   document.getElementById('login-email')?.addEventListener('keydown', e=>{ if(e.key==='Enter') document.getElementById('login-password')?.focus(); });
 
