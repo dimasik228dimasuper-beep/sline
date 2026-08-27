@@ -4597,7 +4597,7 @@ body[data-auth-panel="forgot-form"] #auth-choice{
     <div id="login-form" style="display:none">
       <div class="field"><label>Email или телефон</label><input type="text" id="login-email" placeholder="you@example.com или +79001234567" autocomplete="username" inputmode="email"></div>
       <div class="field"><label>Пароль</label><input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password"></div>
-      <button type="button" class="btn-primary" id="login-btn" onclick="try{event.preventDefault();if(typeof doLogin==='function')doLogin();}catch(e){}">Войти</button>
+      <button type="button" class="btn-primary" id="login-btn">Войти</button>
       <button type="button" class="btn-secondary" id="login-forgot-btn" style="margin-top:10px">Забыли пароль?</button>
       <button type="button" class="btn-secondary" id="login-back-choice" style="margin-top:8px;border:none;color:var(--muted)">← Назад</button>
     </div>
@@ -6698,34 +6698,60 @@ window.slRestoreAuthFlowUI = slRestoreAuthFlowUI;
 window.slSaveAuthFlow = slSaveAuthFlow;
 window.slClearAuthFlow = slClearAuthFlow;
 /** Send code. Returns {ok, skipped, error}. skipped=true → limit/quota → continue without code */
-async function slSendEmailCode(email){
+window._slSendCodeInflight = window._slSendCodeInflight || {};
+window._slSendCodeLast = window._slSendCodeLast || {};
+async function slSendEmailCode(email, opts){
   email = String(email||'').trim().toLowerCase();
   if(!email) return { ok:false, error:'no email' };
-  const code = slGenEmailCode();
+  opts = opts || {};
+  const force = !!opts.force; // true only for explicit "resend"
+  const now = Date.now();
+  // If a send for this email is already in progress — wait for it (one letter)
+  if(window._slSendCodeInflight[email]){
+    try{ return await window._slSendCodeInflight[email]; }catch(e){ return { ok:false, error:String(e&&e.message||e) }; }
+  }
+  // Cooldown 60s: reuse same pending code, do not POST again
+  if(!force){
+    const last = window._slSendCodeLast[email];
+    const pending = (typeof slLoadPendingCode==='function') ? slLoadPendingCode() : null;
+    if(last && (now - last.ts < 60*1000) && pending && pending.email === email && pending.code){
+      return { ok:true, skipped:false, deduped:true, code: pending.code };
+    }
+  }
+  const code = (!force && (typeof slLoadPendingCode==='function') ? (function(){
+    const p = slLoadPendingCode();
+    if(p && p.email===email && p.code && p.exp > now) return String(p.code);
+    return null;
+  })() : null) || slGenEmailCode();
   slSavePendingCode(email, code);
   window._slEmailVerified = false;
-  try{
-    const r = await fetch('/api/send-code', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, code })
-    });
-    let data = {};
-    try{ data = await r.json(); }catch(e){}
-    // Success only if HTTP 2xx and not marked skip
-    if(r.ok && !data.skip){
-      return { ok:true, skipped:false };
+
+  const job = (async function(){
+    try{
+      const r = await fetch('/api/send-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, code })
+      });
+      let data = {};
+      try{ data = await r.json(); }catch(e){}
+      if(r.ok && !data.skip){
+        window._slSendCodeLast[email] = { ts: Date.now(), code: code };
+        return { ok:true, skipped:false };
+      }
+      window._slEmailVerified = true;
+      slClearPendingCode();
+      return { ok:true, skipped:true, error: data.error || ('HTTP '+r.status) };
+    }catch(e){
+      window._slEmailVerified = true;
+      slClearPendingCode();
+      return { ok:true, skipped:true, error: String(e.message||e) };
+    }finally{
+      try{ delete window._slSendCodeInflight[email]; }catch(err){}
     }
-    // ANY error / limit / non-OK → skip verification without code
-    window._slEmailVerified = true;
-    slClearPendingCode();
-    return { ok:true, skipped:true, error: data.error || ('HTTP '+r.status) };
-  }catch(e){
-    // Network / CORS / any throw → skip
-    window._slEmailVerified = true;
-    slClearPendingCode();
-    return { ok:true, skipped:true, error: String(e.message||e) };
-  }
+  })();
+  window._slSendCodeInflight[email] = job;
+  return job;
 }
 function slCheckEmailCode(input){
   const pending = slLoadPendingCode();
@@ -6789,12 +6815,14 @@ function setRegStep(step){
 function setAuthMethod(m){ authMethod = m || 'email'; }
 
 async function doLogin(){
+  if(window._slDoLoginBusy) return;
+  window._slDoLoginBusy = true;
   authMsg('');
   const btn = document.getElementById('login-btn');
   const contact = normalizeContact(document.getElementById('login-email')?.value);
   const password = document.getElementById('login-password')?.value || '';
-  if(!contact){ authMsg('Введите email или номер телефона'); return; }
-  if(!password){ authMsg('Введите пароль'); return; }
+  if(!contact){ authMsg('Введите email или номер телефона'); window._slDoLoginBusy=false; return; }
+  if(!password){ authMsg('Введите пароль'); window._slDoLoginBusy=false; return; }
   if(!sb || !window.sb){
     authMsg('Подключение к серверу…');
     try{
@@ -6802,15 +6830,15 @@ async function doLogin(){
         const ok = await window.slEnsureFirebase();
         if(!ok || !sb){
           authMsg('Сервис входа недоступен. Проверьте интернет или VPN (блокируется Firebase CDN)');
-          return;
+          window._slDoLoginBusy=false; return;
         }
       } else {
         authMsg('Сервис входа недоступен. Обновите страницу');
-        return;
+        window._slDoLoginBusy=false; return;
       }
     }catch(e){
       authMsg('Сервис входа недоступен. Проверьте интернет / VPN');
-      return;
+      window._slDoLoginBusy=false; return;
     }
   }
   if(btn && btn.disabled && btn.classList.contains('btn-loading')){
@@ -6931,6 +6959,7 @@ async function doLogin(){
   }finally{
     clearTimeout(unlock);
     try{ setBtnLoading(btn, false); }catch(e){}
+    window._slDoLoginBusy = false;
   }
 }
 
@@ -7292,7 +7321,17 @@ function wireAuthUI(){
   document.getElementById('login-back-choice')?.addEventListener('click', ()=> showAuthPanel('auth-choice'));
   document.getElementById('reg-back-choice')?.addEventListener('click', ()=> showAuthPanel('auth-choice'));
 
-  document.getElementById('login-btn')?.addEventListener('click', e=>{ e.preventDefault(); doLogin(); });
+  (function(){
+    const lb = document.getElementById('login-btn');
+    if(!lb || lb.dataset.slLoginWired) return;
+    lb.dataset.slLoginWired = '1';
+    lb.addEventListener('click', function(e){
+      e.preventDefault();
+      e.stopPropagation();
+      try{ e.stopImmediatePropagation && e.stopImmediatePropagation(); }catch(err){}
+      doLogin();
+    });
+  })();
   window._slWireLoginVerify = function(){
     const codeBtn = document.getElementById('login-verify-code-btn');
     if(codeBtn && !codeBtn.dataset.slWired){
@@ -7331,7 +7370,7 @@ function wireAuthUI(){
         const email = window._pendingLoginEmail;
         if(!email){ authMsg('Нет email'); return; }
         authMsg('Отправляем…');
-        const res = await slSendEmailCode(email);
+        const res = await slSendEmailCode(email, { force:true });
         if(res.skipped || !res.ok){
           authMsg('Письмо не отправлено — входим без кода');
           const user = window._pendingLoginUser;
@@ -7557,7 +7596,7 @@ function wireAuthUI(){
     const contact = buildContactFromReg();
     if(!contact?.email){ authMsg('Нет email'); return; }
     authMsg('Отправляем…');
-    const res = await slSendEmailCode(contact.email);
+    const res = await slSendEmailCode(contact.email, { force:true });
     if(res.skipped || !res.ok){
       authMsg('Письмо не отправлено — продолжаем без кода');
       window._slEmailVerified = true;
