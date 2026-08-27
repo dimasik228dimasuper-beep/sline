@@ -651,14 +651,14 @@ body.beta-oled .sw-clip{background:var(--panel)!important}
 .composer .icon-btn.composer-side:hover{color:var(--text);border-color:transparent}
 .send-btn{
   width:46px;height:46px;border-radius:50%;border:none;cursor:pointer;
-  background:linear-gradient(145deg,#5B8CFF 0%,#4C7CF3 40%,#6D5DF6 100%);color:#fff;
+  background:linear-gradient(145deg,var(--accent-a,#5B8CFF) 0%,var(--accent-b,#4C7CF3) 55%,var(--accent-a,#6D5DF6) 100%);color:#fff;
   display:flex;align-items:center;justify-content:center;flex-shrink:0;
   opacity:0;transform:scale(.5);pointer-events:none;
-  transition:opacity .22s ease, transform .22s cubic-bezier(.34,1.4,.64,1), box-shadow .2s;
+  transition:opacity .22s ease, transform .22s cubic-bezier(.34,1.4,.64,1), box-shadow .2s, background .25s;
   position:absolute;right:10px;bottom:calc(8px + var(--safe-bottom));
-  box-shadow:0 6px 20px rgba(76,124,243,.45), inset 0 1px 0 rgba(255,255,255,.25);
+  box-shadow:0 6px 20px color-mix(in srgb, var(--accent-a,#4C7CF3) 45%, transparent), inset 0 1px 0 rgba(255,255,255,.25);
 }
-.send-btn svg{width:20px;height:20px;margin-left:2px;filter:drop-shadow(0 1px 1px rgba(0,0,0,.2))}
+.send-btn svg{width:22px;height:22px;margin-left:1px;filter:drop-shadow(0 1px 1px rgba(0,0,0,.2))}
 .send-btn:active{transform:scale(.92)!important;box-shadow:0 2px 10px rgba(76,124,243,.35)}
 .composer.has-text .send-btn{opacity:1;transform:scale(1);pointer-events:auto;position:relative;right:auto;bottom:auto}
 .send-btn.visible{opacity:1;transform:scale(1);pointer-events:auto}
@@ -4764,7 +4764,7 @@ body.theme-light .topbar {
                 <button class="icon-btn composer-side" id="circle-btn" title="Кружок · тап = сменить, зажать = запись" data-i18n-title="tt_circle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" id="circle-btn-icon"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.5"/></svg></button>
                 <button class="icon-btn composer-side" id="voice-btn" title="Голосовое" style="display:none!important" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4"/></svg></button>
               </div>
-              <button class="send-btn" id="send-btn" title="Отправить"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg></button>
+              <button class="send-btn" id="send-btn" title="Отправить"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3.4 20.6L20.85 12.7a.8.8 0 000-1.4L3.4 3.4a.75.75 0 00-1.07.84l1.8 6.84c.1.38.42.65.81.7L14 12l-9.06.22a.9.9 0 00-.81.7L2.33 19.76a.75.75 0 001.07.84z"/></svg></button>
             </div>
             <div id="channel-subscribe-bar" aria-hidden="true" style="display:none;flex-shrink:0;padding:10px 16px;padding-bottom:calc(10px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--line);background:var(--panel);align-items:center;justify-content:center">
               <button type="button" id="channel-subscribe-btn" style="width:100%;max-width:420px;padding:13px 20px;border:none;border-radius:14px;font-weight:700;font-size:15px;cursor:pointer;color:#fff;background:linear-gradient(135deg,#3B82F6,#4C7CF3);box-shadow:0 4px 16px rgba(59,130,246,.35)">Подписаться</button>
@@ -29886,13 +29886,17 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
         LS.setItem('sl_chat_theme', t.id);
         LS.setItem('sl_accent', t.accent);
         applyTheme(t);
+        try{ if(typeof window.slApplyAccent==='function') window.slApplyAccent(t.accent); }catch(e){}
         toast('Тема: '+t.name);
       };
       grid.appendChild(c);
     });
     function applyTheme(t){
-      document.documentElement.style.setProperty('--accent-a', t.accent);
-      document.documentElement.style.setProperty('--accent-b', t.accent);
+      try{ if(typeof window.slApplyAccent==='function') window.slApplyAccent(t.accent); }
+      catch(e){
+        document.documentElement.style.setProperty('--accent-a', t.accent);
+        document.documentElement.style.setProperty('--accent-b', t.accent);
+      }
       const me=ov.querySelector('.bub-me');
       if(me) me.style.background=`linear-gradient(135deg,${t.accent},${t.accent}cc)`;
       const dot=ov.querySelector('#ap-dot');
@@ -29939,13 +29943,19 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
       toast('Обои обновлены');
     };
     ov.querySelector('#ap-colors').onclick=()=>{
-      const cols=['#4C7CF3','#6D5DF6','#2DD4BF','#F0708A','#F7B955','#22c55e','#a78bfa'];
+      const cols=['#4C7CF3','#6D5DF6','#2DD4BF','#F0708A','#F7B955','#22c55e','#a78bfa','#ef4444','#f97316','#14b8a6'];
       const i=(Number(LS.getItem('sl_pc_i')||0)+1)%cols.length;
       LS.setItem('sl_pc_i', String(i));
       LS.setItem('sl_accent', cols[i]);
-      document.documentElement.style.setProperty('--accent-a', cols[i]);
-      document.documentElement.style.setProperty('--accent-b', cols[i]);
-      ov.querySelector('#ap-dot').style.background=cols[i];
+      try{ if(typeof window.slApplyAccent==='function') window.slApplyAccent(cols[i]); }
+      catch(e){
+        document.documentElement.style.setProperty('--accent-a', cols[i]);
+        document.documentElement.style.setProperty('--accent-b', cols[i]);
+      }
+      const dot=ov.querySelector('#ap-dot');
+      if(dot) dot.style.background=cols[i];
+      const me=ov.querySelector('.bub-me');
+      if(me) me.style.background='linear-gradient(135deg,'+cols[i]+','+cols[i]+'cc)';
       toast('Цвет изменён');
     };
     ov.querySelector('#ap-size').onclick=()=>{
@@ -29991,16 +30001,90 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
     row.onclick=()=>window.slOpenAppearance();
   }, 600);
 
-  // Restore accent on load
+  // ---- Global accent color (Оформление) — applies everywhere ----
+  function slHexToRgb(hex){
+    hex = String(hex||'').replace('#','').trim();
+    if(hex.length===3) hex = hex.split('').map(c=>c+c).join('');
+    if(hex.length!==6) return {r:76,g:124,b:243};
+    return { r:parseInt(hex.slice(0,2),16), g:parseInt(hex.slice(2,4),16), b:parseInt(hex.slice(4,6),16) };
+  }
+  function slMixHex(hex, p){
+    // p: -1..1 darker/lighter
+    const {r,g,b} = slHexToRgb(hex);
+    const t = p>=0 ? 255 : 0;
+    const k = Math.abs(p);
+    const nr = Math.round(r + (t-r)*k);
+    const ng = Math.round(g + (t-g)*k);
+    const nb = Math.round(b + (t-b)*k);
+    return '#'+[nr,ng,nb].map(x=>x.toString(16).padStart(2,'0')).join('');
+  }
+  window.slApplyAccent = function(accent, opts){
+    if(!accent) return;
+    accent = String(accent).trim();
+    if(accent[0]!=='#') accent = '#'+accent;
+    const b = slMixHex(accent, 0.18);
+    const dark = slMixHex(accent, -0.12);
+    try{
+      LS.setItem('sl_accent', accent);
+      try{ localStorage.setItem('sl_accent', accent); }catch(e){}
+    }catch(e){}
+    const root = document.documentElement;
+    root.style.setProperty('--accent-a', accent);
+    root.style.setProperty('--accent-b', b);
+    root.style.setProperty('--accent-dark', dark);
+    const rgb = slHexToRgb(accent);
+    root.style.setProperty('--accent-rgb', rgb.r+','+rgb.g+','+rgb.b);
+    // Dynamic stylesheet overrides hardcoded blues
+    let st = document.getElementById('sl-accent-live');
+    if(!st){ st=document.createElement('style'); st.id='sl-accent-live'; document.head.appendChild(st); }
+    st.textContent = `
+:root{ --accent-a:${accent} !important; --accent-b:${b} !important; }
+.send-btn, #send-btn{
+  background: linear-gradient(145deg, ${b} 0%, ${accent} 45%, ${dark} 100%) !important;
+  box-shadow: 0 6px 20px rgba(${rgb.r},${rgb.g},${rgb.b},.45), inset 0 1px 0 rgba(255,255,255,.25) !important;
+}
+.btn-primary, .sl-primary-btn, .max-hdr-btn.plus, #plus-btn,
+.unread-badge, .max-folder-tabs .folder-tab .ft-badge,
+.toggle-switch.on, .folder-tab.active,
+#channel-subscribe-btn{
+  background: linear-gradient(135deg, ${accent}, ${b}) !important;
+  border-color: ${accent} !important;
+}
+.bubble.me{
+  background: linear-gradient(135deg, ${accent}, ${b}) !important;
+}
+.bottom-tab.active, .msg-link, a.msg-link{ color: ${accent} !important; }
+.composer-input-shell:focus-within{
+  border-color: rgba(${rgb.r},${rgb.g},${rgb.b},.55) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.06), 0 0 0 3px rgba(${rgb.r},${rgb.g},${rgb.b},.15), 0 6px 20px rgba(0,0,0,.22) !important;
+}
+.max-folder-tabs .folder-tab.active::after{ background: ${accent} !important; }
+.sl-igif-cat.on, .sl-gif-cat.on{ background: ${accent} !important; }
+.avatar{ background: ${accent} !important; }
+.story-ring{ background: linear-gradient(135deg, ${accent}, ${b}) !important; }
+`;
+    // Send button live
+    try{
+      const btn = document.getElementById('send-btn');
+      if(btn){
+        btn.style.background = `linear-gradient(145deg, ${b} 0%, ${accent} 45%, ${dark} 100%)`;
+        btn.style.boxShadow = `0 6px 20px rgba(${rgb.r},${rgb.g},${rgb.b},.45), inset 0 1px 0 rgba(255,255,255,.25)`;
+      }
+    }catch(e){}
+    try{ window.dispatchEvent(new CustomEvent('sl-accent-change', {detail:{accent}})); }catch(e){}
+    return accent;
+  };
+
+  // Restore accent + font on load
   try{
-    const acc=LS.getItem('sl_accent');
-    if(acc){
-      document.documentElement.style.setProperty('--accent-a', acc);
-      document.documentElement.style.setProperty('--accent-b', acc);
-    }
+    const acc=LS.getItem('sl_accent') || localStorage.getItem('sl_accent');
+    if(acc) window.slApplyAccent(acc);
     const fs=LS.getItem('sl_font_size');
     if(fs) document.documentElement.style.setProperty('--msg-font', fs+'px');
   }catch(e){}
+  // Re-apply after UI mounts
+  setTimeout(function(){ try{ const a=localStorage.getItem('sl_accent'); if(a) window.slApplyAccent(a); }catch(e){} }, 800);
+  setTimeout(function(){ try{ const a=localStorage.getItem('sl_accent'); if(a) window.slApplyAccent(a); }catch(e){} }, 2500);
 
   /* ---- 11) Badge click: verified ≠ name icon ---- */
   document.addEventListener('click', (e)=>{
@@ -50064,14 +50148,20 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
 .sl-igif-grid, .sl-gif-grid, #sl-igif-grid, #sl-gif-grid{
   display:grid !important;
   grid-template-columns:repeat(2, minmax(0, 1fr)) !important;
-  gap:8px !important;
-  padding:0 10px 14px !important;
+  gap:10px !important;
+  padding:8px 12px 16px !important;
   overflow-y:auto !important;
+  overflow-x:hidden !important;
   -webkit-overflow-scrolling:touch;
   align-content:start !important;
-  flex:1;
-  min-height:160px;
-  max-height:48vh;
+  align-items:stretch !important;
+  justify-items:stretch !important;
+  flex:1 1 auto !important;
+  min-height:180px !important;
+  max-height:min(52vh, 420px) !important;
+  width:100% !important;
+  box-sizing:border-box !important;
+  position:relative !important;
 }
 @media(min-width:420px){
   .sl-igif-grid, .sl-gif-grid, #sl-igif-grid, #sl-gif-grid{
@@ -50081,22 +50171,29 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
 .sl-gif-cell{
   position:relative !important;
   width:100% !important;
+  max-width:100% !important;
   aspect-ratio:1 / 1 !important;
   height:auto !important;
   min-height:0 !important;
   border-radius:14px !important;
   overflow:hidden !important;
-  background:#111 !important;
+  background:#0d0f14 !important;
   cursor:pointer !important;
   border:none !important;
   padding:0 !important;
   margin:0 !important;
   display:block !important;
-  isolation:isolate;
+  isolation:isolate !important;
+  transform:none !important;
+  float:none !important;
+  grid-column:auto !important;
+  grid-row:auto !important;
+  align-self:stretch !important;
+  box-sizing:border-box !important;
 }
 .sl-gif-cell img{
   position:absolute !important;
-  inset:0 !important;
+  top:0 !important; left:0 !important; right:0 !important; bottom:0 !important;
   width:100% !important;
   height:100% !important;
   object-fit:cover !important;
@@ -50106,6 +50203,8 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
   border-radius:0 !important;
   max-width:none !important;
   max-height:none !important;
+  transform:none !important;
+  pointer-events:none !important;
 }
 .sl-gif-empty, .sl-gif-load{
   grid-column:1 / -1; text-align:center; padding:36px 16px; opacity:.65; font-size:14px;
@@ -50250,7 +50349,8 @@ img.sl-gif-img{
   function fillGrid(grid, results, reset){
     if(reset) grid.innerHTML = '';
     try{
-      grid.style.cssText = 'display:grid;grid-template-columns:'+(window.innerWidth>=420?'1fr 1fr 1fr':'1fr 1fr')+';gap:8px;padding:0 10px 14px;margin:0;overflow-y:auto;align-content:start;width:100%;box-sizing:border-box;flex:1;min-height:0';
+      var cols = window.innerWidth >= 420 ? '1fr 1fr 1fr' : '1fr 1fr';
+      grid.style.cssText = 'display:grid;grid-template-columns:'+cols+';gap:10px;padding:8px 12px 16px;margin:0;overflow-y:auto;overflow-x:hidden;align-content:start;align-items:stretch;justify-items:stretch;width:100%;box-sizing:border-box;flex:1;min-height:180px;max-height:min(52vh,420px);position:relative';
     }catch(e){}
     results.forEach(item=>{
       const url = pickUrl(item);
@@ -50258,12 +50358,14 @@ img.sl-gif-img{
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'sl-gif-cell';
-      btn.style.cssText = 'position:relative;display:block;width:100%;height:0;padding-bottom:100%;margin:0;border:none;border-radius:14px;overflow:hidden;background:#0d0f14;cursor:pointer;box-sizing:border-box';
+      // aspect-ratio only — NEVER height:0 + padding-bottom (causes stacked pile)
+      btn.style.cssText = 'position:relative;display:block;width:100%;aspect-ratio:1/1;height:auto;min-height:0;margin:0;padding:0;border:none;border-radius:14px;overflow:hidden;background:#0d0f14;cursor:pointer;box-sizing:border-box;transform:none;float:none';
       const img = document.createElement('img');
       img.loading = 'lazy';
       img.alt = '';
       img.src = url;
-      img.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;display:block;margin:0;border:none;max-width:none;max-height:none';
+      img.draggable = false;
+      img.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;display:block;margin:0;border:none;max-width:none;max-height:none;transform:none;pointer-events:none';
       btn.appendChild(img);
       btn.onclick = () => sendGif(url);
       grid.appendChild(btn);
@@ -50497,6 +50599,55 @@ img.sl-gif-img{
 </script>
 
 
+<style id="sl-gif-grid-fix">
+/* Force GIF tiles in a real grid — no card-stack pile */
+#sl-igif-grid, #sl-gif-grid, .sl-igif-grid, .sl-gif-grid{
+  display:grid !important;
+  grid-template-columns:repeat(2,minmax(0,1fr)) !important;
+  gap:10px !important;
+  align-content:start !important;
+  align-items:stretch !important;
+  position:relative !important;
+  overflow-x:hidden !important;
+}
+@media(min-width:420px){
+  #sl-igif-grid, #sl-gif-grid, .sl-igif-grid, .sl-gif-grid{
+    grid-template-columns:repeat(3,minmax(0,1fr)) !important;
+  }
+}
+#sl-igif-grid > .sl-gif-cell,
+#sl-gif-grid > .sl-gif-cell,
+.sl-igif-grid > .sl-gif-cell,
+.sl-gif-grid > .sl-gif-cell{
+  position:relative !important;
+  width:100% !important;
+  aspect-ratio:1/1 !important;
+  height:auto !important;
+  min-height:0 !important;
+  max-height:none !important;
+  padding:0 !important;
+  margin:0 !important;
+  float:none !important;
+  transform:none !important;
+  top:auto !important; left:auto !important; right:auto !important; bottom:auto !important;
+  inset:auto !important;
+  grid-column:auto !important;
+  grid-row:auto !important;
+  overflow:hidden !important;
+  border-radius:14px !important;
+}
+#sl-igif-grid > .sl-gif-cell > img,
+#sl-gif-grid > .sl-gif-cell > img,
+.sl-igif-grid > .sl-gif-cell > img,
+.sl-gif-grid > .sl-gif-cell > img{
+  position:absolute !important;
+  inset:0 !important;
+  width:100% !important; height:100% !important;
+  object-fit:cover !important;
+  transform:none !important;
+  margin:0 !important;
+}
+</style>
 <script id="sl-stk-layout-js">
 (function(){
   if(window._slStkLayout) return; window._slStkLayout=1;
@@ -50521,11 +50672,12 @@ img.sl-gif-img{
     setTimeout(function(){
       var grid = document.getElementById('sl-igif-grid');
       if(!grid) return;
-      grid.style.cssText = 'display:grid;grid-template-columns:'+(window.innerWidth>=420?'1fr 1fr 1fr':'1fr 1fr')+';gap:8px;padding:0 10px 14px;overflow-y:auto;align-content:start;width:100%;box-sizing:border-box;flex:1;min-height:0';
+      var cols = window.innerWidth>=420?'1fr 1fr 1fr':'1fr 1fr';
+      grid.style.cssText = 'display:grid;grid-template-columns:'+cols+';gap:10px;padding:8px 12px 16px;overflow-y:auto;overflow-x:hidden;align-content:start;align-items:stretch;width:100%;box-sizing:border-box;flex:1;min-height:180px;max-height:min(52vh,420px);position:relative';
       grid.querySelectorAll('.sl-gif-cell').forEach(function(btn){
-        btn.style.cssText = 'position:relative;display:block;width:100%;height:0;padding-bottom:100%;margin:0;border:none;border-radius:14px;overflow:hidden;background:#0d0f14;cursor:pointer;box-sizing:border-box';
+        btn.style.cssText = 'position:relative;display:block;width:100%;aspect-ratio:1/1;height:auto;min-height:0;margin:0;padding:0;border:none;border-radius:14px;overflow:hidden;background:#0d0f14;cursor:pointer;box-sizing:border-box;transform:none;float:none';
         var img = btn.querySelector('img');
-        if(img) img.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;display:block;margin:0;border:none;max-width:none;max-height:none';
+        if(img) img.style.cssText = 'position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;display:block;margin:0;border:none;max-width:none;max-height:none;transform:none;pointer-events:none';
       });
     }, 300);
   }, true);
