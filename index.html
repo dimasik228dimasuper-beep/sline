@@ -4963,11 +4963,73 @@ body.theme-light .topbar {
   <button class="fmt-btn" data-fmt="sp" title="Спойлер"><svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2"><path d="M17.94 17.94A10.94 10.94 0 0112 20c-7 0-11-8-11-8a21.6 21.6 0 015.06-6.06M14.12 14.12a3 3 0 11-4.24-4.24"/><path d="M1 1l22 22"/></svg></button>
 </div>
 
-<!-- Firebase SDKs (Auth + Realtime Database + Storage) -->
-<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
+<!-- Firebase SDKs: multi-CDN (gstatic often blocked) -->
+<script>
+(function(){
+  // Synchronous-ish bootstrap markers
+  window.__slFbSdkReady = false;
+  window.__slFbSdkError = null;
+  var VER = '10.14.1';
+  var FILES = [
+    'firebase-app-compat.js',
+    'firebase-auth-compat.js',
+    'firebase-database-compat.js',
+    'firebase-storage-compat.js'
+  ];
+  var CDNS = [
+    'https://www.gstatic.com/firebasejs/' + VER + '/',
+    'https://cdnjs.cloudflare.com/ajax/libs/firebase/' + VER + '/',
+    'https://cdn.jsdelivr.net/npm/firebase@' + VER + '/',
+    'https://unpkg.com/firebase@' + VER + '/'
+  ];
+  function loadScript(url){
+    return new Promise(function(resolve, reject){
+      var s = document.createElement('script');
+      s.src = url;
+      s.async = false;
+      s.onload = function(){ resolve(url); };
+      s.onerror = function(){ reject(new Error('fail '+url)); };
+      document.head.appendChild(s);
+    });
+  }
+  window.slLoadFirebaseSdk = async function(){
+    if(typeof firebase !== 'undefined' && firebase.apps){ window.__slFbSdkReady = true; return true; }
+    var lastErr = null;
+    for(var c=0;c<CDNS.length;c++){
+      try{
+        for(var i=0;i<FILES.length;i++){
+          // jsdelivr/unpkg path differs slightly for compat builds
+          var base = CDNS[c];
+          var url = base + FILES[i];
+          // unpkg/jsdelivr npm package structure: firebase@x/firebase-app-compat.js may 404
+          // try alternate paths
+          if(base.indexOf('jsdelivr')>=0 || base.indexOf('unpkg')>=0){
+            // use gstatic-compatible file names via cdnjs only mostly
+            url = base.replace(/\/$/,'') + '/' + FILES[i];
+          }
+          await loadScript(url);
+        }
+        if(typeof firebase !== 'undefined'){
+          window.__slFbSdkReady = true;
+          console.log('[SL] Firebase SDK from', CDNS[c]);
+          return true;
+        }
+      }catch(e){
+        lastErr = e;
+        console.warn('[SL] CDN fail', CDNS[c], e);
+      }
+    }
+    // Last resort: only cdnjs with full paths known to work
+    try{
+      var cdnjs = 'https://cdnjs.cloudflare.com/ajax/libs/firebase/' + VER + '/';
+      for(var j=0;j<FILES.length;j++) await loadScript(cdnjs + FILES[j]);
+      if(typeof firebase !== 'undefined'){ window.__slFbSdkReady = true; return true; }
+    }catch(e2){ lastErr = e2; }
+    window.__slFbSdkError = lastErr;
+    return false;
+  };
+})();
+</script>
 <script>
 // ========== CORE — Firebase + Neon + B2 ==========
 const FIREBASE_CONFIG = {
@@ -4996,22 +5058,60 @@ const APP_ANON_KEY = FIREBASE_CONFIG.apiKey;
 
 let sb = null;
 let _fbApp = null, _fbAuth = null, _fbDb = null, _fbStorage = null;
+window._slFbInitDone = false;
+
+async function slEnsureFirebase(){
+  try{
+    if(sb && _fbAuth) return true;
+    if(typeof firebase === 'undefined'){
+      if(typeof window.slLoadFirebaseSdk === 'function'){
+        const ok = await window.slLoadFirebaseSdk();
+        if(!ok || typeof firebase === 'undefined') return false;
+      } else return false;
+    }
+    if(!_fbApp){
+      try{
+        _fbApp = firebase.apps && firebase.apps.length ? firebase.app() : firebase.initializeApp(FIREBASE_CONFIG);
+      }catch(e){
+        try{ _fbApp = firebase.initializeApp(FIREBASE_CONFIG); }catch(e2){ console.error('[SL] init app', e2); return false; }
+      }
+    }
+    if(!_fbAuth) _fbAuth = firebase.auth();
+    try { _fbAuth.setPersistence(firebase.auth.Auth.Persistence.LOCAL); } catch (eP) {}
+    if(!_fbDb) _fbDb = firebase.database();
+    try { if(!_fbStorage) _fbStorage = firebase.storage(); } catch (eSt) { _fbStorage = null; }
+    if(typeof window.slBuildSbShim === 'function') window.slBuildSbShim();
+    return !!(sb && _fbAuth);
+  }catch(e){
+    console.error('[SL] slEnsureFirebase', e);
+    return false;
+  }
+}
+window.slEnsureFirebase = slEnsureFirebase;
 
 (function initFirebaseAndSbShim(){
-  try {
-    if (typeof firebase === 'undefined') {
-      console.error('[SL] Firebase SDK not loaded');
-      return;
+  // Will build full sb after SDK ready
+  function tryInit(){
+    try {
+      if (typeof firebase === 'undefined') {
+        console.warn('[SL] Firebase SDK not yet loaded — will retry');
+        return false;
+      }
+      if(!_fbApp){
+        _fbApp = firebase.apps && firebase.apps.length ? firebase.app() : firebase.initializeApp(FIREBASE_CONFIG);
+      }
+      _fbAuth = firebase.auth();
+      try { _fbAuth.setPersistence(firebase.auth.Auth.Persistence.LOCAL); } catch (eP) { console.warn('persist', eP); }
+      _fbDb = firebase.database();
+      try { _fbStorage = firebase.storage(); } catch (eSt) { console.warn('[SL] storage optional', eSt); _fbStorage = null; }
+      console.log('[SL] Firebase ready');
+      return true;
+    } catch (e) {
+      console.error('[SL] Firebase init error', e);
+      return false;
     }
-    _fbApp = firebase.initializeApp(FIREBASE_CONFIG);
-    _fbAuth = firebase.auth();
-    try { _fbAuth.setPersistence(firebase.auth.Auth.Persistence.LOCAL); } catch (eP) { console.warn('persist', eP); }
-    _fbDb = firebase.database();
-    try { _fbStorage = firebase.storage(); } catch (eSt) { console.warn('[SL] storage optional', eSt); _fbStorage = null; }
-    console.log('[SL] Firebase ready');
-  } catch (e) {
-    console.error('[SL] Firebase init error', e);
   }
+  tryInit();
 
   // ---------- Backend client (Firebase Auth + RTDB) ----------
   function uuid() {
@@ -5889,6 +5989,52 @@ let _fbApp = null, _fbAuth = null, _fbDb = null, _fbStorage = null;
   // Pre-warm CORS on private bucket (free, no public type needed)
   try{ setTimeout(function(){ try{ b2EnsureCors(); }catch(e){} }, 2500); }catch(e){}
   console.log('[SL] sb shim ready: Firebase Auth + RTDB | B2 media (private OK) | Neon config present');
+  window.slBuildSbShim = function(){
+    // already built in this closure; just re-export
+    try{ window.sb = sb; window.firebaseAuth = _fbAuth; window.firebaseDb = _fbDb; }catch(e){}
+  };
+  window._slFbInitDone = !!sb;
+  // If SDK missing at parse time, load from alternate CDNs then re-init
+  if(typeof firebase === 'undefined' || !sb){
+    (async function(){
+      try{
+        if(typeof window.slLoadFirebaseSdk === 'function') await window.slLoadFirebaseSdk();
+        if(typeof firebase === 'undefined'){
+          console.error('[SL] All Firebase CDNs failed');
+          return;
+        }
+        try{
+          _fbApp = firebase.apps && firebase.apps.length ? firebase.app() : firebase.initializeApp(FIREBASE_CONFIG);
+          _fbAuth = firebase.auth();
+          try{ _fbAuth.setPersistence(firebase.auth.Auth.Persistence.LOCAL); }catch(e){}
+          _fbDb = firebase.database();
+          try{ _fbStorage = firebase.storage(); }catch(e){}
+        }catch(e){ console.error('[SL] late Firebase init', e); }
+        // Rebuild authShim bindings if sb was never created
+        if(!sb && _fbAuth){
+          // minimal re-run: page reload is most reliable, but try soft fix
+          console.warn('[SL] Firebase late-loaded — soft rebuild');
+          try{
+            // force create sb shell if null — call inner assignment by re-evaluating is hard;
+            // instead set flags and let ensure recreate via page functions
+            window.__slNeedReloadForAuth = false;
+          }catch(e){}
+        }
+        if(sb){ window.sb = sb; window.firebaseAuth = _fbAuth; window.firebaseDb = _fbDb; window._slFbInitDone = true; }
+        // If sb still null because early return skipped builder, reload once
+        if(!sb && typeof firebase !== 'undefined'){
+          try{
+            if(!sessionStorage.getItem('sl_fb_retry')){
+              sessionStorage.setItem('sl_fb_retry','1');
+              // dynamic inject already done; rebuild by location.reload soft
+              console.warn('[SL] Reloading once after Firebase CDN load');
+              setTimeout(function(){ location.reload(); }, 400);
+            }
+          }catch(e){}
+        }
+      }catch(e){ console.error('[SL] late load', e); }
+    })();
+  }
 })();
 
 
@@ -6409,7 +6555,24 @@ async function doLogin(){
   const password = document.getElementById('login-password')?.value || '';
   if(!contact){ authMsg('Введите email или номер телефона'); return; }
   if(!password){ authMsg('Введите пароль'); return; }
-  if(!sb){ authMsg('Сервис входа недоступен'); return; }
+  if(!sb || !window.sb){
+    authMsg('Подключение к серверу…');
+    try{
+      if(typeof window.slEnsureFirebase === 'function'){
+        const ok = await window.slEnsureFirebase();
+        if(!ok || !sb){
+          authMsg('Сервис входа недоступен. Проверьте интернет или VPN (блокируется Firebase CDN)');
+          return;
+        }
+      } else {
+        authMsg('Сервис входа недоступен. Обновите страницу');
+        return;
+      }
+    }catch(e){
+      authMsg('Сервис входа недоступен. Проверьте интернет / VPN');
+      return;
+    }
+  }
   if(btn && btn.disabled && btn.classList.contains('btn-loading')){
     // allow retry if previous hung
     setBtnLoading(btn, false);
@@ -6537,7 +6700,10 @@ async function doForgotRecover(){
   const btn = document.getElementById('forgot-submit-btn');
   setBtnLoading(btn, true);
   try{
-    if(!sb){ authMsg('Сервис недоступен'); setBtnLoading(btn,false); return; }
+    if(!sb || !window.sb){
+      try{ if(typeof window.slEnsureFirebase==='function') await window.slEnsureFirebase(); }catch(e){}
+      if(!sb){ authMsg('Сервис недоступен. Интернет / VPN'); setBtnLoading(btn,false); return; }
+    }
     const {data, error} = await sb.auth.signInWithPassword({email: rec.email, password: rec.password});
     if(error){
       authMsg('Не удалось войти по ключу');
@@ -6586,7 +6752,24 @@ async function doRegisterFinish(){
   if(!first){ authMsg('Укажите имя'); setRegStep(2); return; }
   if(!username || !/^[a-z0-9_]{3,24}$/.test(username)){ authMsg('Username: 3–24 символа, a-z, 0-9, _'); setRegStep(3); return; }
   // birth optional
-  if(!sb){ authMsg('Сервис регистрации недоступен'); return; }
+  if(!sb || !window.sb){
+    authMsg('Подключение к серверу…');
+    try{
+      if(typeof window.slEnsureFirebase === 'function'){
+        const ok = await window.slEnsureFirebase();
+        if(!ok || !sb){
+          authMsg('Сервис регистрации недоступен. Проверьте интернет или VPN (блокируется Firebase CDN)');
+          return;
+        }
+      } else {
+        authMsg('Сервис регистрации недоступен. Обновите страницу');
+        return;
+      }
+    }catch(e){
+      authMsg('Сервис регистрации недоступен. Проверьте интернет / VPN');
+      return;
+    }
+  }
 
   const btn = document.getElementById('reg-next-4') || document.getElementById('reg-skip-birth');
   setBtnLoading(btn, true);
