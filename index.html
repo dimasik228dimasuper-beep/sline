@@ -4534,6 +4534,56 @@ body.theme-light .topbar {
 
 </style>
 
+
+<style id="sl-auth-panel-guard">
+/* Only one auth panel visible at a time */
+#auth-choice.sl-auth-panel-off,
+#login-form.sl-auth-panel-off,
+#login-verify-form.sl-auth-panel-off,
+#register-form.sl-auth-panel-off,
+#forgot-form.sl-auth-panel-off{
+  display:none !important;
+  visibility:hidden !important;
+  pointer-events:none !important;
+  height:0 !important;
+  overflow:hidden !important;
+  margin:0 !important;
+  padding:0 !important;
+  opacity:0 !important;
+}
+html[data-auth-panel="login-verify-form"] #auth-choice,
+html[data-auth-panel="login-form"] #auth-choice,
+html[data-auth-panel="register-form"] #auth-choice,
+html[data-auth-panel="forgot-form"] #auth-choice,
+body[data-auth-panel="login-verify-form"] #auth-choice,
+body[data-auth-panel="login-form"] #auth-choice,
+body[data-auth-panel="register-form"] #auth-choice,
+body[data-auth-panel="forgot-form"] #auth-choice{
+  display:none !important;
+  visibility:hidden !important;
+  pointer-events:none !important;
+  height:0 !important;
+  overflow:hidden !important;
+  opacity:0 !important;
+}
+#login-verify-form .sl-spam-hint{
+  font-size:12px;
+  color:var(--muted,#8B9BB4);
+  text-align:center;
+  margin:0 0 14px;
+  line-height:1.4;
+  opacity:.9;
+}
+#register-form .sl-spam-hint{
+  font-size:12px;
+  color:var(--muted,#8B9BB4);
+  text-align:center;
+  margin:8px 0 12px;
+  line-height:1.4;
+  opacity:.9;
+}
+</style>
+
 <div id="auth-screen">
   <div class="auth-card">
     <div class="brand"><div class="brand-mark" aria-label="SLine"></div><div class="brand-name">SLine</div></div>
@@ -4552,9 +4602,10 @@ body.theme-light .topbar {
       <button type="button" class="btn-secondary" id="login-back-choice" style="margin-top:8px;border:none;color:var(--muted)">← Назад</button>
     </div>
 
-    <div id="login-verify-form" style="display:none">
+    <div id="login-verify-form" style="display:none" class="sl-auth-panel-off" hidden>
       <p style="font-size:14px;font-weight:700;margin-bottom:8px;text-align:center">Подтверждение email</p>
-      <p id="login-verify-hint" style="font-size:13px;color:var(--muted);margin-bottom:14px;line-height:1.45;text-align:center">Мы отправили код на вашу почту</p>
+      <p id="login-verify-hint" style="font-size:13px;color:var(--muted);margin-bottom:8px;line-height:1.45;text-align:center">Мы отправили код на вашу почту</p>
+      <p class="sl-spam-hint">Письмо может быть во вкладке «Спам»</p>
       <div class="field">
         <label>Код из письма</label>
         <input type="text" id="login-email-code" placeholder="123456" inputmode="numeric" autocomplete="one-time-code" maxlength="8" style="text-align:center;font-size:22px;letter-spacing:6px;font-weight:700">
@@ -4620,6 +4671,7 @@ body.theme-light .topbar {
         <div style="text-align:center;margin-bottom:8px;font-size:28px">✉️</div>
         <p style="font-size:14px;font-weight:700;margin-bottom:8px;text-align:center">Подтверждение email</p>
         <p id="reg-verify-hint" style="font-size:13px;color:var(--muted);margin-bottom:14px;line-height:1.45;text-align:center">Мы отправили код на вашу почту</p>
+        <p class="sl-spam-hint">Письмо может быть во вкладке «Спам»</p>
         <div class="field">
           <label>Код из письма</label>
           <input type="text" id="reg-email-code" placeholder="123456" inputmode="numeric" autocomplete="one-time-code" maxlength="8" style="text-align:center;font-size:22px;letter-spacing:6px;font-weight:700">
@@ -6392,7 +6444,8 @@ function showAuthPanel(which){
       wrap.id = 'login-verify-form';
       wrap.style.display = 'none';
       wrap.innerHTML = '<p style="font-size:14px;font-weight:700;margin-bottom:8px;text-align:center">Подтверждение email</p>'
-        +'<p id="login-verify-hint" style="font-size:13px;color:var(--muted);margin-bottom:14px;line-height:1.45;text-align:center">Мы отправили код на вашу почту</p>'
+        +'<p id="login-verify-hint" style="font-size:13px;color:var(--muted);margin-bottom:8px;line-height:1.45;text-align:center">Мы отправили код на вашу почту</p>'
+        +'<p class="sl-spam-hint">Письмо может быть во вкладке «Спам»</p>'
         +'<div class="field"><label>Код из письма</label>'
         +'<input type="text" id="login-email-code" placeholder="123456" inputmode="numeric" autocomplete="one-time-code" maxlength="8" style="text-align:center;font-size:22px;letter-spacing:6px;font-weight:700"></div>'
         +'<button type="button" class="btn-primary" id="login-verify-code-btn">Подтвердить</button>'
@@ -6413,18 +6466,27 @@ function showAuthPanel(which){
     const el = document.getElementById(id);
     if(!el) return;
     if(id===which){
-      el.style.display = 'block';
-      el.style.visibility = 'visible';
-      el.style.pointerEvents = 'auto';
-      el.style.opacity = '1';
+      el.style.setProperty('display', 'block', 'important');
+      el.style.setProperty('visibility', 'visible', 'important');
+      el.style.setProperty('pointer-events', 'auto', 'important');
+      el.style.setProperty('opacity', '1', 'important');
       el.removeAttribute('hidden');
+      el.classList.add('sl-auth-panel-on');
+      el.classList.remove('sl-auth-panel-off');
     } else {
-      el.style.display = 'none';
-      el.style.visibility = 'hidden';
-      el.style.pointerEvents = 'none';
-      el.style.opacity = '0';
+      el.style.setProperty('display', 'none', 'important');
+      el.style.setProperty('visibility', 'hidden', 'important');
+      el.style.setProperty('pointer-events', 'none', 'important');
+      el.style.setProperty('opacity', '0', 'important');
+      el.setAttribute('hidden', '');
+      el.classList.add('sl-auth-panel-off');
+      el.classList.remove('sl-auth-panel-on');
     }
   });
+  try{
+    document.body.setAttribute('data-auth-panel', which || '');
+    document.documentElement.setAttribute('data-auth-panel', which || '');
+  }catch(e){}
   const sub = document.getElementById('auth-sub-text');
   if(sub){
     if(which==='auth-choice') sub.textContent = 'Современный мессенджер';
@@ -32068,6 +32130,18 @@ html, :root, body{
       // Always restore choice buttons first (never leave empty auth screen)
       function revealChoice(){
         try{
+          // Never force choice buttons if user is on code / login / register panels
+          const panel = (document.body && document.body.getAttribute('data-auth-panel')) ||
+            (document.documentElement && document.documentElement.getAttribute('data-auth-panel')) || '';
+          if(panel && panel !== 'auth-choice') return;
+          try{
+            if(typeof slLoadAuthFlow==='function'){
+              const f = slLoadAuthFlow();
+              if(f && f.panel && f.panel !== 'auth-choice') return;
+            }
+          }catch(e){}
+          const vform = document.getElementById('login-verify-form');
+          if(vform && vform.classList.contains('sl-auth-panel-on')) return;
           const choice=document.getElementById('auth-choice');
           if(choice){
             choice.style.visibility='';
@@ -45321,7 +45395,21 @@ body{
     if(app) app.style.setProperty('display','none','important');
     document.documentElement.classList.add('sl-force-auth');
     document.documentElement.classList.remove('sl-force-app');
-    try{ var c=document.getElementById('auth-choice'); if(c){ c.style.display=''; c.style.visibility='visible'; c.style.opacity='1'; c.style.pointerEvents='auto'; } }catch(e){}
+    try{
+      var panel = (document.body && document.body.getAttribute('data-auth-panel')) ||
+        (document.documentElement && document.documentElement.getAttribute('data-auth-panel')) || '';
+      var midVerify = (panel === 'login-verify-form' || panel === 'login-form' || panel === 'register-form' || panel === 'forgot-form');
+      try{
+        if(typeof slLoadAuthFlow==='function'){
+          var f = slLoadAuthFlow();
+          if(f && f.panel && f.panel !== 'auth-choice') midVerify = true;
+        }
+      }catch(e){}
+      if(!midVerify){
+        var c=document.getElementById('auth-choice');
+        if(c){ c.style.display=''; c.style.visibility='visible'; c.style.opacity='1'; c.style.pointerEvents='auto'; }
+      }
+    }catch(e){}
   }
   function showApp(){
     var auth=document.getElementById('auth-screen'), app=document.getElementById('app-screen');
