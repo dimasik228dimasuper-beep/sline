@@ -9807,6 +9807,38 @@ function renderMessage(msg, isGroup=false){
   }catch(e){}
   const time=_msgTs.toLocaleTimeString((typeof currentLang!=='undefined'&&currentLang==='en')?'en-US':'ru-RU',{hour:'2-digit',minute:'2-digit'});
   let bodyText=msg.content||'', replyHtml='';
+  // E2EE: decrypt encrypted messages (async update of bubble)
+  if(msg.type==='encrypted' && window.SL_E2EE && myProfile && myProfile.id){
+    bodyText = '[расшифровка…]';
+    (async function(){
+      try{
+        const payload = typeof msg.content==='string' ? JSON.parse(msg.content) : msg.content;
+        const isG = !!(msg.group_id || isGroup);
+        const peer = msg.sender_id===myProfile.id ? msg.receiver_id : msg.sender_id;
+        const plain = await SL_E2EE.decryptMessage({
+          payload: payload,
+          chatId: isG ? msg.group_id : peer,
+          isGroup: isG,
+          myUid: myProfile.id,
+          peerUid: peer
+        });
+        const el = document.querySelector('.bubble-row[data-id="'+msg.id+'"] .bubble');
+        if(el){
+          // keep time / status nodes if present
+          const timeEl = el.querySelector('.bubble-time, .msg-time, .time');
+          const timeHtml = timeEl ? timeEl.outerHTML : '';
+          const replyEl = el.querySelector('.reply-quote');
+          const replyKeep = replyEl ? replyEl.outerHTML : '';
+          el.innerHTML = replyKeep + (window.escapeHtml ? escapeHtml(plain) : plain) + timeHtml;
+        }
+        msg._decrypted = plain;
+      }catch(e){
+        console.warn('[E2EE] render decrypt', e);
+        const el = document.querySelector('.bubble-row[data-id="'+msg.id+'"] .bubble');
+        if(el) el.innerHTML = (el.innerHTML||'').replace('[расшифровка…]','[не удалось расшифровать]');
+      }
+    })();
+  }
   if((msg.type==='text'||!msg.type)&&bodyText.startsWith('↪ ')){
     const nl=bodyText.indexOf('\n');
     if(nl>-1){
@@ -11017,7 +11049,7 @@ async function sendFileOptimistic(file, mType, caption, quality){
               setTimeout(()=>sb.removeChannel(ch), 1200);
             }
           });
-          const preview = data.type==='text' ? (data.content||'').slice(0,80) : (data.type||'message');
+          const preview = data.type==='encrypted' ? '🔒 Сообщение' : (data.type==='text' ? (data.content||'').slice(0,80) : (data.type||'message'));
           const _ptitle = myProfile.first_name||myProfile.username||'SLine';
           try{ sendWebPushToUser(peerId, _ptitle, preview, {tag:'sl-msg'}); }catch(e){}
           try{ sendNtfyPush(peerId, _ptitle, preview, {tags:'speech_balloon', priority:'high'}); }catch(e){}
@@ -11493,7 +11525,26 @@ async function _sendMessageInner(type='text', fileUrl=null, content=null){
   }
   if(content===null){ input.value=''; sendBtn.classList.remove('visible'); document.getElementById('composer')?.classList.remove('has-text'); input.style.height='auto'; }
   stopTyping();
-  const payload={sender_id:myProfile.id, content:text||'', type:type||'text', file_url:fileUrl||null};
+  let _outContent = text || '';
+  let _outType = type || 'text';
+  // E2EE encrypt text messages
+  if (_outType === 'text' && _outContent && window.SL_E2EE && myProfile && myProfile.id) {
+    try {
+      const isGroup = !!activeGroup;
+      const encrypted = await SL_E2EE.encryptMessage({
+        text: _outContent,
+        chatId: isGroup ? activeGroup.id : (activePartner && activePartner.id),
+        isGroup: isGroup,
+        myUid: myProfile.id,
+        peerUid: isGroup ? null : (activePartner && activePartner.id)
+      });
+      _outContent = JSON.stringify(encrypted);
+      _outType = 'encrypted';
+    } catch (eEnc) {
+      console.warn('[E2EE] encrypt failed, sending plaintext', eEnc);
+    }
+  }
+  const payload={sender_id:myProfile.id, content:_outContent, type:_outType, file_url:fileUrl||null};
   if(activeGroup){ payload.group_id=activeGroup.id; payload.receiver_id=null; }
   else { payload.receiver_id=activePartner.id; payload.group_id=null; }
   try{ if(typeof _replyIdForPayload!=='undefined' && _replyIdForPayload){ payload.reply_to_msg_id=_replyIdForPayload; } }catch(e){}
@@ -11635,7 +11686,7 @@ async function _sendMessageInner(type='text', fileUrl=null, content=null){
             }
           });
           // Push only TO the peer — never show a local notification for our own send
-          const preview = data.type==='text' ? (data.content||'').slice(0,80) : (data.type||'message');
+          const preview = data.type==='encrypted' ? '🔒 Сообщение' : (data.type==='text' ? (data.content||'').slice(0,80) : (data.type||'message'));
           const _ptitle = myProfile.first_name||myProfile.username||'SLine';
           try{ sendWebPushToUser(peerId, _ptitle, preview, {tag:'sl-msg'}); }catch(e){}
           try{ sendNtfyPush(peerId, _ptitle, preview, {tags:'speech_balloon', priority:'high'}); }catch(e){}
