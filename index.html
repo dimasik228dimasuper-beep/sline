@@ -5095,219 +5095,7 @@ body[data-auth-panel="forgot-form"] #auth-choice{
 })();
 </script>
 <script>
-
-<script id="sl-e2ee-module">
-// ===================== SLine E2EE Module (Web Crypto) =====================
-const SL_E2EE = (() => {
-  const LS = localStorage;
-  const CURVE = 'P-256';
-  const AES_ALGO = 'AES-GCM';
-
-  function bufToB64(buf) {
-    return btoa(String.fromCharCode.apply(null, new Uint8Array(buf)));
-  }
-  function b64ToBuf(b64) {
-    const bin = atob(b64);
-    const arr = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
-    return arr.buffer;
-  }
-  async function exportPubKey(key) {
-    const spki = await crypto.subtle.exportKey('spki', key);
-    return bufToB64(spki);
-  }
-  async function importPubKey(b64) {
-    return crypto.subtle.importKey('spki', b64ToBuf(b64), { name: 'ECDH', namedCurve: CURVE }, true, []);
-  }
-  async function exportPrivKey(key) {
-    const pkcs8 = await crypto.subtle.exportKey('pkcs8', key);
-    return bufToB64(pkcs8);
-  }
-  async function importPrivKey(b64) {
-    return crypto.subtle.importKey('pkcs8', b64ToBuf(b64), { name: 'ECDH', namedCurve: CURVE }, true, ['deriveKey', 'deriveBits']);
-  }
-
-  async function ensureUserKeys(uid) {
-    const pubKeyName = 'sl_e2ee_pub_' + uid;
-    const privKeyName = 'sl_e2ee_priv_' + uid;
-    let pubB64 = LS.getItem(pubKeyName);
-    let privB64 = LS.getItem(privKeyName);
-    if (!pubB64 || !privB64) {
-      const pair = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: CURVE }, true, ['deriveKey', 'deriveBits']);
-      pubB64 = await exportPubKey(pair.publicKey);
-      privB64 = await exportPrivKey(pair.privateKey);
-      LS.setItem(pubKeyName, pubB64);
-      LS.setItem(privKeyName, privB64);
-    }
-    return {
-      publicKey: await importPubKey(pubB64),
-      privateKey: await importPrivKey(privB64),
-      publicKeyB64: pubB64
-    };
-  }
-
-  async function publishPublicKey(uid, publicKeyB64) {
-    try {
-      if (typeof firebase !== 'undefined' && firebase.database) {
-        await firebase.database().ref('userKeys/' + uid).set({ publicKey: publicKeyB64, updated: Date.now() });
-      }
-    } catch (e) { console.warn('[E2EE] publishPublicKey', e); }
-  }
-
-  async function getUserPublicKey(uid) {
-    try {
-      if (typeof firebase === 'undefined' || !firebase.database) return null;
-      const snap = await firebase.database().ref('userKeys/' + uid).once('value');
-      const val = snap.val();
-      return val && val.publicKey ? val.publicKey : null;
-    } catch (e) { return null; }
-  }
-
-  async function deriveSharedKey(myPrivKey, theirPubKeyB64) {
-    const theirKey = await importPubKey(theirPubKeyB64);
-    return crypto.subtle.deriveKey(
-      { name: 'ECDH', public: theirKey },
-      myPrivKey,
-      { name: AES_ALGO, length: 256 },
-      false,
-      ['encrypt', 'decrypt']
-    );
-  }
-
-  async function encryptPrivate(plaintext, sharedKey) {
-    const iv = crypto.getRandomValues(new Uint8Array(12));
-    const enc = new TextEncoder().encode(plaintext);
-    const cipher = await crypto.subtle.encrypt({ name: AES_ALGO, iv: iv }, sharedKey, enc);
-    return { v: 1, type: 'private', iv: bufToB64(iv), data: bufToB64(cipher) };
-  }
-
-  async function decryptPrivate(payload, sharedKey) {
-    const iv = b64ToBuf(payload.iv);
-    const data = b64ToBuf(payload.data);
-    const dec = await crypto.subtle.decrypt({ name: AES_ALGO, iv: iv }, sharedKey, data);
-    return new TextDecoder().decode(dec);
-  }
-
-  async function createGroupKey(groupId) {
-    const key = await crypto.subtle.generateKey({ name: AES_ALGO, length: 256 }, true, ['encrypt', 'decrypt']);
-    const raw = await crypto.subtle.exportKey('raw', key);
-    const b64 = bufToB64(raw);
-    LS.setItem('sl_group_key_' + groupId, b64);
-    return key;
-  }
-
-  async function getGroupKey(groupId) {
-    const b64 = LS.getItem('sl_group_key_' + groupId);
-    if (!b64) return null;
-    return crypto.subtle.importKey('raw', b64ToBuf(b64), { name: AES_ALGO }, false, ['encrypt', 'decrypt']);
-  }
-
-  async function saveGroupKey(groupId, rawB64) {
-    LS.setItem('sl_group_key_' + groupId, rawB64);
-  }
-
-  async function encryptGroupKeyForUser(groupKeyRawB64, targetUserPubKeyB64) {
-    const tempPair = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: CURVE }, true, ['deriveKey']);
-    const theirKey = await importPubKey(targetUserPubKeyB64);
-    const shared = await crypto.subtle.deriveKey(
-      { name: 'ECDH', public: theirKey },
-      tempPair.privateKey,
-      { name: AES_ALGO, length: 256 },
-      false,
-      ['encrypt']
-    );
-    const iv = crypto.getRandomValues(new Uint8Array(12));
-    const cipher = await crypto.subtle.encrypt({ name: AES_ALGO, iv: iv }, shared, b64ToBuf(groupKeyRawB64));
-    return { tempPub: await exportPubKey(tempPair.publicKey), iv: bufToB64(iv), data: bufToB64(cipher) };
-  }
-
-  async function decryptGroupKeyFromUser(encrypted, myPrivKey) {
-    const tempPub = await importPubKey(encrypted.tempPub);
-    const shared = await crypto.subtle.deriveKey(
-      { name: 'ECDH', public: tempPub },
-      myPrivKey,
-      { name: AES_ALGO, length: 256 },
-      false,
-      ['decrypt']
-    );
-    const raw = await crypto.subtle.decrypt({ name: AES_ALGO, iv: b64ToBuf(encrypted.iv) }, shared, b64ToBuf(encrypted.data));
-    return bufToB64(raw);
-  }
-
-  async function encryptGroup(plaintext, groupKey) {
-    const iv = crypto.getRandomValues(new Uint8Array(12));
-    const enc = new TextEncoder().encode(plaintext);
-    const cipher = await crypto.subtle.encrypt({ name: AES_ALGO, iv: iv }, groupKey, enc);
-    return { v: 1, type: 'group', iv: bufToB64(iv), data: bufToB64(cipher) };
-  }
-
-  async function decryptGroup(payload, groupKey) {
-    const dec = await crypto.subtle.decrypt({ name: AES_ALGO, iv: b64ToBuf(payload.iv) }, groupKey, b64ToBuf(payload.data));
-    return new TextDecoder().decode(dec);
-  }
-
-  async function encryptMessage(opts) {
-    const { text, chatId, isGroup, myUid, peerUid } = opts;
-    const myKeys = await ensureUserKeys(myUid);
-    if (isGroup) {
-      let groupKey = await getGroupKey(chatId);
-      if (!groupKey) groupKey = await createGroupKey(chatId);
-      return encryptGroup(text, groupKey);
-    } else {
-      const theirPub = await getUserPublicKey(peerUid);
-      if (!theirPub) throw new Error('У собеседника ещё нет ключа шифрования. Пусть он один раз откроет приложение.');
-      const shared = await deriveSharedKey(myKeys.privateKey, theirPub);
-      return encryptPrivate(text, shared);
-    }
-  }
-
-  async function decryptMessage(opts) {
-    const { payload, chatId, isGroup, myUid, peerUid } = opts;
-    if (!payload || !payload.data) return '[не удалось расшифровать]';
-    const myKeys = await ensureUserKeys(myUid);
-    try {
-      if (payload.type === 'group' || isGroup) {
-        const groupKey = await getGroupKey(chatId);
-        if (!groupKey) return '[нет ключа группы]';
-        return await decryptGroup(payload, groupKey);
-      } else {
-        const theirPub = await getUserPublicKey(peerUid);
-        if (!theirPub) return '[нет ключа собеседника]';
-        const shared = await deriveSharedKey(myKeys.privateKey, theirPub);
-        return await decryptPrivate(payload, shared);
-      }
-    } catch (e) {
-      console.warn('[E2EE] decrypt error', e);
-      return '[ошибка расшифровки]';
-    }
-  }
-
-  async function initForUser(uid) {
-    if (!uid) return null;
-    const keys = await ensureUserKeys(uid);
-    await publishPublicKey(uid, keys.publicKeyB64);
-    console.log('[E2EE] keys ready for', uid);
-    return keys;
-  }
-
-  return {
-    initForUser,
-    encryptMessage,
-    decryptMessage,
-    createGroupKey,
-    getGroupKey,
-    saveGroupKey,
-    encryptGroupKeyForUser,
-    decryptGroupKeyFromUser,
-    ensureUserKeys,
-    getUserPublicKey
-  };
-})();
-window.SL_E2EE = SL_E2EE;
-console.log('[SL] E2EE module loaded');
-</script>
-
-// ========== ЯДРО — Firebase + B2 (через прокси) ==========
+// ========== ЯДРО — Firebase + B2 (секреты вынесены) ==========
 const FIREBASE_CONFIG = {
   apiKey: "AIzaSyCRUeJPEmdduOZei7VxNUYJKSf3tiSmLKk",
   authDomain: "sline-chat.firebaseapp.com",
@@ -5319,21 +5107,21 @@ const FIREBASE_CONFIG = {
   measurementId: "G-0MFN8100TX"
 };
 
-// Прокси Cloudflare Worker (секреты B2 только там)
+// Cloudflare Worker proxy — все секретные ключи B2 только там
 const PROXY_URL = "https://old-band-f00b.dimasik-228-dima-super.workers.dev";
 
-// B2 bucket name (не секрет)
+// Neon больше не используется на клиенте
+const NEON_CONNECTION_STRING = "";
+
+// B2 — ключи пустые, реальные значения только на Worker
+const B2_KEY_ID = "";
+const B2_KEY_NAME = "";
+const B2_APPLICATION_KEY = "";
 const B2_BUCKET = "sline-media";
 
 // Сохраняйте старые имена, чтобы существующий код отправки не давал сбоев.
 const APP_BACKEND_URL = "https://sline-chat.firebaseapp.com";
 const APP_ANON_KEY = FIREBASE_CONFIG.apiKey;
-
-// Старые константы оставлены пустыми, чтобы код не падал
-const B2_KEY_ID = "";
-const B2_KEY_NAME = "";
-const B2_APPLICATION_KEY = "";
-const NEON_CONNECTION_STRING = "";
 
 пусть sb = null;
 let _fbApp = null, _fbAuth = null, _fbDb = null, _fbStorage = null;
@@ -5873,28 +5661,25 @@ window.slEnsureFirebase = slEnsureFirebase;
   let _b2BucketName = B2_BUCKET || 'sline-media';
   let _b2UploadCache = null; // { uploadUrl, authorizationToken, expires }
 
-  async function b2Authorize() {
-    // Секреты B2 больше не на клиенте — используем Cloudflare Worker
+  асинхронная функция b2Authorize() {
     if (_b2Auth && _b2Auth._ts && Date.now() - _b2Auth._ts < 50 * 60 * 1000) return _b2Auth;
-    // Получаем временный upload URL через прокси (там же приходят downloadUrl и bucket)
     const res = await fetch(PROXY_URL + '/api/b2/upload-url', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' }
     });
     if (!res.ok) {
       const t = await res.text().catch(() => '');
-      throw new Error('B2 proxy authorize failed: ' + res.status + ' ' + t);
+      throw new Error('B2 proxy failed: ' + res.status + ' ' + t);
     }
     const data = await res.json();
     _b2Auth = {
-      apiUrl: null,
+      apiUrl: data.apiUrl || null,
       authorizationToken: data.authorizationToken,
       downloadUrl: data.downloadUrl,
-      accountId: null,
+      accountId: data.accountId || null,
       _ts: Date.now()
     };
     if (data.bucketName) _b2BucketName = data.bucketName;
-    // Также сразу кладём в кэш upload
     _b2UploadCache = {
       uploadUrl: data.uploadUrl,
       authorizationToken: data.authorizationToken,
@@ -5985,10 +5770,9 @@ window.slEnsureFirebase = slEnsureFirebase;
     }
   }
 
-  async function b2GetUploadUrl() {
+  асинхронная функция b2GetUploadUrl() {
     if (_b2UploadCache && _b2UploadCache.expires > Date.now()) return _b2UploadCache;
-    // Через прокси
-    await b2Authorize(); // это заполнит _b2UploadCache
+    await b2Authorize();
     if (_b2UploadCache) return _b2UploadCache;
     throw new Error('B2 proxy did not return upload URL');
   }
@@ -6255,8 +6039,8 @@ window.slEnsureFirebase = slEnsureFirebase;
   })();
   window.firebaseAuth = _fbAuth;
   window.firebaseDb = _fbDb;
-  window.B2_CONFIG = { bucket: B2_BUCKET }; // secrets removed
-  // window.NEON_CONNECTION_STRING removed for security
+  window.B2_CONFIG = { bucket: B2_BUCKET };
+  /* NEON removed */
   window.b2UploadFile = b2UploadFile; // прямой доступ при необходимости
 
   // Предварительный нагрев CORS в частном хранилище (бесплатное, тип публичного хранилища не требуется)
@@ -31052,7 +30836,7 @@ html, :root, body{
 (function(){
   try{
     const LS = (typeof storage!=='undefined'?storage:localStorage);
-    // removed hardcoded OpenAI key
+    /* OpenAI key removed */
     LS.setItem('sl_asr_provider', 'openai');
   }catch(e){}
 })();
@@ -33834,9 +33618,9 @@ html, :root, body{
   })();
 
   /* ========== 10) AI Chat in settings ========== */
-  const AI_KEY_DEFAULT = ''; // removed
+  const AI_KEY_DEFAULT='';
   try{
-    // removed auto-set of AI key
+    if(!LS.getItem('sl_ai_key')) LS.setItem('sl_ai_key', AI_KEY_DEFAULT);
   }catch(e){}
 
   window.slOpenAIChat = function(){
