@@ -5095,7 +5095,7 @@ body[data-auth-panel="forgot-form"] #auth-choice{
 })();
 </script>
 <script>
-// ========== CORE — Firebase + Neon + B2 ==========
+// ========== CORE — Firebase + B2 (secrets on Worker only) ==========
 const FIREBASE_CONFIG = {
   apiKey: "AIzaSyCRUeJPEmdduOZei7VxNUYJKSf3tiSmLKk",
   authDomain: "sline-chat.firebaseapp.com",
@@ -5107,14 +5107,17 @@ const FIREBASE_CONFIG = {
   measurementId: "G-0MFN8100TX"
 };
 
-// Neon (Postgres) — for future server / Data API use
-const NEON_CONNECTION_STRING = "postgresql://neondb_owner:npg_3QrZLunj6UJI@ep-nameless-shape-ay9hakkj-pooler.c-5.us-east-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require";
+// Cloudflare Worker proxy — all secret keys live only there
+const PROXY_URL = "https://old-band-f00b.dimasik-228-dima-super.workers.dev";
 
-// Backblaze B2
-const B2_KEY_ID = "005cafcc7c82251000000002";
-const B2_KEY_NAME = "sline-key";
-const B2_APPLICATION_KEY = "K005PEeYJxMsO8TY7XGPQZRng/INUgl";
-const B2_BUCKET = "sline-media"; // change if your bucket name is different
+// Neon is no longer used on the client
+const NEON_CONNECTION_STRING = "";
+
+// B2 keys emptied (real values only on Worker)
+const B2_KEY_ID = "";
+const B2_KEY_NAME = "";
+const B2_APPLICATION_KEY = "";
+const B2_BUCKET = "sline-media";
 
 // Keep old names so existing push code doesn't crash
 const APP_BACKEND_URL = "https://sline-chat.firebaseapp.com";
@@ -5659,28 +5662,33 @@ window.slEnsureFirebase = slEnsureFirebase;
   let _b2UploadCache = null; // { uploadUrl, authorizationToken, expires }
 
   async function b2Authorize() {
-    if (_b2Auth && _b2Auth._ts && Date.now() - _b2Auth._ts < 20 * 60 * 60 * 1000) return _b2Auth;
-    const creds = btoa(B2_KEY_ID + ':' + B2_APPLICATION_KEY);
-    const res = await fetch('https://api.backblazeb2.com/b2api/v2/b2_authorize_account', {
-      method: 'GET',
-      headers: { Authorization: 'Basic ' + creds }
+    if (_b2Auth && _b2Auth._ts && Date.now() - _b2Auth._ts < 50 * 60 * 1000) return _b2Auth;
+    const res = await fetch(PROXY_URL + '/api/b2/upload-url', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
     });
     if (!res.ok) {
       const t = await res.text().catch(() => '');
-      throw new Error('B2 authorize failed: ' + res.status + ' ' + t);
+      throw new Error('B2 proxy failed: ' + res.status + ' ' + t);
     }
     const data = await res.json();
     _b2Auth = {
-      apiUrl: data.apiUrl,
+      apiUrl: data.apiUrl || null,
       authorizationToken: data.authorizationToken,
       downloadUrl: data.downloadUrl,
-      accountId: data.accountId,
+      accountId: data.accountId || null,
       _ts: Date.now()
+    };
+    if (data.bucketName) _b2BucketName = data.bucketName;
+    _b2UploadCache = {
+      uploadUrl: data.uploadUrl,
+      authorizationToken: data.authorizationToken,
+      expires: Date.now() + 50 * 60 * 1000
     };
     return _b2Auth;
   }
 
-  async function b2ResolveBucket() {
+  async function b2ResolveBucket() { return _b2BucketId || 'proxy'; /* disabled - using proxy */ 
     if (_b2BucketId) return _b2BucketId;
     const auth = await b2Authorize();
     const res = await fetch(auth.apiUrl + '/b2api/v2/b2_list_buckets', {
@@ -5764,24 +5772,9 @@ window.slEnsureFirebase = slEnsureFirebase;
 
   async function b2GetUploadUrl() {
     if (_b2UploadCache && _b2UploadCache.expires > Date.now()) return _b2UploadCache;
-    const auth = await b2Authorize();
-    const bucketId = await b2ResolveBucket();
-    const res = await fetch(auth.apiUrl + '/b2api/v2/b2_get_upload_url', {
-      method: 'POST',
-      headers: {
-        Authorization: auth.authorizationToken,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ bucketId })
-    });
-    if (!res.ok) throw new Error('B2 get_upload_url failed: ' + res.status);
-    const data = await res.json();
-    _b2UploadCache = {
-      uploadUrl: data.uploadUrl,
-      authorizationToken: data.authorizationToken,
-      expires: Date.now() + 20 * 60 * 60 * 1000
-    };
-    return _b2UploadCache;
+    await b2Authorize();
+    if (_b2UploadCache) return _b2UploadCache;
+    throw new Error('B2 proxy did not return upload URL');
   }
 
   async function sha1Hex(blob) {
@@ -6046,8 +6039,8 @@ window.slEnsureFirebase = slEnsureFirebase;
   })();
   window.firebaseAuth = _fbAuth;
   window.firebaseDb = _fbDb;
-  window.B2_CONFIG = { keyId: B2_KEY_ID, applicationKey: B2_APPLICATION_KEY, keyName: B2_KEY_NAME, bucket: B2_BUCKET };
-  window.NEON_CONNECTION_STRING = NEON_CONNECTION_STRING;
+  window.B2_CONFIG = { bucket: B2_BUCKET };
+  /* NEON removed */
   window.b2UploadFile = b2UploadFile; // direct access if needed
 
   // Pre-warm CORS on private bucket (free, no public type needed)
@@ -30843,7 +30836,7 @@ html, :root, body{
 (function(){
   try{
     const LS = (typeof storage!=='undefined'?storage:localStorage);
-    LS.setItem('sl_asr_key', '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');
+    /* OpenAI key removed for security */
     LS.setItem('sl_asr_provider', 'openai');
   }catch(e){}
 })();
@@ -33625,9 +33618,9 @@ html, :root, body{
   })();
 
   /* ========== 10) AI Chat in settings ========== */
-  const AI_KEY_DEFAULT='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';
+  const AI_KEY_DEFAULT='';
   try{
-    if(!LS.getItem('sl_ai_key')) LS.setItem('sl_ai_key', AI_KEY_DEFAULT);
+    /* auto AI key removed */
   }catch(e){}
 
   window.slOpenAIChat = function(){
@@ -51764,6 +51757,154 @@ img.sl-gif-img{
   setTimeout(boot,400);
   setTimeout(boot,1200);
   console.log('[SL] TG anim v6 — stories MOVE into header chips');
+})();
+</script>
+
+
+<script id="sl-e2ee-module">
+/* SLine E2EE — End-to-End Encryption (Web Crypto API) */
+(function(){
+  if (window.SL_E2EE) return;
+  const LS = localStorage;
+  const CURVE = 'P-256';
+  const AES = 'AES-GCM';
+
+  function bufToB64(buf){ return btoa(String.fromCharCode.apply(null, new Uint8Array(buf))); }
+  function b64ToBuf(b64){ const bin=atob(b64); const a=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++) a[i]=bin.charCodeAt(i); return a.buffer; }
+
+  async function exportPub(key){ return bufToB64(await crypto.subtle.exportKey('spki', key)); }
+  async function importPub(b64){ return crypto.subtle.importKey('spki', b64ToBuf(b64), {name:'ECDH', namedCurve:CURVE}, true, []); }
+  async function exportPriv(key){ return bufToB64(await crypto.subtle.exportKey('pkcs8', key)); }
+  async function importPriv(b64){ return crypto.subtle.importKey('pkcs8', b64ToBuf(b64), {name:'ECDH', namedCurve:CURVE}, true, ['deriveKey','deriveBits']); }
+
+  async function ensureUserKeys(uid){
+    const pk='sl_e2ee_pub_'+uid, sk='sl_e2ee_priv_'+uid;
+    let pubB64=LS.getItem(pk), privB64=LS.getItem(sk);
+    if(!pubB64||!privB64){
+      const pair=await crypto.subtle.generateKey({name:'ECDH',namedCurve:CURVE},true,['deriveKey','deriveBits']);
+      pubB64=await exportPub(pair.publicKey);
+      privB64=await exportPriv(pair.privateKey);
+      LS.setItem(pk,pubB64); LS.setItem(sk,privB64);
+    }
+    return { publicKey: await importPub(pubB64), privateKey: await importPriv(privB64), publicKeyB64: pubB64 };
+  }
+
+  async function publishPublicKey(uid, pubB64){
+    try{
+      if(typeof firebase!=='undefined' && firebase.database){
+        await firebase.database().ref('userKeys/'+uid).set({ publicKey: pubB64, updated: Date.now() });
+      }
+    }catch(e){ console.warn('[E2EE] publish', e); }
+  }
+
+  async function getUserPublicKey(uid){
+    try{
+      if(typeof firebase==='undefined'||!firebase.database) return null;
+      const snap=await firebase.database().ref('userKeys/'+uid).once('value');
+      const v=snap.val(); return v && v.publicKey ? v.publicKey : null;
+    }catch(e){ return null; }
+  }
+
+  async function deriveShared(myPriv, theirPubB64){
+    const their=await importPub(theirPubB64);
+    return crypto.subtle.deriveKey({name:'ECDH',public:their}, myPriv, {name:AES,length:256}, false, ['encrypt','decrypt']);
+  }
+
+  async function encryptPrivate(text, key){
+    const iv=crypto.getRandomValues(new Uint8Array(12));
+    const ct=await crypto.subtle.encrypt({name:AES,iv}, key, new TextEncoder().encode(text));
+    return { v:1, type:'private', iv:bufToB64(iv), data:bufToB64(ct) };
+  }
+  async function decryptPrivate(payload, key){
+    const pt=await crypto.subtle.decrypt({name:AES,iv:b64ToBuf(payload.iv)}, key, b64ToBuf(payload.data));
+    return new TextDecoder().decode(pt);
+  }
+
+  async function createGroupKey(gid){
+    const key=await crypto.subtle.generateKey({name:AES,length:256},true,['encrypt','decrypt']);
+    const raw=bufToB64(await crypto.subtle.exportKey('raw',key));
+    LS.setItem('sl_group_key_'+gid, raw);
+    return key;
+  }
+  async function getGroupKey(gid){
+    const b64=LS.getItem('sl_group_key_'+gid);
+    if(!b64) return null;
+    return crypto.subtle.importKey('raw', b64ToBuf(b64), {name:AES}, false, ['encrypt','decrypt']);
+  }
+  async function saveGroupKey(gid, rawB64){ LS.setItem('sl_group_key_'+gid, rawB64); }
+
+  async function encryptGroup(text, key){
+    const iv=crypto.getRandomValues(new Uint8Array(12));
+    const ct=await crypto.subtle.encrypt({name:AES,iv}, key, new TextEncoder().encode(text));
+    return { v:1, type:'group', iv:bufToB64(iv), data:bufToB64(ct) };
+  }
+  async function decryptGroup(payload, key){
+    const pt=await crypto.subtle.decrypt({name:AES,iv:b64ToBuf(payload.iv)}, key, b64ToBuf(payload.data));
+    return new TextDecoder().decode(pt);
+  }
+
+  async function encryptMessage(opts){
+    const {text, chatId, isGroup, myUid, peerUid}=opts;
+    const me=await ensureUserKeys(myUid);
+    if(isGroup){
+      let gk=await getGroupKey(chatId);
+      if(!gk) gk=await createGroupKey(chatId);
+      return encryptGroup(text, gk);
+    }
+    const theirPub=await getUserPublicKey(peerUid);
+    if(!theirPub) throw new Error('Собеседник ещё не создал ключ шифрования');
+    const shared=await deriveShared(me.privateKey, theirPub);
+    return encryptPrivate(text, shared);
+  }
+
+  async function decryptMessage(opts){
+    const {payload, chatId, isGroup, myUid, peerUid}=opts;
+    if(!payload||!payload.data) return '[не удалось расшифровать]';
+    const me=await ensureUserKeys(myUid);
+    try{
+      if(payload.type==='group'||isGroup){
+        const gk=await getGroupKey(chatId);
+        if(!gk) return '[нет ключа группы]';
+        return await decryptGroup(payload, gk);
+      }
+      const theirPub=await getUserPublicKey(peerUid);
+      if(!theirPub) return '[нет ключа собеседника]';
+      const shared=await deriveShared(me.privateKey, theirPub);
+      return await decryptPrivate(payload, shared);
+    }catch(e){
+      console.warn('[E2EE] decrypt', e);
+      return '[ошибка расшифровки]';
+    }
+  }
+
+  async function initForUser(uid){
+    if(!uid) return;
+    const keys=await ensureUserKeys(uid);
+    await publishPublicKey(uid, keys.publicKeyB64);
+    console.log('[E2EE] ready for', uid);
+    return keys;
+  }
+
+  // Auto-init when Firebase auth is ready
+  function tryAutoInit(){
+    try{
+      if(typeof firebase!=='undefined' && firebase.auth){
+        firebase.auth().onAuthStateChanged(function(user){
+          if(user && user.uid) initForUser(user.uid);
+        });
+      }
+    }catch(e){}
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', tryAutoInit);
+  else setTimeout(tryAutoInit, 1000);
+  setTimeout(tryAutoInit, 3000);
+
+  window.SL_E2EE = {
+    initForUser, encryptMessage, decryptMessage,
+    createGroupKey, getGroupKey, saveGroupKey,
+    ensureUserKeys, getUserPublicKey
+  };
+  console.log('[SL] E2EE module loaded');
 })();
 </script>
 
