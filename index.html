@@ -5095,7 +5095,7 @@ body[data-auth-panel="forgot-form"] #auth-choice{
 })();
 </script>
 <script>
-// ========== ЯДРО — Firebase + B2 (секреты вынесены) ==========
+// ========== ЯДРО — Firebase + Neon + B2 ==========
 const FIREBASE_CONFIG = {
   apiKey: "AIzaSyCRUeJPEmdduOZei7VxNUYJKSf3tiSmLKk",
   authDomain: "sline-chat.firebaseapp.com",
@@ -5107,17 +5107,14 @@ const FIREBASE_CONFIG = {
   measurementId: "G-0MFN8100TX"
 };
 
-// Cloudflare Worker proxy — все секретные ключи B2 только там
-const PROXY_URL = "https://old-band-f00b.dimasik-228-dima-super.workers.dev";
+// Neon (Postgres) — для будущего использования в качестве сервера/API данных
+const NEON_CONNECTION_STRING = "postgresql://neondb_owner:npg_3QrZLunj6UJI@ep-nameless-shape-ay9hakkj-pooler.c-5.us-east-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require";
 
-// Neon больше не используется на клиенте
-const NEON_CONNECTION_STRING = "";
-
-// B2 — ключи пустые, реальные значения только на Worker
-const B2_KEY_ID = "";
-const B2_KEY_NAME = "";
-const B2_APPLICATION_KEY = "";
-const B2_BUCKET = "sline-media";
+// Backblaze B2
+const B2_KEY_ID = "005cafcc7c82251000000002";
+const B2_KEY_NAME = "sline-key";
+const B2_APPLICATION_KEY = "K005PEeYJxMsO8TY7XGPQZRng/INUgl";
+const B2_BUCKET = "sline-media"; // измените, если имя вашего сегмента отличается
 
 // Сохраняйте старые имена, чтобы существующий код отправки не давал сбоев.
 const APP_BACKEND_URL = "https://sline-chat.firebaseapp.com";
@@ -5662,28 +5659,23 @@ window.slEnsureFirebase = slEnsureFirebase;
   let _b2UploadCache = null; // { uploadUrl, authorizationToken, expires }
 
   асинхронная функция b2Authorize() {
-    if (_b2Auth && _b2Auth._ts && Date.now() - _b2Auth._ts < 50 * 60 * 1000) return _b2Auth;
-    const res = await fetch(PROXY_URL + '/api/b2/upload-url', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' }
+    if (_b2Auth && _b2Auth._ts && Date.now() - _b2Auth._ts < 20 * 60 * 60 * 1000) return _b2Auth;
+    const creds = btoa(B2_KEY_ID + ':' + B2_APPLICATION_KEY);
+    const res = await fetch('https://api.backblazeb2.com/b2api/v2/b2_authorize_account', {
+      метод: 'GET',
+      headers: { Authorization: 'Basic ' + creds }
     });
     if (!res.ok) {
       const t = await res.text().catch(() => '');
-      throw new Error('B2 proxy failed: ' + res.status + ' ' + t);
+      throw new Error('B2 authorize failed: ' + res.status + ' ' + t);
     }
     const data = await res.json();
     _b2Auth = {
-      apiUrl: data.apiUrl || null,
+      apiUrl: data.apiUrl,
       authorizationToken: data.authorizationToken,
       downloadUrl: data.downloadUrl,
-      accountId: data.accountId || null,
+      accountId: data.accountId,
       _ts: Date.now()
-    };
-    if (data.bucketName) _b2BucketName = data.bucketName;
-    _b2UploadCache = {
-      uploadUrl: data.uploadUrl,
-      authorizationToken: data.authorizationToken,
-      expires: Date.now() + 50 * 60 * 1000
     };
     return _b2Auth;
   }
@@ -5772,9 +5764,24 @@ window.slEnsureFirebase = slEnsureFirebase;
 
   асинхронная функция b2GetUploadUrl() {
     if (_b2UploadCache && _b2UploadCache.expires > Date.now()) return _b2UploadCache;
-    await b2Authorize();
-    if (_b2UploadCache) return _b2UploadCache;
-    throw new Error('B2 proxy did not return upload URL');
+    const auth = await b2Authorize();
+    const bucketId = await b2ResolveBucket();
+    const res = await fetch(auth.apiUrl + '/b2api/v2/b2_get_upload_url', {
+      метод: 'POST',
+      заголовки: {
+        Авторизация: auth.authorizationToken,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ bucketId })
+    });
+    if (!res.ok) throw new Error('B2 get_upload_url failed: ' + res.status);
+    const data = await res.json();
+    _b2UploadCache = {
+      uploadUrl: data.uploadUrl,
+      authorizationToken: data.authorizationToken,
+      expires: Date.now() + 20 * 60 * 60 * 1000
+    };
+    return _b2UploadCache;
   }
 
   асинхронная функция sha1Hex(blob) {
@@ -6039,8 +6046,8 @@ window.slEnsureFirebase = slEnsureFirebase;
   })();
   window.firebaseAuth = _fbAuth;
   window.firebaseDb = _fbDb;
-  window.B2_CONFIG = { bucket: B2_BUCKET };
-  /* NEON removed */
+  window.B2_CONFIG = { keyId: B2_KEY_ID, applicationKey: B2_APPLICATION_KEY, keyName: B2_KEY_NAME, bucket: B2_BUCKET };
+  window.NEON_CONNECTION_STRING = NEON_CONNECTION_STRING;
   window.b2UploadFile = b2UploadFile; // прямой доступ при необходимости
 
   // Предварительный нагрев CORS в частном хранилище (бесплатное, тип публичного хранилища не требуется)
@@ -30836,7 +30843,7 @@ html, :root, body{
 (function(){
   try{
     const LS = (typeof storage!=='undefined'?storage:localStorage);
-    /* OpenAI key removed */
+    LS.setItem('sl_asr_key', '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');
     LS.setItem('sl_asr_provider', 'openai');
   }catch(e){}
 })();
@@ -33618,7 +33625,7 @@ html, :root, body{
   })();
 
   /* ========== 10) AI Chat in settings ========== */
-  const AI_KEY_DEFAULT='';
+  const AI_KEY_DEFAULT='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';
   try{
     if(!LS.getItem('sl_ai_key')) LS.setItem('sl_ai_key', AI_KEY_DEFAULT);
   }catch(e){}
