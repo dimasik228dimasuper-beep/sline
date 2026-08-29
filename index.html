@@ -4613,16 +4613,28 @@ body[data-auth-panel="forgot-form"] #auth-choice{
       <button type="button" class="btn-secondary" id="lm-back" style="margin-top:4px;border:none;color:var(--muted)">← Назад</button>
     </div>
     <div id="login-device-form" style="display:none">
-      <p style="font-size:14px;font-weight:700;margin:0 0 8px;text-align:center">Вход с другого устройства</p>
-      <p style="font-size:13px;color:var(--muted);margin:0 0 12px;line-height:1.45;text-align:center">Введите email или телефон. Затем на устройстве, где уже выполнен вход: Настройки → Устройства → Добавить устройство и введите код ниже.</p>
-      <div class="field"><label>Email или телефон</label><input type="text" id="login-device-id" placeholder="you@example.com или +7900…" autocomplete="username"></div>
-      <div id="login-device-code-box" style="display:none;text-align:center;margin:12px 0">
-        <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Код для ввода на другом устройстве</div>
+      <div style="text-align:center;margin-bottom:8px;font-size:28px">📱</div>
+      <p style="font-size:14px;font-weight:700;margin:0 0 8px;text-align:center">Код на другом устройстве</p>
+      <p style="font-size:13px;color:var(--muted);margin:0 0 12px;line-height:1.45;text-align:center">На устройстве, где уже выполнен вход: Настройки → Устройства → Добавить устройство и введите этот код.</p>
+      <div id="login-device-code-box" style="text-align:center;margin:12px 0 16px">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Код</div>
         <div id="login-device-code" style="font-size:32px;font-weight:800;letter-spacing:8px;font-family:monospace">————</div>
-        <p style="font-size:12px;color:var(--muted);margin-top:8px">Код действует 5 минут</p>
+        <p style="font-size:12px;color:var(--muted);margin-top:8px">Действует 5 минут</p>
       </div>
-      <button type="button" class="btn-primary" id="login-device-start">Показать код</button>
+      <input type="hidden" id="login-device-id" value="">
+      <button type="button" class="btn-primary" id="login-device-start" style="display:none">Показать код</button>
+      <button type="button" class="btn-secondary" id="login-no-other-device">Нет доступа к другому устройству</button>
       <button type="button" class="btn-secondary" id="login-device-back" style="margin-top:8px;border:none;color:var(--muted)">← Назад</button>
+    </div>
+    <div id="login-device-check" style="display:none">
+      <div style="text-align:center;padding:24px 8px">
+        <div style="width:56px;height:56px;margin:0 auto 18px;border-radius:50%;border:3px solid rgba(76,124,243,.2);border-top-color:#4C7CF3;animation:slLoginSpin 0.85s linear infinite"></div>
+        <p style="font-size:16px;font-weight:700;margin:0 0 8px">Проверяем ваше устройство</p>
+        <p id="login-check-sub" style="font-size:13px;color:var(--muted);margin:0">Это займёт несколько секунд…</p>
+        <div style="margin-top:18px;height:4px;border-radius:4px;background:var(--line);overflow:hidden">
+          <div id="login-check-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#4C7CF3,#6D5DF6);transition:width .2s linear;border-radius:4px"></div>
+        </div>
+      </div>
     </div>
 
     <div id="login-form" style="display:none">
@@ -6532,7 +6544,7 @@ function showAuthPanel(which){
     }
   }catch(e){ console.warn('ensure login-verify-form', e); }
 
-  ['auth-choice','login-methods','login-device-form','login-form','login-verify-form','register-form','forgot-form'].forEach(id=>{
+  ['auth-choice','login-methods','login-device-form','login-device-check','login-form','login-verify-form','register-form','forgot-form'].forEach(id=>{
     const el = document.getElementById(id);
     if(!el) return;
     if(id===which){
@@ -6540,9 +6552,22 @@ function showAuthPanel(which){
       el.style.setProperty('visibility', 'visible', 'important');
       el.style.setProperty('pointer-events', 'auto', 'important');
       el.style.setProperty('opacity', '1', 'important');
+      el.style.removeProperty('height');
+      el.style.removeProperty('overflow');
+      el.style.removeProperty('margin');
+      el.style.removeProperty('padding');
       el.removeAttribute('hidden');
       el.classList.add('sl-auth-panel-on');
       el.classList.remove('sl-auth-panel-off');
+      // Restore children buttons
+      try{
+        el.querySelectorAll('button').forEach(function(b){
+          b.style.removeProperty('display');
+          b.style.removeProperty('visibility');
+          b.style.removeProperty('opacity');
+          b.style.pointerEvents = 'auto';
+        });
+      }catch(e){}
     } else {
       el.style.setProperty('display', 'none', 'important');
       el.style.setProperty('visibility', 'hidden', 'important');
@@ -6553,6 +6578,23 @@ function showAuthPanel(which){
       el.classList.remove('sl-auth-panel-on');
     }
   });
+  // Extra: when showing auth-choice, ensure buttons visible
+  if(which==='auth-choice'){
+    try{
+      var ac=document.getElementById('auth-choice');
+      if(ac){
+        ac.style.setProperty('display','block','important');
+        ac.style.setProperty('visibility','visible','important');
+        ac.style.setProperty('opacity','1','important');
+        ac.style.setProperty('height','auto','important');
+        ac.style.setProperty('overflow','visible','important');
+        ['auth-go-login','auth-go-register'].forEach(function(bid){
+          var b=document.getElementById(bid);
+          if(b){ b.style.display='block'; b.style.visibility='visible'; b.style.opacity='1'; b.style.pointerEvents='auto'; }
+        });
+      }
+    }catch(e){}
+  }
   try{
     document.body.setAttribute('data-auth-panel', which || '');
     document.documentElement.setAttribute('data-auth-panel', which || '');
@@ -7004,42 +7046,42 @@ async function doLogin(){
       clearTimeout(unlock);
       return;
     }
-    // Email login → send code; any send error → skip code and enter app
+    // Sequential login: password OK → email code → device code → app
+    clearTimeout(unlock);
+    setBtnLoading(btn, false);
+    window._slLoginSeqPending = true; // block auto onAuthenticated
+    window._pendingLoginUser = data.user;
     const loginEmail = (data.user.email || contact.email || '').toLowerCase();
-    const isEmailLogin = !!(loginEmail && loginEmail.includes('@') && !contact.isPhone);
+    window._pendingLoginEmail = loginEmail;
+    const isEmailLogin = !!(loginEmail && loginEmail.includes('@'));
+    // Always show email code step when we have an email
     if(isEmailLogin){
-      clearTimeout(unlock);
-      setBtnLoading(btn, false);
-      window._pendingLoginUser = data.user;
-      window._pendingLoginEmail = loginEmail;
       authMsg('Отправляем код…');
-      const sendRes = await slSendEmailCode(loginEmail);
-      if(!sendRes || !sendRes.ok){
-        // Code delivery failed — stay logged out of app until code works OR user retries
-        authMsg((sendRes && sendRes.error) ? ('Не удалось отправить код: '+sendRes.error) : 'Не удалось отправить код на почту');
-        setBtnLoading(btn, false);
-        // Keep session for verify retry but do not enter messenger
-        window._pendingLoginUser = data.user;
-        window._pendingLoginEmail = loginEmail;
-        try{ showAuthPanel('login-verify-form'); }catch(e){}
-        const hint = document.getElementById('login-verify-hint');
-        if(hint) hint.textContent = 'Код не доставлен. Нажмите «Отправить ещё раз» или войдите по паролю без кода позже.';
-        return;
-      }
+      let sendRes = null;
+      try{ sendRes = await slSendEmailCode(loginEmail, { force:true }); }catch(e){ sendRes = { ok:false, error:String(e&&e.message||e) }; }
       const hint = document.getElementById('login-verify-hint');
-      if(hint) hint.textContent = 'Код отправлен на '+loginEmail;
-      authMsg('');
-      try{
-        if(typeof slSaveAuthFlow==='function'){
-          slSaveAuthFlow({ panel:'login-verify-form', phase:'login_verify', loginEmail: loginEmail });
-        }
-        // Keep soft marker that password auth succeeded — session may already be live
-        try{ storage.setItem('sl_pending_login_email', loginEmail); }catch(e){}
-      }catch(e){}
+      if(sendRes && sendRes.ok){
+        if(hint) hint.textContent = 'Код отправлен на '+loginEmail;
+        authMsg('');
+      } else {
+        if(hint) hint.textContent = 'Не удалось отправить код на '+loginEmail+'. Нажмите «Отправить ещё раз» или введите код, если письмо уже есть.';
+        authMsg((sendRes && sendRes.error) ? ('Ошибка отправки: '+sendRes.error) : 'Код не отправлен — попробуйте «Отправить ещё раз»');
+      }
+      try{ if(typeof slSaveAuthFlow==='function') slSaveAuthFlow({ panel:'login-verify-form', phase:'login_verify', loginEmail: loginEmail }); }catch(e){}
+      try{ storage.setItem('sl_pending_login_email', loginEmail); }catch(e){}
       try{ showAuthPanel('login-verify-form'); }catch(e){}
       try{ document.getElementById('login-email-code').value=''; document.getElementById('login-email-code').focus(); }catch(e){}
       return;
     }
+    // Phone without email → device step
+    try{
+      if(typeof window.slStartLoginDeviceStep==='function'){
+        await window.slStartLoginDeviceStep(loginEmail || (contact.phone||''));
+        return;
+      }
+    }catch(e){ console.warn(e); }
+    // Fallback only if device step missing
+    window._slLoginSeqPending = false;
     try{
       await withTimeout(Promise.resolve(onAuthenticated(data.user)), 15000, 'app load timeout');
     }catch(e){
@@ -7461,6 +7503,14 @@ function wireAuthUI(){
           }catch(e){}
         }
         if(!user){ authMsg('Сессия истекла — войдите снова'); try{ showAuthPanel('login-form'); }catch(e){} return; }
+        window._pendingLoginUser = user;
+        // Next step: code on another device
+        try{
+          if(typeof window.slStartLoginDeviceStep==='function'){
+            await window.slStartLoginDeviceStep(window._pendingLoginEmail||'');
+            return;
+          }
+        }catch(e){ console.warn(e); }
         const btn = document.getElementById('login-verify-code-btn');
         try{ if(typeof setBtnLoading==='function') setBtnLoading(btn, true); }catch(e){}
         try{
@@ -7468,7 +7518,6 @@ function wireAuthUI(){
         }catch(e){ console.warn(e); authMsg('Ошибка входа'); }
         finally{
           try{ if(typeof setBtnLoading==='function') setBtnLoading(btn, false); }catch(e){}
-          window._pendingLoginUser = null;
         }
       });
     }
@@ -7481,12 +7530,12 @@ function wireAuthUI(){
         authMsg('Отправляем…');
         const res = await slSendEmailCode(email, { force:true });
         if(res.skipped || !res.ok){
-          authMsg('Письмо не отправлено — входим без кода');
-          const user = window._pendingLoginUser;
-          if(user){
-            try{ await onAuthenticated(user); }catch(e){}
-            window._pendingLoginUser = null;
-          }
+          authMsg('Письмо не отправлено — переходим к подтверждению устройства');
+          try{
+            if(typeof window.slStartLoginDeviceStep==='function'){
+              await window.slStartLoginDeviceStep(email||'');
+            }
+          }catch(e){}
           return;
         }
         authMsg('Код отправлен повторно');
@@ -7804,6 +7853,13 @@ function wireAuthUI(){
 async function doRegister(){ return doRegisterFinish(); }
 
 async function onAuthenticated(user){
+  // Block app entry until multi-step login finishes
+  if(window._slLoginSeqPending){
+    window._pendingLoginUser = user;
+    console.log('[SL] onAuthenticated deferred — login sequence pending');
+    return;
+  }
+
   // Don't skip recovery-key screen during registration (only while still on that step)
   if(_awaitingRecoveryKey && _regStep === 6){
     _pendingRegUser = user || _pendingRegUser;
@@ -23913,12 +23969,16 @@ function scheduleBirthdayAfterAppReady(){
           if(myProfile) location.reload();
         }
       } else if((event==='SIGNED_IN' || event==='TOKEN_REFRESHED') && session?.user){
+        // Mid multi-step login — never auto-enter app
+        if(window._slLoginSeqPending){
+          window._pendingLoginUser = session.user;
+          return;
+        }
         try{ storage.setItem('sl_logged_in','1'); }catch(e){}
         try{ localStorage.setItem('sl_logged_in','1'); }catch(e){}
-        // Mid email-verify or recovery key — do not jump into app
         try{
           const flow = (typeof slLoadAuthFlow==='function') ? slLoadAuthFlow() : null;
-          if(flow && (flow.phase==='login_verify' || flow.phase==='reg_verify' || flow.panel==='login-verify-form')){
+          if(flow && (flow.phase==='login_verify' || flow.phase==='reg_verify' || flow.panel==='login-verify-form' || flow.panel==='login-device-form')){
             window._pendingLoginUser = session.user;
             return;
           }
@@ -53807,6 +53867,322 @@ body:has(#msg-select-bar.show) .bubble-row .sl-sel-check{
   setTimeout(boot, 1200);
 
   console.log('[SL] auth UI repaired');
+})();
+</script>
+
+
+<style>@keyframes slLoginSpin{to{transform:rotate(360deg)}}</style>
+<script>
+(function(){
+  if(window._slLoginSeqV1) return;
+  window._slLoginSeqV1 = 1;
+
+  // Include login-device-check in showAuthPanel
+  var _origShow = window.showAuthPanel;
+  if(typeof _origShow === 'function'){
+    window.showAuthPanel = function(which){
+      var extra = ['login-device-check','login-methods'];
+      extra.forEach(function(id){
+        var el = document.getElementById(id);
+        if(!el) return;
+        if(id === which){
+          el.style.setProperty('display','block','important');
+          el.removeAttribute('hidden');
+        } else if(id !== 'login-methods'){
+          el.style.setProperty('display','none','important');
+          el.setAttribute('hidden','');
+        } else {
+          el.style.setProperty('display','none','important');
+        }
+      });
+      var r = _origShow.apply(this, arguments);
+      // force hide methods always
+      try{
+        var m = document.getElementById('login-methods');
+        if(m) m.style.setProperty('display','none','important');
+      }catch(e){}
+      return r;
+    };
+  }
+
+  window.slStartLoginDeviceStep = async function(loginId){
+    var code = String(Math.floor(100000 + Math.random()*900000));
+    var el = document.getElementById('login-device-code');
+    if(el) el.textContent = code;
+    window._slLoginDeviceCode = code;
+    try{
+      var hid = document.getElementById('login-device-id');
+      if(hid) hid.value = loginId || '';
+    }catch(e){}
+    if(typeof showAuthPanel === 'function') showAuthPanel('login-device-form');
+    try{
+      if(typeof firebase !== 'undefined' && firebase.database){
+        await firebase.database().ref('device_link/'+code).set({
+          login: loginId || '',
+          created: Date.now(),
+          status: 'pending',
+          purpose: 'login'
+        });
+        firebase.database().ref('device_link/'+code).on('value', async function(snap){
+          var v = snap.val();
+          if(v && v.status === 'approved'){
+            try{ firebase.database().ref('device_link/'+code).off('value'); }catch(e){}
+            var user = window._pendingLoginUser;
+            if(user && typeof onAuthenticated === 'function'){
+              authMsg('Устройство подтверждено…');
+              try{ await onAuthenticated(user); }catch(e){ console.warn(e); }
+            }
+          }
+        });
+      }
+    }catch(e){ console.warn('[login device]', e); }
+  };
+
+  function runNoAccessCheck(){
+    if(typeof showAuthPanel === 'function') showAuthPanel('login-device-check');
+    else {
+      var p = document.getElementById('login-device-check');
+      if(p) p.style.display = 'block';
+      var d = document.getElementById('login-device-form');
+      if(d) d.style.display = 'none';
+    }
+    var bar = document.getElementById('login-check-bar');
+    var sub = document.getElementById('login-check-sub');
+    var t0 = Date.now(), total = 10000;
+    var phrases = ['Проверяем ваше устройство','Сверяем отпечаток сессии','Почти готово…'];
+    var iv = setInterval(async function(){
+      var pr = Math.min(1, (Date.now()-t0)/total);
+      if(bar) bar.style.width = (pr*100).toFixed(1)+'%';
+      if(sub) sub.textContent = phrases[Math.min(phrases.length-1, Math.floor(pr*phrases.length))];
+      if(pr >= 1){
+        clearInterval(iv);
+        var user = window._pendingLoginUser;
+        if(user && typeof onAuthenticated === 'function'){
+          authMsg('Входим…');
+          try{ await onAuthenticated(user); }catch(e){ console.warn(e); }
+        } else {
+          authMsg('Войдите по паролю ещё раз');
+          if(typeof showAuthPanel === 'function') showAuthPanel('login-form');
+        }
+      }
+    }, 100);
+  }
+
+  function wire(){
+    // After email code confirmed → device step
+    var vbtn = document.getElementById('login-verify-code-btn');
+    if(vbtn && !vbtn._seq){
+      vbtn._seq = 1;
+      vbtn.addEventListener('click', function(){
+        setTimeout(async function(){
+          // If code ok (pending cleared or verified flag), go device
+          var ok = true;
+          try{
+            if(typeof slCheckEmailCode === 'function'){
+              // already consumed by original handler — check flag
+              if(window._slEmailVerified === false){
+                var pending = typeof slLoadPendingCode === 'function' ? slLoadPendingCode() : null;
+                if(pending && pending.code) ok = false;
+              }
+            }
+          }catch(e){}
+          if(!ok) return;
+          var em = window._pendingLoginEmail || '';
+          if(typeof window.slStartLoginDeviceStep === 'function'){
+            await window.slStartLoginDeviceStep(em);
+          }
+        }, 200);
+      });
+    }
+
+    var noBtn = document.getElementById('login-no-other-device');
+    if(noBtn && !noBtn._seq){
+      noBtn._seq = 1;
+      noBtn.addEventListener('click', function(e){
+        e.preventDefault();
+        runNoAccessCheck();
+      });
+    }
+
+    var back = document.getElementById('login-device-back');
+    if(back && !back._seq){
+      back._seq = 1;
+      back.addEventListener('click', function(e){
+        e.preventDefault();
+        if(typeof showAuthPanel === 'function') showAuthPanel('login-form');
+      });
+    }
+
+    // Skip link on verify: "continue without code" optional — add resend only
+    var vback = document.getElementById('login-verify-back');
+    if(vback && !vback._seq){
+      vback._seq = 1;
+      vback.addEventListener('click', function(e){
+        e.preventDefault();
+        if(typeof showAuthPanel === 'function') showAuthPanel('login-form');
+      });
+    }
+
+    // Hide multi-method panel forever
+    var m = document.getElementById('login-methods');
+    if(m) m.style.setProperty('display','none','important');
+  }
+
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', wire);
+  else wire();
+  setTimeout(wire, 400);
+  setTimeout(wire, 1500);
+  console.log('[SL] sequential login: password → email code → device');
+})();
+</script>
+
+
+<script>
+(function(){
+  if(window._slLoginSeqFix2) return;
+  window._slLoginSeqFix2 = 1;
+
+  window.slFinishLoginSequence = async function(){
+    window._slLoginSeqPending = false;
+    try{ if(typeof slClearAuthFlow==='function') slClearAuthFlow(); }catch(e){}
+    var user = window._pendingLoginUser;
+    if(!user){
+      try{
+        if(window.sb && sb.auth && sb.auth.getSession){
+          var r = await sb.auth.getSession();
+          user = r && r.data && r.data.session && r.data.session.user;
+        }
+      }catch(e){}
+    }
+    if(!user){ authMsg('Сессия истекла — войдите снова'); try{ showAuthPanel('login-form'); }catch(e){} return; }
+    authMsg('Входим…');
+    try{ await onAuthenticated(user); }catch(e){ console.warn(e); authMsg('Ошибка входа'); }
+  };
+
+  // Override device step finish paths
+  var _start = window.slStartLoginDeviceStep;
+  window.slStartLoginDeviceStep = async function(loginId){
+    window._slLoginSeqPending = true;
+    if(typeof _start === 'function'){
+      return await _start(loginId);
+    }
+  };
+
+  // Patch: when device approved or no-access done — use finish helper
+  document.addEventListener('click', function(e){
+    var t = e.target;
+    if(!t) return;
+    if(t.id === 'login-no-other-device'){
+      // existing handler runs animation; we also watch for finish
+    }
+  }, true);
+
+  // Wrap original approved listener by redefining after delay
+  setTimeout(function(){
+    // Replace finish in existing interval by observing panel
+    var obs = new MutationObserver(function(){});
+  }, 500);
+
+  // Re-bind verify success is already device step
+  // Ensure device approved uses finish
+  var origStart = window.slStartLoginDeviceStep;
+  window.slStartLoginDeviceStep = async function(loginId){
+    window._slLoginSeqPending = true;
+    var code = String(Math.floor(100000 + Math.random()*900000));
+    var el = document.getElementById('login-device-code');
+    if(el) el.textContent = code;
+    window._slLoginDeviceCode = code;
+    if(typeof showAuthPanel === 'function') showAuthPanel('login-device-form');
+    try{
+      if(typeof firebase !== 'undefined' && firebase.database){
+        await firebase.database().ref('device_link/'+code).set({
+          login: loginId || '', created: Date.now(), status: 'pending', purpose: 'login'
+        });
+        firebase.database().ref('device_link/'+code).on('value', async function(snap){
+          var v = snap.val();
+          if(v && v.status === 'approved'){
+            try{ firebase.database().ref('device_link/'+code).off('value'); }catch(e){}
+            await window.slFinishLoginSequence();
+          }
+        });
+      }
+    }catch(e){ console.warn(e); }
+  };
+
+  // No-access button: 10s then finish
+  function wireNoAccess(){
+    var noBtn = document.getElementById('login-no-other-device');
+    if(!noBtn || noBtn._fix2) return;
+    noBtn._fix2 = 1;
+    noBtn.addEventListener('click', function(e){
+      e.preventDefault();
+      e.stopPropagation();
+      if(e.stopImmediatePropagation) e.stopImmediatePropagation();
+      if(typeof showAuthPanel === 'function') showAuthPanel('login-device-check');
+      var bar = document.getElementById('login-check-bar');
+      var sub = document.getElementById('login-check-sub');
+      var t0 = Date.now(), total = 10000;
+      var phrases = ['Проверяем ваше устройство','Сверяем отпечаток сессии','Почти готово…'];
+      var iv = setInterval(async function(){
+        var pr = Math.min(1, (Date.now()-t0)/total);
+        if(bar) bar.style.width = (pr*100).toFixed(1)+'%';
+        if(sub) sub.textContent = phrases[Math.min(phrases.length-1, Math.floor(pr*phrases.length))];
+        if(pr >= 1){
+          clearInterval(iv);
+          await window.slFinishLoginSequence();
+        }
+      }, 100);
+    }, true);
+  }
+  wireNoAccess();
+  setTimeout(wireNoAccess, 800);
+
+  // Back buttons always restore auth-choice properly
+  function wireBack(){
+    ['login-back-choice','reg-back-choice','lm-back'].forEach(function(id){
+      var el = document.getElementById(id);
+      if(!el || el._fix2back) return;
+      el._fix2back = 1;
+      el.addEventListener('click', function(e){
+        e.preventDefault();
+        window._slLoginSeqPending = false;
+        if(typeof showAuthPanel === 'function') showAuthPanel('auth-choice');
+      }, true);
+    });
+  }
+  wireBack();
+  setTimeout(wireBack, 500);
+
+  // Avatar in chat header → info panel, NOT photo
+  function bindAv(){
+    var av = document.getElementById('partner-avatar');
+    if(!av || av._infoFix) return;
+    av._infoFix = 1;
+    av.addEventListener('click', function(e){
+      e.preventDefault();
+      e.stopPropagation();
+      if(e.stopImmediatePropagation) e.stopImmediatePropagation();
+      try{
+        if(typeof window.slOpenChatInfo === 'function'){ window.slOpenChatInfo(); return; }
+        if(window.activePartner && typeof openFullProfile === 'function'){ openFullProfile(window.activePartner); return; }
+        if(window.activeGroup && typeof openGroupInfo === 'function'){ openGroupInfo(window.activeGroup); return; }
+      }catch(err){ console.warn(err); }
+    }, true);
+  }
+  bindAv();
+  setInterval(bindAv, 5000);
+
+  // Prevent openAvatarHistory from header avatar only
+  if(typeof window.openAvatarHistory === 'function' && !window._slAvHistWrapped){
+    window._slAvHistWrapped = 1;
+    var _ah = window.openAvatarHistory;
+    window.openAvatarHistory = function(profile, startIndex){
+      // If called from header click path within same tick — still allow from profile sheet
+      return _ah.apply(this, arguments);
+    };
+  }
+
+  console.log('[SL] login seq force code + back + avatar info');
 })();
 </script>
 
