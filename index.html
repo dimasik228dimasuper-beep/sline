@@ -6532,7 +6532,7 @@ function showAuthPanel(which){
     }
   }catch(e){ console.warn('ensure login-verify-form', e); }
 
-  ['auth-choice','login-form','login-verify-form','register-form','forgot-form'].forEach(id=>{
+  ['auth-choice','login-methods','login-device-form','login-form','login-verify-form','register-form','forgot-form'].forEach(id=>{
     const el = document.getElementById(id);
     if(!el) return;
     if(id===which){
@@ -6560,6 +6560,8 @@ function showAuthPanel(which){
   const sub = document.getElementById('auth-sub-text');
   if(sub){
     if(which==='auth-choice') sub.textContent = 'Современный мессенджер';
+    else if(which==='login-methods') sub.textContent = 'Как войти?';
+    else if(which==='login-device-form') sub.textContent = 'Вход с другого устройства';
     else if(which==='login-form') sub.textContent = 'Вход в аккаунт';
     else if(which==='login-verify-form') sub.textContent = 'Подтверждение email';
     else if(which==='forgot-form') sub.textContent = 'Восстановление доступа';
@@ -6805,17 +6807,17 @@ async function slSendEmailCode(email, opts){
       });
       let data = {};
       try{ data = await r.json(); }catch(e){}
-      if(r.ok && !data.skip){
+      if(r.ok && !data.skip && !data.error){
         window._slSendCodeLast[email] = { ts: Date.now(), code: code };
         return { ok:true, skipped:false };
       }
-      window._slEmailVerified = true;
-      slClearPendingCode();
-      return { ok:true, skipped:true, error: data.error || ('HTTP '+r.status) };
+      // Real delivery failure — do NOT skip verification
+      const errMsg = (data && (data.error || data.message)) || ('Не удалось отправить код (HTTP '+r.status+')');
+      try{ slClearPendingCode(); }catch(e2){}
+      return { ok:false, skipped:false, error: errMsg };
     }catch(e){
-      window._slEmailVerified = true;
-      slClearPendingCode();
-      return { ok:true, skipped:true, error: String(e.message||e) };
+      try{ slClearPendingCode(); }catch(e2){}
+      return { ok:false, skipped:false, error: String(e.message||e||'Сеть недоступна') };
     }finally{
       try{ delete window._slSendCodeInflight[email]; }catch(err){}
     }
@@ -6889,8 +6891,41 @@ async function doLogin(){
   window._slDoLoginBusy = true;
   authMsg('');
   const btn = document.getElementById('login-btn');
-  const contact = normalizeContact(document.getElementById('login-email')?.value);
+  const loginMode = window._slLoginMode || 'password';
+  const rawEmail = (document.getElementById('login-email')?.value || '').trim();
+  const contact = normalizeContact(rawEmail);
   const password = document.getElementById('login-password')?.value || '';
+  if(loginMode === 'email_code'){
+    // Only email for this method
+    const em = rawEmail.toLowerCase();
+    if(!em || !em.includes('@') || contact.isPhone){
+      authMsg('Введите email (не телефон)');
+      window._slDoLoginBusy=false; return;
+    }
+    setBtnLoading(btn, true);
+    try{
+      authMsg('Отправляем код…');
+      const sendRes = await slSendEmailCode(em, { force:true });
+      if(!sendRes || !sendRes.ok){
+        authMsg((sendRes && sendRes.error) ? ('Ошибка: '+sendRes.error) : 'Не удалось отправить код на почту');
+        setBtnLoading(btn, false);
+        window._slDoLoginBusy=false;
+        return;
+      }
+      window._pendingLoginEmail = em;
+      const hint = document.getElementById('login-verify-hint');
+      if(hint) hint.textContent = 'Код отправлен на '+em+'. После кода введите пароль аккаунта.';
+      try{ if(typeof slSaveAuthFlow==='function') slSaveAuthFlow({ panel:'login-verify-form', phase:'login_verify', loginEmail: em, needPasswordAfterCode:true }); }catch(e){}
+      try{ showAuthPanel('login-verify-form'); }catch(e){}
+      try{ document.getElementById('login-email-code').value=''; document.getElementById('login-email-code').focus(); }catch(e){}
+      authMsg('');
+    }catch(e){
+      authMsg('Ошибка отправки: '+(e.message||e));
+    }
+    setBtnLoading(btn, false);
+    window._slDoLoginBusy=false;
+    return;
+  }
   if(!contact){ authMsg('Введите email или номер телефона'); window._slDoLoginBusy=false; return; }
   if(!password){ authMsg('Введите пароль'); window._slDoLoginBusy=false; return; }
   if(!sb || !window.sb){
@@ -6978,13 +7013,16 @@ async function doLogin(){
       window._pendingLoginEmail = loginEmail;
       authMsg('Отправляем код…');
       const sendRes = await slSendEmailCode(loginEmail);
-      if(sendRes.skipped || !sendRes.ok){
-        authMsg('');
-        try{
-          await withTimeout(Promise.resolve(onAuthenticated(data.user)), 15000, 'app load timeout');
-        }catch(eAuth){
-          console.warn('onAuthenticated', eAuth);
-        }
+      if(!sendRes || !sendRes.ok){
+        // Code delivery failed — stay logged out of app until code works OR user retries
+        authMsg((sendRes && sendRes.error) ? ('Не удалось отправить код: '+sendRes.error) : 'Не удалось отправить код на почту');
+        setBtnLoading(btn, false);
+        // Keep session for verify retry but do not enter messenger
+        window._pendingLoginUser = data.user;
+        window._pendingLoginEmail = loginEmail;
+        try{ showAuthPanel('login-verify-form'); }catch(e){}
+        const hint = document.getElementById('login-verify-hint');
+        if(hint) hint.textContent = 'Код не доставлен. Нажмите «Отправить ещё раз» или войдите по паролю без кода позже.';
         return;
       }
       const hint = document.getElementById('login-verify-hint');
@@ -7380,7 +7418,7 @@ async function enterMessengerAfterReg(){
 function wireAuthUI(){
   const goL=document.getElementById('auth-go-login');
   const goR=document.getElementById('auth-go-register');
-  if(goL){ goL.onclick=()=>showAuthPanel('login-form'); goL.addEventListener('click',()=>showAuthPanel('login-form')); }
+  if(goL){ goL.onclick=()=>showAuthPanel('login-methods'); goL.addEventListener('click',()=>showAuthPanel('login-methods')); }
   if(goR){ goR.onclick=()=>{ _regStep=1; try{ if(typeof setRegMode==='function') setRegMode('email'); else window._regMode='email'; }catch(e){} setRegStep(1); showAuthPanel('register-form'); }; }
   document.getElementById('auth-go-register')?.addEventListener('click', ()=>{
     _regStep = 1;
@@ -13375,10 +13413,7 @@ document.getElementById('settings-my-link').onclick=()=>{
   const link=`${location.origin}${location.pathname}#/user/@${myProfile.username}`;
   showInfoDialog('Моя ссылка', link);
 };
-document.getElementById('settings-devices').onclick=()=>{
-  const ua=navigator.userAgent;
-  alert('Текущее устройство:\n'+( /Mobile|Android|iPhone/i.test(ua)?'Смартфон':'Компьютер')+'\n'+ua.slice(0,60));
-};
+document.getElementById('settings-devices').onclick=(e)=>{ if(typeof window.slOpenDevicesModal==='function'){ window.slOpenDevicesModal(e); return; } };
 
 // ---- Profile name badge (SVG) + favorite music ----
 window.SL_BADGES = {
@@ -28638,9 +28673,18 @@ html.sl-tv .composer textarea { min-height: 52px; font-size: 17px; }
       let raw=null;
       try{ raw=JSON.parse(LS.getItem('sl_e2e_identity')||'null'); }catch(e){}
       if(!raw || !raw.publicKey || !raw.privateKey){
+        // try cloud restore (multi-device)
+        try{
+          if(typeof firebase!=='undefined' && firebase.database && myProfile?.id){
+            const snap=await firebase.database().ref('userKeys/'+myProfile.id+'/slE2E').once('value');
+            const v=snap.val();
+            if(v && v.publicKey && v.privateKey){ raw=v; LS.setItem('sl_e2e_identity', JSON.stringify(raw)); }
+          }
+        }catch(e){}
+      }
+      if(!raw || !raw.publicKey || !raw.privateKey){
         raw = await generateIdentity();
         LS.setItem('sl_e2e_identity', JSON.stringify(raw));
-        // publish public key best-effort
         try{
           if(myProfile?.id && sb){
             await sb.from('profiles').update({e2e_pub: JSON.stringify(raw.publicKey)}).eq('id', myProfile.id);
@@ -28649,6 +28693,11 @@ html.sl-tv .composer textarea { min-height: 52px; font-size: 17px; }
         }catch(e){
           try{ LS.setItem('sl_e2e_pub_local', JSON.stringify(raw.publicKey)); }catch(e2){}
         }
+        try{
+          if(typeof firebase!=='undefined' && firebase.database && myProfile?.id){
+            await firebase.database().ref('userKeys/'+myProfile.id+'/slE2E').set(raw);
+          }
+        }catch(e){}
       }
       return raw;
     },
@@ -40955,13 +41004,33 @@ window.slGetDisplayName = function(p){
       if(typeof getAvatarHistory==='function') list = (getAvatarHistory(uid)||[]).slice();
     }catch(e){ list = []; }
 
-    // Always include current avatar at front
-    if(profile?.avatar_url){
-      if(!list.length || list[0].url !== profile.avatar_url){
-        list = [{url: profile.avatar_url, at: Date.now()}, ...list.filter(x=>x.url!==profile.avatar_url)];
-        try{ if(typeof pushAvatarHistory==='function') pushAvatarHistory(uid, profile.avatar_url); }catch(e){}
+    // Always include current avatar at front (skip empty / broken placeholders)
+    var avUrl = profile && profile.avatar_url ? String(profile.avatar_url).trim() : '';
+    if(avUrl && !/^data:image\/svg/i.test(avUrl) && avUrl !== 'null' && avUrl !== 'undefined'){
+      if(!list.length || list[0].url !== avUrl){
+        list = [{url: avUrl, at: Date.now()}, ...list.filter(x=>x.url!==avUrl)];
+        try{ if(typeof pushAvatarHistory==='function') pushAvatarHistory(uid, avUrl); }catch(e){}
       }
     }
+    // Also try DOM avatar img currently shown in profile
+    try{
+      var domAv = document.querySelector('#up-av img, #ps-av img, .sl-profile-hero .avatar img, #partner-avatar img');
+      if(domAv && (domAv.currentSrc||domAv.src)){
+        var du = domAv.currentSrc||domAv.src;
+        if(du && !/^data:image\/svg/i.test(du) && !list.some(function(x){return x.url===du;})){
+          list = [{url:du, at:Date.now()}].concat(list);
+        }
+      }
+      // background-image on avatar div
+      var avEl = document.querySelector('#up-av, #ps-av, .sl-profile-hero .avatar');
+      if(avEl){
+        var bg = (avEl.style && avEl.style.backgroundImage) || '';
+        var m = bg.match(/url\(["']?([^"')]+)["']?\)/);
+        if(m && m[1] && !list.some(function(x){return x.url===m[1];})){
+          list = [{url:m[1], at:Date.now()}].concat(list);
+        }
+      }
+    }catch(e){}
 
     if(!list.length){ toast('Нет фото профиля'); return; }
 
@@ -40981,17 +41050,13 @@ window.slGetDisplayName = function(p){
     ov.style.cssText = 'position:fixed;inset:0;z-index:45000;background:#000;display:flex;flex-direction:column;touch-action:none;overscroll-behavior:none';
     let isMe = false;
     try{
-      if(typeof myProfile!=='undefined' && myProfile){
-        isMe = String(uid)===String(myProfile.id)
-          || profile===myProfile
-          || (profile?.username && myProfile.username && profile.username===myProfile.username);
+      if(typeof myProfile!=='undefined' && myProfile && uid){
+        isMe = String(uid)===String(myProfile.id);
       }
-    }catch(e){ isMe = true; }
-    // Prefer showing delete; hide only when clearly another user
-    if(!isMe && profile && typeof myProfile!=='undefined' && myProfile && profile.id && String(profile.id)!==String(myProfile.id)){
+    }catch(e){ isMe = false; }
+    // Never allow delete/edit when viewing someone else's avatar
+    if(profile && myProfile && profile.id && String(profile.id)!==String(myProfile.id)){
       isMe = false;
-    } else if(!profile || !profile.id){
-      isMe = true;
     }
     ov.innerHTML = `
       <div style="position:absolute;top:0;left:0;right:0;z-index:3;padding:calc(8px + env(safe-area-inset-top,0px)) 10px 14px;display:flex;align-items:center;gap:8px;background:linear-gradient(to bottom,rgba(0,0,0,.65),transparent);pointer-events:none">
@@ -41048,6 +41113,13 @@ window.slGetDisplayName = function(p){
       counter.textContent = (idx+1) + '/' + list.length;
       menu.style.display = 'none';
       resetTransform();
+      img.onerror = function(){
+        img.onerror = null;
+        img.alt = 'Фото недоступно';
+        img.style.opacity = '0.4';
+        try{ if(typeof showToast==='function') showToast('Фото не загрузилось'); }catch(e){}
+      };
+      img.style.opacity = '1';
       img.src = list[idx].url;
     }
     function go(d){
@@ -52109,18 +52181,52 @@ img.sl-gif-img{
   async function ensureUserKeys(uid){
     const pk='sl_e2ee_pub_'+uid, sk='sl_e2ee_priv_'+uid;
     let pubB64=LS.getItem(pk), privB64=LS.getItem(sk);
+    // Multi-device: prefer cloud keypair when present (same account on all devices)
+    if(typeof firebase!=='undefined' && firebase.database){
+      try{
+        const snap=await firebase.database().ref('userKeys/'+uid).once('value');
+        const v=snap.val();
+        if(v && v.publicKey && v.privateKey){
+          if(pubB64!==v.publicKey || privB64!==v.privateKey){
+            pubB64=v.publicKey; privB64=v.privateKey;
+            LS.setItem(pk,pubB64); LS.setItem(sk,privB64);
+            console.log('[E2EE] keys synced from cloud for', uid);
+          }
+        }
+      }catch(e){ console.warn('[E2EE] cloud key load', e); }
+    }
     if(!pubB64||!privB64){
       const pair=await crypto.subtle.generateKey({name:'ECDH',namedCurve:CURVE},true,['deriveKey','deriveBits']);
       pubB64=await exportPub(pair.publicKey);
       privB64=await exportPriv(pair.privateKey);
       LS.setItem(pk,pubB64); LS.setItem(sk,privB64);
+      // Upload both so other devices can decrypt
+      try{
+        if(typeof firebase!=='undefined' && firebase.database){
+          await firebase.database().ref('userKeys/'+uid).set({ publicKey: pubB64, privateKey: privB64, updated: Date.now() });
+        }
+      }catch(e){ console.warn('[E2EE] cloud key save', e); }
+    } else {
+      // Ensure cloud has private key for multi-device (migrate old pub-only records)
+      try{
+        if(typeof firebase!=='undefined' && firebase.database){
+          const snap=await firebase.database().ref('userKeys/'+uid).once('value');
+          const v=snap.val()||{};
+          if(!v.privateKey || v.publicKey!==pubB64){
+            await firebase.database().ref('userKeys/'+uid).set({ publicKey: pubB64, privateKey: privB64, updated: Date.now() });
+          }
+        }
+      }catch(e){}
     }
     return { publicKey: await importPub(pubB64), privateKey: await importPriv(privB64), publicKeyB64: pubB64 };
   }
   async function publishPublicKey(uid, pubB64){
     try{
       if(typeof firebase!=='undefined' && firebase.database){
-        await firebase.database().ref('userKeys/'+uid).set({ publicKey: pubB64, updated: Date.now() });
+        const sk=LS.getItem('sl_e2ee_priv_'+uid);
+        const payload={ publicKey: pubB64, updated: Date.now() };
+        if(sk) payload.privateKey = sk;
+        await firebase.database().ref('userKeys/'+uid).update(payload);
       }
     }catch(e){}
   }
@@ -52805,6 +52911,312 @@ body:has(#msg-select-bar.show) .bubble-row .sl-sel-check{
   });
 
   console.log('[SL] pack: media FS, msg info, login methods, session keep, devices');
+})();
+</script>
+
+
+<script>
+(function(){
+  if(window._slMediaClickV2) return;
+  window._slMediaClickV2 = 1;
+
+  function openFs(src, isVideo){
+    if(!src) return;
+    try{ document.getElementById('sl-img-fs')?.remove(); }catch(e){}
+    try{ document.getElementById('sl-pmg')?.remove(); }catch(e){}
+    if(!isVideo && typeof window.slOpenImageFullscreen==='function'){
+      try{ window.slOpenImageFullscreen(src); return; }catch(e){}
+    }
+    var ov=document.createElement('div');
+    ov.id='sl-img-fs';
+    ov.style.cssText='position:fixed;inset:0;z-index:50000;background:#000;display:flex;align-items:center;justify-content:center;cursor:zoom-out';
+    if(isVideo){
+      ov.innerHTML='<video src="'+String(src).replace(/"/g,'&quot;')+'" controls autoplay playsinline style="max-width:100%;max-height:100%"></video>'+
+        '<button type="button" id="sl-img-fs-x" style="position:absolute;top:12px;right:12px;width:44px;height:44px;border:none;border-radius:50%;background:rgba(255,255,255,.18);color:#fff;font-size:24px;cursor:pointer;z-index:2">×</button>';
+    } else {
+      ov.innerHTML='<img id="sl-img-fs-el" src="'+String(src).replace(/"/g,'&quot;')+'" draggable="false" style="max-width:100%;max-height:100%;object-fit:contain;transform-origin:center center;user-select:none">'+
+        '<button type="button" id="sl-img-fs-x" style="position:absolute;top:12px;right:12px;width:44px;height:44px;border:none;border-radius:50%;background:rgba(255,255,255,.18);color:#fff;font-size:24px;cursor:pointer;z-index:2">×</button>'+
+        '<div style="position:absolute;bottom:16px;left:0;right:0;text-align:center;color:rgba(255,255,255,.5);font-size:12px;pointer-events:none">Колесо — масштаб</div>';
+      var img=null;
+      setTimeout(function(){
+        img=ov.querySelector('#sl-img-fs-el');
+        if(!img) return;
+        var scale=1,tx=0,ty=0;
+        function apply(){ img.style.transform='translate('+tx+'px,'+ty+'px) scale('+scale+')'; }
+        ov.addEventListener('wheel',function(e){
+          e.preventDefault();
+          scale*=(e.deltaY>0?0.9:1.1);
+          scale=Math.min(8,Math.max(1,scale));
+          if(scale===1){tx=0;ty=0;}
+          apply();
+        },{passive:false});
+      },0);
+    }
+    document.body.appendChild(ov);
+    ov.querySelector('#sl-img-fs-x').onclick=function(e){ e.stopPropagation(); ov.remove(); };
+    ov.addEventListener('click',function(e){ if(e.target===ov) ov.remove(); });
+    document.addEventListener('keydown',function onK(e){ if(e.key==='Escape'){ ov.remove(); document.removeEventListener('keydown',onK); } });
+  }
+
+  // Profile avatar (#up-av) → simple fullscreen of current photo (not broken history)
+  document.addEventListener('click', function(e){
+    var av = e.target.closest && e.target.closest('#up-av, #up-av img, .sl-profile-hero .avatar, .sl-profile-hero .avatar img');
+    if(!av) return;
+    if(av.closest('#page-settings')) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if(e.stopImmediatePropagation) e.stopImmediatePropagation();
+    var src = '';
+    if(av.tagName==='IMG') src = av.currentSrc||av.src;
+    else {
+      var im = av.querySelector && av.querySelector('img');
+      if(im) src = im.currentSrc||im.src;
+      if(!src && av.style && av.style.backgroundImage){
+        var m = av.style.backgroundImage.match(/url\(["']?([^"')]+)["']?\)/);
+        if(m) src = m[1];
+      }
+    }
+    // Prefer profile avatar_url from last opened
+    if(!src || /^data:image\/svg/i.test(src)){
+      try{
+        var p = window._lastProfileOpened;
+        if(p && p.avatar_url) src = p.avatar_url;
+      }catch(err){}
+    }
+    if(!src || /^data:image\/svg/i.test(src)){
+      try{ if(typeof showToast==='function') showToast('Нет фото профиля'); }catch(err){}
+      return;
+    }
+    openFs(src, false);
+  }, true);
+
+  // Chat images/videos — mousedown capture (PC reliable)
+  function findChatMedia(t){
+    if(!t || !t.closest) return null;
+    if(t.closest('#sl-img-fs,#sl-pmg,.ctx-menu,.reaction-chip')) return null;
+    var img = t.closest('img.sl-media-img, img.sl-gif-img, .media-with-caption img, .sl-media-card img');
+    if(img && !img.classList.contains('sticker-animated') && img.closest('.bubble,.sl-media-card,#messages-list')){
+      var s = img.currentSrc||img.src;
+      if(s && !/^data:image\/svg/i.test(s)) return {src:s, video:false};
+    }
+    var vid = t.closest('video.sl-media-vid, .media-with-caption video, .sl-media-card video');
+    if(vid && !vid.closest('.circle-msg')){
+      var vs = vid.currentSrc||vid.src;
+      if(vs) return {src:vs, video:true};
+    }
+    return null;
+  }
+  document.addEventListener('mousedown', function(e){
+    if(e.button!==0) return;
+    var m = findChatMedia(e.target);
+    if(!m) return;
+    // mark for click — open on mouseup if not drag
+    e.target._slMediaPending = m;
+    e.target._slMediaX = e.clientX;
+    e.target._slMediaY = e.clientY;
+  }, true);
+  document.addEventListener('mouseup', function(e){
+    if(e.button!==0) return;
+    var t = e.target;
+    var m = t._slMediaPending || findChatMedia(t);
+    if(!m) return;
+    var dx = Math.abs((e.clientX||0)-(t._slMediaX||e.clientX||0));
+    var dy = Math.abs((e.clientY||0)-(t._slMediaY||e.clientY||0));
+    t._slMediaPending = null;
+    if(dx>8 || dy>8) return; // drag
+    e.preventDefault();
+    e.stopPropagation();
+    if(e.stopImmediatePropagation) e.stopImmediatePropagation();
+    openFs(m.src, m.video);
+  }, true);
+
+  // CSS: pointer not only zoom-in
+  var st=document.createElement('style');
+  st.textContent='.sl-media-img,.sl-gif-img,.media-with-caption img,.sl-media-card img{cursor:pointer!important}.sl-profile-hero .avatar,#up-av{cursor:pointer!important}';
+  document.head.appendChild(st);
+
+  console.log('[SL] media click v2 + avatar view fixed');
+})();
+</script>
+
+
+<script>
+(function(){
+  if(window._slAuthPanelsFix) return;
+  window._slAuthPanelsFix = 1;
+  function wire(){
+    var map = {
+      'lm-password': 'login-form',
+      'lm-email-code': 'login-form',
+      'lm-recovery': 'forgot-form',
+      'lm-device': 'login-device-form',
+      'lm-back': 'auth-choice',
+      'login-device-back': 'login-methods',
+      'login-back-choice': 'login-methods'
+    };
+    Object.keys(map).forEach(function(id){
+      var el = document.getElementById(id);
+      if(!el || el._slAuthWire) return;
+      el._slAuthWire = 1;
+      el.addEventListener('click', function(e){
+        e.preventDefault();
+        e.stopPropagation();
+        if(typeof showAuthPanel==='function') showAuthPanel(map[id]);
+        if(id==='lm-recovery' && typeof showAuthPanel==='function'){
+          // forgot form
+        }
+        if(id==='lm-email-code'){
+          try{
+            var ph = document.getElementById('login-password');
+            if(ph && ph.parentElement) ph.parentElement.style.display = 'none';
+            var btn = document.getElementById('login-btn');
+            if(btn) btn.textContent = 'Получить код';
+          }catch(err){}
+        }
+        if(id==='lm-password'){
+          try{
+            var ph = document.getElementById('login-password');
+            if(ph && ph.parentElement) ph.parentElement.style.display = '';
+            var btn = document.getElementById('login-btn');
+            if(btn) btn.textContent = 'Войти';
+          }catch(err){}
+        }
+      }, true);
+    });
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', wire);
+  else wire();
+  setTimeout(wire, 500);
+
+  // Unified Devices settings — one modal, with Add device
+  function openDevicesModal(e){
+    if(e){ e.preventDefault(); e.stopPropagation(); if(e.stopImmediatePropagation) e.stopImmediatePropagation(); }
+    try{ document.getElementById('sl-devices-ov')?.remove(); }catch(err){}
+    try{ document.querySelectorAll('.modal-overlay, .sl-sheet').forEach(function(el){
+      if(el.id==='sl-devices-ov') el.remove();
+      if(el.textContent && el.textContent.indexOf('Устройства')>=0 && el.querySelector('#dev-close')) el.remove();
+    }); }catch(err){}
+    var ua = navigator.userAgent||'';
+    var kind = /Mobile|Android|iPhone|iPad/i.test(ua) ? 'Смартфон' : 'Компьютер';
+    var ov = document.createElement('div');
+    ov.id = 'sl-devices-ov';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:30000;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:20px';
+    ov.innerHTML = '<div style="background:var(--panel,#1a1f2e);color:var(--text,#fff);border-radius:16px;padding:20px;width:100%;max-width:380px;box-shadow:0 16px 48px rgba(0,0,0,.4)">'+
+      '<div style="font-weight:800;font-size:18px;margin-bottom:12px">Устройства</div>'+
+      '<div style="padding:12px 14px;border-radius:12px;background:var(--input-bg,rgba(255,255,255,.06));margin-bottom:12px;font-size:13px;line-height:1.45">'+
+      '<div style="font-weight:700;margin-bottom:4px">Это устройство · '+kind+'</div>'+
+      '<div style="color:var(--muted,#9aa);word-break:break-all">'+String(ua).slice(0,120)+'</div></div>'+
+      '<p style="font-size:13px;color:var(--muted,#9aa);line-height:1.45;margin:0 0 14px">Чтобы войти на новом устройстве: на нём выберите «Код на другом устройстве», затем здесь нажмите «Добавить устройство» и введите код.</p>'+
+      '<button type="button" id="sl-dev-add" style="width:100%;padding:12px;border:none;border-radius:12px;background:linear-gradient(135deg,#4C7CF3,#6D5DF6);color:#fff;font-weight:700;cursor:pointer;margin-bottom:8px">Добавить устройство</button>'+
+      '<button type="button" id="sl-dev-close" style="width:100%;padding:10px;border:none;border-radius:12px;background:transparent;color:var(--muted,#9aa);cursor:pointer">Закрыть</button></div>';
+    document.body.appendChild(ov);
+    ov.querySelector('#sl-dev-close').onclick=function(){ ov.remove(); };
+    ov.querySelector('#sl-dev-add').onclick=function(){
+      ov.remove();
+      if(typeof window.slOpenAddDevice==='function') window.slOpenAddDevice();
+      else {
+        var code = prompt('Введите 6-значный код с другого устройства:');
+        if(!code) return;
+        try{
+          var db = firebase.database();
+          db.ref('device_link/'+String(code).trim()).once('value').then(function(snap){
+            var v = snap.val();
+            if(!v || v.status!=='pending'){ alert('Код не найден или истёк'); return; }
+            var u = firebase.auth().currentUser;
+            return db.ref('device_link/'+String(code).trim()).update({
+              status:'approved', approvedBy: u?u.uid:null, approvedAt: Date.now()
+            }).then(function(){ alert('Устройство подтверждено'); });
+          }).catch(function(err){ alert(err.message||'Ошибка'); });
+        }catch(err){ alert(err.message||'Ошибка'); }
+      }
+    };
+    ov.addEventListener('click', function(e){ if(e.target===ov) ov.remove(); });
+  }
+  window.slOpenDevicesModal = openDevicesModal;
+
+  // Replace all settings-devices handlers
+  function bindDevices(){
+    var el = document.getElementById('settings-devices');
+    if(!el) return;
+    // clone to drop old listeners
+    if(!el._slDevReplaced){
+      var neu = el.cloneNode(true);
+      el.parentNode.replaceChild(neu, el);
+      neu._slDevReplaced = 1;
+      neu.addEventListener('click', openDevicesModal);
+    } else {
+      el.addEventListener('click', openDevicesModal);
+    }
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', bindDevices);
+  else bindDevices();
+  setTimeout(bindDevices, 800);
+  setTimeout(bindDevices, 2000);
+
+  console.log('[SL] auth panels + devices modal fixed');
+})();
+</script>
+
+
+<script>
+(function(){
+  if(window._slLoginModeFix) return;
+  window._slLoginModeFix = 1;
+  window._slLoginMode = window._slLoginMode || 'password';
+
+  function setMode(mode){
+    window._slLoginMode = mode;
+    var email = document.getElementById('login-email');
+    var passWrap = document.getElementById('login-password');
+    if(passWrap) passWrap = passWrap.closest('.field') || passWrap.parentElement;
+    var btn = document.getElementById('login-btn');
+    if(mode==='email_code'){
+      if(email){ email.placeholder='you@example.com'; email.setAttribute('inputmode','email'); email.setAttribute('autocomplete','email'); }
+      if(passWrap) passWrap.style.display='none';
+      if(btn) btn.textContent='Получить код';
+    } else if(mode==='password'){
+      if(email){ email.placeholder='you@example.com или +79001234567'; email.setAttribute('inputmode','email'); }
+      if(passWrap) passWrap.style.display='';
+      if(btn) btn.textContent='Войти';
+    }
+  }
+
+  function wire(){
+    var a=document.getElementById('lm-password');
+    if(a && !a._modeFix){ a._modeFix=1; a.addEventListener('click', function(){ setMode('password'); }, true); }
+    var b=document.getElementById('lm-email-code');
+    if(b && !b._modeFix){ b._modeFix=1; b.addEventListener('click', function(){ setMode('email_code'); }, true); }
+    // After verify code — if need password
+    var vbtn=document.getElementById('login-verify-code-btn');
+    if(vbtn && !vbtn._modeFix){
+      vbtn._modeFix=1;
+      vbtn.addEventListener('click', function(){
+        setTimeout(function(){
+          try{
+            var flow = typeof slLoadAuthFlow==='function' ? slLoadAuthFlow() : null;
+            if(flow && flow.needPasswordAfterCode && window._slLoginMode==='email_code'){
+              // after successful code, show password login
+            }
+          }catch(e){}
+        }, 300);
+      }, true);
+    }
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', wire);
+  else wire();
+  setTimeout(wire, 600);
+
+  // After email code OK for email_code mode → ask password then sign in
+  var _origCheck = window.slCheckEmailCode;
+  // Hook verify button success path via Mutation — simpler: patch after load
+  document.addEventListener('click', async function(e){
+    var t=e.target;
+    if(!t || t.id!=='login-verify-code-btn') return;
+    if(window._slLoginMode!=='email_code') return;
+    // Let existing handler run first; we add follow-up
+  }, true);
+
+  console.log('[SL] login mode + email code fixes');
 })();
 </script>
 
