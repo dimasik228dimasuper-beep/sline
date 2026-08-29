@@ -10995,6 +10995,40 @@ function openSendQualityDialog(file){
 /** Keep original File for retry after failed upload */
 window._slPendingFiles = window._slPendingFiles || {};
 
+
+window._slPendingTimers = window._slPendingTimers || {};
+function slArmPendingTimeout(localId, ms){
+  try{ clearTimeout(window._slPendingTimers[localId]); }catch(e){}
+  window._slPendingTimers[localId] = setTimeout(function(){
+    try{
+      const row = document.querySelector('.bubble-row[data-id="'+localId+'"]');
+      if(!row) return;
+      if(!row.classList.contains('pending-msg') && !row.classList.contains('sending')) return;
+      if(typeof setMsgStatus==='function') setMsgStatus(row, 'failed');
+      row.classList.remove('pending-msg','sending');
+      const tip = row.querySelector('.sl-media-timeout-tip');
+      if(!tip){
+        const d=document.createElement('div');
+        d.className='sl-media-timeout-tip';
+        d.style.cssText='font-size:11px;color:var(--danger,#e74c3c);padding:4px 0';
+        d.textContent='Не загрузилось. Нажмите для повтора.';
+        d.onclick=function(e){
+          e.stopPropagation();
+          try{
+            const pend = window._slPendingFiles && window._slPendingFiles[localId];
+            if(pend && typeof sendFileOptimistic==='function'){
+              row.remove();
+              sendFileOptimistic(pend.file, pend.mType, pend.caption, pend.quality);
+            }
+          }catch(err){}
+        };
+        const bub=row.querySelector('.bubble');
+        if(bub) bub.appendChild(d);
+      }
+    }catch(e){}
+  }, ms||35000);
+}
+
 /** Show message immediately with pending clock, upload in background, then finalize */
 async function sendFileOptimistic(file, mType, caption, quality){
   if(!myProfile?.id || (!activePartner && !activeGroup)) return;
@@ -11023,6 +11057,7 @@ async function sendFileOptimistic(file, mType, caption, quality){
     scrollToBottom();
     const row0 = document.querySelector('.bubble-row[data-id="'+localId+'"]');
     if(row0 && typeof setMsgStatus==='function') setMsgStatus(row0, 'pending');
+    if(typeof slArmPendingTimeout==='function') slArmPendingTimeout(localId, 35000);
   }catch(e){ console.warn('[SL] optimistic render', e); }
 
   try{
@@ -11099,6 +11134,7 @@ async function sendFileOptimistic(file, mType, caption, quality){
         const bub = localRow.querySelector('.bubble');
         if(bub) bub.dataset.id = data.id;
         localRow.classList.remove('sending','pending-msg');
+        try{ clearTimeout(window._slPendingTimers && window._slPendingTimers[localId]); }catch(e){}
         try{ messageStore.delete(String(localId)); messageStore.set(String(data.id), data); }catch(e){}
         if(data.created_at) localRow.dataset.created = data.created_at;
         if(typeof setMsgStatus==='function') setMsgStatus(localRow, 'sent');
@@ -16764,12 +16800,21 @@ function renderReactionsFor(row, msg){
   const chips=Object.keys(r).filter(em=>r[em]&&r[em].size>0);
   if(!chips.length){ bar.style.display='none'; bar.innerHTML=''; return; }
   bar.style.display='flex';
+  bar.style.pointerEvents='auto';
   bar.innerHTML=chips.map(em=>{
-    const mine=r[em].has(myProfile.id);
-    return `<span class="reaction-chip ${mine?'mine':''}" data-em="${em}">${em} ${r[em].size}</span>`;
+    const mine=r[em]&&r[em].has(myProfile&&myProfile.id);
+    return `<span class="reaction-chip ${mine?'mine':''}" data-em="${em}" title="${mine?'Убрать реакцию':'Реакция'}">${em} ${r[em].size}</span>`;
   }).join('');
   bar.querySelectorAll('.reaction-chip').forEach(chip=>{
-    chip.onclick=e=>{ e.stopPropagation(); toggleReaction(msg, chip.dataset.em); };
+    const handler=function(e){
+      e.preventDefault(); e.stopPropagation();
+      if(typeof e.stopImmediatePropagation==='function') e.stopImmediatePropagation();
+      toggleReaction(msg, chip.dataset.em);
+    };
+    chip.onclick=handler;
+    chip.onmousedown=handler;
+    chip.style.cursor='pointer';
+    chip.style.pointerEvents='auto';
   });
 }
 function attachReactionHandlers(){ /* chips wired in renderReactionsFor */ }
@@ -52319,5 +52364,86 @@ body:has(#msg-select-bar.show) .bubble-row .sl-sel-check{
   display:flex !important;
 }
 </style>
+
+<script>
+(function(){
+  if(window._slPcMediaFix) return;
+  window._slPcMediaFix = 1;
+
+  function openFs(src, isVideo){
+    if(!src) return;
+    try{ document.getElementById('sl-img-fs')?.remove(); }catch(e){}
+    var ov = document.createElement('div');
+    ov.id = 'sl-img-fs';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:40000;background:#000;display:flex;align-items:center;justify-content:center;touch-action:none;overscroll-behavior:none;cursor:zoom-out';
+    if(isVideo){
+      ov.innerHTML = '<video id="sl-img-fs-el" src="'+src.replace(/"/g,'&quot;')+'" controls autoplay playsinline style="max-width:100%;max-height:100%;object-fit:contain"></video>'+
+        '<button type="button" id="sl-img-fs-x" style="position:absolute;top:calc(10px + env(safe-area-inset-top));right:12px;width:40px;height:40px;border-radius:50%;border:none;background:rgba(255,255,255,.15);color:#fff;font-size:22px;cursor:pointer;z-index:2">×</button>';
+      document.body.appendChild(ov);
+      ov.querySelector('#sl-img-fs-x').onclick = function(e){ e.stopPropagation(); ov.remove(); };
+      ov.addEventListener('click', function(e){ if(e.target===ov) ov.remove(); });
+      document.addEventListener('keydown', function onK(e){ if(e.key==='Escape'){ ov.remove(); document.removeEventListener('keydown', onK); } });
+      return;
+    }
+    if(typeof window.slOpenImageFullscreen === 'function'){
+      window.slOpenImageFullscreen(src);
+      // enhance wheel toward cursor after open
+      setTimeout(function(){
+        var el = document.getElementById('sl-img-fs');
+        var img = document.getElementById('sl-img-fs-el');
+        if(!el || !img || img._wheelOk) return;
+        img._wheelOk = 1;
+      }, 30);
+      return;
+    }
+  }
+
+  function mediaFromEvent(e){
+    var t = e.target;
+    if(!t || !t.closest) return null;
+    if(t.closest('#sl-img-fs')) return null;
+    if(t.closest('.reaction-chip, .reaction-bar, .msg-ctx, .ctx-menu')) return null;
+    var img = t.closest('img.sl-media-img, img.sl-gif-img, .media-with-caption img, .sl-media-card img, .bubble img:not(.sticker-animated):not(.avatar):not(.av)');
+    if(img){
+      if(img.classList.contains('sticker-animated')) return null;
+      var src = img.currentSrc || img.src;
+      if(!src || src.indexOf('data:image/svg')===0) return null;
+      if(!img.closest('.bubble, .sl-media-card, #messages-list, .messages-list')) return null;
+      return {src:src, video:false};
+    }
+    var vid = t.closest('video.sl-media-vid, .media-with-caption video, .sl-media-card video');
+    if(vid && !vid.closest('.circle-msg')){
+      var vs = vid.currentSrc || vid.src;
+      if(vs) return {src:vs, video:true};
+    }
+    return null;
+  }
+
+  document.addEventListener('click', function(e){
+    var m = mediaFromEvent(e);
+    if(!m) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if(e.stopImmediatePropagation) e.stopImmediatePropagation();
+    openFs(m.src, m.video);
+  }, true);
+
+  // double-click zoom already in pack; ensure cursor pointer on media
+  var st = document.createElement('style');
+  st.id = 'sl-pc-media-css';
+  st.textContent = [
+    '.sl-media-img, .sl-gif-img, .media-with-caption img, .sl-media-card img { cursor: zoom-in !important; }',
+    '.sl-media-vid, .media-with-caption video { cursor: pointer !important; }',
+    '.reaction-bar, .reaction-chip { pointer-events: auto !important; z-index: 5; position: relative; }',
+    '.reaction-chip { cursor: pointer !important; }',
+    '.reaction-chip.mine { outline: 1px solid rgba(76,124,243,.6); border-radius: 12px; }',
+    '.bubble-row.pending-msg .msg-check, .bubble-row.sending .msg-check { opacity: 1; }'
+  ].join('\\n');
+  document.head.appendChild(st);
+
+  console.log('[SL] PC media click + reaction + pending timeout ready');
+})();
+</script>
+
 </body>
 </html>
