@@ -5109,6 +5109,23 @@ const FIREBASE_CONFIG = {
 
 // Neon (Postgres) — for future server / Data API use
 const PROXY_URL = "https://old-band-f00b.dimasik-228-dima-super.workers.dev";
+function slCacheChatPreview(peerId, text, at){
+  try{
+    if(!peerId || !text) return;
+    var k = 'sl_chat_prev_v1';
+    var o = {};
+    try{ o = JSON.parse(localStorage.getItem(k)||'{}')||{}; }catch(e){ o={}; }
+    o[String(peerId)] = { t: String(text).slice(0,80), a: at || Date.now() };
+    localStorage.setItem(k, JSON.stringify(o));
+  }catch(e){}
+}
+function slGetCachedPreview(peerId){
+  try{
+    var o = JSON.parse(localStorage.getItem('sl_chat_prev_v1')||'{}')||{};
+    var x = o[String(peerId)];
+    return x && x.t ? x.t : '';
+  }catch(e){ return ''; }
+}
 function slMsgPreview(m){
   if(!m) return '';
   var t = m.type || '';
@@ -8139,7 +8156,7 @@ async function loadChats(){
       if(s!==me && r!==me) continue;
       const pid = s===me ? r : s;
       if(!pid||map.has(pid)) continue;
-      map.set(pid,{lastMessage:(typeof slMsgPreview==='function'?slMsgPreview(m):(m.content||'')),lastAt:m.created_at});
+      var _pv=(typeof slMsgPreview==='function'?slMsgPreview(m):(m.content||'')); map.set(pid,{lastMessage:_pv,lastAt:m.created_at}); try{ if(typeof slCacheChatPreview==='function') slCacheChatPreview(pid,_pv,m.created_at); }catch(e){}
     }
     if(!map.has(myProfile.id)) map.set(myProfile.id,{lastMessage:'Заметки',lastAt:new Date(0).toISOString()});
     const ids=[...map.keys()];
@@ -8456,7 +8473,7 @@ function renderContactsAndGroups(){
         sub = data.description || 'Группа';
       }
     } else {
-      sub = data.lastMessage || ('@'+(data.username||''));
+      sub = data.lastMessage || (typeof slGetCachedPreview==='function' ? slGetCachedPreview(data.id) : '') || ('@'+(data.username||''));
     }
     const online=onlineUsers.has(data.id);
     const lastAt = data.lastAt ? new Date(data.lastAt) : null;
@@ -9836,7 +9853,16 @@ function renderMessage(msg, isGroup=false){
   }catch(e){}
   const time=_msgTs.toLocaleTimeString((typeof currentLang!=='undefined'&&currentLang==='en')?'en-US':'ru-RU',{hour:'2-digit',minute:'2-digit'});
   let bodyText=msg.content||'', replyHtml='';
-  if(msg.type==='encrypted' && !msg._plainReady && window.SL_E2EE && myProfile && myProfile.id){
+  // E2EE: type=encrypted ИЛИ content похож на наш шифр-JSON
+  var _looksE2e = false;
+  try{
+    if(msg.type==='encrypted') _looksE2e = true;
+    else if(typeof msg.content==='string' && msg.content.length>20 && msg.content.charAt(0)==='{'){
+      var _p0 = JSON.parse(msg.content);
+      if(_p0 && _p0.v && _p0.iv && _p0.data) _looksE2e = true;
+    }
+  }catch(eL){}
+  if(_looksE2e && !msg._plainReady && !msg._fromE2e && window.SL_E2EE && myProfile && myProfile.id){
     if(msg._e2eeWorking) return;
     msg._e2eeWorking = true;
     (async function(){
@@ -9844,7 +9870,9 @@ function renderMessage(msg, isGroup=false){
       try{
         var payload = typeof msg.content==='string' ? JSON.parse(msg.content) : msg.content;
         var isG = !!(msg.group_id || isGroup);
-        var peer = msg.sender_id===myProfile.id ? msg.receiver_id : msg.sender_id;
+        var peer = msg.sender_id===myProfile.id ? (msg.receiver_id || msg.sender_id) : msg.sender_id;
+        // Избранное / заметки себе: peer = я сам
+        if(!peer || String(peer)===String(myProfile.id)) peer = myProfile.id;
         plain = await SL_E2EE.decryptMessage({
           payload: payload,
           chatId: isG ? msg.group_id : peer,
@@ -9855,7 +9883,11 @@ function renderMessage(msg, isGroup=false){
       }catch(e){ console.warn('[E2EE]', e); }
       msg._plainReady = true;
       msg._e2eeWorking = false;
-      try{ renderMessage(Object.assign({}, msg, { type: 'text', content: plain, _fromE2e: true }), isGroup); }catch(eR){}
+      try{
+        var row = document.querySelector('.bubble-row[data-id="'+msg.id+'"]');
+        if(row) row.remove();
+      }catch(eRm){}
+      try{ renderMessage(Object.assign({}, msg, { type: 'text', content: plain, _fromE2e: true, _plainReady: true }), isGroup); }catch(eR){}
     })();
     return;
   }
@@ -10961,16 +10993,19 @@ async function sendFileOptimistic(file, mType, caption, quality){
   try{ window._slPendingFiles[localId] = { file:file, mType:mType, caption:caption, quality:quality||'original' }; }catch(e){}
   let blobUrl = '';
   try{
-    if(mType==='image' || mType==='video') blobUrl = URL.createObjectURL(file);
+    if(mType==='image' || mType==='video' || mType==='circle' || mType==='voice' || mType==='gif' || mType==='sticker'){
+      blobUrl = URL.createObjectURL(file);
+    }
   }catch(e){}
   const optMsg = {
     id: localId,
     sender_id: myProfile.id,
-    content: caption || (mType==='file' ? (file.name||'Файл') : ''),
+    content: caption || (mType==='file' ? (file.name||'Файл') : (mType==='voice'||mType==='circle' ? '' : '')),
     type: mType || 'file',
     file_url: blobUrl || '',
     created_at: new Date().toISOString(),
-    _pending: true
+    _pending: true,
+    _localBlob: true
   };
   if(activeGroup){ optMsg.group_id = activeGroup.id; optMsg.receiver_id = null; }
   else { optMsg.receiver_id = activePartner.id; optMsg.group_id = null; }
@@ -10992,8 +11027,17 @@ async function sendFileOptimistic(file, mType, caption, quality){
     try{
       const row = document.querySelector('.bubble-row[data-id="'+localId+'"]');
       if(row && realUrl){
-        row.querySelectorAll('img.sl-media-img, img.sl-gif-img').forEach(function(img){ img.src = realUrl; });
-        row.querySelectorAll('video.sl-media-vid').forEach(function(v){ try{ v.src = realUrl; }catch(e){} });
+        row.querySelectorAll('img.sl-media-img, img.sl-gif-img, img.sticker-animated').forEach(function(img){ img.src = realUrl; });
+        row.querySelectorAll('video.sl-media-vid, .circle-msg video, .circle-msg source').forEach(function(v){
+          try{
+            if(v.tagName==='SOURCE'){ v.src = realUrl; if(v.parentNode && v.parentNode.load) v.parentNode.load(); }
+            else { v.src = realUrl; if(v.load) v.load(); }
+          }catch(e){}
+        });
+        const cm = row.querySelector('.circle-msg');
+        if(cm) cm.setAttribute('data-src', realUrl);
+        const vb = row.querySelector('.voice-bubble');
+        if(vb) vb.setAttribute('data-src', realUrl);
         const btn = row.querySelector('.sl-file-btn');
         if(btn){ btn.href = realUrl; btn.setAttribute('href', realUrl); }
         const card = row.querySelector('.sl-file-card');
@@ -12461,7 +12505,18 @@ async function loadStories(){
   try{ (window.contacts||[]).forEach(c=>{ if(c&&c.id) contactIds.add(String(c.id)); }); }catch(e){}
   window._slInterestingUids = [];
   try{
-    const {data:stories,error}=await sb.from('stories').select('id,user_id,media_url,type,expires_at,created_at').gt('expires_at',new Date().toISOString()).order('created_at',{ascending:false});
+    let stories=null, error=null;
+    try{
+      const res = await sb.from('stories').select('id,user_id,media_url,type,expires_at,created_at').gt('expires_at',new Date().toISOString()).order('created_at',{ascending:false});
+      stories = res && res.data; error = res && res.error;
+    }catch(eGt){
+      try{
+        const res2 = await sb.from('stories').select('id,user_id,media_url,type,expires_at,created_at');
+        stories = (res2 && res2.data) || [];
+        const now = Date.now();
+        stories = stories.filter(function(s){ try{ return new Date(s.expires_at).getTime() > now; }catch(e){ return true; } });
+      }catch(e2){ stories = []; error = e2; }
+    }
     if(error) console.warn('stories load', error);
     let list=stories||[];
     const local=getLocalStories().filter(s=>s.user_id===myProfile.id);
@@ -45612,7 +45667,7 @@ body{
         if(m.group_id) return;
         var pid = s===me ? r : s;
         if(!pid||map.has(pid)) return;
-        map.set(pid,{lastMessage:(typeof slMsgPreview==='function'?slMsgPreview(m):(m.content||'')),lastAt:m.created_at});
+        var _pv=(typeof slMsgPreview==='function'?slMsgPreview(m):(m.content||'')); map.set(pid,{lastMessage:_pv,lastAt:m.created_at}); try{ if(typeof slCacheChatPreview==='function') slCacheChatPreview(pid,_pv,m.created_at); }catch(e){}
       });
       map.set(myProfile.id, map.get(myProfile.id)||{lastMessage:'Заметки',lastAt:new Date(0).toISOString()});
       // Do NOT import sl_my_contacts into chat list without a real message — that leaked strangers
@@ -51872,6 +51927,11 @@ img.sl-gif-img{
   }
   async function getUserPublicKey(uid){
     try{
+      // локальный ключ (Избранное / я сам)
+      var local = LS.getItem('sl_e2ee_pub_'+uid);
+      if(local) return local;
+    }catch(e0){}
+    try{
       if(typeof firebase==='undefined'||!firebase.database) return null;
       const snap=await firebase.database().ref('userKeys/'+uid).once('value');
       const v=snap.val(); return v && v.publicKey ? v.publicKey : null;
@@ -51971,6 +52031,15 @@ img.sl-gif-img{
 .bubble-row .bubble.bubble-circle,.bubble.me.bubble-circle,.bubble.them.bubble-circle{
   background:transparent!important;background-color:transparent!important;border:0!important;box-shadow:none!important;padding:0!important;border-radius:0!important;
 }
+</style>
+<style id="sl-big-emoji-fix">
+.bubble.bubble-big-emoji,.bubble.me.bubble-big-emoji,.bubble.them.bubble-big-emoji,
+.bubble-row .bubble.bubble-big-emoji{
+  background:transparent!important;background-color:transparent!important;background-image:none!important;
+  border:none!important;box-shadow:none!important;padding:0!important;border-radius:0!important;
+  max-width:none!important;
+}
+.bubble.bubble-big-emoji .big-emoji{font-size:64px;line-height:1.1}
 </style>
 </body>
 </html>
