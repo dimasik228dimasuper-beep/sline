@@ -7026,6 +7026,9 @@ async function doLogin(){
 
     let lastError = null;
     let data = null;
+    // CRITICAL: set before signIn — Firebase onAuthStateChange races otherwise
+    window._slLoginSeqPending = true;
+    window._slLoginSeqPending = true;
     for(const email of candidates){
       try{
         const res = await withTimeout(sb.auth.signInWithPassword({email, password}), 8000, 'auth timeout');
@@ -7039,11 +7042,13 @@ async function doLogin(){
     }
 
     if(!data?.user){
+      window._slLoginSeqPending = false;
       const msg = (lastError && lastError.message) || '';
       if(/timeout/i.test(msg)) authMsg('Сервер не отвечает. Проверьте интернет и попробуйте снова');
       else authMsg(/invalid|credentials|email/i.test(msg) ? 'Неверный логин или пароль' : (msg || 'Неверный логин или пароль'));
       setBtnLoading(btn, false);
       clearTimeout(unlock);
+      window._slDoLoginBusy = false;
       return;
     }
     // Sequential login: password OK → email code → device code → app
@@ -54183,6 +54188,218 @@ body:has(#msg-select-bar.show) .bubble-row .sl-sel-check{
   }
 
   console.log('[SL] login seq force code + back + avatar info');
+})();
+</script>
+
+
+<script>
+(function(){
+  if(window._slLoginNuclearGate) return;
+  window._slLoginNuclearGate = 1;
+  // LAST override — cannot be bypassed by earlier wrappers
+  window._slLoginSeqPending = window._slLoginSeqPending || false;
+
+  var _prevAuth = window.onAuthenticated;
+  window.onAuthenticated = async function(user){
+    if(window._slLoginSeqPending){
+      window._pendingLoginUser = user;
+      console.warn('[SL] BLOCKED onAuthenticated — need email code + device');
+      // Force stay on auth UI
+      try{
+        var app = document.getElementById('app-screen');
+        var auth = document.getElementById('auth-screen');
+        if(app){ app.style.setProperty('display','none','important'); }
+        if(auth){ auth.style.setProperty('display','flex','important'); auth.style.visibility='visible'; }
+        document.documentElement.classList.add('sl-on-auth');
+        document.documentElement.classList.remove('sl-force-app','sl-ready');
+        document.body.classList.add('sl-on-auth');
+      }catch(e){}
+      return;
+    }
+    if(typeof _prevAuth === 'function') return await _prevAuth(user);
+  };
+
+  window.slFinishLoginSequence = async function(){
+    window._slLoginSeqPending = false;
+    try{ if(typeof slClearAuthFlow==='function') slClearAuthFlow(); }catch(e){}
+    var user = window._pendingLoginUser;
+    if(!user){
+      try{
+        if(window.sb && sb.auth && sb.auth.getUser){
+          var g = await sb.auth.getUser();
+          user = g && g.data && g.data.user;
+        }
+      }catch(e){}
+    }
+    if(!user && typeof firebase!=='undefined' && firebase.auth){
+      var fu = firebase.auth().currentUser;
+      if(fu) user = { id: fu.uid, email: fu.email };
+    }
+    if(!user){
+      try{ authMsg('Сессия истекла — войдите снова'); showAuthPanel('login-form'); }catch(e){}
+      return;
+    }
+    try{ authMsg('Входим…'); }catch(e){}
+    if(typeof _prevAuth === 'function') await _prevAuth(user);
+    else if(typeof onAuthenticated === 'function'){
+      // prevent recursion
+      window._slLoginSeqPending = false;
+      await _prevAuth(user);
+    }
+  };
+
+  // Force hard UI show for verify panel
+  window.slForceShowVerify = function(email){
+    window._slLoginSeqPending = true;
+    try{
+      var app = document.getElementById('app-screen');
+      var auth = document.getElementById('auth-screen');
+      if(app) app.style.setProperty('display','none','important');
+      if(auth){ auth.style.setProperty('display','flex','important'); auth.style.visibility='visible'; opacity=1; }
+      document.documentElement.classList.add('sl-on-auth','sl-force-auth');
+      document.documentElement.classList.remove('sl-force-app','sl-ready');
+      document.body.classList.add('sl-on-auth');
+    }catch(e){}
+    ['auth-choice','login-form','login-methods','login-device-form','login-device-check','register-form','forgot-form'].forEach(function(id){
+      var el=document.getElementById(id);
+      if(el){ el.style.setProperty('display','none','important'); el.setAttribute('hidden',''); }
+    });
+    var v = document.getElementById('login-verify-form');
+    if(v){
+      v.style.setProperty('display','block','important');
+      v.style.setProperty('visibility','visible','important');
+      v.style.setProperty('opacity','1','important');
+      v.style.setProperty('pointer-events','auto','important');
+      v.style.setProperty('height','auto','important');
+      v.style.setProperty('overflow','visible','important');
+      v.removeAttribute('hidden');
+      v.classList.remove('sl-auth-panel-off');
+      v.classList.add('sl-auth-panel-on');
+    }
+    var hint = document.getElementById('login-verify-hint');
+    if(hint && email) hint.textContent = 'Код отправлен на '+email+' (или нажмите «Отправить ещё раз»)';
+    try{ document.getElementById('auth-sub-text').textContent = 'Подтверждение email'; }catch(e){}
+    try{ document.getElementById('login-email-code').value=''; document.getElementById('login-email-code').focus(); }catch(e){}
+  };
+
+  // Intercept login button — AFTER password success force verify
+  function wireLoginBtn(){
+    var btn = document.getElementById('login-btn');
+    if(!btn || btn._nuclear) return;
+    btn._nuclear = 1;
+    btn.addEventListener('click', function(){
+      // Set pending early on any login attempt
+      window._slLoginSeqPending = true;
+    }, true);
+  }
+  wireLoginBtn();
+  setTimeout(wireLoginBtn, 500);
+
+  // Patch doLogin result by observing: after password, if still pending and no verify shown, force it
+  var _do = window.doLogin;
+  if(typeof _do === 'function'){
+    window.doLogin = async function(){
+      window._slLoginSeqPending = true;
+      try{
+        await _do.apply(this, arguments);
+      }finally{
+        window._slDoLoginBusy = false;
+      }
+      // If sequence still pending and verify/device not visible — force verify
+      setTimeout(function(){
+        if(!window._slLoginSeqPending) return;
+        var v = document.getElementById('login-verify-form');
+        var d = document.getElementById('login-device-form');
+        var vOn = v && v.style.display !== 'none' && !v.hasAttribute('hidden') && !v.classList.contains('sl-auth-panel-off');
+        var dOn = d && d.style.display !== 'none' && !d.hasAttribute('hidden');
+        var app = document.getElementById('app-screen');
+        var appOn = app && app.style.display !== 'none' && window.getComputedStyle(app).display !== 'none';
+        if(appOn && window._slLoginSeqPending){
+          // was wrongly let in
+          app.style.setProperty('display','none','important');
+          var email = window._pendingLoginEmail || (document.getElementById('login-email')||{}).value || '';
+          window.slForceShowVerify(email);
+          return;
+        }
+        if(!vOn && !dOn && window._slLoginSeqPending){
+          var email = window._pendingLoginEmail || (document.getElementById('login-email')||{}).value || '';
+          window.slForceShowVerify(email);
+        }
+      }, 300);
+    };
+  }
+
+  // Verify button → device step (not app)
+  function wireVerify(){
+    var codeBtn = document.getElementById('login-verify-code-btn');
+    if(!codeBtn || codeBtn._nuclear) return;
+    codeBtn._nuclear = 1;
+    codeBtn.addEventListener('click', async function(e){
+      e.preventDefault();
+      e.stopPropagation();
+      if(e.stopImmediatePropagation) e.stopImmediatePropagation();
+      var input = (document.getElementById('login-email-code')||{}).value || '';
+      if(typeof slCheckEmailCode === 'function'){
+        var r = slCheckEmailCode(input);
+        // Allow empty skip only if no pending code
+        if(!r.ok && !r.skipped){ authMsg('Неверный код'); return; }
+      } else if(!String(input).trim()){ authMsg('Введите код'); return; }
+      authMsg('');
+      window._slLoginSeqPending = true;
+      if(typeof window.slStartLoginDeviceStep === 'function'){
+        await window.slStartLoginDeviceStep(window._pendingLoginEmail||'');
+      } else {
+        // minimal device UI
+        if(typeof showAuthPanel==='function') showAuthPanel('login-device-form');
+      }
+    }, true);
+  }
+  wireVerify();
+  setTimeout(wireVerify, 800);
+
+  // Resend
+  function wireResend(){
+    var b = document.getElementById('login-resend-code');
+    if(!b || b._nuclear) return;
+    b._nuclear = 1;
+    b.addEventListener('click', async function(e){
+      e.preventDefault();
+      var email = window._pendingLoginEmail;
+      if(!email){ authMsg('Нет email'); return; }
+      authMsg('Отправляем…');
+      try{
+        var res = await slSendEmailCode(email, {force:true});
+        authMsg(res && res.ok ? 'Код отправлен' : ('Ошибка: '+(res&&res.error||'не отправлено')));
+      }catch(err){ authMsg('Ошибка отправки'); }
+    }, true);
+  }
+  wireResend();
+  setTimeout(wireResend, 800);
+
+  // Device no-access
+  function wireNo(){
+    var b = document.getElementById('login-no-other-device');
+    if(!b || b._nuclear) return;
+    b._nuclear = 1;
+    b.addEventListener('click', function(e){
+      e.preventDefault();
+      e.stopPropagation();
+      if(typeof showAuthPanel==='function') showAuthPanel('login-device-check');
+      var bar=document.getElementById('login-check-bar');
+      var sub=document.getElementById('login-check-sub');
+      var t0=Date.now();
+      var iv=setInterval(async function(){
+        var pr=Math.min(1,(Date.now()-t0)/10000);
+        if(bar) bar.style.width=(pr*100).toFixed(1)+'%';
+        if(sub) sub.textContent = pr<0.4?'Проверяем ваше устройство':(pr<0.75?'Сверяем отпечаток сессии':'Почти готово…');
+        if(pr>=1){ clearInterval(iv); await window.slFinishLoginSequence(); }
+      }, 100);
+    }, true);
+  }
+  wireNo();
+  setTimeout(wireNo, 800);
+
+  console.log('[SL] NUCLEAR login gate active');
 })();
 </script>
 
