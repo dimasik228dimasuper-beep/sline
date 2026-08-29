@@ -285,7 +285,7 @@ body.in-chat .app-pages{
 .search-box{flex-shrink:0;position:relative;margin-bottom:8px}
 .sidebar-header{padding:12px 16px;border-bottom:1px solid var(--line);flex-shrink:0;position:relative;z-index:40}
 
-/* ===== MAX chats header & tabs ===== */
+
 .max-chats-hdr{
   display:flex!important;align-items:center;justify-content:space-between;
   padding:10px 14px!important;padding-top:calc(10px + env(safe-area-inset-top,0px))!important;
@@ -384,7 +384,7 @@ body.chats-selecting .max-folder-tabs .folder-tab[data-can-del="1"] .ft-x{displa
 .pinned-badge{font-size:10px;color:var(--mint);margin-left:4px}
 
 
-/* ===== MAX-style swipe actions (working) ===== */
+
 #contacts-list, .contacts, .sidebar-scroll .contacts{
   overflow-x: hidden !important;
 }
@@ -495,7 +495,7 @@ body.light-theme .sw-front{
 }
 
 
-/* ===== Chat row swipe actions (MAX / Telegram style) ===== */
+
 .sw-clip{
   width:100%;
   max-width:100%;
@@ -695,7 +695,24 @@ body.beta-oled .sw-clip{background:var(--panel)!important}
   40%{box-shadow:0 0 0 3px rgba(76,124,243,.35)}
   70%{box-shadow:0 0 0 2px rgba(76,124,243,.2)}
 }
-.bubble.bubble-circle,.bubble.me.bubble-circle,.bubble.them.bubble-circle{background:transparent!important;background-image:none!important;border:none!important;padding:0!important;box-shadow:none!important;max-width:none!important;border-radius:0!important}
+.bubble.bubble-circle,.bubble.me.bubble-circle,.bubble.them.bubble-circle,
+.bubble-row .bubble.bubble-circle,
+.bubble-row.me .bubble.bubble-circle,
+.bubble-row.them .bubble.bubble-circle{
+  background:transparent!important;
+  background-color:transparent!important;
+  background-image:none!important;
+  border:none!important;
+  padding:0!important;
+  margin:0!important;
+  box-shadow:none!important;
+  max-width:none!important;
+  border-radius:0!important;
+  overflow:visible!important;
+}
+.bubble-row.me .bubble.bubble-circle::before,
+.bubble-row.them .bubble.bubble-circle::before,
+.bubble.bubble-circle::after{display:none!important;content:none!important}
 .media-with-caption{display:flex;flex-direction:column;gap:6px;max-width:100%}
 .media-with-caption img,.media-with-caption video{border-radius:12px;max-width:100%;display:block}
 .media-caption{font-size:14px;line-height:1.35;padding:2px 4px;white-space:pre-wrap;word-break:break-word}
@@ -825,7 +842,7 @@ body.beta-oled .sw-clip{background:var(--panel)!important}
 .msg-link:hover{opacity:.9}
 
 
-/* ========== MAX-style Start Chat / Create Group / Channel ========== */
+
 
 /* TG-style «Начать общение» sheet */
 .sl-sheet{
@@ -1065,7 +1082,7 @@ body.beta-oled .sw-clip{background:var(--panel)!important}
   will-change:transform,opacity,filter;
   animation:em-pop .55s cubic-bezier(.175,.885,.32,1.275) both;
 }
-/* ---- unique keyframes ---- */
+
 @keyframes em-pop{0%{transform:scale(.12);opacity:0}55%{transform:scale(1.2)}78%{transform:scale(.94)}100%{transform:scale(1);opacity:1}}
 @keyframes em-heart{
   0%{transform:scale(.15);opacity:0}
@@ -1431,7 +1448,7 @@ body.light-theme .msg-react-bar .react-more{
 .comment-bar.show{display:flex;gap:8px;align-items:center}
 .comment-bar input{flex:1;padding:10px 14px;border-radius:20px;border:1px solid var(--line);background:var(--input-bg);color:var(--text);font-size:14px;outline:none}
 
-/* ===== Light theme ===== */
+
 body.theme-light, html.theme-light, html.light-theme{
   --bg:#F4F6FB; --panel:#FFFFFF; --panel-hover:#EEF1F8; --line:#DFE4EE; --text:#111827; --muted:#6B7280;
   --input-bg:#F1F3F9;
@@ -1459,7 +1476,7 @@ html:not(.theme-light) body .sl-no-chat-pill{
   background-size:cover;background-position:center;background-repeat:no-repeat;
 }
 
-/* ===== Chat wallpaper ===== */
+
 .messages{background-size:cover;background-position:center;background-repeat:no-repeat}
 #messages-list.theme-doodle-wall{
   background-size:cover !important;
@@ -1484,7 +1501,7 @@ body.theme-light #messages-list.has-wall{ background-color:transparent !importan
   background-position:center center !important;
 }
 
-/* ===== Read status checkmarks (SVG, not emoji) ===== */
+
 .msg-check{display:inline-flex;align-items:center;margin-left:3px;vertical-align:middle;line-height:1}
 .msg-check svg{width:16px;height:16px;display:block}
 .msg-check.sent{opacity:.75;color:rgba(255,255,255,.85)}
@@ -1536,7 +1553,7 @@ body.msg-ctx-open .chat-active{ /* dim via backdrop */ }
 .msg-check.read{opacity:1;color:#53BDEB} /* WhatsApp-like blue double ticks */
 .bubble.them .msg-check{display:none}
 
-/* ===== Text formatting ===== */
+
 .fmt-toolbar{position:fixed;display:none;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:4px;gap:2px;box-shadow:0 8px 24px rgba(0,0,0,.4);z-index:5000}
 .fmt-toolbar.show{display:flex}
 .fmt-btn{width:34px;height:34px;border-radius:8px;border:none;background:none;color:var(--text);cursor:pointer;font-weight:700;font-size:14px;display:flex;align-items:center;justify-content:center}
@@ -1544,18 +1561,18 @@ body.msg-ctx-open .chat-active{ /* dim via backdrop */ }
 .fmt-btn.italic{font-style:italic}
 .fmt-btn.strike{text-decoration:line-through}
 
-/* ===== Spoiler ===== */
+
 .spoiler{background:currentColor;border-radius:4px;cursor:pointer;color:inherit;filter:blur(0);transition:.15s}
 .spoiler.hidden-spoiler{color:transparent;background:rgba(140,150,180,.55)}
 .spoiler.hidden-spoiler *{visibility:hidden}
 
-/* ===== Emoji status next to name ===== */
+
 .emoji-status{font-size:13px;margin-left:2px}
 
-/* ===== Emoji avatar ===== */
+
 .avatar.emoji-avatar{font-size:20px}
 
-/* ===== Gift ===== */
+
 .gift-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:10px 0;max-height:280px;overflow-y:auto}
 .gift-opt{aspect-ratio:1;border-radius:14px;border:1px solid var(--line);background:var(--input-bg);display:flex;align-items:center;justify-content:center;cursor:pointer}
 .gift-opt.selected{border-color:var(--accent-a);box-shadow:0 0 0 2px var(--accent-a)}
@@ -1563,7 +1580,7 @@ body.msg-ctx-open .chat-active{ /* dim via backdrop */ }
 .gift-bubble{display:flex;flex-direction:column;align-items:center;gap:6px;padding:8px 4px}
 .gift-bubble svg{width:64px;height:64px;animation:stickerPop .6s cubic-bezier(.175,.885,.32,1.275)}
 
-/* ===== Poll ===== */
+
 .poll-wrap{min-width:220px}
 .poll-q{font-weight:700;margin-bottom:8px}
 .poll-opt{position:relative;border:1px solid rgba(255,255,255,.25);border-radius:10px;padding:8px 10px;margin-bottom:6px;cursor:pointer;overflow:hidden;font-size:13px}
@@ -1572,13 +1589,13 @@ body.msg-ctx-open .chat-active{ /* dim via backdrop */ }
 .bubble.them .poll-opt{border-color:var(--line)}
 .bubble.them .poll-opt .fill{background:rgba(76,124,243,.15)}
 
-/* ===== User info panel ===== */
+
 .uinfo-row{display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--line);align-items:center}
 .uinfo-row svg{width:18px;height:18px;color:var(--muted);flex-shrink:0}
 .uinfo-label{font-size:11px;color:var(--muted)}
 .uinfo-val{font-size:14px}
 
-/* ===== Custom dialog (replaces alert/confirm/prompt) ===== */
+
 .cd-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(4px);z-index:9500;display:flex;align-items:center;justify-content:center;padding:20px}
 .cd-box{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:20px;width:100%;max-width:340px;text-align:center}
 .cd-msg{font-size:14px;margin-bottom:16px;line-height:1.4}
@@ -1591,7 +1608,7 @@ body.msg-ctx-open .chat-active{ /* dim via backdrop */ }
 
 .settings-item .toggle-switch{margin-left:auto}
 
-/* ===== Recent calls ===== */
+
 .calls-page-head{padding:16px;background:var(--panel);border-bottom:1px solid var(--line);font-size:17px;font-weight:700;display:flex;align-items:center;justify-content:space-between}
 .calls-page-head .calls-clear{font-size:12px;font-weight:600;color:var(--muted);background:none;border:none;cursor:pointer;padding:6px 10px;border-radius:8px}
 .calls-page-head .calls-clear:hover{color:var(--danger);background:var(--panel-hover)}
@@ -1614,7 +1631,7 @@ body.msg-ctx-open .chat-active{ /* dim via backdrop */ }
 
 
 
-/* ===== MAX calls page ===== */
+
 #page-calls{
   display:none;flex-direction:column;background:var(--bg)!important;
   padding:calc(10px + env(safe-area-inset-top,0px)) 0 0;
@@ -1668,7 +1685,7 @@ body.msg-ctx-open .chat-active{ /* dim via backdrop */ }
 }
 #page-calls .call-info-btn svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2}
 
-/* ===== MAX-style settings ===== */
+
 #page-settings.settings-page{
   overflow-y:auto!important;-webkit-overflow-scrolling:touch;
   background:var(--bg)!important;padding-bottom:calc(88px + env(safe-area-inset-bottom,0px));
@@ -1754,7 +1771,7 @@ body.msg-ctx-open .chat-active{ /* dim via backdrop */ }
 }
 #page-settings .max-settings-top button svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:2}
 
-/* ===== Beta features ===== */
+
 body.beta-compact .contact{padding:6px 10px;border-radius:10px;gap:8px}
 body.beta-compact .contact .avatar{width:34px;height:34px;font-size:13px}
 body.beta-compact .contact-name{font-size:13px}
@@ -1770,7 +1787,7 @@ body.beta-oled.theme-light{--bg:#000;--panel:#0A0A0A;--panel-hover:#141414;--lin
 .beta-modal .beta-row .beta-desc{font-size:11px;color:var(--muted);margin-top:2px;line-height:1.35}
 
 
-/* ===== PIN keypad ===== */
+
 .pin-dot{width:14px;height:14px;border-radius:50%;border:2px solid var(--muted);display:inline-block}
 .pin-dot.filled{background:var(--accent-a);border-color:var(--accent-a)}
 .pin-keypad{display:grid;grid-template-columns:repeat(3,64px);gap:14px;justify-content:center}
@@ -1778,7 +1795,7 @@ body.beta-oled.theme-light{--bg:#000;--panel:#0A0A0A;--panel-hover:#141414;--lin
 .pin-key:active{transform:scale(.92);background:var(--accent-a)}
 .pin-key-empty{background:none;border:none}
 
-/* ===== Reactions ===== */
+
 .reaction-bar{display:flex;gap:3px;flex-wrap:wrap;margin-top:4px}
 .reaction-chip{background:rgba(255,255,255,.15);border-radius:999px;padding:2px 7px;font-size:12px;display:flex;align-items:center;gap:3px;cursor:pointer;transition:transform .15s}
 .bubble.them .reaction-chip{background:var(--panel);border:1px solid var(--line)}
@@ -1790,13 +1807,13 @@ body.beta-oled.theme-light{--bg:#000;--panel:#0A0A0A;--panel-hover:#141414;--lin
 .reaction-float{position:fixed;font-size:34px;pointer-events:none;z-index:6000;animation:reactFloat .8s ease-out forwards}
 @keyframes reactFloat{0%{opacity:0;transform:translate(-50%,-50%) scale(.4)}30%{opacity:1;transform:translate(-50%,-50%) scale(1.3)}100%{opacity:0;transform:translate(-50%,-120%) scale(1)}}
 
-/* ===== Verified badge (SVG, not emoji) ===== */
+
 /* Favorites bookmark avatar */
 
 /* Telegram-style full search page */
 
 
-/* ========== TG Calls / Settings / Compose ========== */
+
 
 #page-settings .settings-hero-top,
 #page-settings .settings-profile-top{
@@ -2078,7 +2095,7 @@ html:not(.theme-light):not(.light-theme) [class*="badge-"]{
 }
 /* keep light theme untouched */
 
-/* ========== Telegram-like chats list (dark + light) ========== */
+
 :root{
   --tg-chat-bg:#000000;
   --tg-chat-row:#000000;
@@ -2445,7 +2462,7 @@ body.sl-tg-search-open #app-screen{
 .verified-badge{display:inline-flex;vertical-align:middle;margin-left:4px;align-items:center;flex-shrink:0;line-height:0}
 .verified-badge svg{width:16px;height:16px;display:block;overflow:visible;flex-shrink:0}
 
-/* ===== Owl assistant ===== */
+
 .owl-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);backdrop-filter:blur(6px);z-index:9800;display:flex;align-items:center;justify-content:center;padding:20px;animation:owlFadeIn .25s ease}
 @keyframes owlFadeIn{from{opacity:0}to{opacity:1}}
 .owl-card{background:var(--panel);border:1px solid var(--line);border-radius:24px;padding:28px 22px 22px;max-width:340px;width:100%;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.45);animation:owlCardIn .4s cubic-bezier(.2,.9,.3,1.15)}
@@ -2471,7 +2488,7 @@ body.sl-tg-search-open #app-screen{
 @keyframes owlRowIn{0%{opacity:0;transform:translateX(-6px)}15%{opacity:1;transform:translateX(0)}70%{opacity:1}100%{opacity:0}}
 @keyframes owlFly{0%{transform:translate(0,0) rotate(0)}25%{transform:translate(6px,26px) rotate(6deg)}50%{transform:translate(2px,52px) rotate(-4deg)}75%{transform:translate(8px,20px) rotate(4deg)}100%{transform:translate(0,0) rotate(0)}}
 
-/* ===== Calls ===== */
+
 .call-overlay{position:fixed;inset:0;background:linear-gradient(160deg,#0B1120,#131B2E);z-index:9700;display:none;flex-direction:column;align-items:center;justify-content:center;gap:18px;color:#fff}
 .call-overlay.show{display:flex}
 .call-avatar-big{width:110px;height:110px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:40px;font-weight:700;color:#fff;background-size:cover;background-position:center;position:relative;z-index:3}
@@ -2489,7 +2506,7 @@ body.sl-tg-search-open #app-screen{
 .call-ring-pulse{position:absolute;inset:0;background:radial-gradient(circle,rgba(76,124,243,.25),transparent 60%);animation:callPulse 2s ease-in-out infinite}
 @keyframes callPulse{0%,100%{opacity:.4}50%{opacity:.9}}
 
-/* ===== Social overlays (SPosts / SVideo) ===== */
+
 .social-overlay{
   position:fixed;inset:0;
   background:var(--bg);z-index:9400;
@@ -2575,7 +2592,7 @@ body.sl-tg-search-open #app-screen{
 @keyframes tabIconSpin{0%{transform:rotate(0) scale(1)}50%{transform:rotate(-12deg) scale(1.2)}100%{transform:rotate(0) scale(1)}}
 
 /* Fullscreen profile sheet */
-/* ===== Profile header ===== */
+
 .profile-sheet{position:fixed;inset:0;z-index:9200;background:var(--bg);display:flex;flex-direction:column;overflow:hidden}
 .profile-sheet-top{position:absolute;top:0;left:0;right:0;z-index:50;padding:10px 12px;padding-top:calc(10px + env(safe-area-inset-top,0px));display:flex;align-items:center;gap:10px;background:transparent;min-height:calc(52px + env(safe-area-inset-top,0px));pointer-events:none;box-sizing:border-box}
 .profile-sheet-top > *{pointer-events:auto}
@@ -2631,7 +2648,7 @@ body.sl-tg-search-open #app-screen{
 .profile-cover-btn svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2}
 .profile-sheet.is-stretch .profile-cover-btn{display:none}
 
-/* ===== Settings header: avatar INSIDE cover, no split ===== */
+
 .settings-page{padding:0 0 calc(72px + var(--safe-bottom)) 0;overflow-y:auto!important;overflow-x:hidden!important;-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain}
 .settings-profile{position:relative;padding:0;border-bottom:1px solid var(--line);background:var(--panel)}
 .settings-cover-wrap{
@@ -2708,7 +2725,7 @@ body.sl-tg-search-open #app-screen{
 .pe-actions .btn-primary,.pe-actions .btn-secondary{flex:1}
 
 
-/* ========== ALL UI ANIMATIONS ========== */
+
 body{transition:background-color .35s ease,color .35s ease}
 body.theme-light,body{transition:background-color .35s ease}
 
@@ -2911,7 +2928,7 @@ img, video, canvas {
 .rec-btn.on{background:var(--accent-a)!important;box-shadow:0 0 16px rgba(76,124,243,.5)}
 .rec-btn#rflash.on{background:#F7B955!important;box-shadow:0 0 20px rgba(247,185,85,.55)}
 
-/* ===== Hide bottom tabs when in a chat ===== */
+
 body.in-chat .bottom-tabs{
   display:none!important;
   height:0!important;
@@ -2922,7 +2939,7 @@ body.in-chat .bottom-tabs{
   overflow:hidden!important;
 }
 
-/* ===== Desktop left navigation rail ===== */
+
 .nav-rail{display:none}
 @media(min-width:1025px){
   #app-screen{flex-direction:row}
@@ -2971,7 +2988,7 @@ body.in-chat .bottom-tabs{
 }
 
 
-/* ===== Animated loaders (no text) ===== */
+
 .sl-spinner{
   width:36px;height:36px;border-radius:50%;
   border:3px solid rgba(124,138,165,.25);
@@ -3215,7 +3232,7 @@ body.in-chat .bottom-tabs{
 }
 
 
-/* ===== Feature pack UI ===== */
+
 .reply-bar{display:none;align-items:center;gap:10px;padding:8px 14px;background:var(--panel-hover);border-top:1px solid var(--line);flex-shrink:0}
 .reply-bar.show{display:flex}
 .reply-bar-text{flex:1;font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border-left:3px solid var(--accent-a);padding-left:8px}
@@ -3329,7 +3346,7 @@ body.chats-selecting .sw-clip .sel-check{display:flex}
 .sl-music-ico svg{width:20px;height:20px;stroke:#fff;fill:none}
 
 
-/* ===== LIGHT THEME: all surfaces white ===== */
+
 body.theme-light,
 body.light-theme,
 html.theme-light,
@@ -3497,7 +3514,7 @@ body.light-theme #search-input{
   background:#EEF1F5 !important;
   background-image:none !important;
 }
-/* ===== LIGHT THEME: search / folders / status / lists ===== */
+
 body.theme-light .search-box,
 body.light-theme .search-box,
 body.theme-light .sidebar-search,
@@ -4163,7 +4180,7 @@ html.sl-ready.sl-booting::before{display:none}
 html.sl-ready.sl-booting::before{display:none!important}
 
 
-/* ===== SL Modern UI 2026 — light feel, fluid animations ===== */
+
 :root {
   --bg:#0F1419 !important;
   --panel:#000000 !important;
@@ -5095,7 +5112,7 @@ body[data-auth-panel="forgot-form"] #auth-choice{
 })();
 </script>
 <script>
-// ========== CORE — Firebase + B2 (secrets on Worker only) ==========
+
 const FIREBASE_CONFIG = {
   apiKey: "AIzaSyCRUeJPEmdduOZei7VxNUYJKSf3tiSmLKk",
   authDomain: "sline-chat.firebaseapp.com",
@@ -5663,9 +5680,17 @@ window.slEnsureFirebase = slEnsureFirebase;
 
   async function b2Authorize() {
     if (_b2Auth && _b2Auth._ts && Date.now() - _b2Auth._ts < 50 * 60 * 1000) return _b2Auth;
+    let idToken = '';
+    try {
+      const u = firebase.auth().currentUser;
+      if (u) idToken = await u.getIdToken();
+    } catch (e) {}
     const res = await fetch(PROXY_URL + '/api/b2/upload-url', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' }
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': idToken ? ('Bearer ' + idToken) : ''
+      }
     });
     if (!res.ok) {
       const t = await res.text().catch(() => '');
@@ -6232,7 +6257,6 @@ function setLocked(l){ storage.setItem(LOCKED_KEY,JSON.stringify(l)); }
 function getOfflineQ(){ try{return JSON.parse(storage.getItem(OFFLINE_Q)||'[]');}catch(e){return[];} }
 function setOfflineQ(q){ storage.setItem(OFFLINE_Q,JSON.stringify(q)); }
 
-// ========== ANIMATED LOADER ==========
 (function setupLoaderDom(){
   if(document.getElementById('sl-loader')) return;
   const ov=document.createElement('div');
@@ -6274,8 +6298,6 @@ function setBtnLoading(btn, on){
   }
 }
 
-
-// ========== UI HELPERS ==========
 function switchPage(page){
   checkPipOnLeave();
   // always reset chat swipes so actions never peek after tab switch
@@ -6373,7 +6395,6 @@ function renderAvatarInto(el, url, ch, color){
   }
 }
 
-// ========== AUTH ==========
 let _regStep = 1;
 let _pendingRegUser = null;
 let _pendingRegSession = null;
@@ -6564,7 +6585,7 @@ function findRecoveryRecord(key){
 }
 
 
-/* ===== Email verification via Resend (api/send-code) + durable auth UI state ===== */
+
 window._slEmailVerified = false;
 function slGenEmailCode(){
   return String(Math.floor(100000 + Math.random() * 900000));
@@ -7856,7 +7877,6 @@ async function onAuthenticated(user){
   }
 }
 
-// ========== DEEP LINK ==========
 async function handleDeepLink(){
   const path = pendingDeepLink || location.hash || location.pathname || '';
   // Hidden AI chat — works even before full profile in some cases
@@ -7992,7 +8012,6 @@ async function joinOrOpenGroup(group){
   try{ openGroup(fresh); }catch(e){ console.warn(e); }
 }
 
-// ========== DATA ==========
 
 /** Strict: message belongs to current user (DM or self-notes). Never leak others' chats. */
 function msgInvolvesMe(msg){
@@ -8494,7 +8513,7 @@ function renderContactsAndGroups(){
     clip.insertBefore(actL, row);
     clip.insertBefore(actR, row);
 
-    /* ===== Swipe + click + long-press ===== */
+    
     (function(clip, row, data, type){
       const MAX_L = 156;
       const MAX_R = 156;
@@ -8871,7 +8890,6 @@ function renderFolderTabs(){
   });
 }
 
-// ========== OPEN CHAT ==========
 async function openChat(partner){
   if(partner && (partner.isVerifyCodes || partner.id==='sl_verify_codes')){
     try{ if(typeof window.openVerifyCodesHub==='function') window.openVerifyCodesHub(); }catch(e){}
@@ -9172,8 +9190,6 @@ window.addEventListener('online', ()=>{
   });
 });
 
-
-// ===== Instant chat history cache (Telegram-style) =====
 const _msgCache = new Map(); // key -> {rows, ts}
 const _chatMsgUnsubs = new Map(); // live listeners per chat
 const SL_IDB_NAME = 'sline_msg_cache_v1';
@@ -9685,7 +9701,6 @@ function slSplitEmojis(s){
   return Array.from(s);
 }
 
-// ========== RENDER MESSAGE ==========
 function buildMessageBody(msg, replyHtml, bodyText){
   if(msg.type==='circle'){
     const src = escapeHtml(msg.file_url||'');
@@ -9760,6 +9775,13 @@ function buildMessageBody(msg, replyHtml, bodyText){
     const low = String(msg.content||msg.file_url||'').toLowerCase();
     const isInstall = /\.(apk|exe|msi|dmg|pkg|deb|rpm|ipa|appx|bat|cmd|sh|jar)(\?|$)/i.test(low) || /\.(apk|exe)\b/i.test(low);
     const btnLabel = isInstall ? 'Установить' : 'Скачать';
+    if(!msg.file_url || msg._pending){
+      return `<div class="sl-file-card" data-name="${name}">
+      <div class="sl-file-ico">📄</div>
+      <div class="sl-file-meta"><div class="sl-file-name">${name}</div>
+      <div class="sl-file-sub">${msg._pending?'Загрузка…':'Не удалось загрузить файл'}</div></div>
+    </div>`;
+    }
     return `<div class="sl-file-card" data-url="${url}" data-name="${name}">
       <div class="sl-file-ico">📄</div>
       <div class="sl-file-meta"><div class="sl-file-name">${name}</div>
@@ -9807,38 +9829,59 @@ function renderMessage(msg, isGroup=false){
   }catch(e){}
   const time=_msgTs.toLocaleTimeString((typeof currentLang!=='undefined'&&currentLang==='en')?'en-US':'ru-RU',{hour:'2-digit',minute:'2-digit'});
   let bodyText=msg.content||'', replyHtml='';
-  // E2EE: decrypt encrypted messages (async update of bubble)
-  if(msg.type==='encrypted' && window.SL_E2EE && myProfile && myProfile.id){
-    bodyText = '[расшифровка…]';
+  // E2EE: не показываем пузырь, пока не расшифровали; в шапке — статус
+  if(msg.type==='encrypted' && !msg._plainReady && window.SL_E2EE && myProfile && myProfile.id){
+    if(msg._e2eeWorking) return;
+    msg._e2eeWorking = true;
+    try{
+      var _hdr = document.getElementById('chat-partner-status') || document.getElementById('chat-subtitle') || document.querySelector('#chat-header .status, #chat-top .muted, .chat-header-status');
+      if(_hdr){ _hdr.dataset._prevE2e = _hdr.textContent||''; _hdr.textContent = 'Расшифровка сообщения'; }
+      else {
+        var _n = document.getElementById('chat-partner-name');
+        if(_n && !_n.dataset._e2eLock){ _n.dataset._e2eLock='1'; _n.dataset._prevE2e=_n.textContent||''; _n.textContent = 'Расшифровка сообщения'; }
+      }
+    }catch(eHdr){}
     (async function(){
+      var plain = '[не удалось расшифровать]';
       try{
-        const payload = typeof msg.content==='string' ? JSON.parse(msg.content) : msg.content;
-        const isG = !!(msg.group_id || isGroup);
-        const peer = msg.sender_id===myProfile.id ? msg.receiver_id : msg.sender_id;
-        const plain = await SL_E2EE.decryptMessage({
-          payload: payload,
-          chatId: isG ? msg.group_id : peer,
-          isGroup: isG,
-          myUid: myProfile.id,
-          peerUid: peer
-        });
-        const el = document.querySelector('.bubble-row[data-id="'+msg.id+'"] .bubble');
-        if(el){
-          // keep time / status nodes if present
-          const timeEl = el.querySelector('.bubble-time, .msg-time, .time');
-          const timeHtml = timeEl ? timeEl.outerHTML : '';
-          const replyEl = el.querySelector('.reply-quote');
-          const replyKeep = replyEl ? replyEl.outerHTML : '';
-          el.innerHTML = replyKeep + (window.escapeHtml ? escapeHtml(plain) : plain) + timeHtml;
+        var payload = typeof msg.content==='string' ? JSON.parse(msg.content) : msg.content;
+        var isG = !!(msg.group_id || isGroup);
+        var peer = msg.sender_id===myProfile.id ? msg.receiver_id : msg.sender_id;
+        // несколько попыток получить ключ собеседника
+        var tries = 0;
+        while(tries < 4){
+          plain = await SL_E2EE.decryptMessage({
+            payload: payload,
+            chatId: isG ? msg.group_id : peer,
+            isGroup: isG,
+            myUid: myProfile.id,
+            peerUid: peer
+          });
+          if(plain && plain.indexOf('[нет ключа') === -1 && plain.indexOf('[ошибка') === -1 && plain.indexOf('[не удалось') === -1) break;
+          tries++;
+          await new Promise(function(r){ setTimeout(r, 400 * tries); });
         }
-        msg._decrypted = plain;
       }catch(e){
         console.warn('[E2EE] render decrypt', e);
-        const el = document.querySelector('.bubble-row[data-id="'+msg.id+'"] .bubble');
-        if(el) el.innerHTML = (el.innerHTML||'').replace('[расшифровка…]','[не удалось расшифровать]');
+        plain = '[не удалось расшифровать]';
       }
+      try{
+        var _hdr2 = document.getElementById('chat-partner-status') || document.getElementById('chat-subtitle') || document.querySelector('#chat-header .status, #chat-top .muted, .chat-header-status');
+        var _n2 = document.getElementById('chat-partner-name');
+        if(_hdr2 && _hdr2.dataset._prevE2e!==undefined){ _hdr2.textContent = _hdr2.dataset._prevE2e; delete _hdr2.dataset._prevE2e; }
+        if(_n2 && _n2.dataset._e2eLock){ _n2.textContent = _n2.dataset._prevE2e||_n2.textContent; delete _n2.dataset._e2eLock; delete _n2.dataset._prevE2e; }
+      }catch(eHdr2){}
+      msg._plainReady = true;
+      msg._e2eeWorking = false;
+      msg._displayPlain = plain;
+      // рисуем как обычный текст
+      var copy = Object.assign({}, msg, { type: 'text', content: plain, _fromE2e: true });
+      try{ renderMessage(copy, isGroup); }catch(eR){ console.warn(eR); }
+      try{ scrollToBottom(); }catch(eS){}
     })();
+    return;
   }
+  if(msg._fromE2e && msg._displayPlain){ bodyText = msg._displayPlain; }
   if((msg.type==='text'||!msg.type)&&bodyText.startsWith('↪ ')){
     const nl=bodyText.indexOf('\n');
     if(nl>-1){
@@ -10179,7 +10222,6 @@ function renderMessage(msg, isGroup=false){
         if(typeof e.stopImmediatePropagation==='function') e.stopImmediatePropagation();
       });
 
-      // ===== Seek by dragging on the progress ring =====
       (function bindCircleSeek(){
         const ring = circleEl.querySelector('.circle-ring');
         if(!ring || ring._seekBound) return;
@@ -10463,7 +10505,6 @@ function canPublish(){
 }
 function markPublished(){ storage.setItem(PUBLISH_KEY, String(Date.now())); }
 
-// ========== MEDIA PREPARE (stories + chat) ==========
 function dataUrlBytes(dataUrl){
   try{
     const i=dataUrl.indexOf(',');
@@ -11086,8 +11127,10 @@ async function sendChatFiles(fileList){
   }
   for(const f of files){
     try{
-      const isImg = (f.type||'').startsWith('image/');
-      const isVid = (f.type||'').startsWith('video/') || /\.(mp4|mov|webm|mkv|m4v)$/i.test(f.name||'');
+      const _fn = (f.name||'').toLowerCase();
+      const isBinInstall = /\.(apk|exe|msi|dmg|pkg|deb|rpm|ipa|appx|bat|cmd|sh|jar)$/i.test(_fn);
+      const isImg = !isBinInstall && (f.type||'').startsWith('image/');
+      const isVid = !isBinInstall && ((f.type||'').startsWith('video/') || /\.(mp4|mov|webm|mkv|m4v)$/i.test(_fn));
       const isMedia = isImg || isVid;
       let quality = 'original';
       // Quality dialog only for photos/videos — documents (apk, exe, zip…) send immediately
@@ -11147,8 +11190,6 @@ function addLocalStory(story){
   setLocalStories(arr);
 }
 
-
-// ========== CONTEXT MENU ==========
 function hideMsgReactBar(){
   document.querySelectorAll('.msg-react-bar').forEach(el=>el.remove());
   document.querySelectorAll('.bubble.msg-ctx-focus').forEach(el=>{
@@ -11480,7 +11521,6 @@ document.getElementById('unpin-btn').onclick=()=>{
   const pinned=getPinned(); delete pinned[key]; setPinned(pinned); showPinnedBar();
 };
 
-// ========== SEND ==========
 const input=document.getElementById('message-input'), sendBtn=document.getElementById('send-btn');
 function syncComposerMode(){
   const has = !!(input && input.value.trim().length>0);
@@ -11790,7 +11830,6 @@ function sendTyping(){
 }
 function stopTyping(){ if(isTyping&&activePartner){ isTyping=false; typingChannel?.send({type:'broadcast',event:'stop_typing',payload:{from:myProfile.id,to:activePartner.id}}); } clearTimeout(typingTimeout); }
 
-// ========== STICKERS ==========
 if(document.getElementById('sticker-btn')) document.getElementById('sticker-btn').onclick=()=>{
   const panel=document.getElementById('sticker-panel'); if(!panel) return;
   if(!panel.classList.contains('show')){
@@ -11812,7 +11851,6 @@ function renderStickerGrid(){
   });
 }
 
-// ========== CIRCLE / VOICE (one button: tap=toggle mode, hold=record) ==========
 const circleBtn=document.getElementById('circle-btn');
 let _recModeHold=false;
 let _recPtrId=null;
@@ -12371,7 +12409,6 @@ function finishRecording(){
   try{ mediaRecorder.stop(); }catch(e){ showToast('Не удалось завершить запись'); }
 }
 
-// ========== PiP ==========
 function checkPipOnLeave(){
   const playing=document.querySelector('#messages-list .circle-msg video:not([paused])');
   if(playing && !playing.paused){
@@ -12397,7 +12434,6 @@ function showPip(src, t=0){
   };
 }
 
-// ========== MEDIA GALLERY ==========
 document.getElementById('media-btn').onclick=async()=>{
   if(!activePartner&&!activeGroup) return;
   let modal=document.getElementById('media-modal');
@@ -12419,11 +12455,9 @@ document.getElementById('media-btn').onclick=async()=>{
   }catch(e){ document.getElementById('media-grid').innerHTML='<div class="empty-state">Ошибка</div>'; }
 };
 
-// ========== SEARCH IN CHAT ==========
 /* Chat search is upgraded by SL UX polish pack (counter + next/prev) */
 document.addEventListener('keydown', e=>{ if((e.ctrlKey||e.metaKey)&&e.key==='f' && (activePartner||activeGroup)){ e.preventDefault(); try{ document.getElementById('chat-search-btn')?.click(); }catch(err){} } });
 
-// ========== STORIES + REPLY ==========
 async function loadStories(){
   const bar=document.getElementById('stories-bar'); if(!bar||!myProfile) return;
   let html='';
@@ -13096,7 +13130,6 @@ async function openStoryViewer(userId, name){
 }
 document.getElementById('add-story-btn-side').onclick=()=>document.getElementById('story-input').click();
 
-// ========== ATTACH ==========
 function openMediaCaptionComposer(dataUrl, mediaType, fileName){
   return new Promise(resolve=>{
     const ov=document.createElement('div');
@@ -13187,7 +13220,6 @@ document.getElementById('file-input').onchange=async function(e){
   finally{ hideLoader(); }
 };
 
-// ========== SETTINGS ==========
 document.getElementById('settings-favorites').onclick=()=>{ switchPage('chats'); openChat({id:myProfile.id, username:myProfile.username, first_name:t('it_favorites'), color:myProfile.color, avatar_url:myProfile.avatar_url}); };
 document.getElementById('settings-my-link').onclick=()=>{
   const link=`${location.origin}${location.pathname}#/user/@${myProfile.username}`;
@@ -13758,7 +13790,6 @@ document.getElementById('settings-cover-edit')?.addEventListener('click', pickCo
   if(profile){ profile.style.paddingBottom=''; }
 })();
 
-// ========== BETA FEATURES ==========
 const BETA_KEY='sl_beta';
 const BETA_DEFAULTS={compact:false, enterSend:true, drafts:true, doubleTapHeart:true, oled:false, haptics:false};
 function getBeta(){
@@ -13849,9 +13880,7 @@ function clearDraft(){
 
 document.getElementById('settings-logout').onclick=async()=>{ if(await customConfirm(t('you_sure_logout'))){ try{ storage.removeItem('sl_logged_in'); await sb.auth.signOut(); }catch(e){} location.reload(); } };
 
-// ========== REALTIME ==========
 
-// ========== LIVE MESSAGE SYNC (no re-enter needed) ==========
 let _chatPollTimer=null;
 let _chatPollSince=null;
 function stopChatLiveSync(){
@@ -14086,7 +14115,6 @@ function setupTyping(){
     .subscribe();
 }
 
-// ========== PLUS / CONTACTS ==========
 // Plus opens MAX-style "Начать общение" full screen (not tiny dropdown)
 try{
   const _pb=document.getElementById('plus-btn');
@@ -14099,20 +14127,15 @@ try{
 document.addEventListener('click',e=>{ if(!e.target.closest('#plus-menu')) try{ document.getElementById('plus-dropdown')?.classList.remove('show'); }catch(_){} });
 function debounce(fn,ms){ let t; return (...a)=>{ clearTimeout(t); t=setTimeout(()=>fn(...a),ms); }; }
 
-// ========== SEARCH ==========
 try{ const _si=document.getElementById('search-input'); if(_si) _si.oninput=debounce(()=>{ renderContactsAndGroups(); try{ const list=document.getElementById('contacts-list'); const q=(_si.value||''); if(list && q.trim().length>=2 && typeof appendGlobalSearchResults==='function') appendGlobalSearchResults(list, q); }catch(e2){} },250); }catch(e){}
 
-// ========== SCROLL ==========
 function scrollToBottom(i=false){ const l=document.getElementById('messages-list'); setTimeout(()=>{ if(i) l.scrollTop=l.scrollHeight; else l.scrollTo({top:l.scrollHeight,behavior:'smooth'}); },60); }
 
-// ========== TABS ==========
 document.querySelectorAll('.bottom-tab').forEach(t=>t.onclick=function(){ switchPage(this.dataset.tab); });
 try{ wireAuthUI(); }catch(e){ console.warn('wireAuthUI', e); }
 
 
-// ============================================================
-// ================= FEATURE PATCH MODULE ======================
-// ============================================================
+
 
 // ---------- Custom dialogs (replace system alert/confirm/prompt) ----------
 window.alert = function(msg){ showToast(String(msg)); };
@@ -14273,7 +14296,7 @@ window.slSetThemeMode = slSetThemeMode;
 window.slIsThemeAuto = slIsThemeAuto;
 window.slResolveTheme = slResolveTheme;
 
-/* ===== Full-screen theme picker (first launch + settings) ===== */
+
 const THEME_CHOSEN_KEY = 'sl_theme_chosen';
 function slThemePickerCSS(){
   if(document.getElementById('sl-theme-pick-css')) return;
@@ -14984,7 +15007,7 @@ function applyTextFormatting(row){
   });
 }
 
-/* ========== In-app browser (like Telegram) ========== */
+
 function ensureInAppBrowser(){
   let root = document.getElementById('sl-inapp-browser');
   if(root) return root;
@@ -16793,7 +16816,6 @@ try{
   if(cEl) cEl.onclick=()=>{ try{document.getElementById('plus-dropdown')?.classList.remove('show')}catch(_){}; window.openCreateChannelFlow&&window.openCreateChannelFlow(); };
 }catch(e){}
 
-// ========== MAX-style Start Chat / Group / Channel creation ==========
 function slEsc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function slContactName(c){
   return (c.first_name||'') + (c.last_name?(' '+c.last_name):'') || c.username || c.email || 'User';
@@ -19740,8 +19762,6 @@ document.getElementById('call-overlay')?.addEventListener('click', (e)=>{
 
 /* notifyIncomingCall defined above */
 
-
-// ========== RECENT CALLS ==========
 const CALL_HIST_KEY='sl_call_history';
 function getCallHistory(){
   try{ return JSON.parse(storage.getItem(CALL_HIST_KEY)||'[]'); }catch(e){ return []; }
@@ -21445,8 +21465,6 @@ async function crossPostStory(mediaUrl, mediaType){
   return;
 }
 
-
-// ========== FEATURES: drafts, screen share, photo editor ==========
 const DRAFT_KEY='sl_drafts';
 function draftChatId(){
   if(activePartner) return 'u:'+activePartner.id;
@@ -21748,9 +21766,6 @@ document.getElementById('photo-input').onchange=async function(e){
   }catch(err){ showToast(friendlyError(err)); }
 };
 
-
-
-// ========== FULLSCREEN PROFILE / QR / DEVICES / ROLES / TAB ANIM / CALL AUDIO FIX ==========
 (function improveRemoteAudio(){
   const _att = typeof attachRemoteTrack==='function' ? attachRemoteTrack : null;
   if(!_att) return;
@@ -22253,8 +22268,6 @@ notifyIncomingMessage = function(msg){
 document.getElementById('me-avatar-chats')?.addEventListener('click',()=>{ if(myProfile) openFullProfile(myProfile); });
 document.getElementById('settings-avatar')?.addEventListener('click',()=>{ if(myProfile) openFullProfile(myProfile); });
 
-
-// ========== ANIMATION BEHAVIOR HOOKS ==========
 // Typing indicator with dots
 const _updPartnerStatus = updatePartnerStatus;
 updatePartnerStatus = function(){
@@ -22465,7 +22478,6 @@ updateCircleIcon();
   }, 1000);
 })();
 
-// ========== FEATURE PACK: profile / channel comments / calls / support / about / anonymity ==========
 const SUPPORT_ADMIN_EMAILS = ['admin@mail.ru','dimasik.228.dima.super@gmail.com'];
 function isSupportAdmin(){
   try{
@@ -23129,7 +23141,6 @@ sendMessage = async function(type='text', fileUrl=null, content=null){
   setTimeout(bootSubs, 4000);
 })();
 
-// ========== About ==========
 
 document.getElementById('settings-support')?.addEventListener('click', ()=>{
   try{
@@ -23307,11 +23318,8 @@ window.openAboutProject = function(){
   });
 };
 
-
-// ========== Telegram-style contact profile ==========
 // (TG contact profile removed — using profile-sheet)
 
-// ========== Channel comments under posts ==========
 const _renderMsgCh = renderMessage;
 renderMessage = function(msg, isGroup=false){
   const r = _renderMsgCh.apply(this, arguments);
@@ -23365,7 +23373,6 @@ sendMessage = async function(type='text', fileUrl=null, content=null){
   return _sendCh.apply(this, arguments);
 };
 
-// ========== Incoming call reliability ==========
 const _initCall = initCallSystem;
 initCallSystem = function(){
   _initCall.apply(this, arguments);
@@ -23422,7 +23429,6 @@ showCallUI = function(){
   try{ navigator.vibrate && navigator.vibrate([400,150,400,150,400]); }catch(e){}
 };
 
-// ========== Anonymity enforcement ==========
 const _updatePartnerStatus = updatePartnerStatus;
 updatePartnerStatus = function(){
   if(activePartner && !activePartner.isBot){
@@ -23441,11 +23447,6 @@ if(_sendRead){
 }
 // apply hide phone/email on own profile displays is in openFullProfile above
 
-
-
-
-
-// ========== CREATOR BIRTHDAY SPLASH (Aug 3–5 every year) ==========
 function getLocalMD(){
   const d=new Date();
   return { m:d.getMonth()+1, day:d.getDate(), y:d.getFullYear() };
@@ -23534,7 +23535,6 @@ function scheduleBirthdayAfterAppReady(){
   setTimeout(tryShow, 1500);
 }
 
-// ========== SESSION RESTORE (no login flash) ==========
 (async function bootstrapAuth(){
   function showAuth(){
     // Do NOT wipe sl_logged_in here if we only failed a transient session read —
@@ -23676,7 +23676,6 @@ function scheduleBirthdayAfterAppReady(){
   }catch(e){}
 })();
 
-// ========== FEATURE PACK: 2FA, forward, mute, badges, push, reply bar, drafts in list ==========
 (function(){
   const TFA_KEY='sl_2fa_on';
   const TFA_PIN='sl_2fa_pin';
@@ -24045,10 +24044,6 @@ function scheduleBirthdayAfterAppReady(){
   try{ updateUnreadBadge(); }catch(e){}
 })();
 
-
-
-
-// ========== FEATURE PACK v2: select, bild bot, calls-in-chat, greet, bday, passkey, msg multi ==========
 (function(){
   // --- Chat multi-select ---
   let chatSelectMode=false;
@@ -24392,8 +24387,6 @@ function scheduleBirthdayAfterAppReady(){
   }
 })();
 
-
-// ========== FEATURE PACK v3: delayed send, phone contacts, voice STT, animated emoji, identity, ban check, more ==========
 (function(){
   // --- Ban check on auth ---
   const _authBan = typeof onAuthenticated==='function' ? onAuthenticated : null;
@@ -24653,8 +24646,6 @@ function scheduleBirthdayAfterAppReady(){
   console.log('[SLine] Feature pack v3 loaded: delayed send, report, phone sync, identities, CLI, etc.');
 })();
 
-
-// ========== Reliable message context menu (delegation + PC right-click) ==========
 (function(){
   // Block only default browser menu inside chat; our custom menu handles it
   document.addEventListener('contextmenu', function(e){
@@ -24730,8 +24721,6 @@ function scheduleBirthdayAfterAppReady(){
   });
 })();
 
-
-// ========== FEATURE PACK: news channel, 404, avatar history, multi-account, email verify, transcribe ==========
 (function(){
   const NEWS_USERNAME = 'sline';
   const NEWS_NAME = 'SLine новости';
@@ -24807,7 +24796,6 @@ function scheduleBirthdayAfterAppReady(){
     };
   }
 
-  // ========== 404 ==========
   function show404(path){
     let ov=document.getElementById('sl-404');
     if(!ov){
@@ -24844,7 +24832,6 @@ function scheduleBirthdayAfterAppReady(){
   window.show404 = show404;
   setTimeout(checkRoute404, 500);
 
-  // ========== Avatar history ==========
   const AV_HIST_KEY = 'sl_avatar_history';
   function getAvatarHistory(uid){
     try{ return JSON.parse(storage.getItem(AV_HIST_KEY)||'{}')[uid]||[]; }catch(e){ return []; }
@@ -25029,7 +25016,6 @@ function scheduleBirthdayAfterAppReady(){
     if(cur && myProfile?.id) pushAvatarHistory(myProfile.id, cur);
   }catch(e){}
 
-  // ========== Multi-account switch (Личности) ==========
   const ACC_KEY='sl_accounts';
   function getAccounts(){ try{return JSON.parse(storage.getItem(ACC_KEY)||'[]');}catch(e){return[];} }
   function setAccounts(a){ storage.setItem(ACC_KEY, JSON.stringify(a)); }
@@ -25095,7 +25081,6 @@ function scheduleBirthdayAfterAppReady(){
     }
   }, 800);
 
-  // ========== Real transcription improvement ==========
   /* old transcribeVoiceMsg removed */ window.transcribeVoiceMsg = async function(msg){ return window._slTranscribeImpl && window._slTranscribeImpl(msg); };
 
   // Avatar history entry in profile sheet
@@ -25198,8 +25183,6 @@ function scheduleBirthdayAfterAppReady(){
   };
 })();
 
-
-// ========== Voice message TRANSCRIPTION (actual audio content) ==========
 // FASTEST: Whisper-tiny + MAX-style UI (→T → × → text expand animation)
 window._slWhisperPipe = null;
 window._slWhisperLoading = null;
@@ -25535,9 +25518,6 @@ window._slTranscribeImpl = window.transcribeVoiceMsg = async function(msg){
   }
 };
 
-
-
-// ========== Channel posts: Comments button (Telegram-style), news visibility ==========
 (function(){
   function isChannelFeed(){
     return activeGroup && activeGroup.type==='channel';
@@ -25660,8 +25640,6 @@ window._slTranscribeImpl = window.transcribeVoiceMsg = async function(msg){
   setTimeout(async()=>{ try{ await resolveNewsChannelReal(); injectNewsChannelLocal(); renderContactsAndGroups(); }catch(e){} }, 3000);
 })();
 
-
-// ========== REAL multi-account (sessions) ==========
 (function(){
   const ACC_KEY = 'sl_account_sessions_v3';
   function getAccSessions(){
@@ -25913,9 +25891,6 @@ window._slTranscribeImpl = window.transcribeVoiceMsg = async function(msg){
   console.log('[SL] real multi-account v3 ready');
 })();
 
-
-
-// ========== Session keep-alive (don't expire) ==========
 (function(){
   if(!sb || !sb.auth) return;
   async function refreshNow(){
@@ -25959,8 +25934,6 @@ window._slTranscribeImpl = window.transcribeVoiceMsg = async function(msg){
   console.log('[SL] session keep-alive on');
 })();
 
-
-// ========== MUSIC (settings) ==========
 (function(){
   try {
   const MUSIC_KEY = 'sl_music_lib_v1';
@@ -26336,10 +26309,6 @@ window._slTranscribeImpl = window.transcribeVoiceMsg = async function(msg){
   // leave original; fetchPosts already limited
 })();
 
-
-
-
-// ========== FULLSCREEN PROFILE PHOTOS + FULLSCREEN MUSIC PLAYER ==========
 (function(){
   try{
   window.openMusicFullscreen = function(){
@@ -26436,10 +26405,6 @@ window._slTranscribeImpl = window.transcribeVoiceMsg = async function(msg){
   }catch(err){ console.warn('[SL] pack init', err); }
 })();
 
-
-
-
-// ========== FEATURE PACK: TV mode, no-answer call menu, profile avatar UX ==========
 (function(){
   // --- TV / remote-friendly mode ---
   function isTvLike(){
@@ -26735,9 +26700,6 @@ html.sl-tv .composer textarea { min-height: 52px; font-size: 17px; }
   setTimeout(bind, 4000);
 })();
 
-
-
-// ========== SIGLI MAIL @sigli.gleeze.com ==========
 (function(){
   const MAIL_DOMAIN = 'sigli.gleeze.com';
   const MAIL_BOX_KEY = 'sl_sigli_mailbox';
@@ -27984,7 +27946,6 @@ html.sl-tv .composer textarea { min-height: 52px; font-size: 17px; }
   const toast=(m)=>{ try{showToast(m);}catch(e){console.log(m);} };
   const esc=(s)=>String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
 
-  // ===== Offline queue on failed send =====
   if(typeof sendMessage==='function' && !window._slOffSend){
     window._slOffSend=1;
     const _sm=sendMessage;
@@ -28032,7 +27993,6 @@ html.sl-tv .composer textarea { min-height: 52px; font-size: 17px; }
     };
   }
 
-  // ===== renderMessage: reactions + comments btn + ttl + data-ts =====
   if(typeof renderMessage==='function' && !window._slRmV3){
     window._slRmV3=1;
     const _rm=renderMessage;
@@ -28094,7 +28054,6 @@ html.sl-tv .composer textarea { min-height: 52px; font-size: 17px; }
 
   // reaction-only long-press disabled
 
-  // ===== Quiet on channel subscribe =====
   const _cp = window.openChannelProfile;
   if(typeof _cp==='function' && !window._slQuietSub){
     window._slQuietSub=1;
@@ -28108,7 +28067,6 @@ html.sl-tv .composer textarea { min-height: 52px; font-size: 17px; }
     }
   }, true);
 
-  // ===== Secret chat + TTL + Delete from profile More =====
   // Enhance profile more menu if openFullProfile exists - inject into page via observer
   const obs=new MutationObserver(()=>{
     const modal=document.getElementById('um-more-modal');
@@ -28142,7 +28100,6 @@ html.sl-tv .composer textarea { min-height: 52px; font-size: 17px; }
   });
   try{ obs.observe(document.body, {childList:true, subtree:true}); }catch(e){}
 
-  // ===== Folder filter: assign chat to folder via context =====
   const _ctx = typeof showChatCtx==='function' ? showChatCtx : null;
   if(_ctx && !window._slFolderCtx){
     window._slFolderCtx=1;
@@ -28201,7 +28158,6 @@ html.sl-tv .composer textarea { min-height: 52px; font-size: 17px; }
     };
   }
 
-  // ===== Incoming call hook =====
   if(typeof startCall==='function' && !window._slCallHook){
     window._slCallHook=1;
     // expose for websocket/broadcast
@@ -28212,7 +28168,6 @@ html.sl-tv .composer textarea { min-height: 52px; font-size: 17px; }
     };
   }
 
-  // ===== Secret badge in list =====
   if(typeof renderContactsAndGroups==='function'){
     const _r2=renderContactsAndGroups;
     renderContactsAndGroups=function(){
@@ -28234,17 +28189,14 @@ html.sl-tv .composer textarea { min-height: 52px; font-size: 17px; }
     };
   }
 
-  // ===== Group call visible only in groups =====
   setInterval(()=>{
     const btn=document.getElementById('group-call-btn');
     if(!btn) return;
     btn.style.display=(activeGroup && activeGroup.type!=='channel')?'flex':'none';
   }, 1000);
 
-  // ===== Flush offline on focus =====
   window.addEventListener('focus', ()=>window.slFlushOfflineQueue?.());
 
-  // ===== Ensure catalog + backup + sessions + folders + dnd settings exist =====
   function ensureSetting(id, afterId, html, onClick){
     if(document.getElementById(id)) return;
     const after=document.getElementById(afterId);
@@ -28283,7 +28235,6 @@ html.sl-tv .composer textarea { min-height: 52px; font-size: 17px; }
       });
   }, 1500);
 
-  // ===== Swipe-right on bubble already sets replyToMsg — show reply bar =====
   if(!window._slSwipeReplyBar){
     window._slSwipeReplyBar=1;
     const _show=window.showReplyBar;
@@ -28567,7 +28518,7 @@ html.sl-tv .composer textarea { min-height: 52px; font-size: 17px; }
 console.log('[SL] E2E ECDH+AES-GCM ready');
 })();
 
-/* ===== SL In-app notifications (MAX-style) + system + faster delivery ===== */
+
 (function(){
   'use strict';
   if(window._slInAppNotifV2) return;
@@ -28814,7 +28765,7 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
     };
   }
 
-  /* ---- Faster message delivery ---- */
+  
   try{
     if(typeof startChatLiveSync==='function' && !window._slFastPoll){
       window._slFastPoll = 1;
@@ -28912,7 +28863,7 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
 
 
 
-/* ===== SL FEATURE PACK v4 — files, profile, stickers, media, calls, review ===== */
+
 (function(){
   'use strict';
   if(window._slPackV4) return;
@@ -29510,7 +29461,7 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
 
 
 
-/* ===== SL FEATURE PACK v5 — stickers fix ===== */
+
 (function(){
   'use strict';
   if(window._slPackV5) return;
@@ -29826,7 +29777,7 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
 
 
 
-/* ===== SL FEATURE PACK v6 ===== */
+
 (function(){
   'use strict';
   if(window._slPackV6) return;
@@ -30197,7 +30148,7 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
 
 
 
-/* ===== SL FEATURE PACK v7 — perf + UX fixes ===== */
+
 (function(){
   'use strict';
   if(window._slPackV7) return;
@@ -30205,7 +30156,7 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
   const LS = (typeof storage!=='undefined'?storage:localStorage);
   const toast=(m)=>{ try{showToast(m);}catch(e){console.log(m);} };
 
-  /* ---- Instant buttons: kill laggy rebind loops ---- */
+  
   // Override setInterval for known laggy binders by clearing them after start
   try{
     // Soften fast poll: 900ms is too aggressive with full loadChats
@@ -30214,7 +30165,7 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
     }
   }catch(e){}
 
-  /* ---- Throttle renderContactsAndGroups ---- */
+  
   (function throttleList(){
     if(typeof renderContactsAndGroups!=='function') return;
     if(window._slListThrottle) return;
@@ -30237,7 +30188,7 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
     };
   })();
 
-  /* ---- Protect loadChats from wiping contacts ---- */
+  
   (function protectLoadChats(){
     if(typeof loadChats!=='function' || window._slProtectChats) return;
     window._slProtectChats = 1;
@@ -30261,7 +30212,7 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
     };
   })();
 
-  /* ---- Protect loadGroups similarly ---- */
+  
   (function protectLoadGroups(){
     if(typeof loadGroups!=='function' || window._slProtectGroups) return;
     window._slProtectGroups = 1;
@@ -30287,7 +30238,7 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
     };
   })();
 
-  /* ---- Stop calling loadChats on every single message ---- */
+  
   (function softIncoming(){
     if(typeof handleIncomingMessage!=='function' || window._slSoftHim) return;
     window._slSoftHim = 1;
@@ -30332,7 +30283,7 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
     };
   })();
 
-  /* ---- Guard renderMessage against wrong chat ---- */
+  
   (function guardRender(){
     if(typeof renderMessage!=='function' || window._slGuardRender) return;
     window._slGuardRender = 1;
@@ -30359,7 +30310,7 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
     };
   })();
 
-  /* ---- Slow down polls ---- */
+  
   try{
     // Replace aggressive 900ms poll with 3s
     if(typeof startChatLiveSync==='function'){
@@ -30377,12 +30328,12 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
     }
   }catch(e){}
 
-  /* ---- Presence: don't full re-render list every time ---- */
+  
   (function softPresence(){
     // presence already calls renderContactsAndGroups — throttle covers it
   })();
 
-  /* ---- Rename remaining Signal strings in UI ---- */
+  
   try{
     document.querySelectorAll('.social-title').forEach(el=>{
       if(/Signal Posts/i.test(el.textContent)) el.textContent='SPosts';
@@ -30390,7 +30341,7 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
     });
   }catch(e){}
 
-  /* ---- Prettier composer extra CSS ---- */
+  
   if(!document.getElementById('sl-v7-css')){
     const st=document.createElement('style');
     st.id='sl-v7-css';
@@ -30456,7 +30407,7 @@ body.theme-light .sl-inapp-close{ background:rgba(0,0,0,.06); }
     document.head.appendChild(st);
   }
 
-  /* ---- 10) Appearance settings ---- */
+  
   window.slOpenAppearance = function(){
     const themes = [
       {id:'default', name:'Дом', accent:'#4C7CF3', bg:'#0B1120', icon:'🏠'},
@@ -30774,7 +30725,7 @@ html, :root, body{
   setTimeout(function(){ try{ const a=localStorage.getItem('sl_accent'); if(a) window.slApplyAccent(a); }catch(e){} }, 800);
   setTimeout(function(){ try{ const a=localStorage.getItem('sl_accent'); if(a) window.slApplyAccent(a); }catch(e){} }, 2500);
 
-  /* ---- 11) Badge click: verified ≠ name icon ---- */
+  
   document.addEventListener('click', (e)=>{
     const verified = e.target.closest('.verified-badge');
     const nameBadge = e.target.closest('.sl-name-badge');
@@ -30823,7 +30774,7 @@ html, :root, body{
     };
   }, true);
 
-  /* ---- 12) Working channel / deep links ---- */
+  
   (function linkifyChannels(){
     if(window._slLinkify) return;
     window._slLinkify = 1;
@@ -30854,7 +30805,7 @@ html, :root, body{
     }, true);
   })();
 
-  /* ---- Instant sticker toggle without rebind spam ---- */
+  
   // Disable v5/v6 setInterval rebinders by neutralizing their bind functions after first bind
   try{
     const btn=document.getElementById('sticker-btn');
@@ -30863,7 +30814,7 @@ html, :root, body{
     }
   }catch(e){}
 
-  /* ---- Send button: prevent double-stick ---- */
+  
   (function fixSend(){
     const btn=document.getElementById('send-btn');
     if(!btn || btn.dataset.v7send) return;
@@ -30876,7 +30827,7 @@ html, :root, body{
     }, true);
   })();
 
-  /* ---- Global: pointer responsiveness ---- */
+  
   document.addEventListener('touchstart', ()=>{}, {passive:true});
 
   console.log('[SL] pack v7: perf + appearance + links');
@@ -30894,7 +30845,7 @@ html, :root, body{
 
 
 
-/* ===== SL FEATURE PACK v8 — ASR fallback: API → local Whisper (download) → Web Speech ===== */
+
 (function(){
   'use strict';
   if(window._slPackV8) return;
@@ -31186,7 +31137,7 @@ html, :root, body{
 
 
 
-/* ===== SL FEATURE PACK v9 — E2E shows plaintext, no lock bubbles ===== */
+
 (function(){
   'use strict';
   if(window._slPackV9) return;
@@ -31440,7 +31391,7 @@ html, :root, body{
 
 
 
-/* ===== SL FEATURE PACK v10 — full English: UI + messages ===== */
+
 (function(){
   'use strict';
   if(window._slPackV10) return;
@@ -31780,7 +31731,7 @@ html, :root, body{
 
 
 
-/* ===== SL FEATURE PACK v11 — no E2E header, silent encrypt fail, sticker fix ===== */
+
 (function(){
   'use strict';
   if(window._slPackV11) return;
@@ -31971,7 +31922,7 @@ html, :root, body{
 
 
 
-/* ===== SL: remove stickers completely ===== */
+
 (function(){
   'use strict';
   if(window._slNoStickers) return;
@@ -32036,7 +31987,7 @@ html, :root, body{
 })();
 
 
-/* ===== SL FEATURE PACK v12 — user requests 1-12 ===== */
+
 (function(){
   'use strict';
   if(window._slPackV12) return;
@@ -32044,7 +31995,7 @@ html, :root, body{
   const LS = (typeof storage!=='undefined'?storage:localStorage);
   const toast=(m)=>{ try{showToast(m);}catch(e){console.log(m);} };
 
-  /* ========== 5) Remove proxy button ========== */
+  
   function killProxy(){
     const el=document.getElementById('settings-proxy');
     if(el) el.remove();
@@ -32056,7 +32007,7 @@ html, :root, body{
   setTimeout(killProxy, 800);
   setTimeout(killProxy, 2500);
 
-  /* ========== 12) Remove ALL secret/E2E UI labels ========== */
+  
   function scrubSecretUI(){
     try{
       document.querySelectorAll('.sl-secret-badge').forEach(el=>el.remove());
@@ -32207,7 +32158,7 @@ html, :root, body{
     document.head.appendChild(st);
   }
 
-  /* ========== 4) First-visit onboarding splash ========== */
+  
     function showOnboarding(){
     try{
       // Always restore choice buttons first (never leave empty auth screen)
@@ -32296,7 +32247,7 @@ html, :root, body{
     }
   }catch(e){}
 
-  /* ========== 1) New sticker system: add pack / add sticker / bg remove / AI check ========== */
+  
   const STK_KEY='sl_custom_stickers_v12';
   function getCustomStickers(){
     try{ return JSON.parse(LS.getItem(STK_KEY)||'[]'); }catch(e){ return []; }
@@ -32535,7 +32486,7 @@ html, :root, body{
     row.onclick=()=>openStickerPackManager();
   }, 900);
 
-    /* ========== 3) Stories: non-contacts → single «Интересное» ring ========== */
+    
   (function patchStories(){
     if(!document.getElementById('sl-interesting-css')){
       const st=document.createElement('style');
@@ -32627,7 +32578,7 @@ html, :root, body{
     setTimeout(bindInterestingClicks,1500);
   })();
 
-  /* ========== 6) Faster SPosts / SVideo loading ========== */
+  
   (function speedSocial(){
     // Reduce timeout and cache feeds
     window._slPostsCache = window._slPostsCache || {t:0, html:''};
@@ -32702,7 +32653,7 @@ html, :root, body{
     }
   })();
 
-  /* ========== 7) Search in SPosts and SVideo ========== */
+  
   function injectSocialSearch(overlayId, bodyId, type){
     const ov=document.getElementById(overlayId);
     if(!ov || ov.querySelector('.sl-social-search')) return;
@@ -32741,7 +32692,7 @@ html, :root, body{
     injectSocialSearch('video-overlay','video-body','video');
   }, 1000);
 
-  /* ========== 8) Profile link attachment ========== */
+  
   (function profileLink(){
     // Enhance edit profile sheet when opened
     document.addEventListener('click', (e)=>{
@@ -32792,7 +32743,7 @@ html, :root, body{
     setInterval(showLink, 3000);
   })();
 
-  /* ========== 9) SVideo: no mirror, fullscreen camera, masks, no heavy compression ========== */
+  
   (function videoCam(){
     // Force no-mirror on circle / create video previews
     const killMirror=()=>{
@@ -33108,7 +33059,7 @@ html, :root, body{
 
         ctx.save();
 
-        /* ===== unique AR geometry ===== */
+        
         if(kind==='cat'||kind==='fox'||kind==='dog'){
           const fur=kind==='fox'?'#E87A3A':(kind==='dog'?'#C4A574':'#F5A623');
           const earC=kind==='fox'?'#C45A22':fur;
@@ -33668,7 +33619,7 @@ html, :root, body{
     }
   })();
 
-  /* ========== 10) AI Chat in settings ========== */
+  
   const AI_KEY_DEFAULT='';
   try{
     /* auto AI key removed */
@@ -33753,7 +33704,7 @@ html, :root, body{
     row.onclick=()=>window.slOpenAIChat();
   }, 1000);
 
-  /* ========== 11) Screen time lock ========== */
+  
   function checkScreenTime(){
     try{
       const conf=JSON.parse(LS.getItem('sl_screentime')||'null');
@@ -33868,7 +33819,7 @@ html, :root, body{
     row.onclick=()=>window.slOpenScreenTime();
   }, 1100);
 
-  /* ========== Global: prettier ripple on buttons ========== */
+  
   document.addEventListener('click', (e)=>{
     const btn=e.target.closest('.btn-primary, .btn-secondary, .icon-btn, .bottom-tab, .settings-item');
     if(!btn) return;
@@ -33882,7 +33833,7 @@ html, :root, body{
 
 
 
-/* ===== SL: permanently kill old sticker-pack gacha shop ===== */
+
 (function(){
   'use strict';
   if(window._slKillPackShop) return;
@@ -33973,7 +33924,7 @@ html, :root, body{
 
 
 
-/* ===== FINAL: no gacha sticker shop ===== */
+
 (function(){
   'use strict';
   window.slOpenStickerPackShop = function(){
@@ -33998,7 +33949,7 @@ html, :root, body{
 
 
 
-/* ===== Composer buttons: 1 sticker + ONE mic (tap toggle, hold record) ===== */
+
 (function(){
   'use strict';
   if(window._slComposerBtnsFix) return;
@@ -34252,7 +34203,7 @@ html, :root, body{
 
 
 
-/* ===== SL: stickers send + open pack on sticker click ===== */
+
 (function(){
   'use strict';
   if(window._slStickerSendFix) return;
@@ -34486,7 +34437,7 @@ html, :root, body{
 
 
 
-/* ===== SL: sticker panel close + no auto-open + proper sticker bubbles ===== */
+
 (function(){
   'use strict';
   if(window._slStkCloseFix) return;
@@ -34670,7 +34621,7 @@ html, :root, body{
 
 
 
-/* ===== SL: fix mixed chats + sticker bubbles ===== */
+
 (function(){
   'use strict';
   if(window._slChatIsoFix) return;
@@ -34880,7 +34831,7 @@ html, :root, body{
 
 
 
-/* ===== SL: Telegram-style sticker panel UI ===== */
+
 (function(){
   'use strict';
   if(window._slTgStickerUI) return;
@@ -35378,7 +35329,7 @@ html, :root, body{
 
 
 
-/* ===== SL: Telegram sticker panel 1:1 ===== */
+
 (function(){
   'use strict';
   if(window._slTgStickerUI2) return;
@@ -36172,7 +36123,7 @@ html, :root, body{
 
 
 
-/* ===== SL: FORCE Telegram sticker panel, kill old modal ===== */
+
 (function(){
   'use strict';
   if(window._slForceTgStk) return;
@@ -36344,7 +36295,7 @@ html, :root, body{
 
 
 
-/* ===== SL: Telegram attach menu (скрепка) — all free ===== */
+
 (function(){
   'use strict';
   if(window._slAttachMenuTg) return;
@@ -36635,7 +36586,7 @@ html, :root, body{
 
 
 
-/* ===== SL: Telegram voice + video-circle UX ===== */
+
 (function(){
   'use strict';
   if(window._slTgRecUX) return;
@@ -38250,7 +38201,7 @@ html, :root, body{
 
 
 
-/* ===== SL: stop messages from disappearing ===== */
+
 (function(){
   'use strict';
   if(window._slMsgPersistFix) return;
@@ -38348,7 +38299,7 @@ html, :root, body{
 
 
 
-/* ===== SL: public channels catalog + deep links ===== */
+
 (function(){
   'use strict';
   if(window._slPubChanFix) return;
@@ -38419,7 +38370,7 @@ html, :root, body{
 
 
 
-/* ===== SL: private channel + group invite links ===== */
+
 (function(){
   'use strict';
   if(window._slInviteLinksFix) return;
@@ -38545,7 +38496,7 @@ html, :root, body{
 
 
 
-/* ===== SL: SVideo — no stories, reliable video feed ===== */
+
 (function(){
   'use strict';
   if(window._slSVideoNoStories) return;
@@ -38588,7 +38539,7 @@ html, :root, body{
 
 
 
-/* ===== SL: modern UI polish hooks ===== */
+
 (function(){
   'use strict';
   if(window._slModernUI) return;
@@ -38639,7 +38590,7 @@ document.addEventListener('click', function(e){
 </script>
 <script>
 
-/* ========== USER BOTS: create / discover / auto-reply ========== */
+
 (function(){
   const BOTS_KEY = 'sl_user_bots_v1';
   const BOT_CATALOG_KEY = 'sl_bot_catalog_v1';
@@ -39175,7 +39126,7 @@ document.addEventListener('click', function(e){
 
 
 
-/* ========== MUSIC v2: user uploads, global library, favorite ========== */
+
 (function(){
   const LIB_KEY = 'sl_songs_v2';
   const FAV_KEY = 'sl_fav_song_v2';
@@ -39542,7 +39493,7 @@ document.addEventListener('click', function(e){
 
 
 
-/* ===== SL: fullscreen image zoom, AI chat, alarm, SVG stickers ===== */
+
 (function(){
   'use strict';
   if(window._slPackMediaAiAlarm) return;
@@ -39550,7 +39501,7 @@ document.addEventListener('click', function(e){
 
   function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
-  /* ---------- 1) FULLSCREEN IMAGE + PINCH ZOOM ---------- */
+  
   function openImageFullscreen(src){
     if(!src) return;
     try{ document.getElementById('sl-img-fs')?.remove(); }catch(e){}
@@ -39656,7 +39607,7 @@ document.addEventListener('click', function(e){
     openImageFullscreen(src);
   }, true);
 
-  /* ---------- 2) AI CHAT via #/ai-chat ---------- */
+  
   const AI_KB = [
     {keys:['привет','здравствуй','хай','hello','hi'], ans:'Привет! Я AI-помощник SLine. Спросите про функции приложения.'},
     {keys:['как дела','как ты'], ans:'Отлично! Готов помочь с SLine 😊'},
@@ -39741,7 +39692,7 @@ document.addEventListener('click', function(e){
   setTimeout(checkAiHash, 400);
   setTimeout(checkAiHash, 1500);
 
-  /* ---------- 3) ALARM (notifications even when site closed) ---------- */
+  
   const ALARM_KEY = 'sl_alarms_v1';
   function loadAlarms(){ try{ return JSON.parse(localStorage.getItem(ALARM_KEY)||'[]'); }catch(e){ return []; } }
   function saveAlarms(a){ try{ localStorage.setItem(ALARM_KEY, JSON.stringify(a)); }catch(e){} }
@@ -39949,7 +39900,7 @@ document.addEventListener('click', function(e){
     });
   }catch(e){}
 
-  /* ---------- 4) ~100 SVG STICKERS ---------- */
+  
   function svgSticker(inner, bg){
     const b = bg || 'transparent';
     const raw = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">${b!=='transparent'?`<rect width="128" height="128" rx="28" fill="${b}"/>`:''}${inner}</svg>`;
@@ -40108,7 +40059,7 @@ document.addEventListener('click', function(e){
   console.log('[SL] media zoom + AI + alarm + SVG stickers ready');
 })();
 
-/* ========== SLine: Telegram-style photo viewer + local contact rename ========== */
+
 (function(){
   'use strict';
   if(window._slPhotoRenamePack) return;
@@ -40116,7 +40067,7 @@ document.addEventListener('click', function(e){
 
   function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
-  /* ---- Local contact name overrides (only for you) ---- */
+  
   
 window.slGetDisplayName = function(p){
   if(!p) return '';
@@ -40301,7 +40252,7 @@ window.slGetDisplayName = function(p){
     }
   }, true);
 
-  /* ---- Telegram-style photo viewer ---- */
+  
   function openTelegramPhotoViewer(src, opts){
     opts = opts || {};
     if(!src) return;
@@ -40649,7 +40600,7 @@ window.slGetDisplayName = function(p){
 
 
 <script>
-/* ========== Profile photo HISTORY viewer (MAX-style) ========== */
+
 (function(){
   function toast(m){ try{ if(typeof showToast==='function') showToast(m); }catch(e){} }
 
@@ -41106,7 +41057,7 @@ window.slGetDisplayName = function(p){
 
 
 <script>
-/* ========== News Stickers (real image stickers, not emoji) ========== */
+
 (function(){
   // Labels inspired by News Emoji / trading stickers from the video
   const LABELS = [
@@ -41382,7 +41333,7 @@ window.slGetDisplayName = function(p){
 
 
 <script>
-/* ========== Telegram-style photo albums + carousel ========== */
+
 (function(){
   const MAX_ALBUM = 10;
 
@@ -41949,7 +41900,7 @@ window.slGetDisplayName = function(p){
 
 
 <script>
-/* ========== TG/MAX feature pack: pin chats, unread, notes, forward+comment, wallpaper, view-once, offline banner, secret ========== */
+
 (function(){
   const KEYS = {
     pinnedChats: 'sl_pinned_chats',
@@ -41963,7 +41914,7 @@ window.slGetDisplayName = function(p){
   const toast = (m) => { try{ if(typeof showToast==='function') showToast(m); }catch(e){} };
   const esc = (s) => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
 
-  /* ---------- CSS ---------- */
+  
   function css(){
     if(document.getElementById('sl-feat-pack-css')) return;
     const s=document.createElement('style');
@@ -42010,7 +41961,7 @@ window.slGetDisplayName = function(p){
     document.head.appendChild(s);
   }
 
-  /* ---------- Offline banner ---------- */
+  
   function ensureOfflineBanner(){
     if(document.getElementById('sl-offline-banner')) return;
     const b=document.createElement('div');
@@ -42027,7 +41978,7 @@ window.slGetDisplayName = function(p){
     sync();
   }
 
-  /* ---------- Pinned chats ---------- */
+  
   function getPinnedChats(){ return load(KEYS.pinnedChats, []); }
   function setPinnedChats(a){ save(KEYS.pinnedChats, a); }
   function isPinnedChat(id){ return getPinnedChats().includes(String(id)); }
@@ -42040,7 +41991,7 @@ window.slGetDisplayName = function(p){
     try{ if(typeof renderContactsAndGroups==='function') renderContactsAndGroups(); }catch(e){}
   }
 
-  /* ---------- Mark unread ---------- */
+  
   function markUnread(id){
     id=String(id);
     try{
@@ -42053,7 +42004,7 @@ window.slGetDisplayName = function(p){
     }catch(e){ toast('Не удалось'); }
   }
 
-  /* ---------- Contact notes ---------- */
+  
   function getNotes(){ return load(KEYS.contactNotes, {}); }
   function getNote(id){ return getNotes()[String(id)]||''; }
   function setNote(id, text){
@@ -42077,7 +42028,7 @@ window.slGetDisplayName = function(p){
     try{ if(typeof renderContactsAndGroups==='function') renderContactsAndGroups(); }catch(e){}
   }
 
-  /* ---------- Secret chats ---------- */
+  
   function getSecrets(){ return load(KEYS.secretChats, {}); }
   function isSecret(id){ return !!getSecrets()[String(id)]; }
   function toggleSecret(id){
@@ -42089,7 +42040,7 @@ window.slGetDisplayName = function(p){
     try{ if(typeof renderContactsAndGroups==='function') renderContactsAndGroups(); }catch(e){}
   }
 
-  /* ---------- Chat wallpaper ---------- */
+  
   const WALLS = [
     {id:'none', css:'none', label:'Нет'},
     {id:'dark1', css:'linear-gradient(160deg,#0d1526,#1a2744)', label:'Синий'},
@@ -42143,7 +42094,7 @@ window.slGetDisplayName = function(p){
     ov.addEventListener('click',e=>{ if(e.target===ov) ov.remove(); });
   }
 
-  /* ---------- View-once ---------- */
+  
   function seenVO(){ return load(KEYS.viewOnce, {}); }
   function markVOSeen(mid){ const s=seenVO(); s[String(mid)]=Date.now(); save(KEYS.viewOnce,s); }
   function isVOSeen(mid){ return !!seenVO()[String(mid)]; }
@@ -42230,7 +42181,7 @@ window.slGetDisplayName = function(p){
     }, true);
   }
 
-  /* ---------- Forward with comment ---------- */
+  
   async function forwardWithComment(msg){
     if(!msg){ toast('Нет сообщения'); return; }
     const contacts = (window.contacts||window.allUsers||[]);
@@ -42306,7 +42257,7 @@ window.slGetDisplayName = function(p){
   }
   window.slForwardWithComment = forwardWithComment;
 
-  /* ---------- Enhance chat context menu ---------- */
+  
   function patchChatCtx(){
     if(typeof showChatCtx!=='function' || showChatCtx._featPatched) return;
     const orig=showChatCtx;
@@ -42353,7 +42304,7 @@ window.slGetDisplayName = function(p){
     showChatCtx._featPatched=true;
   }
 
-  /* ---------- Patch message context for forward+comment ---------- */
+  
   function patchMsgForward(){
     document.addEventListener('click', (e)=>{
       const it=e.target.closest && e.target.closest('#ctx-menu .ctx-item, .ctx-item');
@@ -42370,7 +42321,7 @@ window.slGetDisplayName = function(p){
     }, true);
   }
 
-  /* ---------- Sort & decorate contact list ---------- */
+  
   function decorateContacts(){
     const list=document.getElementById('contacts-list');
     if(!list) return;
@@ -42423,7 +42374,7 @@ window.slGetDisplayName = function(p){
     renderContactsAndGroups._featPatched=true;
   }
 
-  /* ---------- Patch openChat to apply wallpaper ---------- */
+  
   function patchOpenChat(){
     if(typeof openChat==='function' && !openChat._wallPatched){
       const orig=openChat;
@@ -42445,7 +42396,7 @@ window.slGetDisplayName = function(p){
     }
   }
 
-  /* ---------- Header button: wallpaper shortcut ---------- */
+  
   function ensureHeaderTools(){
     /* wallpaper only from chat context menu — no header button */
     try{ document.getElementById('sl-wall-btn')?.remove(); }catch(e){}
@@ -42481,7 +42432,7 @@ window.slGetDisplayName = function(p){
 
 
 <script>
-/* ========== Instant chat history ========== */
+
 (function(){
   // Prefetch on press/hover of chat row
   function prefetchForId(id, isGroup){
@@ -42617,7 +42568,7 @@ window.slGetDisplayName = function(p){
 
 
 <script>
-/* ========== MAX stories collapse animation (DISABLED — TG anim elsewhere) ========== */
+
 (function(){
   return; // disabled
 
@@ -42826,7 +42777,6 @@ window.slGetDisplayName = function(p){
     if(!bar) return;
     const p = clamp(progress, 0, 1);
 
-    // ===== clean endpoints: no ghosts =====
     if(p <= 0.02){
       resetStories(bar);
       resetTitle(title);
@@ -43111,7 +43061,7 @@ window.slGetDisplayName = function(p){
 </script>
 
 <script>
-/* ========== SL FULL ANIMATION PACK v2 ========== */
+
 (function(){
   const SPRING = 'cubic-bezier(.22,1,.36,1)';
   const SPRING_BOUNCE = 'cubic-bezier(.34,1.4,.64,1)';
@@ -43122,12 +43072,12 @@ window.slGetDisplayName = function(p){
     s = document.createElement('style');
     s.id = 'sl-full-anim-css';
     s.textContent = `
-/* ===== Reduced motion respect ===== */
+
 @media (prefers-reduced-motion: reduce){
   *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
 }
 
-/* ===== 1. Chat list ===== */
+
 .sw-clip{
   animation:slContactIn .34s ${SPRING} both;
 }
@@ -43183,7 +43133,7 @@ window.slGetDisplayName = function(p){
   /* no transform:scale — breaks swipe translateX */
 }
 
-/* ===== 2. Stories ===== */
+
 #stories-bar .story-item{
   transition:transform .2s ${SPRING}, opacity .2s;
 }
@@ -43216,7 +43166,7 @@ window.slGetDisplayName = function(p){
 }
 @keyframes slStoryFill{from{transform:scaleX(0)}to{transform:scaleX(1)}}
 
-/* ===== 3. Messages ===== */
+
 .bubble-row.me .bubble{
   animation:slRiseMe .32s ${SPRING} both;
 }
@@ -43298,7 +43248,7 @@ window.slGetDisplayName = function(p){
   30%{transform:translateY(-5px);opacity:1}
 }
 
-/* ===== 4. Page / tab transitions ===== */
+
 .app-page{
   transition:opacity .28s ease, transform .32s ${SPRING};
 }
@@ -43338,7 +43288,7 @@ body:not(.in-chat) #chat-active{
   animation:none;
 }
 
-/* ===== 5. Settings ===== */
+
 #page-settings .settings-avatar{
   transition:transform .3s ${SPRING}, box-shadow .3s;
   animation:slAvatarIn .5s ${SPRING_BOUNCE} both;
@@ -43388,7 +43338,7 @@ body:not(.in-chat) #chat-active{
   transition:transform .28s ${SPRING_BOUNCE}, background .2s;
 }
 
-/* ===== 6. Calls ===== */
+
 .sl-incoming-call{
   animation:slCallScreenIn .35s ${SPRING} both;
 }
@@ -43441,7 +43391,7 @@ body:not(.in-chat) #chat-active{
 #page-calls .call-row:nth-child(3){animation-delay:.09s}
 #page-calls .call-row:nth-child(n+4){animation-delay:.12s}
 
-/* ===== 7. Toast / modal / empty ===== */
+
 .cd-toast{
   animation:slToastIn .35s ${SPRING} both;
   transition:opacity .3s, transform .3s ${SPRING};
@@ -43483,7 +43433,7 @@ body:not(.in-chat) #chat-active{
   50%{transform:translateY(-8px) scale(1.02);opacity:1}
 }
 
-/* ===== 8. Composer / send ===== */
+
 .send-btn{
   transition:transform .22s ${SPRING_BOUNCE}, opacity .2s, background .2s;
 }
@@ -43512,7 +43462,7 @@ body:not(.in-chat) #chat-active{
   transform:scale(.88);
 }
 
-/* ===== 9. PIN / security ===== */
+
 .pin-key, .pin-keypad button{
   transition:transform .12s ease, background .15s;
   position:relative;overflow:hidden;
@@ -43542,7 +43492,7 @@ body:not(.in-chat) #chat-active{
   80%{transform:translateX(6px)}
 }
 
-/* ===== 10. Media / gifts / stickers ===== */
+
 .sl-media-img, .media-with-caption img, .bubble img{
   animation:slMediaIn .35s ${SPRING} both;
 }
@@ -43559,7 +43509,7 @@ body:not(.in-chat) #chat-active{
   100%{transform:scale(1) rotate(0)}
 }
 
-/* ===== 11. Theme / wallpaper ===== */
+
 body{
   transition:background-color .4s ease, color .35s ease;
 }
@@ -43567,14 +43517,14 @@ body{
   transition:background .45s ease, background-image .45s ease;
 }
 
-/* ===== 12. Pull hint / scroll ===== */
+
 .sl-pull-hint{
   text-align:center;padding:8px;color:var(--muted);font-size:12px;
   opacity:0;transition:opacity .2s;
 }
 .sl-pull-hint.show{opacity:1}
 
-/* ===== 13. Context menu ===== */
+
 #ctx-menu, .ctx-menu, .sl-ctx{
   animation:slCtxIn .22s ${SPRING} both;
   transform-origin:top left;
@@ -43590,7 +43540,7 @@ body{
   transform:scale(.98);
 }
 
-/* ===== 14. Folder tabs ===== */
+
 .max-folder-tabs .folder-tab,
 .folder-tab{
   transition:color .2s, transform .2s ${SPRING};
@@ -43604,7 +43554,7 @@ body{
   to{transform:scaleX(1);opacity:1}
 }
 
-/* ===== 15. Online / status ===== */
+
 .online-dot, .contact-status-dot{
   animation:slDotIn .35s ${SPRING_BOUNCE} both;
 }
@@ -43613,7 +43563,7 @@ body{
   to{transform:scale(1);opacity:1}
 }
 
-/* ===== 16. Header tools ===== */
+
 .max-hdr-btn, .icon-btn, .chat-actions .icon-btn{
   transition:transform .18s ${SPRING}, background .15s, color .15s;
 }
@@ -43624,7 +43574,7 @@ body{
     document.head.appendChild(s);
   }
 
-  /* ---- Toast upgrade ---- */
+  
   function patchToast(){
     if(typeof showToast!=='function' || showToast._animPatched) return;
     const orig = showToast;
@@ -43642,7 +43592,7 @@ body{
     showToast._animPatched = true;
   }
 
-  /* ---- Switch page transition ---- */
+  
   function patchSwitchPage(){
     if(typeof switchPage!=='function' || switchPage._animPatched) return;
     const orig = switchPage;
@@ -43676,7 +43626,7 @@ body{
     switchPage._animPatched = true;
   }
 
-  /* ---- Message send pulse / just-sent ---- */
+  
   function patchSend(){
     if(typeof sendMessage!=='function' || sendMessage._animPatched) return;
     const orig = sendMessage;
@@ -43697,7 +43647,7 @@ body{
     sendMessage._animPatched = true;
   }
 
-  /* ---- Reaction fly-out ---- */
+  
   function flyReaction(emoji, fromX, fromY, toX, toY){
     const el = document.createElement('div');
     el.className = 'sl-react-fly';
@@ -43727,7 +43677,7 @@ body{
     }, true);
   }
 
-  /* ---- Unread badge arrive ---- */
+  
   function observeBadges(){
     const list = document.getElementById('contacts-list');
     if(!list || list._badgeObs) return;
@@ -43747,7 +43697,7 @@ body{
     mo.observe(list, {childList:true, subtree:true});
   }
 
-  /* ---- Reply highlight ---- */
+  
   function patchReplyJump(){
     document.addEventListener('click', (e)=>{
       const q = e.target.closest && e.target.closest('.reply-quote, .msg-reply, [data-reply-id]');
@@ -43764,7 +43714,7 @@ body{
     }, true);
   }
 
-  /* ---- PIN shake on error ---- */
+  
   function patchPinShake(){
     // observe wrong pin feedback via class or toast
     const orig = window.showToast;
@@ -43785,7 +43735,7 @@ body{
     }, true);
   }
 
-  /* ---- Open chat animation ---- */
+  
   function patchOpenChat(){
     if(typeof openChat==='function' && !openChat._fullAnim){
       const orig = openChat;
@@ -43821,7 +43771,7 @@ body{
     }
   }
 
-  /* ---- Long-press scale on contacts ---- */
+  
   function bindHoldFeedback(){
     const list = document.getElementById('contacts-list');
     if(!list || list._holdBound) return;
@@ -43847,13 +43797,13 @@ body{
     }, {passive:true});
   }
 
-  /* ---- Settings item cascade on open ---- */
+  
   function patchSettingsTab(){
     const btn = document.querySelector('.bottom-tab[data-tab="settings"], .nav-item[data-tab="settings"]');
     // handled in switchPage patch
   }
 
-  /* ---- Heart particles for likes ---- */
+  
   function spawnHearts(x, y, n){
     n = n||5;
     for(let i=0;i<n;i++){
@@ -43875,7 +43825,7 @@ body{
     spawnHearts(r.left+r.width/2, r.top, 4);
   }, true);
 
-  /* ---- Theme transition class ---- */
+  
   function patchTheme(){
     document.addEventListener('click', (e)=>{
       const t = e.target.closest && e.target.closest('[data-theme], #settings-theme, .theme-toggle');
@@ -43908,7 +43858,7 @@ body{
 
 
 <script>
-/* ========== Jump to replied message ========== */
+
 (function(){
   function escapeSel(id){
     try{ return (window.CSS && CSS.escape) ? CSS.escape(String(id)) : String(id).replace(/"/g,'\\"'); }
@@ -44046,7 +43996,7 @@ body{
 
 
 <script>
-/* ========== Send quality chooser + drag & drop into chat ========== */
+
 (function(){
   function bindInputs(){
     const photo = document.getElementById('photo-input');
@@ -44339,7 +44289,7 @@ body{
 
 
 <script>
-/* ========== Chat day separators + sticky date header (MAX-style) ========== */
+
 (function(){
   const MONTHS_RU = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
   const MONTHS_EN = ['January','February','March','April','May','June','July','August','September','October','November','December'];
@@ -44637,7 +44587,7 @@ body{
 
 
 <script>
-/* ========== SL UX polish pack: search, reply bar, drafts, unread sep ========== */
+
 (function(){
   const L = (ru,en)=>{ try{ return (typeof currentLang!=='undefined'&&currentLang==='en')?en:ru; }catch(e){ return ru; } };
 
@@ -44690,7 +44640,7 @@ body{
     document.head.appendChild(s);
   }
 
-  /* ---------- Reply bar in DOM ---------- */
+  
   function ensureReplyBar(){
     let bar=document.getElementById('sl-reply-bar')||document.getElementById('reply-bar');
     if(bar) return bar;
@@ -44735,7 +44685,7 @@ body{
     document.getElementById('composer')?.classList.remove('has-reply');
   };
 
-  /* ---------- Chat search with counter ---------- */
+  
   let _hits=[], _hitIdx=-1;
 
   function clearSearchHits(){
@@ -44846,7 +44796,7 @@ body{
     document.getElementById('sic-next')?.addEventListener('click', ()=>goHit(1));
   }
 
-  /* ---------- Unread separator ---------- */
+  
   function insertUnreadSep(list, afterId){
     if(!list) return;
     list.querySelectorAll('.sl-unread-sep').forEach(e=>e.remove());
@@ -44896,7 +44846,7 @@ body{
     }
   }
 
-  /* ---------- Drafts always on ---------- */
+  
   function forceDrafts(){
     try{
       if(typeof getBeta==='function' && typeof setBeta==='function'){
@@ -44921,7 +44871,7 @@ body{
     }
   }
 
-  /* ---------- Swipe-to-reply polish (ensure reply bar shows) ---------- */
+  
   function patchSwipeReply(){
     // After any assignment to replyToMsg via existing swipe, show bar
     const list=document.getElementById('messages-list');
@@ -44944,7 +44894,7 @@ body{
     mo.observe(list,{attributes:true,subtree:true,attributeFilter:['class']});
   }
 
-  /* ---------- Profile link: keep #/user/ as canonical ---------- */
+  
   window.slProfileLink = function(username){
     const u = String(username||'').replace(/^@/,'');
     return `${location.origin}${location.pathname}#/user/@${u}`;
@@ -45120,7 +45070,7 @@ body{
   window._slSVideoTT = 1;
   const LS = window.storage || localStorage;
 
-  /* ---- Friends = mutual follow ---- */
+  
   function followsKey(){ return 'sl_follows_'+(window.myProfile&&myProfile.id||'x'); }
   function getFollows(){
     try{ return JSON.parse(LS.getItem(followsKey())||'{}'); }catch(e){ return {}; }
@@ -45165,7 +45115,7 @@ body{
     return on;
   };
 
-  /* ---- Create menu (TikTok-like) ---- */
+  
   window.slSVideoCreateMenu = function(body){
     if(body){
       body.innerHTML = `
@@ -45242,7 +45192,7 @@ body{
     if(line) ctx.fillText(line,x,yy);
   }
 
-  /* ---- Friends inbox ---- */
+  
   window.slSVideoFriendsInbox = async function(body){
     body.innerHTML='<div style="padding:16px;color:#fff"><div style="font-weight:800;font-size:20px;margin-bottom:12px">Входящие</div><div id="sv-friends-list">Загрузка…</div></div>';
     const box=body.querySelector('#sv-friends-list');
@@ -45291,7 +45241,7 @@ body{
     });
   };
 
-  /* ---- Music button + duration chips on camera ---- */
+  
   const _open = window.slOpenVideoCamera;
   if(typeof _open==='function'){
     window.slOpenVideoCamera = async function(){
@@ -45817,7 +45767,7 @@ body{
 </script>
 
 <style id="sl-composer-match-v7">
-/* ===== Composer v7: send in-row, smile icon, stickers→text ===== */
+
 #composer.composer, .composer#composer {
   padding: 8px 10px calc(8px + env(safe-area-inset-bottom, 0px)) !important;
   gap: 8px !important;
@@ -47553,7 +47503,6 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
     }
   }, true);
 
-  // ========== Scroll-to-bottom FAB + unread count (only real new msgs) ==========
   var pendingNew = 0;
   var seenMsgIds = new Set();
   var activeChatKey = '';
@@ -48073,7 +48022,7 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
     background-color: transparent !important;
   }
 
-  /* ===== PC: Telegram-style floating white header + composer ===== */
+  
   #page-chats .chat-header {
     margin: 0 4px 10px 4px;
     padding: 8px 14px !important;
@@ -48318,7 +48267,7 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
 
 
 <style id="sl-tg-chrome-mobile">
-/* ===== Phone: TG-style — wallpaper full-bleed, glass header + composer ===== */
+
 @media (max-width: 1024px) {
   /* Full chat shell shows wallpaper */
   body.in-chat #chat-active,
@@ -48343,7 +48292,7 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
     background: transparent !important;
   }
 
-  /* ---- Header: glass pill floating on wallpaper ---- */
+  
   body.in-chat .chat-header,
   body.theme-light.in-chat .chat-header,
   body.light-theme.in-chat .chat-header {
@@ -48440,7 +48389,7 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
     display: none !important;
   }
 
-  /* ---- Composer: transparent glass pieces on wallpaper ---- */
+  
   body.in-chat #composer,
   body.in-chat .composer,
   body.theme-light.in-chat #composer,
@@ -49295,7 +49244,7 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
     color: rgba(240,244,250,0.92) !important;
   }
 
-  /* ===== Classic bottom bar like screenshot ===== */
+  
   body:not(.in-chat) .bottom-tabs,
   body.theme-light:not(.in-chat) .bottom-tabs,
   body.light-theme:not(.in-chat) .bottom-tabs,
@@ -49590,7 +49539,7 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
 (function(){
   if(window._slUserTweaks) return; window._slUserTweaks=1;
 
-  /* --- Glass attach force (inline, beats old #FFF rules) --- */
+  
   function paintAttach(){
     ['attach-btn','circle-btn'].forEach(function(id){
       var el=document.getElementById(id);
@@ -49606,7 +49555,7 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
   setTimeout(paintAttach, 1500);
   setInterval(paintAttach, 3000);
 
-  /* --- Click name/avatar → profile info immediately --- */
+  
   function getPartner(){
     try{
       if(typeof activePartner!=='undefined' && activePartner) return activePartner;
@@ -50842,7 +50791,7 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
     const st=document.createElement('style');
     st.id='sl-gif-css';
     st.textContent = `
-/* ===== GIF picker grid (separate square tiles) ===== */
+
 .sl-inline-gif{ display:flex; flex-direction:column; min-height:0; height:100%; }
 .sl-igif-search{ padding:8px 10px 4px; flex-shrink:0; }
 .sl-igif-search input{
@@ -50921,7 +50870,7 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
 }
 @keyframes slGifSpin{ to{ transform:rotate(360deg) } }
 
-/* ===== Sheet from attach ===== */
+
 #sl-gif-panel{
   position:fixed; left:0; right:0; bottom:0; z-index:12050;
   max-height:min(72vh,560px);
@@ -50950,7 +50899,7 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
   background:rgba(120,120,128,.2); color:inherit; font-size:18px;
 }
 
-/* ===== Chat bubble: separate GIF card + badge ===== */
+
 .sl-media-card.is-gif{
   position:relative !important;
   display:inline-block !important;
@@ -51958,6 +51907,23 @@ img.sl-gif-img{
   console.log('[SL] E2EE module loaded');
 })();
 </script>
+
+
+<style id="sl-fix-circle-file">
+.bubble-row .bubble.bubble-circle,
+.bubble.me.bubble-circle,
+.bubble.them.bubble-circle{
+  background:transparent!important;
+  background-color:transparent!important;
+  background-image:none!important;
+  border:0!important;
+  box-shadow:none!important;
+  padding:0!important;
+  border-radius:0!important;
+}
+.bubble.bubble-circle .circle-msg-wrap{display:inline-block}
+.sl-file-card{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:14px;min-width:200px;max-width:280px}
+</style>
 
 </body>
 </html>
