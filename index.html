@@ -5127,6 +5127,21 @@ const FIREBASE_CONFIG = {
 // Cloudflare Worker proxy — all secret keys live only there
 const PROXY_URL = "https://old-band-f00b.dimasik-228-dima-super.workers.dev";
 
+function slMsgPreview(m){
+  if(!m) return '';
+  var t = m.type || '';
+  var c = m.content;
+  if(t === 'encrypted') return '🔒 Сообщение';
+  if(typeof c === 'string' && c.length > 2 && c.charAt(0) === '{' && c.indexOf('"iv"') !== -1 && c.indexOf('"data"') !== -1) return '🔒 Сообщение';
+  if(t === 'image') return '📷 Фото';
+  if(t === 'video') return '🎬 Видео';
+  if(t === 'voice') return '🎤 Голосовое';
+  if(t === 'circle') return '⭕ Видеосообщение';
+  if(t === 'file') return '📄 ' + String(c || 'Файл').slice(0, 30);
+  if(t === 'sticker') return 'Стикер';
+  return String(c || '').replace(/^↪[^\n]*\n/, '').slice(0, 40);
+}
+
 // Neon is no longer used on the client
 const NEON_CONNECTION_STRING = "";
 
@@ -8129,7 +8144,7 @@ async function loadChats(){
       if(s!==me && r!==me) continue;
       const pid = s===me ? r : s;
       if(!pid||map.has(pid)) continue;
-      map.set(pid,{lastMessage:m.content||'',lastAt:m.created_at});
+      map.set(pid,{lastMessage:(typeof slMsgPreview==='function'?slMsgPreview(m):(m.content||'')),lastAt:m.created_at});
     }
     if(!map.has(myProfile.id)) map.set(myProfile.id,{lastMessage:'Заметки',lastAt:new Date(0).toISOString()});
     const ids=[...map.keys()];
@@ -11071,7 +11086,11 @@ async function sendFileOptimistic(file, mType, caption, quality){
         if(data.created_at) localRow.dataset.created = data.created_at;
         if(typeof setMsgStatus==='function') setMsgStatus(localRow, 'sent');
       } else {
-        renderMessage(data, !!activeGroup);
+        if(data && data.type==='encrypted' && typeof _plainUi==='string'){
+          renderMessage({...data, type:'text', content:_plainUi, _e2eLocal:true}, !!activeGroup);
+        } else {
+          renderMessage(data, !!activeGroup);
+        }
       }
       try{
         const ck = chatCacheKey(activePartner, activeGroup);
@@ -11567,7 +11586,8 @@ async function _sendMessageInner(type='text', fileUrl=null, content=null){
   stopTyping();
   let _outContent = text || '';
   let _outType = type || 'text';
-  // E2EE encrypt text messages
+  let _plainUi = _outContent;
+  // E2EE encrypt text messages (на сервер — шифр, локально показываем текст)
   if (_outType === 'text' && _outContent && window.SL_E2EE && myProfile && myProfile.id) {
     try {
       const isGroup = !!activeGroup;
@@ -11633,7 +11653,16 @@ async function _sendMessageInner(type='text', fileUrl=null, content=null){
     }catch(e){ console.warn(e); }
   }
   const localId = 'local_'+Date.now()+'_'+Math.random().toString(36).slice(2,7);
-  renderMessage({...payload, id:localId, created_at:new Date().toISOString(), _pending:true}, !!activeGroup);
+  // локально всегда читаемый текст; в БД — payload (возможно encrypted)
+  renderMessage({
+    ...payload,
+    id: localId,
+    type: 'text',
+    content: (typeof _plainUi !== 'undefined' ? _plainUi : (payload.type==='encrypted' ? '🔒' : payload.content)),
+    created_at: new Date().toISOString(),
+    _pending: true,
+    _e2eLocal: payload.type === 'encrypted'
+  }, !!activeGroup);
   scrollToBottom();
   try{
     let data=null, error=null;
@@ -14045,15 +14074,26 @@ function handleIncomingMessage(msg){
         try{ loadChats(); }catch(e){}
         return;
       }
-      // content-based dedupe for same second
+      // content-based dedupe for same second (plaintext or e2e local)
       const rows = document.querySelectorAll('.bubble-row.me, .bubble-row[data-me="1"]');
       for(let i=0;i<rows.length;i++){
         const r = rows[i];
+        const rid = String(r.dataset.id||'');
+        if(rid.indexOf('local_')!==0) continue;
         const t = (r.querySelector('.bubble')||{}).textContent||'';
-        if(msg.content && t.indexOf(String(msg.content).slice(0,40))!==-1 && (r.dataset.id||'').indexOf('local_')===0){
+        const cipher = String(msg.content||'');
+        const matchPlain = msg.content && t.indexOf(cipher.slice(0,40))!==-1;
+        // encrypted: ciphertext !== UI text — склеиваем любой свежий local_ пузырь
+        const matchE2e = msg.type==='encrypted' || (cipher.charAt(0)==='{' && cipher.indexOf('"iv"')!==-1);
+        if(matchPlain || matchE2e){
           r.dataset.id = msg.id;
           r.classList.remove('sending','pending-msg');
           if(typeof setMsgStatus==='function') setMsgStatus(r, 'sent');
+          if(window.messageStore){
+            messageStore.delete(rid);
+            messageStore.set(String(msg.id), msg);
+          }
+          try{ loadChats(); }catch(e){}
           return;
         }
       }
@@ -45534,7 +45574,7 @@ body{
         if(m.group_id) return;
         var pid = s===me ? r : s;
         if(!pid||map.has(pid)) return;
-        map.set(pid,{lastMessage:m.content||'',lastAt:m.created_at});
+        map.set(pid,{lastMessage:(typeof slMsgPreview==='function'?slMsgPreview(m):(m.content||'')),lastAt:m.created_at});
       });
       map.set(myProfile.id, map.get(myProfile.id)||{lastMessage:'Заметки',lastAt:new Date(0).toISOString()});
       // Do NOT import sl_my_contacts into chat list without a real message — that leaked strangers
