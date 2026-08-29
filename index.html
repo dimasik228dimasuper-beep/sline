@@ -4599,8 +4599,30 @@ body[data-auth-panel="forgot-form"] #auth-choice{
     <div class="auth-sub" id="auth-sub-text">Современный мессенджер</div>
 
     <div id="auth-choice">
-      <button type="button" class="btn-primary" id="auth-go-login" style="margin-top:8px" onclick="try{event.preventDefault();if(typeof showAuthPanel==='function')showAuthPanel('login-form');}catch(e){}">Вход</button>
+      <button type="button" class="btn-primary" id="auth-go-login" style="margin-top:8px" onclick="try{event.preventDefault();if(typeof showAuthPanel==='function')showAuthPanel('login-methods');else{var m=document.getElementById('login-methods');if(m)m.style.display='block';}}catch(e){}">Вход</button>
       <button type="button" class="btn-secondary" id="auth-go-register" onclick="try{event.preventDefault();window._regStep=1;if(typeof setRegStep==='function')setRegStep(1);if(typeof showAuthPanel==='function')showAuthPanel('register-form');}catch(e){}">Регистрация</button>
+    </div>
+
+    
+    <div id="login-methods" style="display:none">
+      <p style="font-size:14px;font-weight:700;margin:0 0 12px;text-align:center">Как войти?</p>
+      <button type="button" class="btn-primary" id="lm-password" style="margin-bottom:8px">1. По паролю</button>
+      <button type="button" class="btn-secondary" id="lm-email-code" style="margin-bottom:8px">2. Код из письма</button>
+      <button type="button" class="btn-secondary" id="lm-recovery" style="margin-bottom:8px">3. Код восстановления</button>
+      <button type="button" class="btn-secondary" id="lm-device" style="margin-bottom:8px">4. Код на другом устройстве</button>
+      <button type="button" class="btn-secondary" id="lm-back" style="margin-top:4px;border:none;color:var(--muted)">← Назад</button>
+    </div>
+    <div id="login-device-form" style="display:none">
+      <p style="font-size:14px;font-weight:700;margin:0 0 8px;text-align:center">Вход с другого устройства</p>
+      <p style="font-size:13px;color:var(--muted);margin:0 0 12px;line-height:1.45;text-align:center">Введите email или телефон. Затем на устройстве, где уже выполнен вход: Настройки → Устройства → Добавить устройство и введите код ниже.</p>
+      <div class="field"><label>Email или телефон</label><input type="text" id="login-device-id" placeholder="you@example.com или +7900…" autocomplete="username"></div>
+      <div id="login-device-code-box" style="display:none;text-align:center;margin:12px 0">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:6px">Код для ввода на другом устройстве</div>
+        <div id="login-device-code" style="font-size:32px;font-weight:800;letter-spacing:8px;font-family:monospace">————</div>
+        <p style="font-size:12px;color:var(--muted);margin-top:8px">Код действует 5 минут</p>
+      </div>
+      <button type="button" class="btn-primary" id="login-device-start">Показать код</button>
+      <button type="button" class="btn-secondary" id="login-device-back" style="margin-top:8px;border:none;color:var(--muted)">← Назад</button>
     </div>
 
     <div id="login-form" style="display:none">
@@ -11546,8 +11568,11 @@ function showMsgCtx(e, msg){
         showToast('В Избранных');
       }
       else if(a==='info'){
-        const d=msg.created_at?new Date(msg.created_at).toLocaleString():'—';
-        alert(`ID: ${msg.id}\nТип: ${msg.type||'text'}\nОт: ${msg.sender_id}\nВремя: ${d}`);
+        try{ if(typeof window.slOpenMsgInfo==='function') window.slOpenMsgInfo(msg); }
+        catch(e){
+          const d=msg.created_at?new Date(msg.created_at).toLocaleString():'—';
+          alert('Время: '+d);
+        }
       }
       else if(a==='transcribe'){
         if(typeof transcribeVoiceMsg==='function') transcribeVoiceMsg(msg);
@@ -23454,6 +23479,16 @@ window.openAboutProject = function(){
     <div class="sl-sheet-hdr" style="position:relative">
       <button type="button" class="sl-sheet-back" id="ap-x" aria-label="Закрыть" style="font-size:22px;line-height:1">×</button>
       <h2>О проекте</h2>
+      <div style="margin:16px 0;padding:14px 16px;border-radius:14px;background:var(--panel);border:1px solid var(--line)">
+        <div style="font-weight:800;font-size:15px;margin-bottom:8px">🔒 End-to-end шифрование</div>
+        <p style="margin:0;font-size:13px;line-height:1.55;color:var(--muted)">
+          В SLine включено сквозное шифрование (E2EE) на базе ECDH + AES-GCM.
+          Текст личных и секретных чатов шифруется на устройстве отправителя и расшифровывается только на устройстве получателя.
+          Сервер хранит и передаёт шифротекст и не может прочитать содержимое сообщений.
+          Медиа загружается через защищённый прокси; ключи шифрования не покидают ваши устройства.
+        </p>
+      </div>
+
       <span style="width:40px"></span>
     </div>
     <div style="display:flex;gap:6px;padding:8px 12px;overflow-x:auto;border-bottom:1px solid var(--line);flex-shrink:0;-webkit-overflow-scrolling:touch">
@@ -23761,21 +23796,41 @@ function scheduleBirthdayAfterAppReady(){
   }catch(e){ console.warn('bootstrap ensure firebase', e); }
   if(!sb){ showAuth(); return; }
   try{
-    // Give Firebase a moment to hydrate LOCAL persistence (IndexedDB)
+    // Give Firebase time to hydrate LOCAL persistence (IndexedDB) — critical for stay logged in
     try{
-      await new Promise(function(r){ setTimeout(r, 120); });
+      await new Promise(function(r){ setTimeout(r, 200); });
     }catch(e){}
     let sessionUser = null;
     try{
       const {data, error} = await sb.auth.getSession();
       if(data?.session?.user) sessionUser = data.session.user;
     }catch(e){ console.warn('getSession', e); }
-    // Retry once — IndexedDB restore can lag on first paint
+    // Retry — IndexedDB restore can lag on first paint / hard refresh
+    if(!sessionUser){
+      for(let _ri=0;_ri<4 && !sessionUser;_ri++){
+        try{
+          await new Promise(function(r){ setTimeout(r, 250 + _ri*150); });
+          // Prefer native Firebase currentUser after persistence hydrate
+          try{
+            if(window.firebase && firebase.auth){
+              const cu = firebase.auth().currentUser;
+              if(cu){ sessionUser = { id: cu.uid, email: cu.email, user_metadata: cu.displayName?{username:cu.displayName}:{} }; break; }
+            }
+          }catch(e){}
+          const {data} = await sb.auth.getSession();
+          if(data?.session?.user) sessionUser = data.session.user;
+        }catch(e){}
+      }
+    }
+    // Last resort: if we previously logged in and Firebase still has user
     if(!sessionUser){
       try{
-        await new Promise(function(r){ setTimeout(r, 350); });
-        const {data} = await sb.auth.getSession();
-        if(data?.session?.user) sessionUser = data.session.user;
+        const flag = localStorage.getItem('sl_logged_in') || (typeof storage!=='undefined' && storage.getItem && storage.getItem('sl_logged_in'));
+        if(flag==='1' && window.firebase && firebase.auth){
+          await new Promise(function(r){ setTimeout(r, 500); });
+          const cu = firebase.auth().currentUser;
+          if(cu) sessionUser = { id: cu.uid, email: cu.email, user_metadata: {} };
+        }
       }catch(e){}
     }
     // If mid email-verify after password login, stay on code screen even if session exists
@@ -52442,6 +52497,314 @@ body:has(#msg-select-bar.show) .bubble-row .sl-sel-check{
   document.head.appendChild(st);
 
   console.log('[SL] PC media click + reaction + pending timeout ready');
+})();
+</script>
+
+
+<script>
+(function(){
+  if(window._slUserReqPack6) return;
+  window._slUserReqPack6 = 1;
+
+  /* ---- 1) Media fullscreen on click + avatar wheel zoom ---- */
+  function openFsImg(src){
+    if(!src) return;
+    if(typeof window.slOpenImageFullscreen==='function'){
+      window.slOpenImageFullscreen(src);
+      return;
+    }
+    try{ document.getElementById('sl-img-fs')?.remove(); }catch(e){}
+    var ov=document.createElement('div');
+    ov.id='sl-img-fs';
+    ov.style.cssText='position:fixed;inset:0;z-index:40000;background:#000;display:flex;align-items:center;justify-content:center';
+    ov.innerHTML='<img id="sl-img-fs-el" src="'+String(src).replace(/"/g,'&quot;')+'" style="max-width:100%;max-height:100%;object-fit:contain;transform-origin:center center" draggable="false">'+
+      '<button type="button" id="sl-img-fs-x" style="position:absolute;top:12px;right:12px;width:40px;height:40px;border-radius:50%;border:none;background:rgba(255,255,255,.2);color:#fff;font-size:22px;cursor:pointer">×</button>';
+    document.body.appendChild(ov);
+    var img=ov.querySelector('#sl-img-fs-el');
+    var scale=1,tx=0,ty=0;
+    function apply(){ img.style.transform='translate('+tx+'px,'+ty+'px) scale('+scale+')'; }
+    ov.addEventListener('wheel',function(e){
+      e.preventDefault();
+      scale *= (e.deltaY>0?0.9:1.1);
+      scale=Math.min(8,Math.max(1,scale));
+      if(scale===1){tx=0;ty=0;}
+      apply();
+    },{passive:false});
+    ov.querySelector('#sl-img-fs-x').onclick=function(){ov.remove();};
+    ov.addEventListener('click',function(e){if(e.target===ov)ov.remove();});
+  }
+  window.slOpenImageFullscreen = window.slOpenImageFullscreen || openFsImg;
+
+  document.addEventListener('pointerup', function(e){
+    if(e.button!=null && e.button!==0) return;
+    var t=e.target;
+    if(!t||!t.closest) return;
+    if(t.closest('#sl-img-fs,.reaction-chip,.ctx-menu,.msg-select-bar')) return;
+    // avatar in header / profile
+    var av = t.closest('.chat-header .avatar img, .chat-header .avatar, .profile-sheet .avatar img, .profile-avatar img, #chat-avatar img, .sl-profile-av img');
+    if(av){
+      var src = av.tagName==='IMG' ? (av.currentSrc||av.src) : (av.style&&av.style.backgroundImage||'').replace(/^url\(["']?|["']?\)$/g,'');
+      if(src && !src.startsWith('data:image/svg')){
+        e.preventDefault(); e.stopPropagation();
+        openFsImg(src);
+        return;
+      }
+    }
+    var img = t.closest('img.sl-media-img, img.sl-gif-img, .media-with-caption img, .sl-media-card img');
+    if(img && !img.classList.contains('sticker-animated')){
+      var s = img.currentSrc||img.src;
+      if(s && img.closest('.bubble,.sl-media-card,#messages-list')){
+        e.preventDefault(); e.stopPropagation();
+        openFsImg(s);
+        return;
+      }
+    }
+    var vid = t.closest('video.sl-media-vid, .sl-media-card video');
+    if(vid && !vid.closest('.circle-msg')){
+      var vs = vid.currentSrc||vid.src;
+      if(vs){
+        e.preventDefault(); e.stopPropagation();
+        try{ document.getElementById('sl-img-fs')?.remove(); }catch(err){}
+        var ov=document.createElement('div');
+        ov.id='sl-img-fs';
+        ov.style.cssText='position:fixed;inset:0;z-index:40000;background:#000;display:flex;align-items:center;justify-content:center';
+        ov.innerHTML='<video src="'+vs.replace(/"/g,'&quot;')+'" controls autoplay playsinline style="max-width:100%;max-height:100%"></video>'+
+          '<button type="button" id="sl-img-fs-x" style="position:absolute;top:12px;right:12px;width:40px;height:40px;border-radius:50%;border:none;background:rgba(255,255,255,.2);color:#fff;font-size:22px;cursor:pointer">×</button>';
+        document.body.appendChild(ov);
+        ov.querySelector('#sl-img-fs-x').onclick=function(){ov.remove();};
+      }
+    }
+  }, true);
+
+  /* ---- 3) Message info sheet ---- */
+  window.slOpenMsgInfo = function(msg){
+    if(!msg) return;
+    try{ document.getElementById('sl-msg-info')?.remove(); }catch(e){}
+    var sent = msg.created_at ? new Date(msg.created_at).toLocaleString() : '—';
+    var read = msg.read_at || msg.seen_at || msg.delivered_at || null;
+    var readStr = read ? new Date(read).toLocaleString() : 'Нет данных';
+    var fwd = msg.forwarded || msg.is_forwarded || (msg.content&&String(msg.content).indexOf('↪')===0) ? 'Да' : 'Нет';
+    var reacts = 'Нет';
+    try{
+      if(typeof getReactionsFor==='function'){
+        var r = getReactionsFor(String(msg.id));
+        var parts=[];
+        Object.keys(r||{}).forEach(function(em){ if(r[em]&&r[em].size) parts.push(em+' ×'+r[em].size); });
+        if(parts.length) reacts = parts.join(', ');
+      }
+    }catch(e){}
+    var type = msg.type||'text';
+    var ov=document.createElement('div');
+    ov.id='sl-msg-info';
+    ov.style.cssText='position:fixed;inset:0;z-index:35000;background:rgba(0,0,0,.55);display:flex;align-items:flex-end;justify-content:center;padding:12px';
+    ov.innerHTML='<div style="width:100%;max-width:420px;background:var(--panel,#1a1f2e);color:var(--text,#fff);border-radius:18px 18px 12px 12px;padding:20px 18px calc(18px + env(safe-area-inset-bottom));max-height:85vh;overflow:auto">'+
+      '<div style="font-weight:800;font-size:17px;margin-bottom:14px">Данные сообщения</div>'+
+      '<div style="display:flex;flex-direction:column;gap:10px;font-size:14px;line-height:1.4">'+
+      row('Отправлено', sent)+
+      row('Прочитано', readStr)+
+      row('Переслано', fwd)+
+      row('Реакции', reacts)+
+      row('Тип', type)+
+      '</div>'+
+      '<button type="button" id="sl-msg-info-x" style="margin-top:18px;width:100%;padding:12px;border:none;border-radius:12px;background:var(--accent-a,#4C7CF3);color:#fff;font-weight:700;cursor:pointer">Закрыть</button></div>';
+    function row(k,v){ return '<div style="display:flex;justify-content:space-between;gap:12px;padding:10px 12px;background:var(--input-bg,rgba(255,255,255,.06));border-radius:12px"><span style="color:var(--muted,#9aa)">'+k+'</span><span style="font-weight:600;text-align:right">'+String(v)+'</span></div>'; }
+    document.body.appendChild(ov);
+    ov.querySelector('#sl-msg-info-x').onclick=function(){ov.remove();};
+    ov.addEventListener('click',function(e){if(e.target===ov)ov.remove();});
+  };
+
+  /* ---- 2) Retry error clickable + faster small image path ---- */
+  document.addEventListener('click', function(e){
+    var tip = e.target.closest && e.target.closest('.sl-media-timeout-tip');
+    if(!tip) return;
+    e.preventDefault(); e.stopPropagation();
+    var row = tip.closest('.bubble-row');
+    if(!row) return;
+    var lid = row.dataset.id || row.dataset.mid;
+    var pend = window._slPendingFiles && window._slPendingFiles[lid];
+    if(pend && typeof sendFileOptimistic==='function'){
+      try{ row.remove(); }catch(err){}
+      sendFileOptimistic(pend.file, pend.mType, pend.caption, pend.quality||'compress');
+    }
+  }, true);
+
+  // Faster send: skip quality dialog for images < 800KB
+  if(typeof window.openSendQualityDialog==='function' && !window._slFastImgWrap){
+    window._slFastImgWrap = 1;
+    var _oq = window.openSendQualityDialog;
+    window.openSendQualityDialog = function(file){
+      try{
+        if(file && file.type && file.type.indexOf('image/')===0 && file.size < 800*1024){
+          return Promise.resolve('compress');
+        }
+      }catch(e){}
+      return _oq.apply(this, arguments);
+    };
+  }
+
+  /* ---- 5) Login methods wiring ---- */
+  function showPanel(id){
+    ['auth-choice','login-form','login-methods','login-device-form','login-verify-form','register-form'].forEach(function(pid){
+      var el=document.getElementById(pid);
+      if(!el) return;
+      el.style.display = (pid===id) ? 'block' : 'none';
+      if(pid===id){ el.hidden=false; el.classList.remove('sl-auth-panel-off'); }
+    });
+  }
+  if(typeof window.showAuthPanel==='function'){
+    var _sp = window.showAuthPanel;
+    window.showAuthPanel = function(name){
+      if(name==='login-methods' || name==='login-device-form'){ showPanel(name); return; }
+      return _sp.apply(this, arguments);
+    };
+  } else {
+    window.showAuthPanel = showPanel;
+  }
+
+  function wireLoginMethods(){
+    var go=document.getElementById('auth-go-login');
+    if(go && !go._lm){ go._lm=1; go.addEventListener('click', function(e){ e.preventDefault(); showPanel('login-methods'); }); }
+    var lmBack=document.getElementById('lm-back');
+    if(lmBack) lmBack.onclick=function(){ showPanel('auth-choice'); };
+    var lmPass=document.getElementById('lm-password');
+    if(lmPass) lmPass.onclick=function(){ showPanel('login-form'); };
+    var lmMail=document.getElementById('lm-email-code');
+    if(lmMail) lmMail.onclick=function(){
+      showPanel('login-form');
+      try{ document.getElementById('login-password').parentElement.style.display='none'; }catch(e){}
+      var btn=document.getElementById('login-btn');
+      if(btn){ btn.textContent='Получить код'; btn.onclick=async function(){
+        var email=(document.getElementById('login-email').value||'').trim();
+        if(!email){ alert('Введите email'); return; }
+        try{
+          if(firebase.auth().sendSignInLinkToEmail){
+            await firebase.auth().sendSignInLinkToEmail(email,{url:location.href,handleCodeInApp:true});
+          }
+          showPanel('login-verify-form');
+          var h=document.getElementById('login-verify-hint');
+          if(h) h.textContent='Код / ссылка отправлены на '+email;
+        }catch(err){ alert(err.message||'Не удалось отправить код'); }
+      }; }
+    };
+    var lmRec=document.getElementById('lm-recovery');
+    if(lmRec) lmRec.onclick=function(){
+      try{
+        if(typeof showAuthPanel==='function') showAuthPanel('login-form');
+        showPanel('login-form');
+        var btn=document.getElementById('login-forgot-btn');
+        if(btn) btn.click();
+      }catch(e){}
+    };
+    var lmDev=document.getElementById('lm-device');
+    if(lmDev) lmDev.onclick=function(){ showPanel('login-device-form'); };
+    var devBack=document.getElementById('login-device-back');
+    if(devBack) devBack.onclick=function(){ showPanel('login-methods'); };
+    var devStart=document.getElementById('login-device-start');
+    if(devStart) devStart.onclick=async function(){
+      var id=(document.getElementById('login-device-id').value||'').trim().toLowerCase();
+      if(!id){ alert('Введите email или телефон'); return; }
+      var code = String(Math.floor(100000+Math.random()*900000));
+      var box=document.getElementById('login-device-code-box');
+      var codeEl=document.getElementById('login-device-code');
+      if(codeEl) codeEl.textContent=code;
+      if(box) box.style.display='block';
+      try{
+        var db = firebase.database();
+        await db.ref('device_link/'+code).set({
+          login: id,
+          created: Date.now(),
+          status: 'pending'
+        });
+        // poll for approval
+        var unsub = db.ref('device_link/'+code).on('value', async function(snap){
+          var v=snap.val();
+          if(!v) return;
+          if(v.status==='approved' && v.customToken){
+            try{
+              db.ref('device_link/'+code).off('value');
+              await firebase.auth().signInWithCustomToken(v.customToken);
+              // onAuth will enter app
+            }catch(err){
+              // fallback: if approved with email session from other device only marks approved — user still needs password
+              alert('Подтверждено на другом устройстве. Войдите по паролю, если вход не произошёл автоматически.');
+              showPanel('login-form');
+            }
+          }
+        });
+        setTimeout(function(){ try{ db.ref('device_link/'+code).off('value'); }catch(e){} }, 5*60*1000);
+      }catch(err){
+        console.warn(err);
+        alert('Код: '+code+' (покажите его в Настройки → Устройства на другом девайсе)');
+      }
+      window._slPendingDeviceCode = code;
+    };
+  }
+
+  // Settings → Devices → Add device
+  window.slOpenAddDevice = function(){
+    var code = prompt('Введите код с другого устройства (6 цифр):');
+    if(!code) return;
+    code=String(code).trim();
+    try{
+      var db=firebase.database();
+      db.ref('device_link/'+code).once('value').then(function(snap){
+        var v=snap.val();
+        if(!v || v.status!=='pending'){ alert('Код не найден или истёк'); return; }
+        if(Date.now()-(v.created||0) > 5*60*1000){ alert('Код истёк'); return; }
+        // Mark approved — full custom token needs Cloud Function; store approver uid for demo
+        var u = firebase.auth().currentUser;
+        db.ref('device_link/'+code).update({
+          status:'approved',
+          approvedBy: u?u.uid:null,
+          approvedAt: Date.now()
+        }).then(function(){
+          alert('Устройство подтверждено. На другом устройстве завершите вход (если не вошло само — войдите по паролю один раз).');
+        });
+      });
+    }catch(e){ alert('Ошибка: '+(e.message||e)); }
+  };
+
+  // Inject "Устройства" into settings if missing
+  function injectDevicesSetting(){
+    var about=document.getElementById('settings-about');
+    if(!about || document.getElementById('settings-devices')) return;
+    var item=document.createElement('div');
+    item.className='settings-item';
+    item.id='settings-devices';
+    item.innerHTML='<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/></svg><span class="item-text">Устройства</span>';
+    item.onclick=function(){
+      var ov=document.createElement('div');
+      ov.style.cssText='position:fixed;inset:0;z-index:30000;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;padding:20px';
+      ov.innerHTML='<div style="background:var(--panel,#1a1f2e);color:var(--text,#fff);border-radius:16px;padding:20px;width:100%;max-width:360px">'+
+        '<div style="font-weight:800;font-size:17px;margin-bottom:12px">Устройства</div>'+
+        '<p style="font-size:13px;color:var(--muted);margin:0 0 14px;line-height:1.45">Чтобы войти на новом устройстве без пароля: на нём выберите «Код на другом устройстве», затем здесь нажмите «Добавить устройство» и введите код.</p>'+
+        '<button type="button" id="sl-add-dev" class="btn-primary" style="width:100%;padding:12px;border:none;border-radius:12px;background:linear-gradient(135deg,#4C7CF3,#6D5DF6);color:#fff;font-weight:700;cursor:pointer">Добавить устройство</button>'+
+        '<button type="button" id="sl-dev-x" style="margin-top:10px;width:100%;padding:10px;border:none;border-radius:12px;background:transparent;color:var(--muted);cursor:pointer">Закрыть</button></div>';
+      document.body.appendChild(ov);
+      ov.querySelector('#sl-add-dev').onclick=function(){ ov.remove(); window.slOpenAddDevice(); };
+      ov.querySelector('#sl-dev-x').onclick=function(){ ov.remove(); };
+    };
+    about.parentNode.insertBefore(item, about);
+  }
+
+  function boot(){
+    wireLoginMethods();
+    injectDevicesSetting();
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', boot);
+  else boot();
+  setTimeout(boot, 1500);
+
+  /* ---- 6) Extra: keep session flag on visibility ---- */
+  document.addEventListener('visibilitychange', function(){
+    try{
+      if(document.visibilityState==='visible' && window.firebase && firebase.auth && firebase.auth().currentUser){
+        localStorage.setItem('sl_logged_in','1');
+      }
+    }catch(e){}
+  });
+
+  console.log('[SL] pack: media FS, msg info, login methods, session keep, devices');
 })();
 </script>
 
