@@ -11657,11 +11657,19 @@ async function _sendMessageInner(type='text', fileUrl=null, content=null){
     }catch(e){ console.warn(e); }
   }
   const localId = 'local_'+Date.now()+'_'+Math.random().toString(36).slice(2,7);
+  // E2EE: для текста показываем plaintext; медиа/стикеры/кружки — свой type и file_url
+  var _optType = payload.type || 'text';
+  var _optContent = payload.content;
+  if(payload.type === 'encrypted' && typeof _plainUi === 'string'){
+    _optType = 'text';
+    _optContent = _plainUi;
+  }
   renderMessage({
     ...payload,
     id: localId,
-    type: 'text',
-    content: (typeof _plainUi !== 'undefined' ? _plainUi : payload.content),
+    type: _optType,
+    content: _optContent,
+    file_url: payload.file_url || fileUrl || null,
     created_at: new Date().toISOString(),
     _pending: true,
     _e2eLocal: payload.type === 'encrypted'
@@ -38038,45 +38046,32 @@ html, :root, body{
         }
 
         toast('Отправка кружка…');
-        let url = null;
         const ext = /mp4/i.test(mime) ? 'mp4' : 'webm';
+        const file = new File([blob], 'circle_' + Date.now() + '.' + ext, { type: mime });
         try{
-          const file = new File([blob], 'circle_' + Date.now() + '.' + ext, { type: mime });
-          if(typeof uploadFileToStorage === 'function'){
-            const up = await uploadFileToStorage(file, 'circles');
-            if(up && up.ok && up.url) url = up.url;
-            else console.warn('[circle] upload fail', up && up.error);
-          }
-        }catch(e){ console.warn('[circle] upload', e); }
-
-        if(!url){
-          try{
-            url = await new Promise((res, rej)=>{
-              const r = new FileReader();
-              r.onload = ()=>res(r.result);
-              r.onerror = rej;
-              r.readAsDataURL(blob);
-            });
-          }catch(e){
-            toast('Не удалось подготовить кружок');
-            chunks = [];
-            finishCircle._busy = false;
-            return;
-          }
-        }
-
-        if(typeof sendMessage === 'function'){
-          try{
-            // Bypass brief send lock if stuck
-            window._slSendLock = false;
+          window._slSendLock = false;
+          if(typeof sendFileOptimistic === 'function'){
+            await sendFileOptimistic(file, 'circle', '', 'original');
+            toast('Кружок отправлен');
+          } else if(typeof sendMessage === 'function'){
+            let url = null;
+            try{
+              if(typeof uploadFileToStorage === 'function'){
+                const up = await uploadFileToStorage(file, 'circles');
+                if(up && up.ok && up.url) url = up.url;
+              }
+            }catch(e){}
+            if(!url){
+              url = await new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(blob); });
+            }
             await sendMessage('circle', url, '');
             toast('Кружок отправлен');
-          }catch(e){
-            console.error('[circle] sendMessage', e);
-            toast('Не отправилось');
+          } else {
+            toast('sendMessage недоступен');
           }
-        } else {
-          toast('sendMessage недоступен');
+        }catch(e){
+          console.error('[circle] send', e);
+          toast('Не отправилось');
         }
       }catch(e){
         console.error('[circle] done', e);
@@ -52040,6 +52035,24 @@ img.sl-gif-img{
   max-width:none!important;
 }
 .bubble.bubble-big-emoji .big-emoji{font-size:64px;line-height:1.1}
+</style>
+<style id="sl-emoji-nobubble-v2">
+.bubble-row .bubble.bubble-big-emoji,
+.bubble.bubble-big-emoji,
+.bubble.me.bubble-big-emoji,
+.bubble.them.bubble-big-emoji{
+  background:transparent!important;
+  background-color:transparent!important;
+  background-image:none!important;
+  border:0!important;
+  box-shadow:none!important;
+  padding:2px 0!important;
+  border-radius:0!important;
+  max-width:none!important;
+  min-width:0!important;
+}
+.bubble.bubble-big-emoji .big-emoji{font-size:72px!important;line-height:1!important;display:inline-block}
+.bubble.bubble-big-emoji .bubble-time{opacity:.7;font-size:11px}
 </style>
 </body>
 </html>
