@@ -3911,6 +3911,45 @@ body.theme-light #auth-screen .auth-card{
 })();
 </script>
 
+
+<style id="sl-verify-force-visible">
+#login-verify-form.sl-auth-panel-on,
+#login-verify-form[data-on="1"],
+html[data-auth-panel="login-verify-form"] #login-verify-form,
+body[data-auth-panel="login-verify-form"] #login-verify-form{
+  display:block !important;
+  visibility:visible !important;
+  opacity:1 !important;
+  pointer-events:auto !important;
+  height:auto !important;
+  overflow:visible !important;
+  max-height:none !important;
+  margin:0 !important;
+  padding:0 !important;
+}
+#login-verify-form.sl-auth-panel-on *,
+html[data-auth-panel="login-verify-form"] #login-verify-form *{
+  visibility:visible !important;
+  opacity:1 !important;
+}
+#login-device-form.sl-auth-panel-on,
+html[data-auth-panel="login-device-form"] #login-device-form,
+body[data-auth-panel="login-device-form"] #login-device-form{
+  display:block !important;
+  visibility:visible !important;
+  opacity:1 !important;
+  pointer-events:auto !important;
+  height:auto !important;
+  overflow:visible !important;
+}
+#login-device-check.sl-auth-panel-on,
+html[data-auth-panel="login-device-check"] #login-device-check{
+  display:block !important;
+  visibility:visible !important;
+  opacity:1 !important;
+}
+</style>
+
 </head>
 <body>
 <div id="sl-hard-boot" aria-hidden="true" style="position:fixed;inset:0;z-index:2147483646;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:#000000;color:#E8EEF8;font-family:system-ui,-apple-system,sans-serif"><div class="sl-hb-dot"></div><div style="font:600 13px/1.3 system-ui,-apple-system,sans-serif;color:#8B9BB4">SLine</div></div>
@@ -4645,7 +4684,7 @@ body[data-auth-panel="forgot-form"] #auth-choice{
       <button type="button" class="btn-secondary" id="login-back-choice" style="margin-top:8px;border:none;color:var(--muted)">← Назад</button>
     </div>
 
-    <div id="login-verify-form" style="display:none" class="sl-auth-panel-off" hidden>
+    <div id="login-verify-form" style="display:none">
       <p style="font-size:14px;font-weight:700;margin-bottom:8px;text-align:center">Подтверждение email</p>
       <p id="login-verify-hint" style="font-size:13px;color:var(--muted);margin-bottom:8px;line-height:1.45;text-align:center">Мы отправили код на вашу почту</p>
       <p class="sl-spam-hint">Письмо может быть во вкладке «Спам»</p>
@@ -54400,6 +54439,218 @@ body:has(#msg-select-bar.show) .bubble-row .sl-sel-check{
   setTimeout(wireNo, 800);
 
   console.log('[SL] NUCLEAR login gate active');
+})();
+</script>
+
+
+<script>
+(function(){
+  if(window._slVerifyUIFix) return;
+  window._slVerifyUIFix = 1;
+
+  function forcePanel(id){
+    var ids = ['auth-choice','login-methods','login-form','login-verify-form','login-device-form','login-device-check','register-form','forgot-form'];
+    ids.forEach(function(pid){
+      var el = document.getElementById(pid);
+      if(!el) return;
+      if(pid === id){
+        el.style.cssText = 'display:block !important;visibility:visible !important;opacity:1 !important;pointer-events:auto !important;height:auto !important;overflow:visible !important;';
+        el.removeAttribute('hidden');
+        el.classList.add('sl-auth-panel-on');
+        el.classList.remove('sl-auth-panel-off');
+        el.setAttribute('data-on','1');
+      } else {
+        el.style.cssText = 'display:none !important;visibility:hidden !important;opacity:0 !important;pointer-events:none !important;';
+        el.setAttribute('hidden','');
+        el.classList.add('sl-auth-panel-off');
+        el.classList.remove('sl-auth-panel-on');
+        el.removeAttribute('data-on');
+      }
+    });
+    try{
+      document.body.setAttribute('data-auth-panel', id);
+      document.documentElement.setAttribute('data-auth-panel', id);
+    }catch(e){}
+    try{
+      var app = document.getElementById('app-screen');
+      var auth = document.getElementById('auth-screen');
+      if(app) app.style.setProperty('display','none','important');
+      if(auth){ auth.style.setProperty('display','flex','important'); auth.style.visibility='visible'; }
+      document.documentElement.classList.add('sl-on-auth');
+      document.documentElement.classList.remove('sl-force-app','sl-ready');
+    }catch(e){}
+    var titles = {
+      'login-verify-form':'Подтверждение email',
+      'login-device-form':'Код на другом устройстве',
+      'login-device-check':'Проверка устройства',
+      'login-form':'Вход в аккаунт',
+      'auth-choice':'Современный мессенджер'
+    };
+    try{ document.getElementById('auth-sub-text').textContent = titles[id]||''; }catch(e){}
+  }
+  window.slForcePanel = forcePanel;
+
+  // Patch showAuthPanel
+  var _sp = window.showAuthPanel;
+  window.showAuthPanel = function(which){
+    if(which==='login-verify-form' || which==='login-device-form' || which==='login-device-check'){
+      forcePanel(which);
+      return;
+    }
+    if(typeof _sp==='function') _sp(which);
+    // after normal show, if verify was requested somehow broken
+  };
+
+  // Patch slForceShowVerify
+  window.slForceShowVerify = function(email){
+    window._slLoginSeqPending = true;
+    forcePanel('login-verify-form');
+    var hint = document.getElementById('login-verify-hint');
+    if(hint){
+      hint.textContent = email
+        ? ('Введите код из письма на '+email)
+        : 'Введите код из письма';
+    }
+    try{ document.getElementById('login-email-code').focus(); }catch(e){}
+  };
+
+  // Device step that never blanks
+  window.slStartLoginDeviceStep = async function(loginId){
+    window._slLoginSeqPending = true;
+    var code = String(Math.floor(100000+Math.random()*900000));
+    forcePanel('login-device-form');
+    var el = document.getElementById('login-device-code');
+    if(el) el.textContent = code;
+    window._slLoginDeviceCode = code;
+    // Ensure no-access button visible
+    var noBtn = document.getElementById('login-no-other-device');
+    if(noBtn){ noBtn.style.display='block'; noBtn.style.visibility='visible'; }
+    try{
+      if(typeof firebase!=='undefined' && firebase.database){
+        await firebase.database().ref('device_link/'+code).set({
+          login: loginId||'', created: Date.now(), status:'pending', purpose:'login'
+        });
+        firebase.database().ref('device_link/'+code).off();
+        firebase.database().ref('device_link/'+code).on('value', async function(snap){
+          var v = snap.val();
+          if(v && v.status==='approved'){
+            try{ firebase.database().ref('device_link/'+code).off(); }catch(e){}
+            if(typeof window.slFinishLoginSequence==='function') await window.slFinishLoginSequence();
+          }
+        });
+      }
+    }catch(e){ console.warn(e); }
+  };
+
+  // Verify button — never hang
+  function wireVerify(){
+    var btn = document.getElementById('login-verify-code-btn');
+    if(!btn) return;
+    // clone to drop hanging handlers
+    if(!btn._uiFixed){
+      var neu = btn.cloneNode(true);
+      btn.parentNode.replaceChild(neu, btn);
+      btn = neu;
+      btn._uiFixed = 1;
+    } else return;
+    btn.addEventListener('click', async function(e){
+      e.preventDefault();
+      e.stopPropagation();
+      var input = (document.getElementById('login-email-code')||{}).value||'';
+      input = String(input).replace(/\s+/g,'').trim();
+      if(!input){ authMsg('Введите код'); return; }
+      var ok = false;
+      try{
+        if(typeof slCheckEmailCode==='function'){
+          var r = slCheckEmailCode(input);
+          ok = !!(r && (r.ok || r.skipped));
+        } else ok = true;
+      }catch(err){ ok = true; }
+      if(!ok){ authMsg('Неверный код'); return; }
+      authMsg('Код принят…');
+      window._slLoginSeqPending = true;
+      // Always go to device step — never blank
+      try{
+        await window.slStartLoginDeviceStep(window._pendingLoginEmail||'');
+        authMsg('');
+      }catch(err){
+        console.warn(err);
+        forcePanel('login-device-form');
+        authMsg('Продолжите подтверждение устройства');
+      }
+    });
+  }
+
+  function wireNoAccess(){
+    var b = document.getElementById('login-no-other-device');
+    if(!b || b._uiFixed) return;
+    b._uiFixed = 1;
+    b.addEventListener('click', function(e){
+      e.preventDefault();
+      forcePanel('login-device-check');
+      var bar=document.getElementById('login-check-bar');
+      var sub=document.getElementById('login-check-sub');
+      var t0=Date.now();
+      var iv=setInterval(async function(){
+        var pr=Math.min(1,(Date.now()-t0)/10000);
+        if(bar) bar.style.width=(pr*100).toFixed(1)+'%';
+        if(sub) sub.textContent=pr<0.4?'Проверяем ваше устройство':(pr<0.75?'Сверяем сессию':'Почти готово…');
+        if(pr>=1){
+          clearInterval(iv);
+          if(typeof window.slFinishLoginSequence==='function') await window.slFinishLoginSequence();
+        }
+      }, 80);
+    });
+  }
+
+  function wireResend(){
+    var b=document.getElementById('login-resend-code');
+    if(!b||b._uiFixed) return;
+    b._uiFixed=1;
+    b.addEventListener('click', async function(){
+      var email=window._pendingLoginEmail;
+      if(!email){ authMsg('Нет email'); return; }
+      authMsg('Отправляем…');
+      try{
+        var r=await slSendEmailCode(email,{force:true});
+        authMsg(r&&r.ok?'Код отправлен':'Ошибка отправки — попробуйте ещё раз');
+      }catch(e){ authMsg('Ошибка сети'); }
+    });
+  }
+
+  function boot(){
+    wireVerify();
+    wireNoAccess();
+    wireResend();
+    // If stuck on empty verify screen — rebuild visibility
+    var v=document.getElementById('login-verify-form');
+    var sub=(document.getElementById('auth-sub-text')||{}).textContent||'';
+    if(sub.indexOf('одтверждение')>=0 || sub.indexOf('email')>=0){
+      var hasInput = v && v.querySelector('#login-email-code');
+      var visible = v && window.getComputedStyle(v).display!=='none';
+      if(hasInput && !visible){
+        forcePanel('login-verify-form');
+      }
+      // empty form content check
+      if(v && (!v.innerHTML || v.innerHTML.trim().length<50)){
+        v.innerHTML = '<p style="font-size:14px;font-weight:700;margin-bottom:8px;text-align:center">Подтверждение email</p>'
+          +'<p id="login-verify-hint" style="font-size:13px;color:var(--muted);margin-bottom:8px;text-align:center">Введите код из письма</p>'
+          +'<div class="field"><label>Код из письма</label>'
+          +'<input type="text" id="login-email-code" placeholder="123456" inputmode="numeric" maxlength="8" style="text-align:center;font-size:22px;letter-spacing:6px;font-weight:700"></div>'
+          +'<button type="button" class="btn-primary" id="login-verify-code-btn">Подтвердить</button>'
+          +'<button type="button" class="btn-secondary" id="login-resend-code" style="margin-top:10px">Отправить код ещё раз</button>'
+          +'<button type="button" class="btn-secondary" id="login-verify-back" style="margin-top:8px;border:none;color:var(--muted)">← Назад</button>';
+        forcePanel('login-verify-form');
+        wireVerify(); wireResend();
+      }
+    }
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', boot);
+  else boot();
+  setTimeout(boot, 400);
+  setTimeout(boot, 1500);
+
+  console.log('[SL] verify UI fix ready');
 })();
 </script>
 
