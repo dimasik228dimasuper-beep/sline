@@ -8412,7 +8412,8 @@ window.sanitizeContactsList = sanitizeContactsList;
 
 async function loadChats(){
   const list=document.getElementById('contacts-list'); if(!list||!myProfile) return;
-  function cacheKey(){ return 'sl_contacts_cache_v2_'+(myProfile&&myProfile.id||'x'); }
+  const me=String(myProfile.id);
+  function cacheKey(){ return 'sl_contacts_cache_v2_'+me; }
   function loadCache(){
     try{
       const raw=localStorage.getItem(cacheKey());
@@ -8422,33 +8423,102 @@ async function loadChats(){
       return o.items;
     }catch(e){ return null; }
   }
+  function loadAllLocalCaches(){
+    const out=[];
+    const seen=new Set();
+    function pushArr(arr){
+      if(!Array.isArray(arr)) return;
+      arr.forEach(function(c){
+        if(!c||!c.id) return;
+        const id=String(c.id);
+        if(seen.has(id)) return;
+        seen.add(id);
+        out.push(c);
+      });
+    }
+    try{ pushArr(loadCache()); }catch(e){}
+    try{
+      for(var i=0;i<localStorage.length;i++){
+        var k=localStorage.key(i);
+        if(!k) continue;
+        if(k===cacheKey()) continue;
+        if(/^sl_contacts_cache/.test(k) || /^sl_contacts_cache_v2_/.test(k)){
+          try{
+            var raw=localStorage.getItem(k);
+            var o=JSON.parse(raw);
+            if(Array.isArray(o)) pushArr(o);
+            else if(o && Array.isArray(o.items)) pushArr(o.items);
+          }catch(e){}
+        }
+      }
+    }catch(e){}
+    // legacy plain arrays
+    try{ pushArr(JSON.parse(localStorage.getItem('sl_contacts_cache')||'null')); }catch(e){}
+    return out;
+  }
   function saveCache(items){
     try{ localStorage.setItem(cacheKey(), JSON.stringify({ts:Date.now(),items:items||[]})); }catch(e){}
   }
   window.slSaveContactsCache=function(){ try{ saveCache(contacts); }catch(e){} };
   window.slLoadContactsCache=loadCache;
 
-  // 1) Instant paint from cache
-  const cached=loadCache();
-  if(cached && cached.length){
-    contacts=cached;
+  // 1) Instant paint from ANY local cache
+  const cachedAll=loadAllLocalCaches();
+  if(cachedAll && cachedAll.length){
+    contacts=cachedAll.map(function(c){ c._dmWithMe=true; return c; });
     try{ sanitizeContactsList(); }catch(e){}
     try{ renderContactsAndGroups(); }catch(e){}
   } else {
     try{ list.innerHTML=loaderHTML(); }catch(e){}
   }
 
-  const me=String(myProfile.id);
-  const map=new Map(); // peerId -> {lastMessage,lastAt,chatKey}
+  const map=new Map(); // peerId -> {lastMessage,lastAt,chatKey,profile?}
 
+  function touchMap(peer, meta){
+    if(!peer) return;
+    peer=String(peer);
+    if(peer===me) return;
+    meta=meta||{};
+    const prev=map.get(peer);
+    if(!prev){
+      map.set(peer, {
+        lastMessage: meta.lastMessage||meta.preview||'',
+        lastAt: meta.lastAt||meta.updated||meta.created_at||null,
+        chatKey: meta.chatKey||null,
+        profile: meta.profile||null
+      });
+      return;
+    }
+    if(meta.lastAt && (!prev.lastAt || String(meta.lastAt)>String(prev.lastAt))){
+      prev.lastAt=meta.lastAt;
+      if(meta.lastMessage!=null) prev.lastMessage=meta.lastMessage;
+    } else if(!prev.lastMessage && meta.lastMessage){
+      prev.lastMessage=meta.lastMessage;
+    }
+    if(meta.chatKey) prev.chatKey=meta.chatKey;
+    if(meta.profile) prev.profile=meta.profile;
+  }
+
+  // Seed map from local caches
   try{
-    // 2) PRIMARY: user_chat_index (works with strict Firebase rules)
+    cachedAll.forEach(function(c){
+      if(!c||!c.id) return;
+      touchMap(c.id, {
+        lastMessage: c.lastMessage||'',
+        lastAt: c.lastAt||null,
+        profile: c
+      });
+    });
+  }catch(e){}
+
+  // 2) PRIMARY: user_chat_index
+  try{
     const db = window.firebaseDb || (window.firebase && firebase.database && firebase.database());
     if(db){
       const snap = await db.ref('user_chat_index/'+me).once('value');
       const idx = snap.val() || {};
       Object.keys(idx).forEach(function(k){
-        if(!k || String(k).indexOf('g_')===0) return; // groups via loadGroups
+        if(!k || String(k).indexOf('g_')===0) return;
         const meta = idx[k] || {};
         let peer = meta.peer_id || meta.peer || null;
         if(!peer){
@@ -8458,21 +8528,58 @@ async function loadChats(){
           }
         }
         if(!peer || String(peer)===me) return;
-        const lastAt = meta.lastAt || meta.updated || meta.created_at || null;
-        const lastMessage = meta.lastMessage || meta.preview || '';
-        const prev = map.get(String(peer));
-        if(!prev || (lastAt && (!prev.lastAt || String(lastAt)>String(prev.lastAt)))){
-          map.set(String(peer), { lastMessage: lastMessage, lastAt: lastAt, chatKey: k });
-        }
+        touchMap(peer, {
+          lastMessage: meta.lastMessage || meta.preview || '',
+          lastAt: meta.lastAt || meta.updated || meta.created_at || null,
+          chatKey: k
+        });
       });
     }
   }catch(e){ console.warn('[SL] loadChats index', e); }
 
-  // 3) Enrich last preview from chat_msgs (only keys we already know — no global scan)
+  // 3) my_contacts (Firebase + local)
+  try{
+    const db = window.firebaseDb || (window.firebase && firebase.database && firebase.database());
+    if(db){
+      const snap = await db.ref('my_contacts/'+me).once('value');
+      const val = snap.val();
+      if(val){
+        if(Array.isArray(val)){
+          val.forEach(function(id){ touchMap(id, {}); });
+        } else if(typeof val==='object'){
+          Object.keys(val).forEach(function(id){
+            const v=val[id];
+            if(v && typeof v==='object'){
+              touchMap(v.id||id, {
+                lastMessage: v.lastMessage||'',
+                lastAt: v.lastAt||null,
+                profile: v
+              });
+            } else {
+              touchMap(id, {});
+            }
+          });
+        }
+      }
+    }
+  }catch(e){}
+  try{
+    const raw=localStorage.getItem('sl_my_contacts_'+me)||localStorage.getItem('sl_my_contacts')||'[]';
+    const arr=JSON.parse(raw)||[];
+    (arr||[]).forEach(function(id){ touchMap(id, {}); });
+  }catch(e){}
+
+  // 4) Pinned chats
+  try{
+    const raw=localStorage.getItem('sl_pinned_chats_'+me)||localStorage.getItem('sl_pinned_chats')||'[]';
+    (JSON.parse(raw)||[]).forEach(function(id){ touchMap(id, {}); });
+  }catch(e){}
+
+  // 5) Enrich previews from chat_msgs for known peers + backfill index
   try{
     const db = window.firebaseDb || (window.firebase && firebase.database && firebase.database());
     if(db && map.size){
-      const peers = Array.from(map.keys()).slice(0, 40);
+      const peers = Array.from(map.keys()).slice(0, 80);
       await Promise.all(peers.map(async function(peer){
         try{
           const key = (typeof dmPairKey==='function')
@@ -8486,59 +8593,86 @@ async function loadChats(){
           const m = msgs[msgs.length-1];
           if(!m) return;
           var _pv=(typeof slMsgPreview==='function'?slMsgPreview(m):(m.content||''));
-          map.set(String(peer), {
-            lastMessage: _pv,
-            lastAt: m.created_at || map.get(String(peer)).lastAt,
-            chatKey: key
-          });
+          touchMap(peer, { lastMessage:_pv, lastAt:m.created_at, chatKey:key });
+          // backfill own index so list survives reloads
+          try{
+            await db.ref('user_chat_index/'+me+'/'+key).update({
+              lastAt: m.created_at || new Date().toISOString(),
+              lastMessage: String(_pv).slice(0,120),
+              updated: Date.now(),
+              chatKey: key,
+              peer_id: String(peer)
+            });
+          }catch(eBF){}
         }catch(err){}
       }));
     }
   }catch(e){ console.warn('[SL] loadChats chat_msgs', e); }
 
   // Always include self (Избранное)
-  if(!map.has(me)) map.set(me, { lastMessage:'Заметки', lastAt:new Date(0).toISOString(), chatKey: null });
+  // (added later in build)
 
   try{
     const ids = Array.from(map.keys());
+    // always ensure self in list
+    if(!ids.includes(me)) ids.unshift(me);
+
     let profiles = [];
-    // Load profiles one-by-one / small batches (rules allow auth read on profiles)
+    const byId = new Map();
+
+    // Batch via sb
     try{
       if(typeof sb!=='undefined' && sb && ids.length){
-        const {data:prs}=await sb.from('profiles').select('id,username,username2,first_name,last_name,avatar_url,color,email,phone').in('id', ids);
-        profiles = prs || [];
-      }
-    }catch(e1){
-      // Fallback: Firebase direct
-      try{
-        const db = window.firebaseDb || (window.firebase && firebase.database && firebase.database());
-        if(db){
-          for(const id of ids.slice(0,60)){
-            try{
-              const s = await db.ref('tables/profiles/'+id).once('value');
-              const p = s.val();
-              if(p){ p.id = p.id || id; profiles.push(p); }
-            }catch(e2){}
-          }
+        // chunk in 30s
+        for(let i=0;i<ids.length;i+=30){
+          const chunk=ids.slice(i,i+30);
+          try{
+            const {data:prs}=await sb.from('profiles').select('id,username,username2,first_name,last_name,avatar_url,color,email,phone').in('id', chunk);
+            (prs||[]).forEach(function(p){ byId.set(String(p.id), p); });
+          }catch(eC){}
         }
-      }catch(e3){}
-    }
+      }
+    }catch(e1){}
 
-    const byId = new Map(profiles.map(function(p){ return [String(p.id), p]; }));
+    // Fill missing via Firebase direct
+    try{
+      const db = window.firebaseDb || (window.firebase && firebase.database && firebase.database());
+      if(db){
+        const missing = ids.filter(function(id){ return !byId.has(String(id)); }).slice(0,60);
+        await Promise.all(missing.map(async function(id){
+          try{
+            const s = await db.ref('tables/profiles/'+id).once('value');
+            const p = s.val();
+            if(p){ p.id = p.id || id; byId.set(String(id), p); }
+          }catch(e2){}
+        }));
+      }
+    }catch(e3){}
+
+    // seed from cache profiles
+    try{
+      cachedAll.forEach(function(c){
+        if(c&&c.id&&!byId.has(String(c.id))) byId.set(String(c.id), c);
+      });
+    }catch(e){}
+
     const next = [];
     ids.forEach(function(id){
-      const meta = map.get(String(id)) || {};
-      const p = byId.get(String(id));
-      if(p){
-        next.push(Object.assign({}, p, {
-          lastMessage: meta.lastMessage || '',
-          lastAt: meta.lastAt || null,
-          _dmWithMe: true
-        }));
-      } else if(String(id)===me){
+      if(String(id)===me){
         next.push(Object.assign({}, myProfile, {
           lastMessage: 'Заметки',
           lastAt: new Date(0).toISOString(),
+          _dmWithMe: true
+        }));
+        return;
+      }
+      const meta = map.get(String(id)) || {};
+      const p = byId.get(String(id)) || meta.profile;
+      if(p){
+        next.push(Object.assign({}, p, {
+          id: p.id || id,
+          lastMessage: meta.lastMessage || p.lastMessage || '',
+          lastAt: meta.lastAt || p.lastAt || null,
           _dmWithMe: true
         }));
       } else {
@@ -8552,22 +8686,34 @@ async function loadChats(){
         });
       }
     });
-    // sort by lastAt desc
+
     next.sort(function(a,b){
+      if(String(a.id)===me) return 1;
+      if(String(b.id)===me) return -1;
       return String(b.lastAt||'').localeCompare(String(a.lastAt||''));
     });
-    // ensure self first-ish or present
-    if(!next.some(function(c){ return c && String(c.id)===me; })){
-      next.unshift(Object.assign({}, myProfile, { lastMessage:'Заметки', lastAt:new Date(0).toISOString(), _dmWithMe:true }));
-    }
+
+    // Merge with previous contacts so we never drop something we already showed
+    try{
+      const have=new Set(next.map(function(c){ return String(c.id); }));
+      (contacts||[]).forEach(function(c){
+        if(!c||!c.id) return;
+        if(have.has(String(c.id))) return;
+        c._dmWithMe=true;
+        next.push(c);
+        have.add(String(c.id));
+      });
+    }catch(e){}
+
     contacts = next;
     try{ sanitizeContactsList(); }catch(e){}
     saveCache(contacts);
     renderContactsAndGroups();
+    console.log('[SL] loadChats done', contacts.length);
   }catch(e){
     console.warn('[SL] loadChats build', e);
     if(!contacts||!contacts.length){
-      const c2=loadCache();
+      const c2=loadAllLocalCaches();
       if(c2&&c2.length){ contacts=c2; renderContactsAndGroups(); }
       else {
         contacts=[{...myProfile,lastMessage:'Заметки',lastAt:new Date(0).toISOString(),_dmWithMe:true}];
