@@ -1,142 +1,136 @@
-/* SLine Service Worker — closed PWA notifications + shell cache */
-const CACHE = 'sline-shell-v3';
-const SHELL = ['./', './index.html', './sw.js'];
+/* SLine PWA Service Worker — background notifications + offline shell */
+const CACHE = 'sline-pwa-v3';
+const PRECACHE = [];
 
-self.addEventListener('install', (e) => {
+self.addEventListener('install', (event) => {
   self.skipWaiting();
-  e.waitUntil(
-    caches.open(CACHE).then((c) => c.addAll(SHELL).catch(() => {})).catch(() => {})
+  event.waitUntil(
+    caches.open(CACHE).then((cache) => {
+      if (PRECACHE.length) return cache.addAll(PRECACHE);
+    }).catch(function(){})
   );
 });
 
-self.addEventListener('activate', (e) => {
-  e.waitUntil((async () => {
-    try {
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    (async () => {
       const keys = await caches.keys();
-      await Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)));
-    } catch (err) {}
-    try { await self.clients.claim(); } catch (err) {}
-  })());
-});
-
-function notifOpts(o) {
-  o = o || {};
-  const opts = {
-    body: o.body || '',
-    tag: o.tag || ('sl-' + Date.now()),
-    renotify: true,
-    silent: false,
-    requireInteraction: o.requireInteraction !== false,
-    data: o.data || { url: './' }
-  };
-  if (o.icon && /^https?:\/\//i.test(o.icon)) opts.icon = o.icon;
-  if (o.badge && /^https?:\/\//i.test(o.badge)) opts.badge = o.badge;
-  if (Array.isArray(o.vibrate)) opts.vibrate = o.vibrate;
-  else opts.vibrate = [300, 100, 300, 100, 300];
-  try {
-    opts.actions = [{ action: 'open', title: 'Открыть' }];
-  } catch (e) {}
-  return opts;
-}
-
-self.addEventListener('notificationclick', (e) => {
-  e.notification.close();
-  const data = (e.notification && e.notification.data) || {};
-  const url = data.url || './';
-  e.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
-      for (const c of list) {
-        try {
-          if ('focus' in c) {
-            try { c.postMessage({ type: 'sl-notification-click', data }); } catch (err) {}
-            return c.focus();
-          }
-        } catch (err) {}
-      }
-      if (clients.openWindow) return clients.openWindow(url);
-    })
+      await Promise.all(keys.map((k) => (k === CACHE ? null : caches.delete(k))));
+      await self.clients.claim();
+    })()
   );
 });
 
-self.addEventListener('push', (e) => {
-  let data = { title: 'SLine', body: 'Новое сообщение', urgent: false, tag: 'sl-push', url: './' };
-  try {
-    if (e.data) data = Object.assign(data, e.data.json());
-  } catch (err) {
-    try { data.body = e.data.text(); } catch (e2) {}
-  }
-  // Never show ciphertext in notification body
-  if (typeof data.body === 'string' && /^e2e:(v1|sig):/i.test(data.body.trim())) {
-    data.body = '🔒 Зашифрованное сообщение';
-  }
-  e.waitUntil(
-    self.registration.showNotification(data.title || 'SLine', notifOpts({
-      body: data.body || '',
-      tag: data.tag || 'sl-push',
-      requireInteraction: true,
-      vibrate: data.urgent ? [400, 150, 400, 150, 400] : [300, 100, 300],
-      icon: data.icon,
-      badge: data.badge,
-      data: { url: data.url || './', mid: data.mid, peerId: data.peerId }
-    }))
-  );
-});
-
-self.addEventListener('message', (e) => {
-  const msg = e.data || {};
-  if (msg.type === 'sl-show-notification') {
-    const o = msg.options || {};
-    let body = o.body || '';
-    if (typeof body === 'string' && /^e2e:(v1|sig):/i.test(body.trim())) {
-      body = '🔒 Зашифрованное сообщение';
-    }
-    e.waitUntil(
-      self.registration.showNotification(msg.title || 'SLine', notifOpts({
-        body: body,
-        tag: o.tag || 'sl-local',
-        requireInteraction: o.requireInteraction !== false,
-        data: o.data || { url: './' },
-        icon: o.icon,
-        badge: o.badge,
-        vibrate: o.vibrate
-      }))
-        .then(() => { if (e.ports && e.ports[0]) e.ports[0].postMessage({ ok: true }); })
-        .catch((err) => { if (e.ports && e.ports[0]) e.ports[0].postMessage({ ok: false, error: String(err) }); })
-    );
-  }
-  if (msg.type === 'sl-ping') {
-    if (e.ports && e.ports[0]) e.ports[0].postMessage({ ok: true, sw: true });
-  }
-  if (msg.type === 'sl-skip-waiting') {
-    self.skipWaiting();
-  }
-});
-
-// Network-first for HTML; cache-first for same-origin static
-self.addEventListener('fetch', (e) => {
-  const req = e.request;
+/* Network-first for navigations; cache fallback */
+self.addEventListener('fetch', (event) => {
+  const req = event.request;
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
 
-  if (req.mode === 'navigate' || url.pathname.endsWith('.html') || url.pathname === '/' || url.pathname.endsWith('/')) {
-    e.respondWith(
+  if (req.mode === 'navigate' || (req.headers.get('accept') || '').includes('text/html')) {
+    event.respondWith(
       fetch(req).then((res) => {
         const copy = res.clone();
-        caches.open(CACHE).then((c) => c.put(req, copy)).catch(() => {});
+        caches.open(CACHE).then((c) => c.put(req, copy)).catch(function(){});
         return res;
-      }).catch(() => caches.match(req).then((r) => r || caches.match('./index.html')))
+      }).catch(() => caches.match(req).then((r) => r || caches.match('./') || caches.match('/')))
     );
     return;
   }
+});
 
-  if (/\.(js|css|png|jpg|jpeg|svg|webp|woff2?)$/i.test(url.pathname)) {
-    e.respondWith(
-      caches.match(req).then((cached) => cached || fetch(req).then((res) => {
-        const copy = res.clone();
-        caches.open(CACHE).then((c) => c.put(req, copy)).catch(() => {});
-        return res;
-      }))
-    );
+function parsePushData(event) {
+  let data = { title: 'SLine', body: '', tag: 'sline', url: './', icon: null, badge: null };
+  try {
+    if (event.data) {
+      const json = event.data.json();
+      if (json) {
+        data.title = json.title || json.notification?.title || data.title;
+        data.body = json.body || json.notification?.body || json.message || '';
+        data.tag = json.tag || json.notification?.tag || data.tag;
+        data.url = json.url || json.link || json.click_action || './';
+        data.icon = json.icon || json.notification?.icon || null;
+        data.badge = json.badge || null;
+        data.data = json.data || json;
+      }
+    }
+  } catch (e) {
+    try {
+      const t = event.data && event.data.text();
+      if (t) data.body = t;
+    } catch (e2) {}
+  }
+  return data;
+}
+
+/* Web Push — works when PWA is minimized / browser in background */
+self.addEventListener('push', (event) => {
+  const data = parsePushData(event);
+  const title = String(data.title || 'SLine').slice(0, 120);
+  const options = {
+    body: String(data.body || '').slice(0, 400),
+    tag: data.tag || 'sline',
+    renotify: true,
+    requireInteraction: false,
+    silent: false,
+    data: {
+      url: data.url || './',
+      ...(data.data || {})
+    },
+    icon: data.icon || undefined,
+    badge: data.badge || undefined,
+    vibrate: [80, 40, 80]
+  };
+  event.waitUntil(
+    self.registration.showNotification(title, options)
+  );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const target = (event.notification.data && event.notification.data.url) || './';
+  event.waitUntil(
+    (async () => {
+      const all = await clients.matchAll({ type: 'window', includeUncontrolled: true });
+      for (const client of all) {
+        try {
+          if ('focus' in client) {
+            await client.focus();
+            if (client.navigate) {
+              try { await client.navigate(target); } catch (e) {}
+            }
+            try {
+              client.postMessage({ type: 'SL_NOTIFICATION_CLICK', url: target, data: event.notification.data });
+            } catch (e) {}
+            return;
+          }
+        } catch (e) {}
+      }
+      if (clients.openWindow) {
+        await clients.openWindow(target);
+      }
+    })()
+  );
+});
+
+self.addEventListener('notificationclose', () => {});
+
+/* Messages from page: show local notification when tab is backgrounded */
+self.addEventListener('message', (event) => {
+  const msg = event.data || {};
+  if (msg.type === 'SL_SHOW_NOTIFICATION') {
+    const title = String(msg.title || 'SLine').slice(0, 120);
+    const options = {
+      body: String(msg.body || '').slice(0, 400),
+      tag: msg.tag || 'sline-local',
+      renotify: true,
+      data: { url: msg.url || './', ...(msg.data || {}) },
+      vibrate: [60, 30, 60]
+    };
+    event.waitUntil(self.registration.showNotification(title, options));
+  }
+  if (msg.type === 'SKIP_WAITING') {
+    self.skipWaiting();
   }
 });
