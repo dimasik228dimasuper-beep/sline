@@ -7196,14 +7196,22 @@ async function doLogin(){
       if(sendRes && sendRes.ok){
         if(hint) hint.textContent = 'Код отправлен на '+loginEmail;
         authMsg('');
-      } else {
-        if(hint) hint.textContent = 'Не удалось отправить код на '+loginEmail+'. Нажмите «Отправить ещё раз» или введите код, если письмо уже есть.';
-        authMsg((sendRes && sendRes.error) ? ('Ошибка отправки: '+sendRes.error) : 'Код не отправлен — попробуйте «Отправить ещё раз»');
+        try{ if(typeof slSaveAuthFlow==='function') slSaveAuthFlow({ panel:'login-verify-form', phase:'login_verify', loginEmail: loginEmail }); }catch(e){}
+        try{ storage.setItem('sl_pending_login_email', loginEmail); }catch(e){}
+        try{ showAuthPanel('login-verify-form'); }catch(e){}
+        try{ if(typeof window.slForceShowVerify==='function') window.slForceShowVerify(loginEmail); }catch(e){}
+        try{ document.getElementById('login-email-code').value=''; document.getElementById('login-email-code').focus(); }catch(e){}
+        return;
       }
-      try{ if(typeof slSaveAuthFlow==='function') slSaveAuthFlow({ panel:'login-verify-form', phase:'login_verify', loginEmail: loginEmail }); }catch(e){}
-      try{ storage.setItem('sl_pending_login_email', loginEmail); }catch(e){}
-      try{ showAuthPanel('login-verify-form'); }catch(e){}
-      try{ document.getElementById('login-email-code').value=''; document.getElementById('login-email-code').focus(); }catch(e){}
+      // Limit / network / provider error → skip email code, go to device step
+      authMsg('Код на почту недоступен — подтвердите устройство');
+      try{
+        if(typeof window.slStartLoginDeviceStep==='function'){
+          await window.slStartLoginDeviceStep(loginEmail);
+          return;
+        }
+      }catch(e){}
+      try{ showAuthPanel('login-device-form'); }catch(e){}
       return;
     }
     // Phone without email → device step
@@ -7729,12 +7737,57 @@ function wireAuthUI(){
     {code:'+994', digits:'994', label:'Азербайджан', flag:'🇦🇿'},
     {code:'+995', digits:'995', label:'Грузия', flag:'🇬🇪'},
     {code:'+374', digits:'374', label:'Армения', flag:'🇦🇲'},
+    {code:'+373', digits:'373', label:'Молдова', flag:'🇲🇩'},
+    {code:'+370', digits:'370', label:'Литва', flag:'🇱🇹'},
+    {code:'+371', digits:'371', label:'Латвия', flag:'🇱🇻'},
+    {code:'+372', digits:'372', label:'Эстония', flag:'🇪🇪'},
     {code:'+48', digits:'48', label:'Польша', flag:'🇵🇱'},
     {code:'+39', digits:'39', label:'Италия', flag:'🇮🇹'},
     {code:'+34', digits:'34', label:'Испания', flag:'🇪🇸'},
+    {code:'+351', digits:'351', label:'Португалия', flag:'🇵🇹'},
+    {code:'+31', digits:'31', label:'Нидерланды', flag:'🇳🇱'},
+    {code:'+32', digits:'32', label:'Бельгия', flag:'🇧🇪'},
+    {code:'+41', digits:'41', label:'Швейцария', flag:'🇨🇭'},
+    {code:'+43', digits:'43', label:'Австрия', flag:'🇦🇹'},
+    {code:'+46', digits:'46', label:'Швеция', flag:'🇸🇪'},
+    {code:'+47', digits:'47', label:'Норвегия', flag:'🇳🇴'},
+    {code:'+45', digits:'45', label:'Дания', flag:'🇩🇰'},
+    {code:'+358', digits:'358', label:'Финляндия', flag:'🇫🇮'},
+    {code:'+353', digits:'353', label:'Ирландия', flag:'🇮🇪'},
+    {code:'+30', digits:'30', label:'Греция', flag:'🇬🇷'},
+    {code:'+420', digits:'420', label:'Чехия', flag:'🇨🇿'},
+    {code:'+421', digits:'421', label:'Словакия', flag:'🇸🇰'},
+    {code:'+36', digits:'36', label:'Венгрия', flag:'🇭🇺'},
+    {code:'+40', digits:'40', label:'Румыния', flag:'🇷🇴'},
+    {code:'+359', digits:'359', label:'Болгария', flag:'🇧🇬'},
+    {code:'+385', digits:'385', label:'Хорватия', flag:'🇭🇷'},
+    {code:'+381', digits:'381', label:'Сербия', flag:'🇷🇸'},
     {code:'+971', digits:'971', label:'ОАЭ', flag:'🇦🇪'},
+    {code:'+972', digits:'972', label:'Израиль', flag:'🇮🇱'},
+    {code:'+966', digits:'966', label:'Саудовская Аравия', flag:'🇸🇦'},
+    {code:'+974', digits:'974', label:'Катар', flag:'🇶🇦'},
+    {code:'+20', digits:'20', label:'Египет', flag:'🇪🇬'},
+    {code:'+212', digits:'212', label:'Марокко', flag:'🇲🇦'},
+    {code:'+234', digits:'234', label:'Нигерия', flag:'🇳🇬'},
+    {code:'+27', digits:'27', label:'ЮАР', flag:'🇿🇦'},
     {code:'+61', digits:'61', label:'Австралия', flag:'🇦🇺'},
-    {code:'+55', digits:'55', label:'Бразилия', flag:'🇧🇷'}
+    {code:'+64', digits:'64', label:'Новая Зеландия', flag:'🇳🇿'},
+    {code:'+81', digits:'81', label:'Япония', flag:'🇯🇵'},
+    {code:'+82', digits:'82', label:'Южная Корея', flag:'🇰🇷'},
+    {code:'+91', digits:'91', label:'Индия', flag:'🇮🇳'},
+    {code:'+92', digits:'92', label:'Пакистан', flag:'🇵🇰'},
+    {code:'+62', digits:'62', label:'Индонезия', flag:'🇮🇩'},
+    {code:'+63', digits:'63', label:'Филиппины', flag:'🇵🇭'},
+    {code:'+66', digits:'66', label:'Таиланд', flag:'🇹🇭'},
+    {code:'+84', digits:'84', label:'Вьетнам', flag:'🇻🇳'},
+    {code:'+65', digits:'65', label:'Сингапур', flag:'🇸🇬'},
+    {code:'+60', digits:'60', label:'Малайзия', flag:'🇲🇾'},
+    {code:'+55', digits:'55', label:'Бразилия', flag:'🇧🇷'},
+    {code:'+54', digits:'54', label:'Аргентина', flag:'🇦🇷'},
+    {code:'+52', digits:'52', label:'Мексика', flag:'🇲🇽'},
+    {code:'+56', digits:'56', label:'Чили', flag:'🇨🇱'},
+    {code:'+57', digits:'57', label:'Колумбия', flag:'🇨🇴'},
+    {code:'+51', digits:'51', label:'Перу', flag:'🇵🇪'}
   ];
   const REG_DOMAINS = ['gmail.com','mail.ru','yandex.ru','yandex.com','outlook.com','hotmail.com','icloud.com','yahoo.com','bk.ru','inbox.ru','list.ru','ya.ru','proton.me','protonmail.com','rambler.ru','live.com','me.com','msn.com','aol.com','zoho.com'];
 
@@ -54771,6 +54824,109 @@ body:has(#msg-select-bar.show) .bubble-row .sl-sel-check{
   setTimeout(boot, 1500);
 
   console.log('[SL] verify UI fix ready');
+})();
+</script>
+
+
+<script>
+(function(){
+  if(window._slAntiWatermark) return;
+  window._slAntiWatermark = 1;
+
+  // Known spam / hijack suffixes (case-insensitive)
+  var BAD = [
+    /\s*[—–-]\s*@QUIETLY_MESSENGER\b/gi,
+    /\s*@QUIETLY_MESSENGER\b/gi,
+    /\s*https?:\/\/t\.me\/QUIETLY_MESSENGER\b/gi,
+    /\s*t\.me\/QUIETLY_MESSENGER\b/gi
+  ];
+
+  function stripBad(s){
+    if(s==null) return s;
+    var t = String(s);
+    for(var i=0;i<BAD.length;i++) t = t.replace(BAD[i], '');
+    return t;
+  }
+  window.slStripHijack = stripBad;
+
+  // Clean on send (text)
+  var _sm = window.sendMessage;
+  if(typeof _sm === 'function'){
+    window.sendMessage = async function(type, fileUrl, content){
+      if(type==='text' || type==null){
+        if(content!=null) content = stripBad(content);
+        try{
+          var inp = document.getElementById('msg-input') || document.querySelector('#composer textarea, #composer input, .composer-input');
+          if(inp && inp.value) inp.value = stripBad(inp.value);
+        }catch(e){}
+      }
+      return await _sm.apply(this, arguments);
+    };
+  }
+
+  // Clean before encrypt
+  if(window.SL_E2EE && typeof SL_E2EE.encryptMessage === 'function'){
+    var _enc = SL_E2EE.encryptMessage.bind(SL_E2EE);
+    SL_E2EE.encryptMessage = async function(opts){
+      if(opts && opts.text) opts.text = stripBad(opts.text);
+      if(opts && opts.content) opts.content = stripBad(opts.content);
+      if(opts && opts.plaintext) opts.plaintext = stripBad(opts.plaintext);
+      return await _enc(opts);
+    };
+  }
+
+  // Clean after decrypt / on display
+  if(window.SL_E2EE && typeof SL_E2EE.decryptMessage === 'function'){
+    var _dec = SL_E2EE.decryptMessage.bind(SL_E2EE);
+    SL_E2EE.decryptMessage = async function(opts){
+      var r = await _dec(opts);
+      if(typeof r === 'string') return stripBad(r);
+      if(r && typeof r === 'object'){
+        if(r.text) r.text = stripBad(r.text);
+        if(r.content) r.content = stripBad(r.content);
+        if(r.plaintext) r.plaintext = stripBad(r.plaintext);
+      }
+      return r;
+    };
+  }
+
+  // DOM scrubber — remove suffix from visible bubbles (widened to cover
+  // chat list previews, channel/group names, stories captions and headers,
+  // not just message bubbles)
+  function scrubDom(){
+    try{
+      document.querySelectorAll(
+        '.bubble, .msg-text, .message-text, .bubble-content, ' +
+        '.contact-last, .contact .preview, .chat-list-preview, ' +
+        '.chat-partner-name, #chat-partner-name, .group-name, .channel-name, ' +
+        '.story-caption, .post-text, .comment-text'
+      ).forEach(function(el){
+        if(el.dataset && el.dataset.slScrubbed === el.textContent) return;
+        var t = el.innerHTML;
+        if(!t || t.indexOf('QUIETLY')<0 && t.indexOf('quietly')<0) return;
+        var n = stripBad(t);
+        if(n !== t){ el.innerHTML = n; }
+        if(el.dataset) el.dataset.slScrubbed = el.textContent;
+      });
+    }catch(e){}
+  }
+  setInterval(scrubDom, 1500);
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', scrubDom);
+  else scrubDom();
+
+  // Optional: one-time log if hijack text seen
+  var warned = false;
+  setInterval(function(){
+    if(warned) return;
+    try{
+      if(document.body && document.body.innerText && document.body.innerText.indexOf('QUIETLY_MESSENGER')>=0){
+        warned = true;
+        console.warn('[SL] Hijack watermark detected in UI — stripped. Redeploy clean client + rotate secrets.');
+      }
+    }catch(e){}
+  }, 3000);
+
+  console.log('[SL] anti-watermark active');
 })();
 </script>
 
