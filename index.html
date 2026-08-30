@@ -17223,9 +17223,9 @@ window.slOpenAddContact = function(profile, profileSheet){
 };
 
 async function searchProfilesSafe(q, excludeId, limit, fields){
-  fields = fields || ['username','email','phone','first_name','last_name'];
+  fields = fields || ['username','username2','email','phone','first_name','last_name'];
   q = String(q||'').trim().replace(/^@+/, '');
-  limit = limit || 12;
+  limit = limit || 20;
   excludeId = excludeId != null ? String(excludeId) : null;
   if(!q) return {data:[], error:null};
   const byId = new Map();
@@ -17236,30 +17236,57 @@ async function searchProfilesSafe(q, excludeId, limit, fields){
   };
   const ql = q.toLowerCase();
   const endPrefix = q + String.fromCharCode(0xf8ff);
+  const endPrefixL = ql + String.fromCharCode(0xf8ff);
 
-  // A) Indexed RTDB: exact + prefix on username
+  // A) Indexed RTDB: username + username2 exact and prefix
   try{
     const db = window.firebaseDb || (typeof _fbDb!=='undefined' ? _fbDb : null);
     if(db){
       const ref = db.ref('tables/profiles');
-      try{
-        const snap = await ref.orderByChild('username').equalTo(q).limitToFirst(limit).once('value');
-        snap.forEach(ch=>{ const v=ch.val(); if(v) push(Object.assign({id:ch.key}, v)); });
-      }catch(e){}
-      if(!byId.size){
+      const tries = [
+        ['username', q], ['username', ql],
+        ['username2', q], ['username2', ql]
+      ];
+      for(const [field, val] of tries){
         try{
-          const snap = await ref.orderByChild('username').equalTo(ql).limitToFirst(limit).once('value');
+          const snap = await ref.orderByChild(field).equalTo(val).limitToFirst(limit).once('value');
           snap.forEach(ch=>{ const v=ch.val(); if(v) push(Object.assign({id:ch.key}, v)); });
         }catch(e){}
       }
+      for(const field of ['username','username2']){
+        try{
+          const snap = await ref.orderByChild(field).startAt(ql).endAt(endPrefixL).limitToFirst(limit).once('value');
+          snap.forEach(ch=>{ const v=ch.val(); if(v) push(Object.assign({id:ch.key}, v)); });
+        }catch(e){}
+        try{
+          const snap = await ref.orderByChild(field).startAt(q).endAt(endPrefix).limitToFirst(limit).once('value');
+          snap.forEach(ch=>{ const v=ch.val(); if(v) push(Object.assign({id:ch.key}, v)); });
+        }catch(e){}
+      }
+      // phone exact digits
       try{
-        const snap = await ref.orderByChild('username').startAt(q).endAt(endPrefix).limitToFirst(limit).once('value');
-        snap.forEach(ch=>{ const v=ch.val(); if(v) push(Object.assign({id:ch.key}, v)); });
+        const dig = q.replace(/\D/g,'');
+        if(dig.length >= 6){
+          const variants = [dig, '+'+dig, dig.replace(/^8/,'7'), '+7'+dig.slice(-10)];
+          for(const ph of variants){
+            try{
+              const snap = await ref.orderByChild('phone').equalTo(ph).limitToFirst(5).once('value');
+              snap.forEach(ch=>{ const v=ch.val(); if(v) push(Object.assign({id:ch.key}, v)); });
+            }catch(e){}
+          }
+        }
       }catch(e){}
+      // email exact
+      if(q.indexOf('@')>=0){
+        try{
+          const snap = await ref.orderByChild('email').equalTo(ql).limitToFirst(5).once('value');
+          snap.forEach(ch=>{ const v=ch.val(); if(v) push(Object.assign({id:ch.key}, v)); });
+        }catch(e){}
+      }
     }
   }catch(e){}
 
-  // B) Shim or(ilike) full-scan filter
+  // B) Shim or(ilike) 
   try{
     let attempt = [...fields];
     for(let guard=0; guard<fields.length+1; guard++){
@@ -17278,34 +17305,27 @@ async function searchProfilesSafe(q, excludeId, limit, fields){
     }
   }catch(e){}
 
-  // C) Fallback: scan up to 500 profiles client-side
-  if(byId.size < 3){
+  // C) Fallback: wider client scan
+  if(byId.size < 5){
     try{
       const db = window.firebaseDb || (typeof _fbDb!=='undefined' ? _fbDb : null);
       if(db){
-        const snap = await db.ref('tables/profiles').limitToFirst(500).once('value');
-        snap.forEach(ch=>{
-          const v = ch.val(); if(!v || typeof v!=='object') return;
-          const blob = [v.username,v.first_name,v.last_name,v.email,v.phone].map(x=>String(x||'').toLowerCase()).join(' ');
-          if(blob.indexOf(ql)!==-1) push(Object.assign({id:ch.key}, v));
+        const snap = await db.ref('tables/profiles').limitToFirst(1500).once('value');
+        const val = snap.val()||{};
+        Object.keys(val).forEach(function(id){
+          if(byId.size >= limit) return;
+          const p = val[id]; if(!p) return;
+          const hay = [p.username,p.username2,p.email,p.phone,p.first_name,p.last_name].map(function(x){ return String(x||'').toLowerCase(); }).join(' ');
+          if(hay.indexOf(ql) >= 0) push(Object.assign({id:id}, p));
         });
       }
     }catch(e){}
   }
 
-  let rows = Array.from(byId.values());
-  rows.sort((a,b)=>{
-    const ae = String(a.username||'').toLowerCase()===ql ? 0 : 1;
-    const be = String(b.username||'').toLowerCase()===ql ? 0 : 1;
-    return ae-be;
-  });
-  return {data: rows.slice(0, limit), error:null};
+  return { data: Array.from(byId.values()).slice(0, limit), error: null };
 }
 
-// ---------- Verified badge ----------
-const VERIFIED_EMAILS=['admin@mail.ru','dimasik.228.dima.super@gmail.com'];
-const VERIFIED_USERNAMES=['son'];
-const verifiedSvg='<span class="verified-badge" title="Подтверждённый аккаунт" aria-label="verified"><svg viewBox="0 0 22 22" width="16" height="16" xmlns="http://www.w3.org/2000/svg"><circle cx="11" cy="11" r="11" fill="#4C7CF3"/><path d="M6.2 11.2l2.8 2.8 6.2-6.2" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>';
+
 function verifiedBadgeIf(email, username){
   if(email && typeof email==='object'){
     username = email.username || email.user_name || username;
@@ -55869,7 +55889,7 @@ body:has(#msg-select-bar.show) .bubble-row .sl-sel-check{
       ['+82','KR'],['+84','VN'],['+66','TH'],['+62','ID'],['+60','MY'],['+65','SG'],['+63','PH'],['+61','AU'],['+64','NZ'],['+55','BR'],
       ['+54','AR'],['+52','MX'],['+57','CO'],['+56','CL'],['+27','ZA'],['+20','EG'],['+234','NG'],['+254','KE'],['+212','MA'],['+358','FI'],
       ['+46','SE'],['+47','NO'],['+45','DK'],['+31','NL'],['+32','BE'],['+41','CH'],['+43','AT'],['+351','PT'],['+30','GR'],['+359','BG'],
-      ['+370','LT'],['+371','LV'],['+372','EE'],['+373','MD'],['+381','RS'],['+385','HR'],['+386','SI'],['+421','SK'],['+353','IE'],['+352','LU']
+      ['+370','LT · Литва'],['+371','LV · Латвия'],['+372','EE · Эстония'],['+373','MD'],['+374','AM'],['+375','BY'],['+380','UA'],['+381','RS'],['+385','HR'],['+386','SI'],['+420','CZ'],['+421','SK'],['+353','IE'],['+352','LU'],['+358','FI'],['+46','SE'],['+47','NO'],['+45','DK'],['+48','PL']
     ];
     var have={};
     Array.from(sel.options).forEach(function(o){ have[o.value]=1; });
@@ -57869,6 +57889,105 @@ body:has(#msg-select-bar.show) .bubble-row .sl-sel-check{
   }, 45000);
 
   console.log('[SL] stories smooth + robust viewer');
+})();
+</script>
+
+
+<script>
+(function(){
+  if(window._slMigrateChats) return;
+  window._slMigrateChats = 1;
+
+  async function migrateMyChatsFromMessages(){
+    try{
+      if(!myProfile||!myProfile.id) return 0;
+      const me = String(myProfile.id);
+      const db = window.firebaseDb || (window.firebase && firebase.database && firebase.database());
+      if(!db) return 0;
+      const peers = new Map();
+
+      function addMsg(m){
+        if(!m) return;
+        const s = m.sender_id!=null?String(m.sender_id):'';
+        const r = m.receiver_id!=null?String(m.receiver_id):'';
+        if(m.group_id){
+          // group pointer
+          return;
+        }
+        if(s!==me && r!==me) return;
+        const peer = s===me ? r : s;
+        if(!peer || peer===me) return;
+        const at = m.created_at || null;
+        const prev = (typeof slMsgPreview==='function'?slMsgPreview(m):(m.content||m.type||''));
+        const cur = peers.get(peer);
+        if(!cur || (at && (!cur.lastAt || String(at)>String(cur.lastAt)))){
+          peers.set(peer, { lastAt: at, lastMessage: String(prev).slice(0,120) });
+        }
+      }
+
+      // Try indexed queries (need temporary rules OR works if child rules allow)
+      for(const field of ['sender_id','receiver_id']){
+        try{
+          const snap = await db.ref('tables/messages').orderByChild(field).equalTo(me).limitToLast(500).once('value');
+          const val = snap.val()||{};
+          Object.keys(val).forEach(function(id){ addMsg(Object.assign({id:id}, val[id])); });
+        }catch(e){ console.warn('[SL] migrate query', field, e && e.message); }
+      }
+
+      // Also chat_msgs keys containing me — cannot list root; try peers we already know
+      try{
+        const known = new Set(Array.from(peers.keys()));
+        (window.contacts||[]).forEach(function(c){ if(c&&c.id) known.add(String(c.id)); });
+        try{
+          const raw = localStorage.getItem('sl_contacts_cache_v2_'+me);
+          const o = raw?JSON.parse(raw):null;
+          ((o&&o.items)||[]).forEach(function(c){ if(c&&c.id) known.add(String(c.id)); });
+        }catch(e){}
+        for(const peer of Array.from(known).slice(0,100)){
+          if(String(peer)===me) continue;
+          const key = [me, String(peer)].sort().join('_');
+          try{
+            const snap = await db.ref('chat_msgs/'+key).orderByChild('created_at').limitToLast(1).once('value');
+            const val = snap.val();
+            if(!val) continue;
+            Object.keys(val).forEach(function(id){ addMsg(Object.assign({id:id}, val[id])); });
+          }catch(e){}
+        }
+      }catch(e){}
+
+      // Write index
+      let n = 0;
+      const updates = {};
+      peers.forEach(function(meta, peer){
+        const key = [me, String(peer)].sort().join('_');
+        updates['user_chat_index/'+me+'/'+key] = {
+          lastAt: meta.lastAt || new Date().toISOString(),
+          lastMessage: meta.lastMessage || '',
+          updated: Date.now(),
+          chatKey: key,
+          peer_id: String(peer)
+        };
+        n++;
+      });
+      // chunk updates
+      const keys = Object.keys(updates);
+      for(let i=0;i<keys.length;i+=50){
+        const chunk = {};
+        keys.slice(i,i+50).forEach(function(k){ chunk[k]=updates[k]; });
+        try{ await db.ref().update(chunk); }catch(e){ console.warn(e); }
+      }
+      console.log('[SL] migrated chats to index', n);
+      if(n && typeof loadChats==='function') await loadChats();
+      return n;
+    }catch(e){ console.warn('[SL] migrate', e); return 0; }
+  }
+  window.slMigrateMyChats = migrateMyChatsFromMessages;
+
+  // auto-run once per login
+  setTimeout(function(){ migrateMyChatsFromMessages(); }, 4000);
+  setTimeout(function(){ migrateMyChatsFromMessages(); }, 12000);
+
+  console.log('[SL] chat migrate helper ready');
 })();
 </script>
 
