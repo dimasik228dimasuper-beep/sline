@@ -8457,7 +8457,15 @@ async function loadChats(){
     return out;
   }
   function saveCache(items){
-    try{ localStorage.setItem(cacheKey(), JSON.stringify({ts:Date.now(),items:items||[]})); }catch(e){}
+    try{
+      var arr = items||[];
+      // never overwrite a non-empty cache with empty
+      if(!arr.length){
+        var prev = loadCache();
+        if(prev && prev.length) return;
+      }
+      localStorage.setItem(cacheKey(), JSON.stringify({ts:Date.now(),items:arr}));
+    }catch(e){}
   }
   window.slSaveContactsCache=function(){ try{ saveCache(contacts); }catch(e){} };
   window.slLoadContactsCache=loadCache;
@@ -8938,6 +8946,25 @@ window.resolveNewsChannelReal = resolveNewsChannelReal;
 
 function renderContactsAndGroups(){
   const list=document.getElementById('contacts-list'); if(!list) return;
+  // Always keep Избранное so list is never blank
+  try{
+    if(typeof myProfile!=='undefined' && myProfile && myProfile.id){
+      if(!Array.isArray(contacts)) contacts=[];
+      if(!contacts.some(function(c){ return c && String(c.id)===String(myProfile.id); })){
+        contacts.unshift({
+          id: myProfile.id,
+          username: myProfile.username,
+          first_name: myProfile.first_name || 'Избранное',
+          last_name: myProfile.last_name || '',
+          avatar_url: myProfile.avatar_url,
+          color: myProfile.color,
+          lastMessage: 'Заметки',
+          lastAt: new Date(0).toISOString(),
+          _dmWithMe: true
+        });
+      }
+    }
+  }catch(e){}
   // News channel is NOT forced into the list. Only if user joined / publisher.
   try{ if(typeof injectNewsChannelLocal==='function') injectNewsChannelLocal(false); }catch(e){}
   // Restore group/channel avatars from local backup if DB column missing
@@ -57988,6 +58015,70 @@ body:has(#msg-select-bar.show) .bubble-row .sl-sel-check{
   setTimeout(function(){ migrateMyChatsFromMessages(); }, 12000);
 
   console.log('[SL] chat migrate helper ready');
+})();
+</script>
+
+
+<script>
+(function(){
+  if(window._slEmptyListFix) return;
+  window._slEmptyListFix = 1;
+
+  function ensureSelfContact(){
+    try{
+      if(!window.myProfile || !myProfile.id) return;
+      if(!Array.isArray(window.contacts)) window.contacts = [];
+      var me = String(myProfile.id);
+      if(!contacts.some(function(c){ return c && String(c.id)===me; })){
+        contacts.unshift({
+          id: myProfile.id,
+          username: myProfile.username,
+          first_name: 'Избранное',
+          lastMessage: 'Заметки',
+          lastAt: new Date(0).toISOString(),
+          avatar_url: myProfile.avatar_url,
+          color: myProfile.color,
+          _dmWithMe: true
+        });
+      }
+    }catch(e){}
+  }
+
+  async function forceShowChats(){
+    try{
+      ensureSelfContact();
+      if(typeof loadChats==='function'){
+        try{ await loadChats(); }catch(e){ console.warn(e); }
+      }
+      if(typeof loadGroups==='function'){
+        try{ await loadGroups(); }catch(e){}
+      }
+      ensureSelfContact();
+      if(typeof renderContactsAndGroups==='function') renderContactsAndGroups();
+
+      // if still empty DOM — paint Избранное manually
+      var list = document.getElementById('contacts-list');
+      if(list && !list.querySelector('.sw-clip, .contact, .chat-row')){
+        ensureSelfContact();
+        if(typeof renderContactsAndGroups==='function') renderContactsAndGroups();
+      }
+      if(list && list.children.length===0){
+        list.innerHTML = '<div class="empty-state" style="padding:28px;text-align:center;color:var(--muted)">Нет чатов<br><span style="font-size:12px">Нажмите + чтобы начать общение</span></div>';
+      }
+    }catch(e){ console.warn('forceShowChats', e); }
+  }
+
+  setTimeout(forceShowChats, 800);
+  setTimeout(forceShowChats, 2500);
+  setTimeout(forceShowChats, 6000);
+  setTimeout(forceShowChats, 12000);
+
+  // when app becomes visible
+  document.addEventListener('visibilitychange', function(){
+    if(document.visibilityState==='visible') setTimeout(forceShowChats, 300);
+  });
+
+  console.log('[SL] empty list fix on');
 })();
 </script>
 
