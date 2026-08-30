@@ -4040,6 +4040,26 @@ html[data-auth-panel="login-verify-form"] #login-verify-form,
 }
 </style>
 
+
+<style id="sl-fix14-css">
+/* Never show send when empty */
+.composer:not(.has-text) .send-btn,
+.composer:not(.has-text) #send-btn{
+  opacity:0 !important;
+  pointer-events:none !important;
+  transform:scale(0) !important;
+}
+body.recording .send-btn,
+body.recording #send-btn,
+.composer.recording .send-btn{
+  opacity:0 !important;
+  pointer-events:none !important;
+  display:none !important;
+}
+/* Hide chat style remnants */
+#sl-chat-style, #sl-btn-chat-style, .sl-chat-style-row{display:none !important}
+</style>
+
 </head>
 <body>
 <div id="sl-hard-boot" aria-hidden="true" style="position:fixed;inset:0;z-index:2147483646;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:#000000;color:#E8EEF8;font-family:system-ui,-apple-system,sans-serif"><div class="sl-hb-dot"></div><div style="font:600 13px/1.3 system-ui,-apple-system,sans-serif;color:#8B9BB4">SLine</div></div>
@@ -4435,6 +4455,11 @@ body::before {
   background: rgba(26,34,45,.92) !important;
   backdrop-filter: blur(20px) saturate(1.2) !important;
   -webkit-backdrop-filter: blur(20px) saturate(1.2) !important;
+}
+html[data-chat-style="solid"] .composer, html[data-chat-style="solid"] #composer {
+  background:#1c1c1e !important;
+  backdrop-filter:none !important;
+  -webkit-backdrop-filter:none !important;
   border-top: 1px solid var(--line) !important;
   box-shadow: 0 -8px 32px rgba(0,0,0,.15);
 }
@@ -5605,9 +5630,32 @@ window.slEnsureFirebase = slEnsureFirebase;
               if (self.table === 'messages') {
                 if (data.group_id) {
                   await _fbDb.ref('chat_msgs/g_' + data.group_id + '/' + id).set(data);
+                  try {
+                    const gid = String(data.group_id);
+                    const sid = String(data.sender_id||'');
+                    const prev = String(data.content||data.type||'').slice(0,120);
+                    const at = data.created_at || new Date().toISOString();
+                    if (sid) {
+                      await _fbDb.ref('user_chat_index/'+sid+'/g_'+gid).update({
+                        lastAt: at, lastMessage: prev, updated: Date.now(), group_id: gid
+                      });
+                    }
+                  } catch (eg) {}
                 } else if (data.sender_id && data.receiver_id) {
                   const key = [String(data.sender_id), String(data.receiver_id)].sort().join('_');
                   await _fbDb.ref('chat_msgs/' + key + '/' + id).set(data);
+                  try {
+                    const prev = String(data.content||data.type||'').slice(0,120);
+                    const at = data.created_at || new Date().toISOString();
+                    const s = String(data.sender_id), r = String(data.receiver_id);
+                    // Rules: can only write own user_chat_index/$uid
+                    let my = null;
+                    try{ my = (_fbAuth && _fbAuth.currentUser && _fbAuth.currentUser.uid) || s; }catch(e){ my = s; }
+                    const peer = (String(my)===s) ? r : s;
+                    await _fbDb.ref('user_chat_index/'+String(my)+'/'+key).set({
+                      lastAt: at, lastMessage: prev, updated: Date.now(), chatKey: key, peer_id: peer
+                    });
+                  } catch (ei) {}
                 }
               }
             } catch (eIdx) {}
@@ -8125,11 +8173,8 @@ async function onAuthenticated(user){
     window._slAuthUid = now;
     // New profile: never restore any chat list from disk
     if(typeof _slIsNewProfile!=='undefined' && _slIsNewProfile){
-      try{ contacts = [{...myProfile, lastMessage:'Заметки', lastAt:new Date(0).toISOString(), _dmWithMe:true}]; }catch(e){ contacts=[]; }
-      try{
-        var ck='sl_contacts_cache_v2_'+now;
-        localStorage.removeItem(ck);
-      }catch(e){}
+      /* do NOT wipe contacts list — loadChats will fill it */
+      try{ console.log('[SL] new profile flag — keep loadChats'); }catch(e){}
     }
   }catch(e){}
 
@@ -8349,9 +8394,9 @@ function sanitizeContactsList(){
     contacts=contacts.filter(function(c){
       if(!c||!c.id) return false;
       if(String(c.id)===me) return true;
-      // require explicit flag set only after network-confirmed DM involving me
-      if(c._dmWithMe === true && c.lastAt) return true;
-      if(pinned.has(String(c.id)) && c._dmWithMe === true) return true;
+      if(c._dmWithMe === true) return true;
+      if(c.lastAt || c.lastMessage) return true;
+      if(pinned.has(String(c.id))) return true;
       return false;
     });
     // ensure self present
@@ -8367,7 +8412,6 @@ window.sanitizeContactsList = sanitizeContactsList;
 
 async function loadChats(){
   const list=document.getElementById('contacts-list'); if(!list||!myProfile) return;
-  // --- LOW EGRESS: cache first, network second ---
   function cacheKey(){ return 'sl_contacts_cache_v2_'+(myProfile&&myProfile.id||'x'); }
   function loadCache(){
     try{
@@ -8375,7 +8419,6 @@ async function loadChats(){
       if(!raw) return null;
       const o=JSON.parse(raw);
       if(!o||!Array.isArray(o.items)) return null;
-      if(Date.now()-(o.ts||0)>1000*60*60*24*14) return o.items; // still use stale
       return o.items;
     }catch(e){ return null; }
   }
@@ -8392,67 +8435,171 @@ async function loadChats(){
     try{ sanitizeContactsList(); }catch(e){}
     try{ renderContactsAndGroups(); }catch(e){}
   } else {
-    list.innerHTML=loaderHTML();
+    try{ list.innerHTML=loaderHTML(); }catch(e){}
   }
 
+  const me=String(myProfile.id);
+  const map=new Map(); // peerId -> {lastMessage,lastAt,chatKey}
+
   try{
-    // 2) Prefer single RPC (if SQL function installed)
-    let usedRpc=false;
+    // 2) PRIMARY: user_chat_index (works with strict Firebase rules)
+    const db = window.firebaseDb || (window.firebase && firebase.database && firebase.database());
+    if(db){
+      const snap = await db.ref('user_chat_index/'+me).once('value');
+      const idx = snap.val() || {};
+      Object.keys(idx).forEach(function(k){
+        if(!k || String(k).indexOf('g_')===0) return; // groups via loadGroups
+        const meta = idx[k] || {};
+        let peer = meta.peer_id || meta.peer || null;
+        if(!peer){
+          const parts = String(k).split('_');
+          if(parts.length>=2){
+            peer = parts[0]===me ? parts[1] : parts[0];
+          }
+        }
+        if(!peer || String(peer)===me) return;
+        const lastAt = meta.lastAt || meta.updated || meta.created_at || null;
+        const lastMessage = meta.lastMessage || meta.preview || '';
+        const prev = map.get(String(peer));
+        if(!prev || (lastAt && (!prev.lastAt || String(lastAt)>String(prev.lastAt)))){
+          map.set(String(peer), { lastMessage: lastMessage, lastAt: lastAt, chatKey: k });
+        }
+      });
+    }
+  }catch(e){ console.warn('[SL] loadChats index', e); }
+
+  // 3) Enrich last preview from chat_msgs (only keys we already know — no global scan)
+  try{
+    const db = window.firebaseDb || (window.firebase && firebase.database && firebase.database());
+    if(db && map.size){
+      const peers = Array.from(map.keys()).slice(0, 40);
+      await Promise.all(peers.map(async function(peer){
+        try{
+          const key = (typeof dmPairKey==='function')
+            ? dmPairKey(me, peer)
+            : [me, String(peer)].sort().join('_');
+          const snap = await db.ref('chat_msgs/'+key).orderByChild('created_at').limitToLast(1).once('value');
+          const val = snap.val();
+          if(!val) return;
+          const msgs = Object.keys(val).map(function(id){ return Object.assign({id:id}, val[id]); });
+          msgs.sort(function(a,b){ return String(a.created_at||'').localeCompare(String(b.created_at||'')); });
+          const m = msgs[msgs.length-1];
+          if(!m) return;
+          var _pv=(typeof slMsgPreview==='function'?slMsgPreview(m):(m.content||''));
+          map.set(String(peer), {
+            lastMessage: _pv,
+            lastAt: m.created_at || map.get(String(peer)).lastAt,
+            chatKey: key
+          });
+        }catch(err){}
+      }));
+    }
+  }catch(e){ console.warn('[SL] loadChats chat_msgs', e); }
+
+  // Always include self (Избранное)
+  if(!map.has(me)) map.set(me, { lastMessage:'Заметки', lastAt:new Date(0).toISOString(), chatKey: null });
+
+  try{
+    const ids = Array.from(map.keys());
+    let profiles = [];
+    // Load profiles one-by-one / small batches (rules allow auth read on profiles)
     try{
-      // RPC disabled for privacy: some deployments returned OTHER users' chats.
-      // Always build list from messages that involve me only.
-      usedRpc=false;
-    }catch(e){ usedRpc=false; }
+      if(typeof sb!=='undefined' && sb && ids.length){
+        const {data:prs}=await sb.from('profiles').select('id,username,username2,first_name,last_name,avatar_url,color,email,phone').in('id', ids);
+        profiles = prs || [];
+      }
+    }catch(e1){
+      // Fallback: Firebase direct
+      try{
+        const db = window.firebaseDb || (window.firebase && firebase.database && firebase.database());
+        if(db){
+          for(const id of ids.slice(0,60)){
+            try{
+              const s = await db.ref('tables/profiles/'+id).once('value');
+              const p = s.val();
+              if(p){ p.id = p.id || id; profiles.push(p); }
+            }catch(e2){}
+          }
+        }
+      }catch(e3){}
+    }
 
-    if(usedRpc) return;
-
-    // 3) Fallback: small messages query (limit 80, not 300)
-    const {data}=await sb.from('messages')
-      .select('sender_id,receiver_id,content,created_at')
-      .or(`sender_id.eq.${myProfile.id},receiver_id.eq.${myProfile.id}`)
-      .is('group_id',null)
-      .order('created_at',{ascending:false})
-      .limit(300);
-    const map=new Map();
-    for(const m of(data||[])){
-      if(!m) continue;
-      if(typeof msgInvolvesMe==='function' && !msgInvolvesMe(m)) continue;
-      const me=String(myProfile.id);
-      const s=m.sender_id!=null?String(m.sender_id):'';
-      const r=m.receiver_id!=null?String(m.receiver_id):'';
-      if(s!==me && r!==me) continue;
-      const pid = s===me ? r : s;
-      if(!pid||map.has(pid)) continue;
-      var _pv=(typeof slMsgPreview==='function'?slMsgPreview(m):(m.content||'')); map.set(pid,{lastMessage:_pv,lastAt:m.created_at}); try{ if(typeof slCacheChatPreview==='function') slCacheChatPreview(pid,_pv,m.created_at); }catch(e){}
+    const byId = new Map(profiles.map(function(p){ return [String(p.id), p]; }));
+    const next = [];
+    ids.forEach(function(id){
+      const meta = map.get(String(id)) || {};
+      const p = byId.get(String(id));
+      if(p){
+        next.push(Object.assign({}, p, {
+          lastMessage: meta.lastMessage || '',
+          lastAt: meta.lastAt || null,
+          _dmWithMe: true
+        }));
+      } else if(String(id)===me){
+        next.push(Object.assign({}, myProfile, {
+          lastMessage: 'Заметки',
+          lastAt: new Date(0).toISOString(),
+          _dmWithMe: true
+        }));
+      } else {
+        next.push({
+          id: id,
+          username: 'user_'+String(id).slice(0,6),
+          first_name: 'Чат',
+          lastMessage: meta.lastMessage || '',
+          lastAt: meta.lastAt || null,
+          _dmWithMe: true
+        });
+      }
+    });
+    // sort by lastAt desc
+    next.sort(function(a,b){
+      return String(b.lastAt||'').localeCompare(String(a.lastAt||''));
+    });
+    // ensure self first-ish or present
+    if(!next.some(function(c){ return c && String(c.id)===me; })){
+      next.unshift(Object.assign({}, myProfile, { lastMessage:'Заметки', lastAt:new Date(0).toISOString(), _dmWithMe:true }));
     }
-    if(!map.has(myProfile.id)) map.set(myProfile.id,{lastMessage:'Заметки',lastAt:new Date(0).toISOString()});
-    const ids=[...map.keys()];
-    let profiles=[];
-    if(ids.length){
-      // only needed columns
-      const {data:prs}=await sb.from('profiles').select('id,username,first_name,last_name,avatar_url,color,email').in('id',ids);
-      profiles=prs||[];
-    }
-    contacts=profiles.map(p=>({...p,lastMessage:map.get(p.id)?.lastMessage||'',lastAt:map.get(p.id)?.lastAt, _dmWithMe:true}));
-    // ensure self
-    if(!contacts.some(c=>c&&c.id===myProfile.id)){
-      contacts.unshift({...myProfile,lastMessage:'Заметки',lastAt:new Date(0).toISOString(), _dmWithMe:true});
-    }
+    contacts = next;
     try{ sanitizeContactsList(); }catch(e){}
     saveCache(contacts);
     renderContactsAndGroups();
   }catch(e){
+    console.warn('[SL] loadChats build', e);
     if(!contacts||!contacts.length){
-      // last resort: self + cache
       const c2=loadCache();
       if(c2&&c2.length){ contacts=c2; renderContactsAndGroups(); }
       else {
-        contacts=[{...myProfile,lastMessage:'Заметки',lastAt:new Date(0).toISOString()}];
+        contacts=[{...myProfile,lastMessage:'Заметки',lastAt:new Date(0).toISOString(),_dmWithMe:true}];
         renderContactsAndGroups();
       }
     }
   }
 }
+
+/** Sorted DM pair key + write both users' chat index (strict rules safe) */
+function dmPairKey(a,b){
+  return [String(a), String(b)].sort().join('_');
+}
+window.dmPairKey = dmPairKey;
+
+async function slTouchChatIndex(senderId, receiverId, preview, createdAt){
+  try{
+    const db = window.firebaseDb || (window.firebase && firebase.database && firebase.database());
+    if(!db || !senderId || !receiverId) return;
+    const key = dmPairKey(senderId, receiverId);
+    const at = createdAt || new Date().toISOString();
+    const prev = (preview!=null ? String(preview) : '').slice(0, 120);
+    let my = null;
+    try{ my = (firebaseAuth && firebaseAuth.currentUser && firebaseAuth.currentUser.uid) || (myProfile && myProfile.id); }catch(e){}
+    if(!my) my = senderId;
+    const peer = (String(my)===String(senderId)) ? receiverId : senderId;
+    await db.ref('user_chat_index/'+String(my)+'/'+key).set({
+      lastAt: at, lastMessage: prev, updated: Date.now(), chatKey: key, peer_id: String(peer)
+    });
+  }catch(e){ console.warn('[SL] touch index', e); }
+}
+window.slTouchChatIndex = slTouchChatIndex;
 async function loadGroups(){
   try{ const {data}=await sb.from('group_members').select('group_id,role,groups(*)').eq('user_id',myProfile.id); groups=(data||[]).map(m=>({...m.groups,myRole:m.role})).filter(g=>g?.id); }catch(e){ groups=[]; }
   // Locally hidden (deleted from list)
@@ -8776,6 +8923,12 @@ function renderContactsAndGroups(){
     clip.dataset.cid=data.id;
     clip.dataset.ctype=type;
     row.classList.add('sw-front');
+    /* Telegram-style select checkmark (left) */
+    var selChk=document.createElement('div');
+    selChk.className='sel-check';
+    selChk.innerHTML='';
+    selChk.setAttribute('aria-hidden','true');
+    row.insertBefore(selChk, row.firstChild);
     clip.appendChild(row);
 
     /* Left actions (swipe right → reveal): Не прочитан + Закрепить */
@@ -13061,24 +13214,60 @@ async function openStoriesOrProfile(profileLike){
 
 async function openStoryViewer(userId, name){
   let stories=[];
+  const now = Date.now();
+  // Robust load: .gt() may be missing in Firebase shim
   try{
-    const {data}=await sb.from('stories').select('*').eq('user_id',userId).gt('expires_at',new Date().toISOString()).order('created_at');
-    stories=data||[];
-  }catch(e){}
-  if(String(userId)===String(myProfile?.id)){
-    const local=getLocalStories().filter(s=>s.user_id===myProfile.id);
-    const ids=new Set(stories.map(s=>String(s.id)));
-    const urls=new Set(stories.map(s=>String(s.media_url||'')).filter(Boolean));
+    let data=null;
+    try{
+      const res=await sb.from('stories').select('*').eq('user_id',userId).order('created_at');
+      data = res && res.data;
+    }catch(e1){
+      try{
+        const res2=await sb.from('stories').select('*').eq('user_id',userId);
+        data = res2 && res2.data;
+      }catch(e2){ data=[]; }
+    }
+    stories = (data||[]).filter(function(s){
+      if(!s) return false;
+      if(!s.expires_at) return true;
+      try{ return new Date(s.expires_at).getTime() > now; }catch(e){ return true; }
+    });
+  }catch(e){ stories=[]; }
+  // Firebase direct fallback
+  if(!stories.length){
+    try{
+      const db = window.firebaseDb || (window.firebase && firebase.database && firebase.database());
+      if(db){
+        const snap = await db.ref('tables/stories').orderByChild('user_id').equalTo(String(userId)).once('value');
+        const val = snap.val()||{};
+        stories = Object.keys(val).map(function(id){ return Object.assign({id:id}, val[id]); }).filter(function(s){
+          if(!s.expires_at) return true;
+          try{ return new Date(s.expires_at).getTime() > now; }catch(e){ return true; }
+        });
+        stories.sort(function(a,b){ return String(a.created_at||'').localeCompare(String(b.created_at||'')); });
+      }
+    }catch(e){}
+  }
+  // Local stories (own + any cached for this user)
+  try{
+    const local=getLocalStories().filter(function(s){ return String(s.user_id)===String(userId); });
+    const ids=new Set(stories.map(function(s){ return String(s.id); }));
+    const urls=new Set(stories.map(function(s){ return String(s.media_url||''); }).filter(Boolean));
     for(const ls of local){
       const url=String(ls.media_url||'');
       if(ids.has(String(ls.id))) continue;
       if(url && urls.has(url)) continue;
+      if(ls.expires_at){
+        try{ if(new Date(ls.expires_at).getTime() <= now) continue; }catch(e){}
+      }
       stories.push(ls);
       ids.add(String(ls.id));
       if(url) urls.add(url);
     }
-  }
-  if(!stories?.length){ showToast(t('no_stories')); return; }
+  }catch(e){}
+  // Keep only items with playable media
+  stories = (stories||[]).filter(function(s){ return s && (s.media_url || s.type==='text'); });
+  if(!stories.length){ showToast(typeof t==='function'?t('no_stories'):'Нет историй'); return; }
   let viewer=document.getElementById('story-viewer');
   // recreate if old markup (double progress bars / no safe-area)
   // force rebuild if old single-bar progress
@@ -43378,19 +43567,21 @@ window.slGetDisplayName = function(p){
 
   function resetStories(bar){
     if(!bar) return;
-    bar.style.maxHeight='';
-    bar.style.opacity='';
-    bar.style.paddingTop='';
-    bar.style.paddingBottom='';
-    bar.style.marginBottom='';
-    bar.style.transform='';
-    bar.style.filter='';
-    bar.style.pointerEvents='';
+    const full = bar.dataset.fullH || (Math.max(bar.scrollHeight, 110)+'px');
+    bar.dataset.fullH = full;
+    bar.style.maxHeight = full;
+    bar.style.opacity = '1';
+    bar.style.paddingTop = '';
+    bar.style.paddingBottom = '';
+    bar.style.marginBottom = '';
+    bar.style.transform = 'scaleY(1) translateY(0)';
+    bar.style.filter = 'none';
+    bar.style.pointerEvents = 'auto';
     bar.querySelectorAll('.story-item').forEach(it=>{
-      it.style.transform='';
-      it.style.opacity='';
+      it.style.transform = 'scale(1)';
+      it.style.opacity = '1';
       const sp=it.querySelector('span');
-      if(sp) sp.style.opacity='';
+      if(sp) sp.style.opacity = '1';
     });
   }
 
@@ -50175,8 +50366,14 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
       var bg=light?'rgba(255,255,255,0.22)':'rgba(40,46,58,0.42)';
       el.style.setProperty('background-color', bg, 'important');
       el.style.setProperty('background-image', 'none', 'important');
-      el.style.setProperty('backdrop-filter', 'blur(20px)', 'important');
-      el.style.setProperty('-webkit-backdrop-filter', 'blur(20px)', 'important');
+      if((document.documentElement.getAttribute('data-chat-style')||'')!=='solid'){
+        el.style.setProperty('backdrop-filter', 'blur(20px)', 'important');
+        el.style.setProperty('-webkit-backdrop-filter', 'blur(20px)', 'important');
+      } else {
+        el.style.setProperty('backdrop-filter', 'none', 'important');
+        el.style.setProperty('-webkit-backdrop-filter', 'none', 'important');
+        el.style.setProperty('background', '#1c1c1e', 'important');
+      }
     });
   }
   setTimeout(paintAttach, 1500);
@@ -55417,10 +55614,27 @@ body:has(#msg-select-bar.show) .bubble-row .sl-sel-check{
         bar.remove();
       };
       bar.querySelector('#sl-sel-archive').onclick=function(){
-        document.querySelectorAll('.sl-selected').forEach(function(r){
-          try{ r.click(); }catch(e){}
-        });
-        if(typeof showToast==='function') showToast('В архив');
+        try{
+          var arch = (typeof getArchive==='function'?getArchive():JSON.parse(localStorage.getItem('sl_archive')||'[]'))||[];
+          var ids = [];
+          document.querySelectorAll('.sl-selected, .chat-selected').forEach(function(r){
+            var id = r.dataset.id || r.dataset.uid || (r.closest('[data-id]')&&r.closest('[data-id]').dataset.id);
+            if(id) ids.push(String(id));
+          });
+          if(window._selectedChats) window._selectedChats.forEach(function(id){ ids.push(String(id)); });
+          ids = Array.from(new Set(ids));
+          var allIn = ids.length && ids.every(function(id){ return arch.map(String).includes(String(id)); });
+          if(allIn){
+            arch = arch.filter(function(id){ return !ids.includes(String(id)); });
+            if(typeof showToast==='function') showToast('Из архива');
+          } else {
+            ids.forEach(function(id){ if(!arch.map(String).includes(String(id))) arch.push(id); });
+            if(typeof showToast==='function') showToast('В архиве: '+ids.length);
+          }
+          if(typeof setArchive==='function') setArchive(arch);
+          else localStorage.setItem('sl_archive', JSON.stringify(arch));
+          if(typeof renderContactsAndGroups==='function') renderContactsAndGroups();
+        }catch(e){ console.warn(e); }
         bar.querySelector('#sl-sel-cancel').click();
       };
       bar.querySelector('#sl-sel-delete').onclick=function(){
@@ -55588,7 +55802,7 @@ body:has(#msg-select-bar.show) .bubble-row .sl-sel-check{
     var page=document.getElementById('page-settings');
     if(!page||document.getElementById('sl-chat-style')) return;
     var box=document.createElement('div');
-    box.id='sl-chat-style';
+    box.id='sl-chat-style-removed';box.style.display='none';
     box.className='settings-section';
     var cur=localStorage.getItem('sl_chat_style')||'glass';
     box.innerHTML='<div class="settings-row" style="flex-direction:column;align-items:stretch;gap:8px">'+
@@ -55609,7 +55823,7 @@ body:has(#msg-select-bar.show) .bubble-row .sl-sel-check{
     document.documentElement.setAttribute('data-chat-style', mode||'glass');
     document.body.setAttribute('data-chat-style', mode||'glass');
   }
-  applyChatStyle(localStorage.getItem('sl_chat_style')||'glass');
+  applyChatStyle('glass'); localStorage.setItem('sl_chat_style','glass');
   setInterval(wireChatStyle, 2500);
 
   // light theme + solid style polish
@@ -55733,7 +55947,7 @@ body:has(#msg-select-bar.show) .bubble-row .sl-sel-check{
       row2.className = 'settings-row';
       row2.id = 'sl-btn-chatstyle';
       row2.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:14px 16px;cursor:pointer';
-      row2.innerHTML = '<span style="font-weight:600">Стиль чатов</span><span style="color:var(--muted)">›</span>';
+      row2.style.display='none';row2.innerHTML = '<span style="font-weight:600">Стиль чатов</span><span style="color:var(--muted)">›</span>';
       row2.onclick = openChatStyleSheet;
       var a2 = document.getElementById('sl-btn-username');
       if(a2 && a2.nextSibling) a2.parentNode.insertBefore(row2, a2.nextSibling);
@@ -55977,7 +56191,27 @@ body:has(#msg-select-bar.show) .bubble-row .sl-sel-check{
         bar.querySelector('#sl-sel-cancel').click();
       };
       bar.querySelector('#sl-sel-archive').onclick = function(){
-        if(typeof showToast==='function') showToast('В архив');
+        try{
+          var arch = (typeof getArchive==='function'?getArchive():JSON.parse(localStorage.getItem('sl_archive')||'[]'))||[];
+          var ids = [];
+          document.querySelectorAll('.sl-selected, .chat-selected').forEach(function(r){
+            var id = r.dataset.id || r.dataset.uid || (r.closest('[data-id]')&&r.closest('[data-id]').dataset.id);
+            if(id) ids.push(String(id));
+          });
+          if(window._selectedChats) window._selectedChats.forEach(function(id){ ids.push(String(id)); });
+          ids = Array.from(new Set(ids));
+          var allIn = ids.length && ids.every(function(id){ return arch.map(String).includes(String(id)); });
+          if(allIn){
+            arch = arch.filter(function(id){ return !ids.includes(String(id)); });
+            if(typeof showToast==='function') showToast('Из архива');
+          } else {
+            ids.forEach(function(id){ if(!arch.map(String).includes(String(id))) arch.push(id); });
+            if(typeof showToast==='function') showToast('В архиве: '+ids.length);
+          }
+          if(typeof setArchive==='function') setArchive(arch);
+          else localStorage.setItem('sl_archive', JSON.stringify(arch));
+          if(typeof renderContactsAndGroups==='function') renderContactsAndGroups();
+        }catch(e){}
         bar.querySelector('#sl-sel-cancel').click();
       };
     }
@@ -56273,6 +56507,1222 @@ body:has(#msg-select-bar.show) .bubble-row .sl-sel-check{
   }, 3000);
 
   console.log('[SL] core UX 11: avatar info, solid style, stickers, select');
+})();
+</script>
+
+
+<script>
+(function(){
+  if(window._slTgSelectV12) return;
+  window._slTgSelectV12 = 1;
+
+  /* ===== Telegram-like multi-select ===== */
+  function ensureSelChecks(){
+    document.querySelectorAll('#contacts-list .sw-clip, #contacts-list .contact').forEach(function(c){
+      var front = c.classList.contains('sw-clip') ? (c.querySelector('.sw-front')||c) : c;
+      var ch = front.querySelector('.sel-check');
+      if(!ch){
+        ch = document.createElement('div');
+        ch.className = 'sel-check';
+        front.insertBefore(ch, front.firstChild);
+      }
+    });
+  }
+
+  function syncSelUI(){
+    var set = window._selectedChats || window.selectedChats;
+    if(!set) set = window._selectedChats = new Set();
+    document.querySelectorAll('#contacts-list .sw-clip').forEach(function(c){
+      var id = String(c.dataset.cid||'');
+      var on = set.has(id);
+      c.classList.toggle('selected', on);
+      var front = c.querySelector('.sw-front');
+      if(front) front.classList.toggle('selected', on);
+      var ch = c.querySelector('.sel-check');
+      if(ch){
+        ch.classList.toggle('on', on);
+        ch.innerHTML = on ? '✓' : '';
+      }
+    });
+    var cnt = document.getElementById('chat-sel-count');
+    if(cnt) cnt.textContent = set.size + ' выбрано';
+  }
+
+  function showTgSelectBar(){
+    var bar = document.getElementById('sl-tg-sel-bar');
+    if(!bar){
+      bar = document.createElement('div');
+      bar.id = 'sl-tg-sel-bar';
+      bar.innerHTML =
+        '<button type="button" data-a="read">Прочитать все</button>'+
+        '<button type="button" data-a="archive">В архив</button>'+
+        '<button type="button" data-a="del">Удалить</button>';
+      document.body.appendChild(bar);
+      bar.addEventListener('click', async function(e){
+        var btn = e.target.closest('button');
+        if(!btn) return;
+        var a = btn.getAttribute('data-a');
+        var set = window._selectedChats || new Set();
+        var ids = Array.from(set);
+        if(a==='read'){
+          try{
+            var u = JSON.parse(localStorage.getItem('sl_unread')||'{}');
+            ids.forEach(function(id){ delete u[id]; if(window.unread) delete window.unread[id]; });
+            localStorage.setItem('sl_unread', JSON.stringify(u));
+            if(typeof renderContactsAndGroups==='function') renderContactsAndGroups();
+            if(typeof showToast==='function') showToast('Прочитано');
+          }catch(err){}
+          exitTgSelect();
+        } else if(a==='archive'){
+          try{
+            var arch = JSON.parse(localStorage.getItem('sl_archive')||'[]');
+            ids.forEach(function(id){ if(arch.indexOf(id)<0) arch.push(id); });
+            localStorage.setItem('sl_archive', JSON.stringify(arch));
+            if(typeof setArchive==='function') setArchive(arch);
+            if(typeof renderContactsAndGroups==='function') renderContactsAndGroups();
+            if(typeof showToast==='function') showToast('В архиве: '+ids.length);
+          }catch(err){}
+          exitTgSelect();
+        } else if(a==='del'){
+          if(!(await (typeof customConfirm==='function'?customConfirm('Удалить выбранные ('+ids.length+')?'):confirm('Удалить?')))) return;
+          try{
+            if(typeof exitChatSelect==='function'){
+              /* reuse built-in delete path via selectedChats */
+              window.selectedChats = set;
+              window._selectedChats = set;
+            }
+            ids.forEach(function(id){
+              try{
+                var row = document.querySelector('#contacts-list .sw-clip[data-cid="'+id+'"]');
+                if(row) row.remove();
+              }catch(e){}
+            });
+            if(typeof showToast==='function') showToast('Удалено');
+          }catch(err){}
+          exitTgSelect();
+        }
+      });
+    }
+    bar.classList.add('show');
+  }
+
+  function enterTgSelect(preId){
+    document.body.classList.add('chats-selecting');
+    if(!window._selectedChats) window._selectedChats = new Set();
+    if(typeof selectedChats!=='undefined') try{ window.selectedChats = window._selectedChats; }catch(e){}
+    ensureSelChecks();
+    if(preId) window._selectedChats.add(String(preId));
+    showTgSelectBar();
+    var done = document.getElementById('chats-done-btn');
+    if(done){ done.style.display = 'inline-block'; }
+    /* hide Изм. */
+    document.querySelectorAll('.max-hdr-btn, #chats-edit-btn').forEach(function(b){
+      if(b && b.id!=='chats-done-btn') b.style.visibility='hidden';
+    });
+    syncSelUI();
+    try{ navigator.vibrate && navigator.vibrate(12); }catch(e){}
+  }
+
+  function exitTgSelect(){
+    document.body.classList.remove('chats-selecting');
+    window._selectedChats = new Set();
+    document.querySelectorAll('#contacts-list .sw-clip.selected').forEach(function(c){ c.classList.remove('selected'); });
+    document.querySelectorAll('.sel-check.on').forEach(function(c){ c.classList.remove('on'); c.innerHTML=''; });
+    var bar = document.getElementById('sl-tg-sel-bar');
+    if(bar) bar.classList.remove('show');
+    var done = document.getElementById('chats-done-btn');
+    if(done) done.style.display = 'none';
+    document.querySelectorAll('.max-hdr-btn, #chats-edit-btn').forEach(function(b){
+      if(b) b.style.visibility='';
+    });
+    if(typeof exitChatSelect==='function') try{ exitChatSelect(); }catch(e){}
+  }
+
+  window._slEnterChatSelect = function(row, type, data){
+    var id = data && data.id;
+    if(!id && row) id = row.dataset && (row.dataset.cid||row.dataset.id);
+    enterTgSelect(id);
+  };
+  window.enterChatsSelectMode = function(){ enterTgSelect(); };
+
+  document.getElementById('chats-done-btn')?.addEventListener('click', function(e){
+    e.preventDefault();
+    exitTgSelect();
+  });
+
+  /* click on row while selecting */
+  document.addEventListener('click', function(e){
+    if(!document.body.classList.contains('chats-selecting')) return;
+    var clip = e.target.closest('#contacts-list .sw-clip');
+    if(!clip) return;
+    e.preventDefault();
+    e.stopPropagation();
+    var id = String(clip.dataset.cid||'');
+    if(!window._selectedChats) window._selectedChats = new Set();
+    if(window._selectedChats.has(id)) window._selectedChats.delete(id);
+    else window._selectedChats.add(id);
+    syncSelUI();
+  }, true);
+
+  /* long-press / Изм. button */
+  document.addEventListener('click', function(e){
+    var btn = e.target.closest('#chats-edit-btn, .max-hdr-edit, [data-action="edit-chats"]');
+    if(btn){ e.preventDefault(); enterTgSelect(); }
+  }, true);
+
+  /* CSS: Telegram circles + solid style override glass */
+  if(!document.getElementById('sl-tg-select-css')){
+    var st = document.createElement('style');
+    st.id = 'sl-tg-select-css';
+    st.textContent = `
+      .sel-check{
+        display:none !important;
+        width:22px;height:22px;border-radius:50%;
+        border:2px solid rgba(120,120,128,.55);
+        margin-right:10px;flex-shrink:0;
+        align-items:center;justify-content:center;
+        font-size:13px;font-weight:700;color:#fff;
+        background:transparent;box-sizing:border-box;
+      }
+      body.chats-selecting .sel-check{ display:flex !important; }
+      .sel-check.on, .sw-clip.selected .sel-check{
+        background:#3B82F6 !important;
+        border-color:#3B82F6 !important;
+      }
+      body.chats-selecting .sw-actions{ display:none !important; }
+      #sl-tg-sel-bar{
+        display:none;position:fixed;left:12px;right:12px;bottom:calc(70px + env(safe-area-inset-bottom));
+        z-index:100000;gap:8px;padding:8px;
+        background:rgba(44,44,46,.94);border-radius:16px;
+        backdrop-filter:blur(20px);
+        box-shadow:0 8px 32px rgba(0,0,0,.45);
+      }
+      #sl-tg-sel-bar.show{ display:flex !important; }
+      #sl-tg-sel-bar button{
+        flex:1;border:none;background:transparent;color:#fff;
+        font-size:14px;font-weight:600;padding:12px 8px;cursor:pointer;border-radius:12px;
+      }
+      #sl-tg-sel-bar button:active{ background:rgba(255,255,255,.08); }
+      #sl-tg-sel-bar button[data-a="del"]{ color:#ff453a; }
+      body.chats-selecting #chats-done-btn{ display:inline-block !important; }
+
+      /* SOLID style beats glass !important */
+      html[data-chat-style="solid"] .composer,
+      html[data-chat-style="solid"] #composer,
+      html[data-chat-style="solid"] .chat-header,
+      html[data-chat-style="solid"] #chat-header,
+      html[data-chat-style="solid"] .sidebar,
+      html[data-chat-style="solid"] .topbar{
+        background:#1c1c1e !important;
+        backdrop-filter: none !important;
+        -webkit-backdrop-filter: none !important;
+      }
+      html[data-chat-style="solid"] .composer-input-shell,
+      html[data-chat-style="solid"] #message-input{
+        background:#2c2c2e !important;
+      }
+      html.theme-light[data-chat-style="solid"] .composer,
+      html.theme-light[data-chat-style="solid"] #composer,
+      html.theme-light[data-chat-style="solid"] .chat-header,
+      html.theme-light[data-chat-style="solid"] #chat-header{
+        background:#ffffff !important;
+        backdrop-filter: none !important;
+        -webkit-backdrop-filter: none !important;
+        color:#111 !important;
+      }
+      html.theme-light[data-chat-style="solid"] .composer-input-shell,
+      html.theme-light[data-chat-style="solid"] #message-input{
+        background:#f2f2f7 !important;
+        color:#111 !important;
+      }
+    `;
+    document.head.appendChild(st);
+  }
+
+  /* apply saved style now */
+  try{
+    var mode = localStorage.getItem('sl_chat_style')||'glass';
+    document.documentElement.setAttribute('data-chat-style', mode);
+    document.body.setAttribute('data-chat-style', mode);
+  }catch(e){}
+
+  /* ===== Avatar → contact card ONLY ===== */
+  function bindAvatarCard(){
+    var av = document.getElementById('partner-avatar');
+    if(!av || av._slCard12) return;
+    av._slCard12 = 1;
+    av.style.cursor = 'pointer';
+    av.addEventListener('click', function(e){
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      try{
+        if(typeof window.slOpenChatInfo === 'function'){ window.slOpenChatInfo(); return; }
+        if(typeof openPartnerInfo === 'function'){ openPartnerInfo(); return; }
+        var p = window.activePartner || window.activeGroup;
+        if(p && typeof openFullProfile === 'function') openFullProfile(p);
+      }catch(err){ console.warn(err); }
+    }, true);
+  }
+  setInterval(bindAvatarCard, 800);
+  bindAvatarCard();
+
+  /* Wire style radio Apply more aggressively */
+  document.addEventListener('change', function(e){
+    if(e.target && e.target.name === 'slcs'){
+      localStorage.setItem('sl_chat_style', e.target.value);
+      document.documentElement.setAttribute('data-chat-style', e.target.value);
+      document.body.setAttribute('data-chat-style', e.target.value);
+    }
+  }, true);
+
+  console.log('[SL] Telegram select + solid style + avatar card v12');
+})();
+</script>
+
+
+<script>
+(function(){
+  if(window._slFix13) return;
+  window._slFix13 = 1;
+
+  /* ---- A) Avatar in chat header → ONLY info card ---- */
+  function openInfoOnly(e){
+    try{
+      if(e){ e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation(); }
+    }catch(err){}
+    try{
+      if(typeof window.slOpenChatInfo === 'function'){ window.slOpenChatInfo(); return; }
+      var p = window.activePartner || (typeof activePartner!=='undefined'?activePartner:null);
+      var g = window.activeGroup || (typeof activeGroup!=='undefined'?activeGroup:null);
+      if(g && typeof openGroupInfo==='function'){ openGroupInfo(g); return; }
+      if(p && typeof openFullProfile==='function'){ openFullProfile(p); return; }
+    }catch(err){ console.warn(err); }
+  }
+
+  // Capture-phase on document: kill photo viewer from header avatar
+  document.addEventListener('click', function(e){
+    var t = e.target;
+    if(!t || !t.closest) return;
+    // partner avatar or its children inside chat header
+    var av = t.closest('#partner-avatar');
+    if(av){
+      openInfoOnly(e);
+      return;
+    }
+    // header title area
+    if(t.closest('#chat-partner-name') || t.closest('#chat-partner-status')){
+      // only if inside chat header, not elsewhere
+      if(t.closest('.chat-header, #chat-header')){
+        openInfoOnly(e);
+      }
+    }
+  }, true);
+
+  // Wrap openTelegramPhotoViewer / openImageFullscreen so header never opens them via avatar
+  function wrapPhoto(name){
+    try{
+      var orig = window[name];
+      if(typeof orig !== 'function' || orig._sl13) return;
+      window[name] = function(src, opts){
+        try{
+          // if last click was partner-avatar, open info instead
+          if(window._slLastClickWasPartnerAv){
+            window._slLastClickWasPartnerAv = false;
+            openInfoOnly();
+            return;
+          }
+        }catch(e){}
+        return orig.apply(this, arguments);
+      };
+      window[name]._sl13 = 1;
+    }catch(e){}
+  }
+  document.addEventListener('pointerdown', function(e){
+    window._slLastClickWasPartnerAv = !!(e.target && e.target.closest && e.target.closest('#partner-avatar'));
+  }, true);
+  setInterval(function(){
+    wrapPhoto('openTelegramPhotoViewer');
+    wrapPhoto('openImageFullscreen');
+    wrapPhoto('slOpenImageFullscreen');
+    wrapPhoto('openAvatarHistory');
+  }, 2000);
+  wrapPhoto('openTelegramPhotoViewer');
+  wrapPhoto('openImageFullscreen');
+  wrapPhoto('openAvatarHistory');
+
+  /* ---- B) SOLID style: kill glass every second if needed ---- */
+  function applySolid(){
+    var mode = localStorage.getItem('sl_chat_style') || 'glass';
+    document.documentElement.setAttribute('data-chat-style', mode);
+    document.body.setAttribute('data-chat-style', mode);
+    if(mode !== 'solid') return;
+    var sels = ['.composer','#composer','.chat-header','#chat-header','.sidebar','.topbar','.composer-input-shell'];
+    sels.forEach(function(sel){
+      document.querySelectorAll(sel).forEach(function(el){
+        el.style.setProperty('backdrop-filter', 'none', 'important');
+        el.style.setProperty('-webkit-backdrop-filter', 'none', 'important');
+        if(sel.indexOf('composer-input')>=0 || sel==='#message-input'){
+          el.style.setProperty('background', '#2c2c2e', 'important');
+        } else {
+          el.style.setProperty('background', '#1c1c1e', 'important');
+        }
+      });
+    });
+    var inp = document.getElementById('message-input');
+    if(inp){
+      inp.style.setProperty('background', '#2c2c2e', 'important');
+      inp.style.setProperty('backdrop-filter', 'none', 'important');
+    }
+  }
+  applySolid();
+  setInterval(applySolid, 1500);
+
+  // Style buttons
+  document.addEventListener('click', function(e){
+    var btn = e.target.closest && e.target.closest('#sl-chat-style button, [data-style]');
+    // radio already handled
+  }, true);
+  document.addEventListener('change', function(e){
+    if(e.target && e.target.name === 'slcs'){
+      localStorage.setItem('sl_chat_style', e.target.value);
+      applySolid();
+      if(typeof showToast==='function') showToast(e.target.value==='solid'?'Обычный стиль':'Стеклянный стиль');
+    }
+  }, true);
+
+  /* ---- C) Restore chats: reload + user_chat_index fallback ---- */
+  async function forceReloadChats(){
+    try{
+      // clear accidental hide-all
+      try{
+        var hid = JSON.parse(localStorage.getItem('sl_hidden_chats')||'[]');
+        if(hid.length > 50) localStorage.setItem('sl_hidden_chats','[]');
+      }catch(e){}
+
+      if(typeof loadChats === 'function') await loadChats();
+      if(typeof loadGroups === 'function') await loadGroups();
+
+      // Firebase user_chat_index fallback
+      try{
+        var uid = (window.myProfile && myProfile.id) || (firebaseAuth && firebaseAuth.currentUser && firebaseAuth.currentUser.uid);
+        var db = window.firebaseDb || (window.firebase && firebase.database && firebase.database());
+        if(uid && db && (!window.contacts || contacts.length <= 1)){
+          var snap = await db.ref('user_chat_index/' + uid).once('value');
+          var idx = snap.val() || {};
+          var ids = Object.keys(idx);
+          if(ids.length){
+            var list = [];
+            for(var i=0;i<ids.length && i<80;i++){
+              var k = ids[i];
+              var meta = idx[k] || {};
+              // peer id from chat key like uid1_uid2
+              var peer = null;
+              if(k.indexOf('_')>=0){
+                var parts = k.split('_');
+                peer = parts[0]===String(uid) ? parts[1] : parts[0];
+              }
+              if(!peer || peer===String(uid)) continue;
+              list.push({
+                id: peer,
+                username: meta.username || peer.slice(0,6),
+                first_name: meta.name || meta.username || 'Чат',
+                lastMessage: meta.lastMessage || meta.preview || '',
+                lastAt: meta.lastAt || meta.updated || Date.now(),
+                _dmWithMe: true,
+                avatar_url: meta.avatar_url || null
+              });
+            }
+            if(list.length){
+              // merge
+              var have = new Set((contacts||[]).map(function(c){ return String(c.id); }));
+              list.forEach(function(c){
+                if(!have.has(String(c.id))) contacts.push(c);
+              });
+              if(typeof sanitizeContactsList==='function') sanitizeContactsList();
+              if(typeof renderContactsAndGroups==='function') renderContactsAndGroups();
+              console.log('[SL] restored from user_chat_index', list.length);
+            }
+          }
+        }
+      }catch(err){ console.warn('index fallback', err); }
+
+      if(typeof renderContactsAndGroups==='function') renderContactsAndGroups();
+    }catch(e){ console.warn('forceReloadChats', e); }
+  }
+  setTimeout(forceReloadChats, 2500);
+  setTimeout(forceReloadChats, 8000);
+
+  /* CSS solid nuclear */
+  if(!document.getElementById('sl-solid-nuclear')){
+    var st=document.createElement('style');
+    st.id='sl-solid-nuclear';
+    st.textContent=`
+      html[data-chat-style="solid"] .composer,
+      html[data-chat-style="solid"] #composer,
+      html[data-chat-style="solid"] .chat-header,
+      html[data-chat-style="solid"] #chat-header,
+      html[data-chat-style="solid"] .sidebar,
+      html[data-chat-style="solid"] .topbar,
+      html[data-chat-style="solid"] .max-chats-header{
+        background:#1c1c1e !important;
+        backdrop-filter:none !important;
+        -webkit-backdrop-filter:none !important;
+        opacity:1 !important;
+      }
+      html[data-chat-style="solid"] #message-input,
+      html[data-chat-style="solid"] .composer-input-shell,
+      html[data-chat-style="solid"] .composer .input-wrap{
+        background:#2c2c2e !important;
+        backdrop-filter:none !important;
+        -webkit-backdrop-filter:none !important;
+      }
+      html.theme-light[data-chat-style="solid"] .composer,
+      html.theme-light[data-chat-style="solid"] #composer,
+      html.theme-light[data-chat-style="solid"] .chat-header,
+      html.theme-light[data-chat-style="solid"] #chat-header{
+        background:#fff !important;
+        color:#111 !important;
+        backdrop-filter:none !important;
+        -webkit-backdrop-filter:none !important;
+      }
+      html.theme-light[data-chat-style="solid"] #message-input,
+      html.theme-light[data-chat-style="solid"] .composer-input-shell{
+        background:#f2f2f7 !important;
+        color:#111 !important;
+      }
+    `;
+    document.head.appendChild(st);
+  }
+
+  console.log('[SL] fix13: chats reload, avatar=info, solid nuclear');
+})();
+</script>
+
+
+<script>
+(function(){
+  if(window._slFix14) return;
+  window._slFix14 = 1;
+
+  /* ========== 1) RESTORE CHATS ========== */
+  async function restoreAllChats(){
+    try{
+      var uid = (window.myProfile && myProfile.id) || null;
+      try{
+        if(firebaseAuth && firebaseAuth.currentUser) uid = firebaseAuth.currentUser.uid;
+      }catch(e){}
+      if(!uid) return;
+
+      // Clear hide-all accident
+      try{
+        var hid = JSON.parse(localStorage.getItem('sl_hidden_chats')||'[]');
+        if(Array.isArray(hid) && hid.length > 20) localStorage.setItem('sl_hidden_chats','[]');
+      }catch(e){}
+
+      // 1) Cache
+      try{
+        var ck = 'sl_contacts_cache_v2_'+uid;
+        var raw = localStorage.getItem(ck) || localStorage.getItem('sl_contacts_cache_v2') || localStorage.getItem('sl_contacts_cache');
+        if(raw){
+          var arr = JSON.parse(raw);
+          if(Array.isArray(arr) && arr.length > 1){
+            window.contacts = arr.map(function(x){ x._dmWithMe = true; return x; });
+            if(typeof renderContactsAndGroups==='function') renderContactsAndGroups();
+            console.log('[SL] chats from cache', arr.length);
+          }
+        }
+      }catch(e){}
+
+      // 2) loadChats native
+      try{ if(typeof loadChats==='function') await loadChats(); }catch(e){}
+      try{ if(typeof loadGroups==='function') await loadGroups(); }catch(e){}
+
+      // 3) Firebase chat_msgs keys + user_chat_index
+      try{
+        var db = window.firebaseDb || (window.firebase && firebase.database && firebase.database());
+        if(db){
+          var snap = await db.ref('user_chat_index/'+uid).once('value');
+          var idx = snap.val() || {};
+          var ids = Object.keys(idx);
+          if(ids.length){
+            var have = new Set((window.contacts||[]).map(function(c){ return String(c&&c.id); }));
+            var added = 0;
+            ids.forEach(function(k){
+              var meta = idx[k]||{};
+              var peer = null;
+              if(String(k).indexOf('g_')===0) return; // groups separate
+              var parts = String(k).split('_');
+              if(parts.length>=2){
+                peer = parts[0]===String(uid) ? parts[1] : parts[0];
+              }
+              if(!peer || peer===String(uid) || have.has(String(peer))) return;
+              window.contacts = window.contacts || [];
+              window.contacts.push({
+                id: peer,
+                username: meta.username || ('user_'+String(peer).slice(0,6)),
+                first_name: meta.name || meta.username || 'Чат',
+                lastMessage: meta.lastMessage || meta.preview || '',
+                lastAt: meta.lastAt || meta.updated || Date.now(),
+                avatar_url: meta.avatar_url || null,
+                color: meta.color || null,
+                _dmWithMe: true
+              });
+              have.add(String(peer));
+              added++;
+            });
+            if(added){
+              if(typeof sanitizeContactsList==='function') sanitizeContactsList();
+              if(typeof renderContactsAndGroups==='function') renderContactsAndGroups();
+              console.log('[SL] restored index chats', added);
+            }
+          }
+          // Also scan chat_msgs for pair keys containing me
+          try{
+            var cm = await db.ref('chat_msgs').limitToFirst(200).once('value');
+            var all = cm.val()||{};
+            var have2 = new Set((window.contacts||[]).map(function(c){ return String(c&&c.id); }));
+            Object.keys(all).forEach(function(k){
+              if(k.indexOf('g_')===0) return;
+              if(k.indexOf(String(uid))<0) return;
+              var parts = k.split('_');
+              var peer = parts[0]===String(uid) ? parts[1] : parts[0];
+              if(!peer || peer===String(uid) || have2.has(String(peer))) return;
+              window.contacts = window.contacts || [];
+              window.contacts.push({
+                id: peer, username: 'user_'+String(peer).slice(0,6),
+                first_name: 'Чат', lastMessage: '', lastAt: Date.now(), _dmWithMe: true
+              });
+              have2.add(String(peer));
+            });
+            if(typeof renderContactsAndGroups==='function') renderContactsAndGroups();
+          }catch(e2){}
+        }
+      }catch(e){ console.warn('fb restore', e); }
+
+      if(typeof renderContactsAndGroups==='function') renderContactsAndGroups();
+    }catch(e){ console.warn('restoreAllChats', e); }
+  }
+  setTimeout(restoreAllChats, 1500);
+  setTimeout(restoreAllChats, 5000);
+  setTimeout(restoreAllChats, 12000);
+
+  /* ========== 2) REMOVE CHAT STYLE ========== */
+  function killStyleUI(){
+    ['sl-chat-style','sl-btn-chat-style','sl-chat-style-btn'].forEach(function(id){
+      var el=document.getElementById(id); if(el) el.remove();
+    });
+    document.querySelectorAll('[id*="chat-style"], .sl-chat-style-row').forEach(function(el){
+      if(el.textContent && el.textContent.indexOf('Стиль')>=0) el.remove();
+    });
+    // force glass
+    try{
+      document.documentElement.setAttribute('data-chat-style','glass');
+      document.body.setAttribute('data-chat-style','glass');
+      localStorage.setItem('sl_chat_style','glass');
+    }catch(e){}
+  }
+  killStyleUI();
+  setInterval(killStyleUI, 3000);
+
+  /* ========== 3+10) SECOND USERNAME full-screen + validation ========== */
+  function openUsernameEditor(){
+    var old = document.getElementById('sl-un-fullscreen');
+    if(old) old.remove();
+    var p = window.myProfile || {};
+    var u1 = String(p.username || localStorage.getItem('sl_username1') || '').replace(/^@/,'');
+    var u2 = String(p.username2 || localStorage.getItem('sl_username2') || '').replace(/^@/,'');
+    var ov = document.createElement('div');
+    ov.id = 'sl-un-fullscreen';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:100000;background:var(--bg,#0b0d12);display:flex;flex-direction:column;animation:slUnIn .28s ease';
+    ov.innerHTML = '<style>@keyframes slUnIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}</style>'+
+      '<div style="padding:14px 16px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--line,rgba(255,255,255,.08))">'+
+      '<button type="button" id="sl-un-back" style="width:40px;height:40px;border-radius:50%;border:none;background:rgba(255,255,255,.08);color:#fff;font-size:22px;cursor:pointer">‹</button>'+
+      '<div style="font-weight:700;font-size:17px;flex:1">Username</div>'+
+      '<button type="button" id="sl-un-save2" style="padding:8px 16px;border-radius:999px;border:none;background:#4C7CF3;color:#fff;font-weight:700;cursor:pointer">Готово</button>'+
+      '</div>'+
+      '<div style="padding:24px 20px;flex:1;overflow:auto">'+
+      '<div style="font-size:13px;color:var(--muted,#8b93a7);margin-bottom:8px">Основной username</div>'+
+      '<div style="display:flex;align-items:center;background:var(--input-bg,#161b26);border:1px solid var(--line,rgba(255,255,255,.1));border-radius:14px;padding:0 14px;margin-bottom:6px">'+
+      '<span style="color:#4C7CF3;font-weight:800;font-size:18px;user-select:none">@</span>'+
+      '<input id="sl-fs-un1" value="'+u1.replace(/"/g,'')+'" maxlength="32" autocomplete="off" style="flex:1;border:none;background:transparent;color:var(--text,#fff);font-size:17px;padding:14px 8px;outline:none">'+
+      '</div>'+
+      '<div id="sl-fs-err1" style="min-height:18px;font-size:12px;color:#e5484d;margin-bottom:18px"></div>'+
+      '<div style="font-size:13px;color:var(--muted,#8b93a7);margin-bottom:8px">Второй username (необязательно)</div>'+
+      '<div style="display:flex;align-items:center;background:var(--input-bg,#161b26);border:1px solid var(--line,rgba(255,255,255,.1));border-radius:14px;padding:0 14px;margin-bottom:6px">'+
+      '<span style="color:#4C7CF3;font-weight:800;font-size:18px;user-select:none">@</span>'+
+      '<input id="sl-fs-un2" value="'+u2.replace(/"/g,'')+'" maxlength="32" autocomplete="off" style="flex:1;border:none;background:transparent;color:var(--text,#fff);font-size:17px;padding:14px 8px;outline:none">'+
+      '</div>'+
+      '<div id="sl-fs-err2" style="min-height:18px;font-size:12px;color:#e5484d;margin-bottom:12px"></div>'+
+      '<div style="font-size:12px;color:var(--muted,#8b93a7);line-height:1.45">Только латиница, цифры и _. От 3 до 32 символов. Нельзя занять занятый username.</div>'+
+      '</div>';
+    document.body.appendChild(ov);
+    ov.querySelector('#sl-un-back').onclick = function(){ ov.remove(); };
+
+    function validate(v, el){
+      v = (v||'').replace(/^@/,'').trim().toLowerCase();
+      if(!v){ el.textContent=''; return true; }
+      if(!/^[a-z0-9_]+$/.test(v)){ el.textContent='Запрещённые символы'; return false; }
+      if(v.length<3){ el.textContent='Минимум 3 символа'; return false; }
+      if(v.length>32){ el.textContent='Максимум 32 символа'; return false; }
+      el.textContent=''; return true;
+    }
+    var i1 = ov.querySelector('#sl-fs-un1');
+    var i2 = ov.querySelector('#sl-fs-un2');
+    i1.oninput = function(){ this.value=this.value.replace(/@/g,'').toLowerCase().replace(/[^a-z0-9_]/g,''); validate(this.value, ov.querySelector('#sl-fs-err1')); };
+    i2.oninput = function(){ this.value=this.value.replace(/@/g,'').toLowerCase().replace(/[^a-z0-9_]/g,''); validate(this.value, ov.querySelector('#sl-fs-err2')); };
+
+    async function isTaken(name, myId){
+      if(!name) return false;
+      try{
+        var db = window.firebaseDb || (window.firebase && firebase.database && firebase.database());
+        if(!db) return false;
+        // scan profiles for username / username2
+        var snap = await db.ref('tables/profiles').orderByChild('username').equalTo(name).once('value');
+        var val = snap.val();
+        if(val){
+          var ids = Object.keys(val);
+          for(var i=0;i<ids.length;i++){ if(String(ids[i])!==String(myId)) return true; }
+        }
+        var snap2 = await db.ref('tables/profiles').orderByChild('username2').equalTo(name).once('value');
+        var val2 = snap2.val();
+        if(val2){
+          var ids2 = Object.keys(val2);
+          for(var j=0;j<ids2.length;j++){ if(String(ids2[j])!==String(myId)) return true; }
+        }
+      }catch(e){}
+      return false;
+    }
+
+    ov.querySelector('#sl-un-save2').onclick = async function(){
+      var a = (i1.value||'').replace(/^@/,'').trim().toLowerCase();
+      var b = (i2.value||'').replace(/^@/,'').trim().toLowerCase();
+      if(!validate(a, ov.querySelector('#sl-fs-err1'))) return;
+      if(!validate(b, ov.querySelector('#sl-fs-err2'))) return;
+      if(a && b && a===b){ ov.querySelector('#sl-fs-err2').textContent='Юзернеймы должны отличаться'; return; }
+      var myId = (window.myProfile && myProfile.id) || null;
+      if(a && await isTaken(a, myId)){ ov.querySelector('#sl-fs-err1').textContent='Этот username уже занят'; return; }
+      if(b && await isTaken(b, myId)){ ov.querySelector('#sl-fs-err2').textContent='Этот username уже занят'; return; }
+      try{
+        localStorage.setItem('sl_username1', a);
+        localStorage.setItem('sl_username2', b);
+        if(window.myProfile){ myProfile.username=a; myProfile.username2=b||null; }
+        if(myId && window.firebaseDb){
+          await firebaseDb.ref('tables/profiles/'+myId).update({username:a, username2:b||null});
+        } else if(window.sb && myId){
+          await sb.from('profiles').update({username:a, username2:b||null}).eq('id', myId);
+        }
+        if(typeof showToast==='function') showToast('Сохранено');
+        ov.remove();
+      }catch(e){
+        ov.querySelector('#sl-fs-err2').textContent = 'Ошибка: '+(e.message||e);
+      }
+    };
+  }
+  window.openUsernameEditor = openUsernameEditor;
+
+  // Wire settings Username button
+  setInterval(function(){
+    document.querySelectorAll('#sl-btn-username, [data-act="username"]').forEach(function(btn){
+      if(btn._sl14) return;
+      btn._sl14 = 1;
+      btn.onclick = function(e){ e.preventDefault(); openUsernameEditor(); };
+    });
+    // inject button if missing
+    var page = document.getElementById('page-settings') || document.querySelector('.settings-page');
+    if(page && !document.getElementById('sl-btn-username')){
+      var row = document.createElement('div');
+      row.className = 'settings-item';
+      row.id = 'sl-btn-username';
+      row.innerHTML = '<span style="font-weight:600">Username</span><span style="color:var(--muted)">›</span>';
+      row.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:14px 16px;cursor:pointer';
+      row.onclick = function(){ openUsernameEditor(); };
+      var anchor = page.querySelector('.settings-section') || page.firstElementChild;
+      if(anchor) anchor.parentNode.insertBefore(row, anchor);
+      else page.appendChild(row);
+    }
+  }, 2000);
+
+  /* ========== 4+9) PHONE FORMAT ON LOGIN ========== */
+  function formatRUPhone(digits){
+    // digits: only numbers, may start with 7/8
+    var d = (digits||'').replace(/\D/g,'');
+    if(d.charAt(0)==='8') d = '7'+d.slice(1);
+    if(d.charAt(0)!=='7' && d.length>0) d = '7'+d;
+    d = d.slice(0, 11); // 7 + 10
+    var rest = d.slice(1); // up to 10
+    var out = '+7';
+    if(rest.length===0) return out;
+    out += ' '+rest.slice(0,3);
+    if(rest.length>3) out += '-'+rest.slice(3,6);
+    if(rest.length>6) out += '-('+rest.slice(6,8);
+    if(rest.length>8) out += '-'+rest.slice(8,10)+')';
+    else if(rest.length>6) out += ')';
+    return out;
+  }
+  function wirePhoneAnim(inp){
+    if(!inp || inp._slPhone14) return;
+    inp._slPhone14 = 1;
+    inp.addEventListener('input', function(){
+      var v = inp.value || '';
+      var t = v.trim();
+      // ONLY if the first character is + or a digit → phone mode
+      // emails like user12@mail.com must NOT convert
+      if(!t) return;
+      var first = t.charAt(0);
+      if(first !== '+' && !/[0-9]/.test(first)) return;
+      var dig = v.replace(/\D/g,'');
+      if(dig.length > 11) dig = dig.slice(0,11);
+      var formatted = formatRUPhone(dig);
+      if(inp.value !== formatted){
+        inp.value = formatted;
+        try{ inp.setSelectionRange(formatted.length, formatted.length); }catch(e){}
+      }
+    });
+  }
+  setInterval(function(){
+    ['#auth-login','#login-input','#auth-email','#auth-contact','input[name="login"]','#reg-phone','#login-phone'].forEach(function(sel){
+      document.querySelectorAll(sel).forEach(wirePhoneAnim);
+    });
+    // any visible auth input
+    document.querySelectorAll('#auth-screen input[type="text"], #auth-screen input[type="tel"], #auth-screen input[type="email"]').forEach(wirePhoneAnim);
+  }, 1000);
+
+  /* ========== 5) ARCHIVE LABEL «Из архива» ========== */
+  function fixArchiveLabels(){
+    try{
+      var arch = [];
+      try{ arch = (typeof getArchive==='function'?getArchive():JSON.parse(localStorage.getItem('sl_archive')||'[]'))||[]; }catch(e){}
+      var selected = window._slSelectedChats || window.selectedChatIds || [];
+      if(!Array.isArray(selected)) selected = [];
+      var allArch = selected.length && selected.every(function(id){ return arch.map(String).includes(String(id)); });
+      document.querySelectorAll('#sl-sel-archive, [data-a="archive"]').forEach(function(btn){
+        var txt = allArch ? 'Из архива' : 'В архив';
+        if(btn.textContent.indexOf('архив')>=0 || btn.textContent.indexOf('Архив')>=0){
+          if(btn.textContent.trim() !== txt) btn.textContent = txt;
+        }
+      });
+      // context menu already has Разархивировать — ok
+    }catch(e){}
+  }
+  setInterval(fixArchiveLabels, 800);
+
+  // patch setArchive bar creation
+  document.addEventListener('click', function(){
+    setTimeout(fixArchiveLabels, 50);
+  }, true);
+
+  /* ========== 6) HIDE MINI SEND DURING VOICE/CIRCLE ========== */
+  function forceComposerButtons(){
+    try{
+      var input = document.getElementById('message-input');
+      var send = document.getElementById('send-btn');
+      var composer = document.getElementById('composer');
+      var hasText = !!(input && input.value && input.value.trim().length);
+      var recording = !!(document.body.classList.contains('recording') || document.querySelector('.rec-lock, .sl-rec-lock, .recording-ui, .voice-lock, [class*="rec-lock"]'));
+      if(send){
+        if(!hasText || recording){
+          send.classList.remove('visible');
+          send.style.setProperty('opacity','0','important');
+          send.style.setProperty('pointer-events','none','important');
+          send.style.setProperty('transform','scale(0)','important');
+        } else {
+          send.classList.add('visible');
+          send.style.removeProperty('opacity');
+          send.style.removeProperty('pointer-events');
+          send.style.removeProperty('transform');
+        }
+      }
+      if(composer){
+        if(!hasText) composer.classList.remove('has-text');
+        else composer.classList.add('has-text');
+      }
+      // hide any floating mini send that is NOT the main send-btn
+      document.querySelectorAll('.send-btn, [class*="send"]').forEach(function(el){
+        if(el.id === 'send-btn') return;
+        if(el.closest && el.closest('#composer')) return;
+        // floating lock/send hybrid during gesture
+        if(el.classList.contains('sl-mini-send') || el.dataset.miniSend){
+          el.style.display = 'none';
+        }
+      });
+    }catch(e){}
+  }
+  setInterval(forceComposerButtons, 200);
+  document.addEventListener('input', forceComposerButtons, true);
+
+  /* ========== 7) STICKER PACKS SEPARATE (news / bunny) ========== */
+  function splitStickerPacks(){
+    try{
+      if(typeof STICKER_PACKS === 'undefined') return;
+      // ensure news and bunny are separate keys
+      var news = STICKER_PACKS.news || STICKER_PACKS.News;
+      var bunny = STICKER_PACKS.bunny || STICKER_PACKS.Bunny || STICKER_PACKS.rabbit;
+      // if someone merged them into one pack, split by name heuristics
+      Object.keys(STICKER_PACKS).forEach(function(k){
+        var p = STICKER_PACKS[k];
+        if(!p || !p.stickers) return;
+        if(k==='news' || k==='bunny') return;
+        if((p.name||'').toLowerCase().indexOf('news')>=0 && !STICKER_PACKS.news){
+          STICKER_PACKS.news = { name: p.name||'News', stickers: p.stickers.slice() };
+        }
+        if((p.name||'').toLowerCase().indexOf('bunny')>=0 && !STICKER_PACKS.bunny){
+          STICKER_PACKS.bunny = { name: p.name||'Bunny', stickers: p.stickers.slice() };
+        }
+      });
+      // re-render tabs so each pack is its own tab
+      var packsEl = document.getElementById('sticker-packs');
+      if(packsEl && !packsEl._slSplit14){
+        packsEl._slSplit14 = 1;
+        var keys = Object.keys(STICKER_PACKS);
+        packsEl.innerHTML = keys.map(function(k){
+          return '<div class="sticker-pack-tab" data-pack="'+k+'" style="margin-right:6px">'+
+            (STICKER_PACKS[k].name||k)+'</div>';
+        }).join('') + '<div class="sticker-pack-tab" data-pack="__create__" id="sl-stk-create-tab" style="font-weight:800">+</div>';
+        packsEl.querySelectorAll('.sticker-pack-tab').forEach(function(t){
+          t.onclick = function(){
+            if(t.dataset.pack==='__create__'){
+              if(typeof window.slCreateCustomSticker==='function') window.slCreateCustomSticker();
+              return;
+            }
+            window.activeStickerPack = t.dataset.pack;
+            packsEl.querySelectorAll('.sticker-pack-tab').forEach(function(x){ x.classList.toggle('active', x.dataset.pack===t.dataset.pack); });
+            if(typeof renderStickerGrid==='function') renderStickerGrid();
+          };
+        });
+      }
+    }catch(e){}
+  }
+  setInterval(splitStickerPacks, 2500);
+
+  /* custom sticker + */
+  window.slCreateCustomSticker = function(){
+    var inp = document.createElement('input');
+    inp.type = 'file'; inp.accept = 'image/png,image/webp,image/gif,image/*';
+    inp.onchange = async function(){
+      var f = inp.files && inp.files[0];
+      if(!f) return;
+      var url = URL.createObjectURL(f);
+      // store into custom pack
+      if(typeof STICKER_PACKS==='undefined') window.STICKER_PACKS = {};
+      if(!STICKER_PACKS.custom) STICKER_PACKS.custom = { name: 'Мои', stickers: [] };
+      STICKER_PACKS.custom.stickers.push(url);
+      try{
+        var arr = JSON.parse(localStorage.getItem('sl_custom_stickers')||'[]');
+        // keep blob urls only this session; also try dataURL
+        var reader = new FileReader();
+        reader.onload = function(){
+          arr.push(reader.result);
+          localStorage.setItem('sl_custom_stickers', JSON.stringify(arr.slice(-40)));
+        };
+        reader.readAsDataURL(f);
+      }catch(e){}
+      window.activeStickerPack = 'custom';
+      if(typeof renderStickerGrid==='function') renderStickerGrid();
+      if(typeof showToast==='function') showToast('Стикер добавлен');
+    };
+    inp.click();
+  };
+  // load custom stickers
+  try{
+    var cs = JSON.parse(localStorage.getItem('sl_custom_stickers')||'[]');
+    if(cs.length){
+      if(typeof STICKER_PACKS==='undefined') window.STICKER_PACKS={};
+      STICKER_PACKS.custom = { name:'Мои', stickers: cs.slice() };
+    }
+  }catch(e){}
+
+  /* ========== 8) BEAUTIFUL CONTACT CARD ========== */
+  var _ofp = window.openFullProfile || (typeof openFullProfile==='function'?openFullProfile:null);
+  window.openFullProfile = async function(profile){
+    if(!profile){ if(_ofp) return _ofp.apply(this,arguments); return; }
+    // Prefer our animated card
+    try{
+      var old = document.getElementById('sl-contact-card');
+      if(old) old.remove();
+      var name = [profile.first_name, profile.last_name].filter(Boolean).join(' ') || profile.username || 'Контакт';
+      var u1 = profile.username ? '@'+String(profile.username).replace(/^@/,'') : '';
+      var u2 = profile.username2 ? '@'+String(profile.username2).replace(/^@/,'') : '';
+      var uname = u1 && u2 ? (u1+', а также '+u2) : (u1||u2||'');
+      var phone = profile.phone || '';
+      var av = profile.avatar_url || '';
+      var color = profile.color || '#4C7CF3';
+      var letter = (name||'?').trim().charAt(0).toUpperCase();
+      var ov = document.createElement('div');
+      ov.id = 'sl-contact-card';
+      ov.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.55);display:flex;align-items:flex-end;justify-content:center;animation:slCardBg .25s ease';
+      ov.innerHTML = '<style>'+
+        '@keyframes slCardBg{from{opacity:0}to{opacity:1}}'+
+        '@keyframes slCardUp{from{transform:translateY(100%)}to{transform:translateY(0)}}'+
+        '@keyframes slAvPop{from{transform:scale(.6);opacity:0}to{transform:scale(1);opacity:1}}'+
+        '</style>'+
+        '<div style="width:100%;max-width:480px;max-height:92vh;overflow:auto;background:var(--panel,#12151c);border-radius:22px 22px 0 0;padding:0 0 28px;animation:slCardUp .32s cubic-bezier(.22,1,.36,1);box-shadow:0 -12px 40px rgba(0,0,0,.45)">'+
+        '<div style="height:4px;width:40px;border-radius:99px;background:rgba(255,255,255,.2);margin:10px auto 0"></div>'+
+        '<div style="display:flex;justify-content:center;margin-top:18px">'+
+        (av
+          ? '<img src="'+av.replace(/"/g,'')+'" style="width:96px;height:96px;border-radius:50%;object-fit:cover;animation:slAvPop .4s cubic-bezier(.22,1,.36,1);box-shadow:0 8px 28px rgba(0,0,0,.35);cursor:pointer" id="sl-cc-av">'
+          : '<div id="sl-cc-av" style="width:96px;height:96px;border-radius:50%;background:'+color+';display:flex;align-items:center;justify-content:center;font-size:36px;font-weight:800;color:#fff;animation:slAvPop .4s cubic-bezier(.22,1,.36,1);cursor:pointer">'+letter+'</div>')+
+        '</div>'+
+        '<div style="text-align:center;margin-top:14px;padding:0 20px">'+
+        '<div style="font-size:22px;font-weight:800;letter-spacing:-.02em">'+String(name).replace(/</g,'&lt;')+'</div>'+
+        (uname?'<div style="margin-top:6px;color:#4C7CF3;font-weight:600;font-size:14px">'+String(uname).replace(/</g,'&lt;')+'</div>':'')+
+        (phone?'<div style="margin-top:6px;color:var(--muted,#8b93a7);font-size:14px">'+String(phone).replace(/</g,'&lt;')+'</div>':'')+
+        '</div>'+
+        '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;padding:22px 20px 8px">'+
+        '<button type="button" data-cc="msg" style="padding:14px 8px;border-radius:16px;border:none;background:rgba(76,124,243,.15);color:#4C7CF3;font-weight:700;cursor:pointer">Написать</button>'+
+        '<button type="button" data-cc="call" style="padding:14px 8px;border-radius:16px;border:none;background:rgba(52,199,89,.12);color:#34c759;font-weight:700;cursor:pointer">Звонок</button>'+
+        '<button type="button" data-cc="more" style="padding:14px 8px;border-radius:16px;border:none;background:rgba(255,255,255,.06);color:var(--text,#fff);font-weight:700;cursor:pointer">Ещё</button>'+
+        '</div>'+
+        '<div style="margin:12px 16px;border-radius:16px;background:rgba(255,255,255,.04);overflow:hidden">'+
+        '<div style="padding:14px 16px;border-bottom:1px solid rgba(255,255,255,.06);font-size:14px;color:var(--muted)">В сети / был(а) недавно</div>'+
+        '<div style="padding:14px 16px;font-size:14px">Уведомления · Звук</div>'+
+        '</div>'+
+        '<div style="padding:8px 20px"><button type="button" id="sl-cc-close" style="width:100%;padding:14px;border-radius:14px;border:none;background:rgba(255,255,255,.06);color:var(--text);font-weight:700;cursor:pointer">Закрыть</button></div>'+
+        '</div>';
+      document.body.appendChild(ov);
+      ov.addEventListener('click', function(e){ if(e.target===ov) ov.remove(); });
+      ov.querySelector('#sl-cc-close').onclick = function(){ ov.remove(); };
+      ov.querySelector('#sl-cc-av').onclick = function(e){
+        e.stopPropagation();
+        if(av && typeof openTelegramPhotoViewer==='function') openTelegramPhotoViewer(av,{title:'Фото'});
+        else if(av && typeof openImageFullscreen==='function') openImageFullscreen(av);
+      };
+      ov.querySelector('[data-cc="msg"]').onclick = function(){
+        ov.remove();
+        try{
+          if(typeof openChat==='function') openChat(profile);
+        }catch(e){}
+      };
+      ov.querySelector('[data-cc="call"]').onclick = function(){
+        if(typeof showToast==='function') showToast('Звонок…');
+      };
+      ov.querySelector('[data-cc="more"]').onclick = function(){
+        if(_ofp){ ov.remove(); _ofp(profile); }
+      };
+      return;
+    }catch(e){
+      if(_ofp) return _ofp.apply(this, arguments);
+    }
+  };
+  // also slOpenChatInfo uses openFullProfile
+  window.slOpenChatInfo = function(){
+    try{
+      if(typeof activeGroup!=='undefined' && activeGroup){
+        if(typeof openGroupInfo==='function') return openGroupInfo(activeGroup);
+        return window.openFullProfile(activeGroup);
+      }
+      var partner = (typeof activePartner!=='undefined' && activePartner) ? activePartner : window.activePartner;
+      if(partner) return window.openFullProfile(partner);
+    }catch(e){ console.warn(e); }
+  };
+
+  console.log('[SL] fix14: chats, no style, username FS, phone, archive, send, stickers, card');
+})();
+</script>
+
+
+<script>
+(function(){
+  if(window._slIndexLive) return;
+  window._slIndexLive = 1;
+
+  function pairKey(a,b){
+    return [String(a),String(b)].sort().join('_');
+  }
+
+  async function onMsgForIndex(m){
+    try{
+      if(!m || !myProfile || !myProfile.id) return;
+      const me = String(myProfile.id);
+      if(m.group_id){
+        const db = window.firebaseDb || (firebase && firebase.database && firebase.database());
+        if(!db) return;
+        const prev = String(m.content||m.type||'').slice(0,120);
+        await db.ref('user_chat_index/'+me+'/g_'+m.group_id).update({
+          lastAt: m.created_at || new Date().toISOString(),
+          lastMessage: prev,
+          updated: Date.now(),
+          group_id: String(m.group_id)
+        });
+        return;
+      }
+      const s = m.sender_id!=null?String(m.sender_id):'';
+      const r = m.receiver_id!=null?String(m.receiver_id):'';
+      if(s!==me && r!==me) return;
+      const peer = s===me ? r : s;
+      if(!peer) return;
+      if(typeof slTouchChatIndex==='function'){
+        await slTouchChatIndex(s||me, r||peer, (typeof slMsgPreview==='function'?slMsgPreview(m):(m.content||'')), m.created_at);
+      }
+      // soft update contacts list preview
+      try{
+        if(Array.isArray(contacts)){
+          var hit = contacts.find(function(c){ return c && String(c.id)===String(peer); });
+          var prev = (typeof slMsgPreview==='function'?slMsgPreview(m):(m.content||''));
+          if(hit){
+            hit.lastMessage = prev;
+            hit.lastAt = m.created_at || hit.lastAt;
+            hit._dmWithMe = true;
+          } else {
+            contacts.unshift({ id: peer, first_name: 'Чат', lastMessage: prev, lastAt: m.created_at||new Date().toISOString(), _dmWithMe: true });
+          }
+          if(typeof renderContactsAndGroups==='function') renderContactsAndGroups();
+          if(typeof slSaveContactsCache==='function') slSaveContactsCache();
+        }
+      }catch(e){}
+    }catch(e){}
+  }
+
+  // Hook renderMessage if present
+  try{
+    if(typeof renderMessage==='function' && !renderMessage._idxHook){
+      var _rm = renderMessage;
+      window.renderMessage = function(msg, isGroup){
+        try{ onMsgForIndex(msg); }catch(e){}
+        return _rm.apply(this, arguments);
+      };
+      renderMessage._idxHook = 1;
+    }
+  }catch(e){}
+
+  // Subscribe to own index for live list
+  function subIndex(){
+    try{
+      if(!myProfile||!myProfile.id) return;
+      var db = window.firebaseDb || (firebase && firebase.database && firebase.database());
+      if(!db) return;
+      if(window._slIdxSub) return;
+      window._slIdxSub = db.ref('user_chat_index/'+myProfile.id);
+      window._slIdxSub.on('value', function(){
+        try{ if(typeof loadChats==='function') loadChats(); }catch(e){}
+      });
+    }catch(e){}
+  }
+  setTimeout(subIndex, 2000);
+  setTimeout(subIndex, 8000);
+
+  console.log('[SL] live user_chat_index ready');
+})();
+</script>
+
+
+<script>
+(function(){
+  if(window._slStoriesSmooth) return;
+  window._slStoriesSmooth = 1;
+
+  // CSS transitions for expand/collapse
+  if(!document.getElementById('sl-stories-smooth-css')){
+    var st=document.createElement('style');
+    st.id='sl-stories-smooth-css';
+    st.textContent = `
+      #stories-bar, .stories-bar{
+        transform-origin: top center;
+        transition: max-height .34s cubic-bezier(.22,1,.36,1),
+                    opacity .28s ease,
+                    transform .34s cubic-bezier(.22,1,.36,1),
+                    padding .28s ease,
+                    margin .28s ease,
+                    filter .28s ease !important;
+        will-change: max-height, opacity, transform;
+        overflow: hidden !important;
+      }
+      #stories-bar .story-item, .stories-bar .story-item{
+        transition: transform .3s cubic-bezier(.22,1,.36,1), opacity .25s ease !important;
+        will-change: transform, opacity;
+      }
+      #stories-bar .story-item span, .stories-bar .story-item span{
+        transition: opacity .22s ease !important;
+      }
+      #max-chats-title{
+        transition: opacity .25s ease, transform .3s cubic-bezier(.22,1,.36,1) !important;
+      }
+      #sl-chats-title-chip{
+        transition: opacity .28s ease, transform .32s cubic-bezier(.22,1,.36,1) !important;
+      }
+    `;
+    document.head.appendChild(st);
+  }
+
+  // Soften settle: animate toward 0/1 instead of hard reset
+  function softSettle(){
+    try{
+      var sc=document.getElementById('sidebar-scroll');
+      if(!sc) return;
+      var y = sc.scrollTop || 0;
+      var RANGE = 90;
+      // if near top — smoothly expand (don't snap styles off)
+      if(y < 12){
+        sc.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    }catch(e){}
+  }
+
+  // Override abrupt resetStories to animated expand
+  function patchReset(){
+    try{
+      // find scroll handler scope via redefining apply on bar
+      var bar = document.getElementById('stories-bar');
+      if(!bar) return;
+      // ensure when expanding, maxHeight goes to a real value first
+      if(!bar.dataset.fullH){
+        bar.style.maxHeight = 'none';
+        bar.dataset.fullH = Math.max(bar.scrollHeight, 110) + 'px';
+      }
+    }catch(e){}
+  }
+
+  // Intercept scroll to use smoother expand when scrolling up
+  function bindSmooth(){
+    var sc = document.getElementById('sidebar-scroll');
+    if(!sc || sc._slSmoothStories) return;
+    sc._slSmoothStories = 1;
+    var lastY = sc.scrollTop || 0;
+    sc.addEventListener('scroll', function(){
+      var y = sc.scrollTop || 0;
+      var bar = document.getElementById('stories-bar');
+      if(!bar) return;
+      // scrolling up toward top
+      if(y < lastY && y < 100){
+        var full = bar.dataset.fullH || '120px';
+        if(y < 8){
+          bar.style.maxHeight = full;
+          bar.style.opacity = '1';
+          bar.style.transform = 'scaleY(1) translateY(0)';
+          bar.style.pointerEvents = 'auto';
+          bar.style.filter = 'none';
+          bar.querySelectorAll('.story-item').forEach(function(it){
+            it.style.transform = 'scale(1)';
+            it.style.opacity = '1';
+            var sp=it.querySelector('span');
+            if(sp) sp.style.opacity='1';
+          });
+        }
+      }
+      // measure natural height when fully open
+      if(y < 2){
+        bar.style.maxHeight = 'none';
+        bar.dataset.fullH = Math.max(bar.scrollHeight, 110) + 'px';
+        bar.style.maxHeight = bar.dataset.fullH;
+      }
+      lastY = y;
+    }, {passive:true});
+  }
+
+  setInterval(bindSmooth, 1500);
+  setTimeout(bindSmooth, 500);
+  setTimeout(patchReset, 800);
+
+  // Also refresh stories more often so new posts appear
+  setInterval(function(){
+    try{
+      if(typeof loadStories==='function' && document.getElementById('stories-bar')){
+        loadStories();
+      }
+    }catch(e){}
+  }, 45000);
+
+  console.log('[SL] stories smooth + robust viewer');
 })();
 </script>
 
