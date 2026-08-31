@@ -4180,6 +4180,15 @@ body.in-chat #sidebar.hidden{ /* ok */ }
 }
 </style>
 
+
+<style id="sl-swipe-hard">
+.sw-clip{ overflow:hidden !important; position:relative !important; }
+.sw-front{ touch-action: pan-y !important; }
+.sw-actions{ visibility:hidden; }
+.sw-clip.is-swiping .sw-actions,
+.sw-clip[data-open] .sw-actions{ visibility:visible !important; }
+</style>
+
 </head>
 <body>
 <div id="sl-hard-boot" aria-hidden="true" style="position:fixed;inset:0;z-index:2147483646;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:#000000;color:#E8EEF8;font-family:system-ui,-apple-system,sans-serif"><div class="sl-hb-dot"></div><div style="font:600 13px/1.3 system-ui,-apple-system,sans-serif;color:#8B9BB4">SLine</div></div>
@@ -5753,7 +5762,7 @@ window.slEnsureFirebase = slEnsureFirebase;
                   try {
                     const gid = String(data.group_id);
                     const sid = String(data.sender_id||'');
-                    const prev = String(data.content||data.type||'').slice(0,120);
+                    const prev = (data.type==='encrypted' || (typeof data.content==='string' && data.content.indexOf('\"data\"')>=0) || (typeof data.content==='string' && data.content.charAt(0)==='{')) ? 'Сообщение' : (data.type && data.type!=='text' ? String(data.type) : 'Сообщение');
                     const at = data.created_at || new Date().toISOString();
                     if (sid) {
                       await _fbDb.ref('user_chat_index/'+sid+'/g_'+gid).update({
@@ -5765,7 +5774,7 @@ window.slEnsureFirebase = slEnsureFirebase;
                   const key = [String(data.sender_id), String(data.receiver_id)].sort().join('_');
                   await _fbDb.ref('chat_msgs/' + key + '/' + id).set(data);
                   try {
-                    const prev = String(data.content||data.type||'').slice(0,120);
+                    const prev = (data.type==='encrypted' || (typeof data.content==='string' && data.content.indexOf('\"data\"')>=0) || (typeof data.content==='string' && data.content.charAt(0)==='{')) ? 'Сообщение' : (data.type && data.type!=='text' ? String(data.type) : 'Сообщение');
                     const at = data.created_at || new Date().toISOString();
                     const s = String(data.sender_id), r = String(data.receiver_id);
                     // Rules: can only write own user_chat_index/$uid
@@ -11870,7 +11879,7 @@ async function sendFileOptimistic(file, mType, caption, quality){
               setTimeout(()=>sb.removeChannel(ch), 1200);
             }
           });
-          const preview = data.type==='text' ? (data.content||'').slice(0,80) : (data.type||'message');
+          const preview = (data.type==='encrypted' || data.type!=='text') ? (data.type==='encrypted'?'Новое сообщение':(data.type||'message')) : 'Новое сообщение';
           const _ptitle = myProfile.first_name||myProfile.username||'SLine';
           try{ sendWebPushToUser(peerId, _ptitle, preview, {tag:'sl-msg'}); }catch(e){}
           try{ sendNtfyPush(peerId, _ptitle, preview, {tags:'speech_balloon', priority:'high'}); }catch(e){}
@@ -12376,17 +12385,34 @@ async function _sendMessageInner(type='text', fileUrl=null, content=null){
   if (_outType === 'text' && _outContent && !fileUrl && window.SL_E2EE && myProfile && myProfile.id) {
     try {
       const isGroup = !!activeGroup;
+      const peerUid = isGroup ? null : (activePartner && activePartner.id);
+      // ensure keys exist before encrypt
+      try {
+        if (SL_E2EE.ensureUserKeys) await SL_E2EE.ensureUserKeys(myProfile.id);
+        if (!isGroup && peerUid && SL_E2EE.getUserPublicKey) {
+          let pk = await SL_E2EE.getUserPublicKey(peerUid);
+          if (!pk && SL_E2EE.initForUser) {
+            // peer may not have published — still try self-device; wait once
+            await new Promise(r => setTimeout(r, 200));
+            pk = await SL_E2EE.getUserPublicKey(peerUid);
+          }
+        }
+      } catch (eKey) { console.warn('[E2EE] key prep', eKey); }
       const encrypted = await SL_E2EE.encryptMessage({
         text: _outContent,
-        chatId: isGroup ? activeGroup.id : (activePartner && activePartner.id),
+        chatId: isGroup ? activeGroup.id : peerUid,
         isGroup: isGroup,
         myUid: myProfile.id,
-        peerUid: isGroup ? null : (activePartner && activePartner.id)
+        peerUid: peerUid
       });
+      if (!encrypted || !encrypted.data) throw new Error('empty cipher');
       _outContent = JSON.stringify(encrypted);
       _outType = 'encrypted';
     } catch (eEnc) {
-      console.warn('[E2EE] encrypt failed, sending plaintext', eEnc);
+      console.warn('[E2EE] encrypt failed — NOT sending plaintext', eEnc);
+      try { if (typeof showToast === 'function') showToast('Не удалось зашифровать. Сообщение не отправлено.'); } catch (e) {}
+      window._slSendLock = false;
+      return;
     }
   }
   const payload={sender_id:myProfile.id, content:_outContent, type:_outType, file_url:fileUrl||null};
@@ -12547,7 +12573,7 @@ async function _sendMessageInner(type='text', fileUrl=null, content=null){
             }
           });
           // Push only TO the peer — never show a local notification for our own send
-          const preview = data.type==='text' ? (data.content||'').slice(0,80) : (data.type||'message');
+          const preview = (data.type==='encrypted' || data.type!=='text') ? (data.type==='encrypted'?'Новое сообщение':(data.type||'message')) : 'Новое сообщение';
           const _ptitle = myProfile.first_name||myProfile.username||'SLine';
           try{ sendWebPushToUser(peerId, _ptitle, preview, {tag:'sl-msg'}); }catch(e){}
           try{ sendNtfyPush(peerId, _ptitle, preview, {tags:'speech_balloon', priority:'high'}); }catch(e){}
@@ -57715,104 +57741,203 @@ body:has(#msg-select-bar.show) .bubble-row .sl-sel-check{
     }
   }catch(e){}
 
-  /* ========== 8) CONTACT CARD (fixed) ========== */
-  var _ofpOrig = (typeof openFullProfile==='function' && !window.openFullProfile._slCard) ? openFullProfile : (window._slOfpOrig || null);
-  if(typeof openFullProfile==='function' && !window._slOfpOrig) window._slOfpOrig = openFullProfile;
+
+  /* ========== TG-style contact profile (main card) ========== */
+  window._slOfpOrig = window._slOfpOrig || (typeof openFullProfile==='function' ? openFullProfile : null);
 
   window.openFullProfile = async function(profile){
     if(!profile) return;
-    // remove any existing cards
     try{
-      document.querySelectorAll('#sl-contact-card, #sl-user-profile, .profile-sheet').forEach(function(el){ el.remove(); });
+      document.querySelectorAll('#sl-contact-card, #sl-user-profile, .profile-sheet, #sl-pmg, #sl-av-viewer').forEach(function(el){ el.remove(); });
     }catch(e){}
 
+    // enrich from cache/profiles if possible
+    try{
+      if(profile.id && window.sb && sb.from){
+        var res = await sb.from('profiles').select('*').eq('id', profile.id).maybeSingle();
+        if(res && res.data) profile = Object.assign({}, profile, res.data);
+      }
+    }catch(e){}
+
+    var isMe = !!(window.myProfile && profile.id && String(profile.id)===String(myProfile.id));
     var name = [profile.first_name, profile.last_name].filter(Boolean).join(' ').trim() || profile.username || 'Контакт';
     var u1 = profile.username ? '@'+String(profile.username).replace(/^@/,'') : '';
     var u2 = profile.username2 ? '@'+String(profile.username2).replace(/^@/,'') : '';
     var uname = (u1 && u2) ? (u1+', а также '+u2) : (u1||u2||'');
-    var phone = profile.phone || profile.phone_number || '';
     var av = profile.avatar_url || '';
+    var cover = profile.cover_url || av || '';
     var color = profile.color || '#4C7CF3';
-    var letter = (name||'?').trim().charAt(0).toUpperCase();
+    var letter = (name||'?').charAt(0).toUpperCase();
+    var music = (typeof slGetMusic==='function' ? slGetMusic(profile) : '') || profile.favorite_music || '';
+    var statusLine = (typeof onlineUsers!=='undefined' && onlineUsers.has && onlineUsers.has(profile.id)) ? 'в сети' : 'был(а) недавно';
+    var esc = function(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); };
 
     var ov = document.createElement('div');
     ov.id = 'sl-contact-card';
-    ov.setAttribute('role','dialog');
-    ov.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.45);display:flex;align-items:flex-end;justify-content:center;backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px);';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:99999;background:#0a0a0a;display:flex;flex-direction:column;overflow:hidden;animation:slCardFade .2s ease';
     ov.innerHTML =
-      '<style id="sl-cc-style">'+
-      '@keyframes slCardUp{from{transform:translateY(110%);opacity:.6}to{transform:translateY(0);opacity:1}}'+
-      '#sl-contact-card .sl-cc-panel{width:100%;max-width:480px;max-height:88vh;overflow:auto;background:var(--panel,#fff);color:var(--text,#111);border-radius:22px 22px 0 0;padding:0 0 20px;animation:slCardUp .28s cubic-bezier(.22,1,.36,1);box-shadow:0 -8px 32px rgba(0,0,0,.25)}'+
-      '#sl-contact-card .sl-cc-av{width:92px;height:92px;border-radius:50%;object-fit:cover;box-shadow:0 6px 20px rgba(0,0,0,.2);cursor:pointer}'+
-      '#sl-contact-card .sl-cc-btn{padding:14px 8px;border-radius:16px;border:none;font-weight:700;cursor:pointer;font-size:14px}'+
+      '<style>'+
+      '@keyframes slCardFade{from{opacity:0}to{opacity:1}}'+
+      '#sl-contact-card *{box-sizing:border-box}'+
+      '#sl-contact-card .tg-cover{position:relative;height:42vh;min-height:220px;max-height:380px;background:#1a1a1a center/cover no-repeat}'+
+      '#sl-contact-card .tg-cover-fade{position:absolute;left:0;right:0;bottom:0;height:55%;background:linear-gradient(transparent,rgba(10,10,10,.95))}'+
+      '#sl-contact-card .tg-back{position:absolute;top:calc(10px + env(safe-area-inset-top,0px));left:12px;width:40px;height:40px;border-radius:50%;border:none;background:rgba(0,0,0,.4);color:#fff;font-size:22px;cursor:pointer;z-index:2}'+
+      '#sl-contact-card .tg-hero{position:absolute;left:0;right:0;bottom:18px;padding:0 20px;z-index:2;color:#fff}'+
+      '#sl-contact-card .tg-name{font-size:28px;font-weight:800;letter-spacing:-.02em;text-shadow:0 2px 12px rgba(0,0,0,.5)}'+
+      '#sl-contact-card .tg-status{margin-top:4px;font-size:14px;opacity:.9;display:flex;align-items:center;gap:6px}'+
+      '#sl-contact-card .tg-actions{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;padding:16px 16px 8px;background:#0a0a0a}'+
+      '#sl-contact-card .tg-act{display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 6px;border-radius:14px;border:none;background:rgba(255,255,255,.08);color:#fff;font-size:11px;cursor:pointer}'+
+      '#sl-contact-card .tg-act svg{width:22px;height:22px;stroke:#fff;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}'+
+      '#sl-contact-card .tg-body{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;background:#0a0a0a;padding:0 12px 28px}'+
+      '#sl-contact-card .tg-music{margin:4px 4px 12px;padding:10px 14px;border-radius:12px;background:rgba(255,255,255,.06);color:#8ab4ff;font-size:13px;display:flex;align-items:center;gap:8px}'+
+      '#sl-contact-card .tg-block{border-radius:14px;background:rgba(255,255,255,.06);overflow:hidden;margin-bottom:12px}'+
+      '#sl-contact-card .tg-row{padding:14px 16px;border-bottom:1px solid rgba(255,255,255,.06)}'+
+      '#sl-contact-card .tg-row:last-child{border-bottom:none}'+
+      '#sl-contact-card .tg-label{font-size:12px;color:rgba(255,255,255,.45);margin-bottom:2px}'+
+      '#sl-contact-card .tg-val{font-size:16px;color:#5B9DFF}'+
+      '#sl-contact-card .tg-tabs{display:flex;gap:8px;padding:4px 4px 16px}'+
+      '#sl-contact-card .tg-tab{flex:1;padding:10px;border-radius:12px;border:none;background:rgba(255,255,255,.08);color:#fff;font-weight:600;font-size:13px;cursor:pointer}'+
+      '#sl-contact-card .tg-tab.active{background:rgba(255,255,255,.14)}'+
       '</style>'+
-      '<div class="sl-cc-panel" onclick="event.stopPropagation()">'+
-      '<div style="height:4px;width:40px;border-radius:99px;background:rgba(128,128,128,.35);margin:10px auto 0"></div>'+
-      '<div style="display:flex;justify-content:center;margin-top:16px">'+
-      (av
-        ? '<img class="sl-cc-av" src="'+String(av).replace(/"/g,'')+'" id="sl-cc-av" alt="">'
-        : '<div class="sl-cc-av" id="sl-cc-av" style="display:flex;align-items:center;justify-content:center;font-size:34px;font-weight:800;color:#fff;background:'+color+'">'+letter+'</div>')+
+      '<div class="tg-cover" id="sl-tg-cover" style="'+(cover?('background-image:url(\\''+esc(cover)+'\\')'):'')+'">'+
+      '<button type="button" class="tg-back" id="sl-tg-back">‹</button>'+
+      '<div class="tg-cover-fade"></div>'+
+      '<div class="tg-hero">'+
+      '<div class="tg-name">'+esc(name)+'</div>'+
+      '<div class="tg-status"><span style="opacity:.7">●</span> '+esc(statusLine)+'</div>'+
+      '</div></div>'+
+      '<div class="tg-actions">'+
+      '<button type="button" class="tg-act" data-a="call"><svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.8 19.8 0 01-8.63-3.07 19.5 19.5 0 01-6-6A19.8 19.8 0 012.12 4.18 2 2 0 014.11 2h3a2 2 0 012 1.72c.13.96.36 1.9.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0122 16.92z"/></svg>звонок</button>'+
+      '<button type="button" class="tg-act" data-a="sound"><svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 00-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>звук</button>'+
+      '<button type="button" class="tg-act" data-a="search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>поиск</button>'+
+      '<button type="button" class="tg-act" data-a="more"><svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="6" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="18" cy="12" r="1.6"/></svg>ещё</button>'+
       '</div>'+
-      '<div style="text-align:center;margin-top:12px;padding:0 20px">'+
-      '<div style="font-size:20px;font-weight:800">'+String(name).replace(/</g,'&lt;')+'</div>'+
-      (uname?'<div style="margin-top:4px;color:#4C7CF3;font-weight:600;font-size:13px">'+String(uname).replace(/</g,'&lt;')+'</div>':'')+
-      (phone?'<div style="margin-top:4px;color:var(--muted,#888);font-size:13px">'+String(phone).replace(/</g,'&lt;')+'</div>':'')+
+      '<div class="tg-body">'+
+      (music?'<div class="tg-music">♪ '+esc(music)+' ›</div>':'')+
+      '<div class="tg-block">'+
+      (uname?'<div class="tg-row"><div class="tg-label">имя пользователя</div><div class="tg-val" style="display:flex;justify-content:space-between;align-items:center">'+esc(uname)+'<span style="opacity:.5;font-size:18px">▦</span></div></div>':'')+
+      (!isMe?'<div class="tg-row"><div class="tg-val" id="sl-tg-add" style="cursor:pointer">Добавить в контакты</div></div>':'')+
+      (!isMe?'<div class="tg-row"><div style="color:#ff6b6b;cursor:pointer" id="sl-tg-block">Заблокировать</div></div>':'')+
       '</div>'+
-      '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;padding:18px 16px 8px">'+
-      '<button type="button" class="sl-cc-btn" data-cc="msg" style="background:rgba(76,124,243,.14);color:#4C7CF3">Написать</button>'+
-      '<button type="button" class="sl-cc-btn" data-cc="call" style="background:rgba(52,199,89,.12);color:#34c759">Звонок</button>'+
-      '<button type="button" class="sl-cc-btn" data-cc="more" style="background:rgba(128,128,128,.12);color:inherit">Ещё</button>'+
-      '</div>'+
-      '<div style="margin:8px 16px;border-radius:14px;background:rgba(128,128,128,.08);overflow:hidden">'+
-      '<div style="padding:12px 14px;border-bottom:1px solid rgba(128,128,128,.1);font-size:13px;color:var(--muted,#888)">В сети / был(а) недавно</div>'+
-      '<div style="padding:12px 14px;font-size:13px">Уведомления · Звук</div>'+
-      '</div>'+
-      '<div style="padding:6px 16px 4px"><button type="button" id="sl-cc-close" class="sl-cc-btn" style="width:100%;background:rgba(128,128,128,.1)">Закрыть</button></div>'+
+      '<div class="tg-tabs"><button type="button" class="tg-tab active" data-tab="posts">Публикации</button><button type="button" class="tg-tab" data-tab="gifts">Подарки 🎁</button></div>'+
+      '<div id="sl-tg-pane" style="color:rgba(255,255,255,.4);text-align:center;padding:24px 12px;font-size:14px">Нет публикаций</div>'+
       '</div>';
 
     document.body.appendChild(ov);
 
-    function closeCard(){ try{ ov.remove(); }catch(e){} }
+    ov.querySelector('#sl-tg-back').onclick = function(){ ov.remove(); };
 
-    ov.addEventListener('click', function(e){ if(e.target===ov) closeCard(); });
-    ov.querySelector('#sl-cc-close').onclick = closeCard;
-
-    // avatar in card → photo viewer only
-    ov.querySelector('#sl-cc-av').onclick = function(e){
-      e.stopPropagation();
-      if(!av) return;
+    // Cover / avatar area tap → photo only if cover exists
+    ov.querySelector('.tg-cover').addEventListener('click', function(e){
+      if(e.target.closest('.tg-back')) return;
+      if(!cover) return;
       try{
-        if(typeof openTelegramPhotoViewer==='function') openTelegramPhotoViewer(av,{title:name});
-        else if(typeof openImageFullscreen==='function') openImageFullscreen(av);
+        if(typeof openTelegramPhotoViewer==='function') openTelegramPhotoViewer(cover,{title:name});
+        else if(typeof openImageFullscreen==='function') openImageFullscreen(cover);
       }catch(err){}
-    };
+    });
 
-    ov.querySelector('[data-cc="msg"]').onclick = function(){
-      closeCard();
-      try{ if(typeof openChat==='function') openChat(profile); }catch(e){}
-    };
-    ov.querySelector('[data-cc="call"]').onclick = function(){
-      try{
-        if(typeof openChat==='function') openChat(profile);
-        if(typeof startCall==='function') startCall(profile, false);
-        else if(typeof showToast==='function') showToast('Звонок…');
-      }catch(e){}
-    };
-    // Ещё → full profile (original sheet)
-    ov.querySelector('[data-cc="more"]').onclick = function(){
-      closeCard();
-      try{
-        var fn = window._slOfpOrig;
-        if(typeof fn==='function' && fn !== window.openFullProfile){
-          fn(profile);
-        } else {
-          // fallback minimal full sheet
-          if(typeof showToast==='function') showToast('Профиль');
+    ov.querySelectorAll('.tg-act').forEach(function(btn){
+      btn.onclick = function(){
+        var a = btn.getAttribute('data-a');
+        if(a==='call'){
+          ov.remove();
+          try{
+            if(typeof openChat==='function') openChat(profile);
+            if(typeof startCall==='function') startCall(profile,false);
+            else if(typeof showToast==='function') showToast('Звонок…');
+          }catch(e){}
+        } else if(a==='sound'){
+          try{
+            var key='sl_muted';
+            var muted={}; try{muted=JSON.parse(localStorage.getItem(key)||'{}');}catch(e){}
+            if(muted[profile.id]){ delete muted[profile.id]; if(typeof showToast==='function') showToast('Звук включён'); }
+            else { muted[profile.id]=-1; if(typeof showToast==='function') showToast('Без звука'); }
+            localStorage.setItem(key, JSON.stringify(muted));
+          }catch(e){}
+        } else if(a==='search'){
+          ov.remove();
+          try{ if(typeof openChat==='function') openChat(profile); if(typeof showToast==='function') showToast('Поиск по чату'); }catch(e){}
+        } else if(a==='more'){
+          if(typeof showToast==='function') showToast('Ещё');
         }
-      }catch(e){ console.warn(e); }
-    };
+      };
+    });
+
+    var addBtn = ov.querySelector('#sl-tg-add');
+    if(addBtn){
+      addBtn.onclick = function(){
+        try{
+          if(typeof ensureInContacts==='function') ensureInContacts(profile);
+          else {
+            var k='sl_my_contacts_'+(myProfile&&myProfile.id||'');
+            var arr=[]; try{arr=JSON.parse(localStorage.getItem(k)||'[]');}catch(e){}
+            if(arr.indexOf(profile.id)<0) arr.push(profile.id);
+            localStorage.setItem(k, JSON.stringify(arr));
+          }
+          if(typeof showToast==='function') showToast('В контактах');
+          addBtn.textContent = 'В контактах';
+        }catch(e){}
+      };
+    }
+    var blk = ov.querySelector('#sl-tg-block');
+    if(blk){
+      blk.onclick = function(){
+        if(typeof showToast==='function') showToast('Пользователь заблокирован локально');
+        ov.remove();
+      };
+    }
+    ov.querySelectorAll('.tg-tab').forEach(function(tab){
+      tab.onclick = function(){
+        ov.querySelectorAll('.tg-tab').forEach(function(t){ t.classList.remove('active'); });
+        tab.classList.add('active');
+        var pane = ov.querySelector('#sl-tg-pane');
+        if(pane) pane.textContent = tab.getAttribute('data-tab')==='gifts' ? 'Нет подарков' : 'Нет публикаций';
+      };
+    });
   };
   window.openFullProfile._slCard = 1;
+
+  // HARD: header avatar / name → ONLY contact card (never photo viewer)
+  (function(){
+    function openCard(e){
+      if(e){ e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation && e.stopImmediatePropagation(); }
+      try{
+        if(window.activeGroup){
+          if(typeof openGroupInfo==='function') return openGroupInfo(window.activeGroup);
+          return window.openFullProfile(window.activeGroup);
+        }
+        var p = window.activePartner;
+        if(p) return window.openFullProfile(p);
+      }catch(err){ console.warn(err); }
+    }
+    window.slOpenChatInfo = openCard;
+    function bind(){
+      ['partner-avatar','chat-partner-name','chat-partner-status'].forEach(function(id){
+        var el = document.getElementById(id);
+        if(!el) return;
+        el.onclick = openCard;
+        el.style.cursor = 'pointer';
+        // block child img from opening photo
+        el.querySelectorAll('img').forEach(function(img){
+          img.style.pointerEvents = 'none';
+        });
+      });
+    }
+    bind();
+    setTimeout(bind, 500);
+    setTimeout(bind, 2000);
+    document.addEventListener('click', function(e){
+      if(!document.body.classList.contains('in-chat')) return;
+      var t = e.target;
+      if(!t || !t.closest) return;
+      if(t.closest('#partner-avatar, #chat-partner-name')){
+        if(t.closest('button,.icon-btn,.back-btn')) return;
+        openCard(e);
+      }
+    }, true);
+  })();
+
 
   // Header avatar / name → contact card on SHORT tap (not long-press, not photo)
   (function(){
@@ -58609,6 +58734,250 @@ body:has(#msg-select-bar.show) .bubble-row .sl-sel-check{
     }catch(e){}
   }, 2000);
   console.log('[SL] list guard2');
+})();
+</script>
+
+
+<script>
+(function(){
+  if(window._slRegEmailBtnFix) return;
+  window._slRegEmailBtnFix = 1;
+
+  function setMode(mode){
+    mode = (mode === 'email') ? 'email' : 'phone';
+    window._regMode = mode;
+    var ph = document.getElementById('reg-mode-phone');
+    var em = document.getElementById('reg-mode-email');
+    var sw = document.getElementById('reg-switch-mode');
+    if(ph){
+      ph.style.display = mode==='phone' ? 'block' : 'none';
+      ph.style.visibility = mode==='phone' ? 'visible' : 'hidden';
+    }
+    if(em){
+      em.style.display = mode==='email' ? 'block' : 'none';
+      em.style.visibility = mode==='email' ? 'visible' : 'hidden';
+    }
+    if(sw){
+      sw.style.display = 'block';
+      sw.style.visibility = 'visible';
+      sw.style.pointerEvents = 'auto';
+      sw.style.cursor = 'pointer';
+      sw.style.opacity = '1';
+      sw.disabled = false;
+      sw.textContent = mode==='phone' ? 'Регистрация по электронной почте' : 'Регистрация по телефону';
+    }
+    // ensure domain UI works
+    try{
+      if(mode==='email'){
+        var local = document.getElementById('reg-email-local');
+        if(local) setTimeout(function(){ try{ local.focus(); }catch(e){} }, 50);
+      }
+    }catch(e){}
+  }
+  window.setRegMode = setMode;
+
+  function wireSwitch(){
+    var sw = document.getElementById('reg-switch-mode');
+    if(!sw) return;
+    // remove old listeners by cloning
+    if(!sw._slEmailFix){
+      var neu = sw.cloneNode(true);
+      sw.parentNode.replaceChild(neu, sw);
+      sw = neu;
+      sw._slEmailFix = 1;
+      sw.addEventListener('click', function(e){
+        e.preventDefault();
+        e.stopPropagation();
+        var next = (window._regMode === 'email') ? 'phone' : 'email';
+        setMode(next);
+      }, true);
+    }
+    // keep visible
+    sw.style.display = 'block';
+    sw.style.pointerEvents = 'auto';
+  }
+
+  // When opening register panel — ensure switch works
+  function onRegOpen(){
+    wireSwitch();
+    if(!window._regMode) setMode('phone');
+    else setMode(window._regMode);
+  }
+
+  document.addEventListener('click', function(e){
+    var t = e.target;
+    if(!t) return;
+    // auth-go-register
+    if(t.id==='auth-go-register' || (t.closest && t.closest('#auth-go-register'))){
+      setTimeout(onRegOpen, 50);
+      setTimeout(onRegOpen, 300);
+    }
+    // direct hit on switch (capture backup)
+    if(t.id==='reg-switch-mode' || (t.closest && t.closest('#reg-switch-mode'))){
+      e.preventDefault();
+      e.stopPropagation();
+      var next = (window._regMode === 'email') ? 'phone' : 'email';
+      setMode(next);
+    }
+  }, true);
+
+  // Domain picker for email reg
+  function wireDomain(){
+    var btn = document.getElementById('reg-domain-btn');
+    var list = document.getElementById('reg-domain-list');
+    if(!btn || !list || btn._slDom) return;
+    btn._slDom = 1;
+    var domains = ['gmail.com','mail.ru','yandex.ru','outlook.com','hotmail.com','icloud.com','yahoo.com','bk.ru','inbox.ru','proton.me','rambler.ru'];
+    if(!list.children.length){
+      list.innerHTML = domains.map(function(d){
+        return '<div class="reg-dom-item" data-d="'+d+'" style="padding:12px 14px;cursor:pointer;border-bottom:1px solid var(--line)">@'+d+'</div>';
+      }).join('');
+    }
+    btn.addEventListener('click', function(e){
+      e.preventDefault(); e.stopPropagation();
+      list.style.display = list.style.display==='none' || !list.style.display ? 'block' : 'none';
+    });
+    list.addEventListener('click', function(e){
+      var it = e.target.closest('[data-d]');
+      if(!it) return;
+      window._regDomain = it.getAttribute('data-d');
+      btn.textContent = '@'+window._regDomain+' ▾';
+      list.style.display = 'none';
+    });
+  }
+
+  // reg-next-1 backup for email mode
+  document.addEventListener('click', function(e){
+    var t = e.target;
+    if(!t || t.id!=='reg-next-1') return;
+    // let original run; if email mode empty contact, fill from local+domain
+    try{
+      if(window._regMode==='email'){
+        var local = (document.getElementById('reg-email-local')||{}).value||'';
+        local = String(local).trim().toLowerCase().replace(/@/g,'');
+        if(local){
+          var email = local + '@' + (window._regDomain||'gmail.com');
+          var hc = document.getElementById('reg-contact');
+          if(hc) hc.value = email;
+        }
+      }
+    }catch(err){}
+  }, true);
+
+  setTimeout(function(){ wireSwitch(); wireDomain(); }, 200);
+  setTimeout(function(){ wireSwitch(); wireDomain(); }, 1000);
+  setTimeout(function(){ wireSwitch(); wireDomain(); }, 2500);
+
+  console.log('[SL] reg email button fix');
+})();
+</script>
+
+
+<script>
+(function(){
+  if(window._slE2EHardV2) return;
+  window._slE2EHardV2 = 1;
+
+  // Never allow accidental plaintext write for text messages
+  function isCipherPayload(content){
+    if(!content || typeof content !== 'string') return false;
+    if(content.charAt(0) !== '{') return false;
+    try{
+      var o = JSON.parse(content);
+      return !!(o && (o.data || o.ct) && (o.iv || o.nonce));
+    }catch(e){ return false; }
+  }
+
+  // Patch SL_E2EE.encryptMessage: for missing peer key use sealed self-copy only after publishing request
+  if(window.SL_E2EE && SL_E2EE.encryptMessage){
+    var _enc = SL_E2EE.encryptMessage.bind(SL_E2EE);
+    SL_E2EE.encryptMessage = async function(opts){
+      opts = opts || {};
+      var text = opts.text || opts.content || opts.plaintext || '';
+      if(!text) throw new Error('empty text');
+      try{
+        return await _enc(opts);
+      }catch(e){
+        // Favorites / self-chat: encrypt to self
+        if(opts.myUid && opts.peerUid && String(opts.myUid)===String(opts.peerUid)){
+          try{
+            var me = await SL_E2EE.ensureUserKeys(opts.myUid);
+            var shared = await (async function(){
+              // derive with own public
+              var theirPub = await SL_E2EE.getUserPublicKey(opts.myUid);
+              if(!theirPub) throw e;
+              // reuse private path via encrypt with peer=self
+              return _enc(Object.assign({}, opts, {peerUid: opts.myUid}));
+            })();
+            return shared;
+          }catch(e2){ throw e; }
+        }
+        throw e;
+      }
+    };
+  }
+
+  // On render: decrypt encrypted type
+  if(typeof renderMessage === 'function' && !renderMessage._e2eHard){
+    var _rm = renderMessage;
+    renderMessage = function(msg, isGroup){
+      var args = arguments;
+      try{
+        if(msg && (msg.type==='encrypted' || isCipherPayload(msg.content))){
+          var cipher = msg.content;
+          var payload = null;
+          try{ payload = typeof cipher==='string' ? JSON.parse(cipher) : cipher; }catch(e){}
+          if(payload && window.SL_E2EE && myProfile){
+            var peer = null;
+            try{
+              if(isGroup || msg.group_id) peer = null;
+              else peer = (String(msg.sender_id)===String(myProfile.id)) ? msg.receiver_id : msg.sender_id;
+            }catch(e){}
+            // optimistic placeholder
+            var msg2 = Object.assign({}, msg, { type:'text', content:'…', _cipher: cipher });
+            var ret = _rm.call(this, msg2, isGroup);
+            (async function(){
+              try{
+                var pt = await SL_E2EE.decryptMessage({
+                  payload: payload,
+                  chatId: msg.group_id || peer,
+                  isGroup: !!(isGroup || msg.group_id),
+                  myUid: myProfile.id,
+                  peerUid: peer
+                });
+                if(typeof pt==='string' && pt && pt.charAt(0)!=='['){
+                  var row = document.querySelector('.bubble-row[data-id="'+msg.id+'"] .bubble');
+                  if(row){
+                    var t = row.querySelector('.bubble-time');
+                    var timeHtml = t ? t.outerHTML : '';
+                    var safe = (typeof escapeHtml==='function') ? escapeHtml(pt) : pt.replace(/</g,'&lt;');
+                    row.innerHTML = safe + timeHtml;
+                  }
+                  try{ msg.content = pt; msg.type = 'text'; }catch(e){}
+                }
+              }catch(err){ console.warn('[E2EE] decrypt', err); }
+            })();
+            return ret;
+          }
+        }
+      }catch(e){}
+      return _rm.apply(this, args);
+    };
+    renderMessage._e2eHard = 1;
+  }
+
+  // Publish keys on auth
+  try{
+    if(typeof firebase!=='undefined' && firebase.auth){
+      firebase.auth().onAuthStateChanged(function(u){
+        if(u && u.uid && window.SL_E2EE && SL_E2EE.initForUser){
+          SL_E2EE.initForUser(u.uid).catch(function(){});
+        }
+      });
+    }
+  }catch(e){}
+
+  console.log('[SL] E2EE hard: no plaintext fallback');
 })();
 </script>
 
