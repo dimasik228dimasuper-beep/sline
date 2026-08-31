@@ -4095,6 +4095,37 @@ body.recording #send-btn,
 }
 </style>
 
+
+<style id="sl-no-crush-css">
+#stories-bar, .stories-bar {
+  transform: none !important;
+  max-height: none !important;
+  opacity: 1 !important;
+  filter: none !important;
+}
+#stories-bar .story-item {
+  transform: none !important;
+  opacity: 1 !important;
+}
+#sl-chats-title-chip { display: none !important; }
+#contacts-list .avatar,
+#contacts-list .sl-fav-avatar {
+  width: 48px !important;
+  height: 48px !important;
+  min-width: 48px !important;
+  min-height: 48px !important;
+  max-width: 48px !important;
+  max-height: 48px !important;
+  border-radius: 50% !important;
+  transform: none !important;
+  flex-shrink: 0 !important;
+}
+#contacts-list .sw-clip {
+  transform: none !important;
+  height: auto !important;
+}
+</style>
+
 </head>
 <body>
 <div id="sl-hard-boot" aria-hidden="true" style="position:fixed;inset:0;z-index:2147483646;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:#000000;color:#E8EEF8;font-family:system-ui,-apple-system,sans-serif"><div class="sl-hb-dot"></div><div style="font:600 13px/1.3 system-ui,-apple-system,sans-serif;color:#8B9BB4">SLine</div></div>
@@ -43656,12 +43687,30 @@ window.slGetDisplayName = function(p){
   }
 
   function applyCollapse(progress){
+    /* DISABLED — was crushing UI into blue bar / hiding chats */
     const bar=document.getElementById('stories-bar');
     const chip=ensureChip();
     const header=document.querySelector('#page-chats .sidebar-header');
     const title=document.getElementById('max-chats-title');
-    if(!bar) return;
-    const p = clamp(progress, 0, 1);
+    if(bar){
+      bar.style.maxHeight='';
+      bar.style.opacity='1';
+      bar.style.transform='none';
+      bar.style.paddingTop='';
+      bar.style.paddingBottom='';
+      bar.style.marginBottom='';
+      bar.style.filter='none';
+      bar.style.pointerEvents='auto';
+      bar.querySelectorAll('.story-item').forEach(it=>{
+        it.style.transform='';
+        it.style.opacity='1';
+      });
+    }
+    if(header) header.classList.remove('is-stories-collapsed');
+    if(chip){ try{ chip.style.display='none'; }catch(e){} }
+    if(title){ title.style.opacity=''; title.style.visibility=''; title.style.transform=''; }
+    return;
+    const p = 0;
 
     // ===== clean endpoints: no ghosts =====
     if(p <= 0.02){
@@ -58076,6 +58125,153 @@ body:has(#msg-select-bar.show) .bubble-row .sl-sel-check{
   }, true);
 
   console.log('[SL] lean boot — Избранное guaranteed');
+})();
+</script>
+
+
+<script>
+(function(){
+  if(window._slNuclearList) return;
+  window._slNuclearList = 1;
+
+  function esc(s){
+    return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+  }
+
+  function paintList(){
+    var list = document.getElementById('contacts-list');
+    if(!list) return;
+
+    // Kill broken transforms on stories / list
+    try{
+      var bar = document.getElementById('stories-bar');
+      if(bar){
+        bar.style.cssText = 'display:flex;gap:12px;padding:10px 16px;overflow-x:auto;border-bottom:1px solid var(--line)';
+      }
+      document.querySelectorAll('#stories-bar .story-item').forEach(function(it){
+        it.style.transform='';
+        it.style.opacity='1';
+      });
+      var chip=document.getElementById('sl-chats-title-chip');
+      if(chip) chip.remove();
+    }catch(e){}
+
+    var me = null;
+    try{ me = (window.myProfile && myProfile.id) ? myProfile : null; }catch(e){}
+    if(!me){
+      // still show placeholder so screen not empty
+      if(!list.querySelector('[data-sl-nuclear]')){
+        list.innerHTML = '<div data-sl-nuclear="1" style="padding:32px 16px;text-align:center;color:#687787;font-size:15px">Загрузка аккаунта…</div>';
+      }
+      return;
+    }
+
+    // Build contacts array minimum
+    if(!Array.isArray(window.contacts)) window.contacts = [];
+    var mid = String(me.id);
+    var hasSelf = contacts.some(function(c){ return c && String(c.id)===mid; });
+    if(!hasSelf){
+      contacts.unshift({
+        id: me.id,
+        first_name: 'Избранное',
+        lastMessage: 'Заметки',
+        lastAt: new Date(0).toISOString(),
+        avatar_url: me.avatar_url||null,
+        color: '#2EA6FF',
+        _dmWithMe: true
+      });
+    }
+
+    // If complex renderer leaves empty / broken DOM — paint ourselves
+    var rows = list.querySelectorAll('.sw-clip, .contact, [data-cid]');
+    var broken = !rows.length;
+    if(!broken){
+      // detect stretched blue bar (height very small relative to width)
+      try{
+        var av = list.querySelector('.avatar');
+        if(av){
+          var r = av.getBoundingClientRect();
+          if(r.width > 120 && r.height < 30) broken = true;
+        }
+      }catch(e){}
+    }
+
+    if(!broken && rows.length) return;
+
+    var html = '';
+    var seen = {};
+    var arr = contacts.slice();
+    // self first
+    arr.sort(function(a,b){
+      if(String(a.id)===mid) return -1;
+      if(String(b.id)===mid) return 1;
+      return 0;
+    });
+    arr.forEach(function(c){
+      if(!c||!c.id||seen[String(c.id)]) return;
+      seen[String(c.id)]=1;
+      var isSelf = String(c.id)===mid;
+      var name = isSelf ? 'Избранное' : ([c.first_name,c.last_name].filter(Boolean).join(' ') || c.username || 'Чат');
+      var sub = isSelf ? 'Заметки' : (c.lastMessage || ('@'+(c.username||'')));
+      var avHtml;
+      if(isSelf){
+        avHtml = '<div class="avatar" style="width:48px;height:48px;min-width:48px;min-height:48px;border-radius:50%;background:#2EA6FF;display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden">'+
+          '<svg viewBox="0 0 24 24" width="22" height="22" fill="#fff"><path d="M6 3.5A1.5 1.5 0 017.5 2h9A1.5 1.5 0 0118 3.5v17.2a.8.8 0 01-1.3.6L12 17.2l-4.7 4.1A.8.8 0 016 20.7V3.5z"/></svg></div>';
+      } else if(c.avatar_url){
+        avHtml = '<div class="avatar" style="width:48px;height:48px;min-width:48px;min-height:48px;border-radius:50%;overflow:hidden;flex-shrink:0;background:#ccc">'+
+          '<img src="'+esc(c.avatar_url)+'" alt="" style="width:48px;height:48px;object-fit:cover;display:block;border-radius:50%" onerror="this.parentNode.style.background=\''+esc(c.color||'#4C7CF3')+'\';this.remove()"></div>';
+      } else {
+        var letter = (name||'?').charAt(0).toUpperCase();
+        avHtml = '<div class="avatar" style="width:48px;height:48px;min-width:48px;min-height:48px;border-radius:50%;background:'+esc(c.color||'#4C7CF3')+';color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0">'+esc(letter)+'</div>';
+      }
+      html += '<div class="sl-n-row" data-cid="'+esc(c.id)+'" data-self="'+(isSelf?'1':'0')+'" style="display:flex;align-items:center;gap:12px;padding:10px 14px;cursor:pointer;border-bottom:1px solid rgba(127,127,127,.12)">'+
+        avHtml+
+        '<div style="min-width:0;flex:1">'+
+        '<div style="font-weight:600;font-size:16px;color:var(--text,#111)">'+esc(name)+'</div>'+
+        '<div style="font-size:14px;color:#687787;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(sub)+'</div>'+
+        '</div></div>';
+    });
+
+    if(!html){
+      html = '<div style="padding:32px;text-align:center;color:#687787">Нет чатов</div>';
+    }
+    list.innerHTML = html;
+    list.querySelectorAll('.sl-n-row').forEach(function(row){
+      row.onclick = function(){
+        var id = row.getAttribute('data-cid');
+        var isSelf = row.getAttribute('data-self')==='1';
+        try{
+          if(isSelf && typeof openChat==='function'){ openChat(myProfile); return; }
+          var peer = (contacts||[]).find(function(c){ return c && String(c.id)===String(id); });
+          if(peer && typeof openChat==='function') openChat(peer);
+          else if(typeof openChat==='function') openChat({id:id, first_name: row.querySelector('div div')?.textContent||'Чат'});
+        }catch(e){ console.warn(e); }
+      };
+    });
+    console.log('[SL] nuclear list painted', list.querySelectorAll('.sl-n-row').length);
+  }
+
+  // Run often until list has real rows
+  var n = 0;
+  var t = setInterval(function(){
+    n++;
+    paintList();
+    var list=document.getElementById('contacts-list');
+    if(list && list.querySelectorAll('.sl-n-row,[data-cid]').length > 0 && n > 3){
+      /* keep a slow watchdog */
+      if(n > 15) clearInterval(t);
+    }
+    if(n > 40) clearInterval(t);
+  }, 800);
+
+  setTimeout(paintList, 300);
+  setTimeout(paintList, 1200);
+  setTimeout(function(){
+    try{ if(typeof loadChats==='function') loadChats().then(paintList).catch(paintList); }
+    catch(e){ paintList(); }
+  }, 600);
+
+  console.log('[SL] nuclear list active');
 })();
 </script>
 
