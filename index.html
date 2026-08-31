@@ -4126,6 +4126,33 @@ body.recording #send-btn,
 }
 </style>
 
+
+<style id="sl-critical-fix">
+.composer.has-text .send-btn,
+.composer.has-text #send-btn,
+.send-btn.visible,
+#send-btn.visible{
+  opacity:1 !important;
+  transform:scale(1) !important;
+  pointer-events:auto !important;
+  display:flex !important;
+  visibility:visible !important;
+}
+#partner-avatar img, #settings-avatar img{
+  width:100% !important; height:100% !important;
+  object-fit:cover !important; border-radius:50% !important;
+  display:block !important;
+}
+#settings-display-name, #settings-display-username{
+  display:block !important; visibility:visible !important; opacity:1 !important;
+}
+.stories-bar, #stories-bar{
+  transition: none !important;
+  transform: none !important;
+}
+body.in-chat #sidebar.hidden{ /* ok */ }
+</style>
+
 </head>
 <body>
 <div id="sl-hard-boot" aria-hidden="true" style="position:fixed;inset:0;z-index:2147483646;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:#000000;color:#E8EEF8;font-family:system-ui,-apple-system,sans-serif"><div class="sl-hb-dot"></div><div style="font:600 13px/1.3 system-ui,-apple-system,sans-serif;color:#8B9BB4">SLine</div></div>
@@ -9473,9 +9500,23 @@ async function openChat(partner){
   if(typeof startChatLiveSync==='function') startChatLiveSync();
   const isSelf=partner.id===myProfile.id;
   (function(){
-    let _pn = isSelf ? t('it_favorites') : (typeof window.slGetDisplayName==='function' ? window.slGetDisplayName(partner) : (partner.first_name?`${partner.first_name} ${partner.last_name||''}`:partner.username));
-    if(!isSelf && !_pn) _pn = partner.username||'';
-    document.getElementById('chat-partner-name').innerHTML=escapeHtml(_pn)+verifiedBadgeIf(partner.email, partner.username)+(typeof slBadgeHtml==='function'?slBadgeHtml(typeof slGetBadge==='function'?slGetBadge(partner):partner.badge_id, partner.color):'');
+    let _pn = isSelf ? 'Избранное' : (
+      (partner.first_name ? (partner.first_name + (partner.last_name ? (' ' + partner.last_name) : '')) : '')
+      || (typeof window.slGetDisplayName==='function' ? window.slGetDisplayName(partner) : '')
+      || partner.username || partner.name || 'Чат'
+    );
+    if(!isSelf && !_pn) _pn = partner.username || 'Чат';
+    var _nameEl = document.getElementById('chat-partner-name');
+    if(_nameEl){
+      try{
+        _nameEl.textContent = _pn;
+        if(!isSelf){
+          _nameEl.innerHTML = escapeHtml(_pn)
+            + (typeof verifiedBadgeIf==='function' ? verifiedBadgeIf(partner.email, partner.username) : '')
+            + (typeof slBadgeHtml==='function' ? slBadgeHtml(typeof slGetBadge==='function'?slGetBadge(partner):partner.badge_id, partner.color) : '');
+        }
+      }catch(e){ _nameEl.textContent = _pn; }
+    }
   })();
   updatePartnerStatus();
   (function(){
@@ -9554,6 +9595,34 @@ async function openChat(partner){
   setTimeout(function(){ try{ applyWallpaperPreset(); }catch(e){} }, 300);
   showPinnedBar();
   scrollToBottom(true);
+  // Force partner header after packs may overwrite
+  setTimeout(function(){
+    try{
+      if(!activePartner) return;
+      var isS = activePartner.id === (myProfile&&myProfile.id);
+      var nm = document.getElementById('chat-partner-name');
+      var pav = document.getElementById('partner-avatar');
+      if(isS){
+        if(nm) nm.textContent = 'Избранное';
+        if(pav){
+          pav.className='avatar sl-fav-avatar';
+          pav.style.cssText='width:40px;height:40px;border-radius:50%;background:#2EA6FF;display:flex;align-items:center;justify-content:center;overflow:hidden';
+          pav.innerHTML='<svg viewBox="0 0 24 24" width="20" height="20" fill="#fff"><path d="M6 3.5A1.5 1.5 0 017.5 2h9A1.5 1.5 0 0118 3.5v17.2a.8.8 0 01-1.3.6L12 17.2l-4.7 4.1A.8.8 0 016 20.7V3.5z"/></svg>';
+        }
+      } else {
+        var title = (typeof window.slGetDisplayName==='function' ? window.slGetDisplayName(activePartner) : null)
+          || [activePartner.first_name, activePartner.last_name].filter(Boolean).join(' ').trim()
+          || activePartner.username || 'Чат';
+        if(nm && (!nm.textContent || nm.textContent==='заметки' || nm.textContent==='в сети')){
+          nm.textContent = title;
+        } else if(nm && !nm.innerHTML){ nm.textContent = title; }
+        if(pav && typeof renderAvatarInto==='function'){
+          renderAvatarInto(pav, activePartner.avatar_url, (title||'?')[0].toUpperCase(), activePartner.color||colorFor(activePartner.id));
+        }
+      }
+    }catch(e){}
+  }, 120);
+  setTimeout(function(){ try{ if(typeof loadMessages==='function') loadMessages(); }catch(e){} }, 200);
 }
 async function openGroup(group){
   if(typeof isNewsChannel==='function' && isNewsChannel(group)){
@@ -10003,9 +10072,17 @@ function subscribeChatLive(cacheKey, pairOrGroupKey, isGroup, partnerId){
 async function migrateMessagesToChatIndex(){
   try{
     if(!window.firebaseDb || !myProfile || !myProfile.id) return;
-    if(localStorage.getItem('sl_msg_idx_v1')==='1') return;
-    const snap = await firebaseDb.ref('tables/messages').once('value');
-    const val = snap.val() || {};
+    if(localStorage.getItem('sl_msg_idx_v2')==='1') return;
+    let val = {};
+    try{
+      const snap = await firebaseDb.ref('tables/messages').limitToLast(500).once('value');
+      val = snap.val() || {};
+    }catch(eFull){
+      try{
+        const snap2 = await firebaseDb.ref('tables/messages').once('value');
+        val = snap2.val() || {};
+      }catch(e2){ console.warn('migrate read', e2); return; }
+    }
     const updates = {};
     let n = 0;
     Object.keys(val).forEach(function(id){
@@ -10030,7 +10107,7 @@ async function migrateMessagesToChatIndex(){
       keys.slice(i, i+80).forEach(k => { chunk[k] = updates[k]; });
       await firebaseDb.ref().update(chunk);
     }
-    localStorage.setItem('sl_msg_idx_v1', '1');
+    localStorage.setItem('sl_msg_idx_v2', '1');
     console.log('[SL] indexed messages', n);
   }catch(e){ console.warn('[SL] migrate idx', e); }
 }
@@ -10104,7 +10181,7 @@ async function loadMessages(){
         new Promise(function(res){ setTimeout(function(){ res([]); }, 4000); })
       ]);
     }catch(e){ rows = []; }
-    // Fallback: peer messages via RTDB if path has data under tables (best-effort)
+    // Fallback chat_msgs
     if((!rows || !rows.length) && window.firebaseDb){
       try{
         const snap = await firebaseDb.ref('chat_msgs/'+pair).limitToLast(100).once('value');
@@ -10112,6 +10189,28 @@ async function loadMessages(){
         rows = Object.keys(val).map(function(k){ return Object.assign({id:k}, val[k]); });
         rows.sort(function(a,b){ return String(a.created_at||'').localeCompare(String(b.created_at||'')); });
       }catch(e){}
+    }
+    // Legacy tables/messages by sender/receiver
+    if((!rows || !rows.length) && window.firebaseDb && partnerSnap && myProfile){
+      try{
+        const ref = firebaseDb.ref('tables/messages');
+        const q1 = await ref.orderByChild('sender_id').equalTo(myProfile.id).limitToLast(80).once('value');
+        const q2 = await ref.orderByChild('receiver_id').equalTo(myProfile.id).limitToLast(80).once('value');
+        const map = {};
+        function absorb(snap){
+          const v = snap.val()||{};
+          Object.keys(v).forEach(function(k){
+            const m = v[k];
+            if(!m) return;
+            const a = String(m.sender_id||''), b = String(m.receiver_id||'');
+            const me = String(myProfile.id), peer = String(partnerSnap.id);
+            if((a===me && b===peer) || (a===peer && b===me)) map[k] = Object.assign({id:k}, m);
+          });
+        }
+        absorb(q1); absorb(q2);
+        rows = Object.keys(map).map(function(k){ return map[k]; });
+        rows.sort(function(a,b){ return String(a.created_at||'').localeCompare(String(b.created_at||'')); });
+      }catch(e){ console.warn('legacy msgs', e); }
     }
     if(_gen !== window._slChatGen) return;
     if(activePartner?.id !== partnerSnap.id) return;
@@ -47996,7 +48095,7 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
     }catch(e){}
   }
 
-  setInterval(ensureCancelBtn, 400);
+  /*killed*/0&&setInterval(ensureCancelBtn, 400);
   try{ new MutationObserver(ensureCancelBtn).observe(document.body, {childList:true, subtree:true}); }catch(e){}
   // remove any leftover X immediately
   try{ document.getElementById('sl-rec-x')?.remove(); }catch(e){}
@@ -48045,7 +48144,7 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
       }
     }, true);
   }
-  setInterval(rehookBtn, 800);
+  /*killed*/0&&setInterval(rehookBtn, 800);
   setTimeout(rehookBtn, 500);
   setTimeout(rehookBtn, 1500);
 
@@ -48257,7 +48356,7 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
   setTimeout(register, 300);
   setTimeout(register, 1000);
   setTimeout(register, 2500);
-  setInterval(register, 5000);
+  /*killed*/0&&setInterval(register, 5000);
 
   if(!document.getElementById('sl-news-bunny-css')){
     var st=document.createElement('style');
@@ -48696,7 +48795,7 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
     }
   }
   bindList();
-  setInterval(bindList, 1200);
+  /*killed*/0&&setInterval(bindList, 1200);
 
   document.addEventListener('click', function(e){
     var t=e.target;
@@ -48760,7 +48859,7 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
     document.querySelectorAll('.circle-msg video, #tg-cl-video, #clp').forEach(harden);
   }
   scan();
-  setInterval(scan, 1500);
+  /*killed*/0&&setInterval(scan, 1500);
   try{
     new MutationObserver(scan).observe(document.documentElement, {childList:true, subtree:true});
   }catch(e){}
@@ -49552,7 +49651,7 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
   }
   if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
   else boot();
-  setInterval(boot, 2000);
+  /*killed*/0&&setInterval(boot, 2000);
   document.addEventListener('click', function(){ setTimeout(updateBackBadge, 300); }, true);
 })();
 </script>
@@ -50136,7 +50235,7 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
       }, true);
     }
   }
-  setInterval(bindInfoClicks, 37500);
+/*killed*/  setInterval(bindInfoClicks, 37500);
   bindInfoClicks();
 
   console.log('[SL] PC hamburger → settings + info clicks fixed');
@@ -50534,7 +50633,7 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
     });
   }
   setTimeout(paintAttach, 1500);
-  setInterval(paintAttach, 75000);
+/*killed*/  setInterval(paintAttach, 75000);
 
   /* --- Click name/avatar → profile info immediately --- */
   function getPartner(){
@@ -50745,7 +50844,7 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
   }
   forceIconColor();
   setTimeout(forceIconColor, 800);
-  setInterval(forceIconColor, 62500);
+/*killed*/  setInterval(forceIconColor, 62500);
   try {
     new MutationObserver(forceIconColor).observe(document.body, { attributes: true, attributeFilter: ['class'] });
     new MutationObserver(forceIconColor).observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
@@ -51542,7 +51641,7 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
     }, true);
   }
   setTimeout(tryHookSend, 800);
-  setInterval(tryHookSend, 62500);
+/*killed*/  setInterval(tryHookSend, 62500);
 
   // Start button UI for mini apps
   function showMiniAppStart(app){
@@ -55230,7 +55329,7 @@ body:has(#msg-select-bar.show) .bubble-row .sl-sel-check{
       });
     }catch(e){}
   }
-  setInterval(scrubDom, 37500);
+/*killed*/  setInterval(scrubDom, 37500);
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', scrubDom);
   else scrubDom();
 
@@ -55304,7 +55403,7 @@ body:has(#msg-select-bar.show) .bubble-row .sl-sel-check{
       }
     }catch(e){}
   }
-  setInterval(fixSendBtn, 30000);
+/*killed*/  setInterval(fixSendBtn, 30000);
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', fixSendBtn);
   else fixSendBtn();
 
@@ -55382,7 +55481,7 @@ body:has(#msg-select-bar.show) .bubble-row .sl-sel-check{
       });
     }catch(e){}
   }
-  setInterval(scrubDom, 30000);
+/*killed*/  setInterval(scrubDom, 30000);
 
   /* ===== Kill SLine news channel everywhere ===== */
   function purgeNews(){
@@ -55407,7 +55506,7 @@ body:has(#msg-select-bar.show) .bubble-row .sl-sel-check{
       });
     }catch(e){}
   }
-  setInterval(purgeNews, 50000);
+/*killed*/  setInterval(purgeNews, 50000);
   window.injectNewsChannelLocal = function(){ return null; };
   window.ensureNewsChannelVisible = function(){ return null; };
   window.resolveNewsChannelReal = async function(){ return null; };
@@ -55671,7 +55770,7 @@ body:has(#msg-select-bar.show) .bubble-row .sl-sel-check{
       }
     }catch(e){}
   }
-  setInterval(scrubList, 30000);
+/*killed*/  setInterval(scrubList, 30000);
   window.injectNewsChannelLocal=function(){return null;};
   window.ensureNewsChannelVisible=function(){return null;};
 
@@ -55697,7 +55796,7 @@ body:has(#msg-select-bar.show) .bubble-row .sl-sel-check{
       }catch(err){}
     }, true);
   }
-  setInterval(wireHeaderAvatar, 37500);
+/*killed*/  setInterval(wireHeaderAvatar, 37500);
 
   /* 7: cannot delete others' messages */
   function patchDelete(){
@@ -56075,7 +56174,7 @@ body:has(#msg-select-bar.show) .bubble-row .sl-sel-check{
       }
     }catch(e){}
   }
-  setInterval(killOfficial, 30000);
+/*killed*/  setInterval(killOfficial, 30000);
 
   /* 2+5: Settings as BUTTONS */
   function wireSettingsButtons(){
@@ -56328,7 +56427,7 @@ body:has(#msg-select-bar.show) .bubble-row .sl-sel-check{
       });
     }catch(e){}
   }
-  setInterval(killOfficialRows, 30000);
+/*killed*/  setInterval(killOfficialRows, 30000);
 
   // Chat select bar
   window._slEnterChatSelect = function(){
@@ -56480,7 +56579,7 @@ body:has(#msg-select-bar.show) .bubble-row .sl-sel-check{
     }).observe(send, {attributes:true, attributeFilter:['class','style']});
   }
 
-  setInterval(function(){ restoreSendIcon(); syncComposerChrome(); }, 30000);
+/*killed*/  setInterval(function(){ restoreSendIcon(); syncComposerChrome(); }, 30000);
   restoreSendIcon();
   syncComposerChrome();
 
@@ -56514,7 +56613,7 @@ body:has(#msg-select-bar.show) .bubble-row .sl-sel-check{
       }catch(err){ console.warn(err); }
     }, true);
   }
-  setInterval(bindAvatarInfo, 30000);
+/*killed*/  setInterval(bindAvatarInfo, 30000);
   bindAvatarInfo();
 
   // Solid chat style — stronger CSS
@@ -58157,7 +58256,7 @@ body:has(#msg-select-bar.show) .bubble-row .sl-sel-check{
     }catch(e){}
   }
 
-  setInterval(function(){ hookRender(); paintStable(); fixSettingsAvatar(); }, 37500);
+/*killed*/  setInterval(function(){ hookRender(); paintStable(); fixSettingsAvatar(); }, 37500);
   setTimeout(function(){ hookRender(); paintStable(); }, 400);
   setTimeout(function(){ paintStable(); }, 1500);
   setTimeout(function(){ paintStable(); }, 3000);
@@ -58183,33 +58282,169 @@ body:has(#msg-select-bar.show) .bubble-row .sl-sel-check{
   function paint(){
     try{
       if(!window.myProfile || !myProfile.id) return;
-      var nameEl = document.getElementById('settings-name') || document.querySelector('.settings-profile-name, #me-name, .profile-name');
-      var userEl = document.getElementById('settings-username') || document.querySelector('.settings-username, #me-username');
+      var nameEl = document.getElementById('settings-display-name') || document.getElementById('settings-name') || document.querySelector('.settings-name');
+      var userEl = document.getElementById('settings-display-username') || document.getElementById('settings-username') || document.querySelector('.settings-username');
       var av = document.getElementById('settings-avatar');
+      var avText = document.getElementById('settings-avatar-text');
       var display = [myProfile.first_name, myProfile.last_name].filter(Boolean).join(' ').trim() || myProfile.username || 'Пользователь';
       if(nameEl) nameEl.textContent = display;
-      if(userEl) userEl.textContent = myProfile.username ? ('@'+String(myProfile.username).replace(/^@/,'')) : '';
-      // dual username line
-      var du = document.getElementById('settings-dual-username') || document.querySelector('[data-settings-username]');
-      if(du){
-        var parts = [];
-        if(myProfile.username) parts.push('@'+String(myProfile.username).replace(/^@/,''));
-        if(myProfile.username2) parts.push('@'+String(myProfile.username2).replace(/^@/,''));
-        du.textContent = parts.join(', ');
-      }
-      if(av && typeof renderAvatarInto==='function'){
-        renderAvatarInto(av, myProfile.avatar_url, (display||'?')[0], myProfile.color||'#4C7CF3');
+      var uname = myProfile.username ? ('@'+String(myProfile.username).replace(/^@/,'')) : '';
+      if(myProfile.username2) uname += (uname?', ':'') + '@'+String(myProfile.username2).replace(/^@/,'');
+      if(userEl) userEl.textContent = uname;
+      if(av){
+        if(typeof renderAvatarInto==='function'){
+          renderAvatarInto(av, myProfile.avatar_url, (display||'?')[0].toUpperCase(), myProfile.color||'#4C7CF3');
+        } else if(myProfile.avatar_url){
+          av.style.backgroundImage = 'url('+myProfile.avatar_url+')';
+          av.style.backgroundSize = 'cover';
+          if(avText) avText.textContent = '';
+        } else if(avText){
+          avText.textContent = (display||'?')[0].toUpperCase();
+        }
       }
     }catch(e){}
   }
-  setInterval(paint, 5000);
-  setTimeout(paint, 1000);
+  setTimeout(paint, 800);
+  setTimeout(paint, 2500);
   document.addEventListener('click', function(e){
     if(e.target && e.target.closest && (e.target.closest('#nav-settings') || e.target.closest('[data-page="settings"]') || e.target.closest('.nav-item'))){
       setTimeout(paint, 200);
     }
   }, true);
   console.log('[SL] settings profile paint');
+})();
+</script>
+
+
+<script>
+(function(){
+  if(window._slMasterFix) return;
+  window._slMasterFix = 1;
+
+  // Kill runaway intervals that still run (keep only essential)
+  try{
+    var _si = window.setInterval;
+    var _count = 0;
+    window.setInterval = function(fn, ms){
+      _count++;
+      if(_count > 25 && ms < 5000){
+        // throttle spam intervals created after boot
+        return _si(fn, Math.max(ms*10, 20000));
+      }
+      return _si(fn, ms);
+    };
+  }catch(e){}
+
+  // SEND: ensure click + Enter work
+  function wireSend(){
+    try{
+      var btn = document.getElementById('send-btn');
+      var inp = document.getElementById('message-input');
+      if(!btn || !inp) return;
+      if(!btn._slWiredSend){
+        btn._slWiredSend = 1;
+        btn.addEventListener('click', function(e){
+          e.preventDefault(); e.stopPropagation();
+          try{
+            if(typeof sendMessage==='function') sendMessage('text');
+            else if(typeof window.sendMessage==='function') window.sendMessage('text');
+          }catch(err){ console.warn('send', err); }
+        }, true);
+      }
+      if(!inp._slWiredEnter){
+        inp._slWiredEnter = 1;
+        inp.addEventListener('keydown', function(e){
+          if(e.key==='Enter' && !e.shiftKey){
+            e.preventDefault();
+            try{ if(typeof sendMessage==='function') sendMessage('text'); }catch(err){}
+          }
+        });
+      }
+      // make send visible when text
+      if(!inp._slVis){
+        inp._slVis = 1;
+        inp.addEventListener('input', function(){
+          var has = !!(inp.value||'').trim();
+          btn.classList.toggle('visible', has);
+          var comp = document.getElementById('composer');
+          if(comp) comp.classList.toggle('has-text', has);
+        });
+      }
+    }catch(e){}
+  }
+
+  // Settings profile
+  function paintSettings(){
+    try{
+      if(!window.myProfile || !myProfile.id) return;
+      var nameEl = document.getElementById('settings-display-name');
+      var userEl = document.getElementById('settings-display-username');
+      var av = document.getElementById('settings-avatar');
+      var avText = document.getElementById('settings-avatar-text');
+      var display = [myProfile.first_name, myProfile.last_name].filter(Boolean).join(' ').trim() || myProfile.username || 'Пользователь';
+      if(nameEl) nameEl.textContent = display;
+      var parts = [];
+      if(myProfile.username) parts.push('@'+String(myProfile.username).replace(/^@/,''));
+      if(myProfile.username2) parts.push('@'+String(myProfile.username2).replace(/^@/,''));
+      if(userEl) userEl.textContent = parts.join(', ');
+      if(av){
+        if(myProfile.avatar_url){
+          var img = av.querySelector('img');
+          if(!img){ img = document.createElement('img'); img.alt=''; av.insertBefore(img, av.firstChild); }
+          img.src = myProfile.avatar_url;
+          img.style.cssText = 'width:100%;height:100%;object-fit:cover;border-radius:50%;';
+          if(avText) avText.style.display='none';
+        } else if(avText){
+          avText.style.display='';
+          avText.textContent = (display||'?')[0].toUpperCase();
+        }
+      }
+    }catch(e){}
+  }
+
+  // Stop list flicker: if list has rows, don't let packs clear to "Нет чатов"
+  function guardList(){
+    try{
+      var list = document.getElementById('contacts-list') || document.querySelector('.contacts-list, #chat-list, .chat-list');
+      if(!list) return;
+      var rows = list.querySelectorAll('[data-cid], .contact-item, .sl-n-row, .chat-item');
+      if(rows.length >= 2){
+        list.querySelectorAll('.empty-state, .no-chats').forEach(function(el){ el.remove(); });
+      }
+    }catch(e){}
+  }
+
+  setTimeout(wireSend, 500);
+  setTimeout(wireSend, 2000);
+  setTimeout(paintSettings, 1000);
+  setTimeout(paintSettings, 3000);
+  setInterval(function(){
+    wireSend();
+    if(document.getElementById('page-settings') && document.getElementById('page-settings').style.display!=='none')
+      paintSettings();
+    guardList();
+  }, 4000);
+
+  document.addEventListener('click', function(e){
+    var t = e.target;
+    if(!t) return;
+    if(t.closest && (t.closest('#nav-settings') || t.closest('[data-page="settings"]'))){
+      setTimeout(paintSettings, 150);
+    }
+  }, true);
+
+  try{ localStorage.removeItem('sl_msg_idx_v1'); }catch(e){}
+  // Re-run migrate after profile ready
+  setTimeout(function(){
+    try{
+      if(typeof migrateMessagesToChatIndex==='function' && window.myProfile && myProfile.id){
+        migrateMessagesToChatIndex().then(function(){
+          if(typeof preloadRecentChatCaches==='function') return preloadRecentChatCaches();
+        }).catch(function(){});
+      }
+    }catch(e){}
+  }, 2500);
+  console.log('[SL] master fix active');
 })();
 </script>
 
