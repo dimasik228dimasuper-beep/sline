@@ -4153,6 +4153,33 @@ body.recording #send-btn,
 body.in-chat #sidebar.hidden{ /* ok */ }
 </style>
 
+
+<style id="sl-stories-stable">
+#stories-bar, .stories-bar{
+  max-height: none !important;
+  opacity: 1 !important;
+  transform: none !important;
+  filter: none !important;
+  pointer-events: auto !important;
+  transition: opacity .25s ease, max-height .35s ease !important;
+}
+#max-chats-title, .max-chats-title{
+  opacity: 1 !important;
+  visibility: visible !important;
+  transform: none !important;
+}
+.chip-av-ring, #stories-chip, .stories-chip, .sl-stories-chip{ display:none !important; }
+.sidebar-header.is-stories-collapsed{ /* ignore */ }
+</style>
+
+
+<style id="sl-swipe-fix">
+#contacts-list .contact, #contacts-list .sl-n-row, .chat-row, .contact-item{
+  touch-action: pan-y !important;
+  position: relative;
+}
+</style>
+
 </head>
 <body>
 <div id="sl-hard-boot" aria-hidden="true" style="position:fixed;inset:0;z-index:2147483646;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:#000000;color:#E8EEF8;font-family:system-ui,-apple-system,sans-serif"><div class="sl-hb-dot"></div><div style="font:600 13px/1.3 system-ui,-apple-system,sans-serif;color:#8B9BB4">SLine</div></div>
@@ -57688,89 +57715,137 @@ body:has(#msg-select-bar.show) .bubble-row .sl-sel-check{
     }
   }catch(e){}
 
-  /* ========== 8) BEAUTIFUL CONTACT CARD ========== */
-  var _ofp = window.openFullProfile || (typeof openFullProfile==='function'?openFullProfile:null);
+  /* ========== 8) CONTACT CARD (fixed) ========== */
+  var _ofpOrig = (typeof openFullProfile==='function' && !window.openFullProfile._slCard) ? openFullProfile : (window._slOfpOrig || null);
+  if(typeof openFullProfile==='function' && !window._slOfpOrig) window._slOfpOrig = openFullProfile;
+
   window.openFullProfile = async function(profile){
-    if(!profile){ if(_ofp) return _ofp.apply(this,arguments); return; }
-    // Prefer our animated card
+    if(!profile) return;
+    // remove any existing cards
     try{
-      var old = document.getElementById('sl-contact-card');
-      if(old) old.remove();
-      var name = [profile.first_name, profile.last_name].filter(Boolean).join(' ') || profile.username || 'Контакт';
-      var u1 = profile.username ? '@'+String(profile.username).replace(/^@/,'') : '';
-      var u2 = profile.username2 ? '@'+String(profile.username2).replace(/^@/,'') : '';
-      var uname = u1 && u2 ? (u1+', а также '+u2) : (u1||u2||'');
-      var phone = profile.phone || '';
-      var av = profile.avatar_url || '';
-      var color = profile.color || '#4C7CF3';
-      var letter = (name||'?').trim().charAt(0).toUpperCase();
-      var ov = document.createElement('div');
-      ov.id = 'sl-contact-card';
-      ov.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.55);display:flex;align-items:flex-end;justify-content:center;animation:slCardBg .25s ease';
-      ov.innerHTML = '<style>'+
-        '@keyframes slCardBg{from{opacity:0}to{opacity:1}}'+
-        '@keyframes slCardUp{from{transform:translateY(100%)}to{transform:translateY(0)}}'+
-        '@keyframes slAvPop{from{transform:scale(.6);opacity:0}to{transform:scale(1);opacity:1}}'+
-        '</style>'+
-        '<div style="width:100%;max-width:480px;max-height:92vh;overflow:auto;background:var(--panel,#12151c);border-radius:22px 22px 0 0;padding:0 0 28px;animation:slCardUp .32s cubic-bezier(.22,1,.36,1);box-shadow:0 -12px 40px rgba(0,0,0,.45)">'+
-        '<div style="height:4px;width:40px;border-radius:99px;background:rgba(255,255,255,.2);margin:10px auto 0"></div>'+
-        '<div style="display:flex;justify-content:center;margin-top:18px">'+
-        (av
-          ? '<img src="'+av.replace(/"/g,'')+'" style="width:96px;height:96px;border-radius:50%;object-fit:cover;animation:slAvPop .4s cubic-bezier(.22,1,.36,1);box-shadow:0 8px 28px rgba(0,0,0,.35);cursor:pointer" id="sl-cc-av">'
-          : '<div id="sl-cc-av" style="width:96px;height:96px;border-radius:50%;background:'+color+';display:flex;align-items:center;justify-content:center;font-size:36px;font-weight:800;color:#fff;animation:slAvPop .4s cubic-bezier(.22,1,.36,1);cursor:pointer">'+letter+'</div>')+
-        '</div>'+
-        '<div style="text-align:center;margin-top:14px;padding:0 20px">'+
-        '<div style="font-size:22px;font-weight:800;letter-spacing:-.02em">'+String(name).replace(/</g,'&lt;')+'</div>'+
-        (uname?'<div style="margin-top:6px;color:#4C7CF3;font-weight:600;font-size:14px">'+String(uname).replace(/</g,'&lt;')+'</div>':'')+
-        (phone?'<div style="margin-top:6px;color:var(--muted,#8b93a7);font-size:14px">'+String(phone).replace(/</g,'&lt;')+'</div>':'')+
-        '</div>'+
-        '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;padding:22px 20px 8px">'+
-        '<button type="button" data-cc="msg" style="padding:14px 8px;border-radius:16px;border:none;background:rgba(76,124,243,.15);color:#4C7CF3;font-weight:700;cursor:pointer">Написать</button>'+
-        '<button type="button" data-cc="call" style="padding:14px 8px;border-radius:16px;border:none;background:rgba(52,199,89,.12);color:#34c759;font-weight:700;cursor:pointer">Звонок</button>'+
-        '<button type="button" data-cc="more" style="padding:14px 8px;border-radius:16px;border:none;background:rgba(255,255,255,.06);color:var(--text,#fff);font-weight:700;cursor:pointer">Ещё</button>'+
-        '</div>'+
-        '<div style="margin:12px 16px;border-radius:16px;background:rgba(255,255,255,.04);overflow:hidden">'+
-        '<div style="padding:14px 16px;border-bottom:1px solid rgba(255,255,255,.06);font-size:14px;color:var(--muted)">В сети / был(а) недавно</div>'+
-        '<div style="padding:14px 16px;font-size:14px">Уведомления · Звук</div>'+
-        '</div>'+
-        '<div style="padding:8px 20px"><button type="button" id="sl-cc-close" style="width:100%;padding:14px;border-radius:14px;border:none;background:rgba(255,255,255,.06);color:var(--text);font-weight:700;cursor:pointer">Закрыть</button></div>'+
-        '</div>';
-      document.body.appendChild(ov);
-      ov.addEventListener('click', function(e){ if(e.target===ov) ov.remove(); });
-      ov.querySelector('#sl-cc-close').onclick = function(){ ov.remove(); };
-      ov.querySelector('#sl-cc-av').onclick = function(e){
-        e.stopPropagation();
-        if(av && typeof openTelegramPhotoViewer==='function') openTelegramPhotoViewer(av,{title:'Фото'});
-        else if(av && typeof openImageFullscreen==='function') openImageFullscreen(av);
-      };
-      ov.querySelector('[data-cc="msg"]').onclick = function(){
-        ov.remove();
+      document.querySelectorAll('#sl-contact-card, #sl-user-profile, .profile-sheet').forEach(function(el){ el.remove(); });
+    }catch(e){}
+
+    var name = [profile.first_name, profile.last_name].filter(Boolean).join(' ').trim() || profile.username || 'Контакт';
+    var u1 = profile.username ? '@'+String(profile.username).replace(/^@/,'') : '';
+    var u2 = profile.username2 ? '@'+String(profile.username2).replace(/^@/,'') : '';
+    var uname = (u1 && u2) ? (u1+', а также '+u2) : (u1||u2||'');
+    var phone = profile.phone || profile.phone_number || '';
+    var av = profile.avatar_url || '';
+    var color = profile.color || '#4C7CF3';
+    var letter = (name||'?').trim().charAt(0).toUpperCase();
+
+    var ov = document.createElement('div');
+    ov.id = 'sl-contact-card';
+    ov.setAttribute('role','dialog');
+    ov.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.45);display:flex;align-items:flex-end;justify-content:center;backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px);';
+    ov.innerHTML =
+      '<style id="sl-cc-style">'+
+      '@keyframes slCardUp{from{transform:translateY(110%);opacity:.6}to{transform:translateY(0);opacity:1}}'+
+      '#sl-contact-card .sl-cc-panel{width:100%;max-width:480px;max-height:88vh;overflow:auto;background:var(--panel,#fff);color:var(--text,#111);border-radius:22px 22px 0 0;padding:0 0 20px;animation:slCardUp .28s cubic-bezier(.22,1,.36,1);box-shadow:0 -8px 32px rgba(0,0,0,.25)}'+
+      '#sl-contact-card .sl-cc-av{width:92px;height:92px;border-radius:50%;object-fit:cover;box-shadow:0 6px 20px rgba(0,0,0,.2);cursor:pointer}'+
+      '#sl-contact-card .sl-cc-btn{padding:14px 8px;border-radius:16px;border:none;font-weight:700;cursor:pointer;font-size:14px}'+
+      '</style>'+
+      '<div class="sl-cc-panel" onclick="event.stopPropagation()">'+
+      '<div style="height:4px;width:40px;border-radius:99px;background:rgba(128,128,128,.35);margin:10px auto 0"></div>'+
+      '<div style="display:flex;justify-content:center;margin-top:16px">'+
+      (av
+        ? '<img class="sl-cc-av" src="'+String(av).replace(/"/g,'')+'" id="sl-cc-av" alt="">'
+        : '<div class="sl-cc-av" id="sl-cc-av" style="display:flex;align-items:center;justify-content:center;font-size:34px;font-weight:800;color:#fff;background:'+color+'">'+letter+'</div>')+
+      '</div>'+
+      '<div style="text-align:center;margin-top:12px;padding:0 20px">'+
+      '<div style="font-size:20px;font-weight:800">'+String(name).replace(/</g,'&lt;')+'</div>'+
+      (uname?'<div style="margin-top:4px;color:#4C7CF3;font-weight:600;font-size:13px">'+String(uname).replace(/</g,'&lt;')+'</div>':'')+
+      (phone?'<div style="margin-top:4px;color:var(--muted,#888);font-size:13px">'+String(phone).replace(/</g,'&lt;')+'</div>':'')+
+      '</div>'+
+      '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;padding:18px 16px 8px">'+
+      '<button type="button" class="sl-cc-btn" data-cc="msg" style="background:rgba(76,124,243,.14);color:#4C7CF3">Написать</button>'+
+      '<button type="button" class="sl-cc-btn" data-cc="call" style="background:rgba(52,199,89,.12);color:#34c759">Звонок</button>'+
+      '<button type="button" class="sl-cc-btn" data-cc="more" style="background:rgba(128,128,128,.12);color:inherit">Ещё</button>'+
+      '</div>'+
+      '<div style="margin:8px 16px;border-radius:14px;background:rgba(128,128,128,.08);overflow:hidden">'+
+      '<div style="padding:12px 14px;border-bottom:1px solid rgba(128,128,128,.1);font-size:13px;color:var(--muted,#888)">В сети / был(а) недавно</div>'+
+      '<div style="padding:12px 14px;font-size:13px">Уведомления · Звук</div>'+
+      '</div>'+
+      '<div style="padding:6px 16px 4px"><button type="button" id="sl-cc-close" class="sl-cc-btn" style="width:100%;background:rgba(128,128,128,.1)">Закрыть</button></div>'+
+      '</div>';
+
+    document.body.appendChild(ov);
+
+    function closeCard(){ try{ ov.remove(); }catch(e){} }
+
+    ov.addEventListener('click', function(e){ if(e.target===ov) closeCard(); });
+    ov.querySelector('#sl-cc-close').onclick = closeCard;
+
+    // avatar in card → photo viewer only
+    ov.querySelector('#sl-cc-av').onclick = function(e){
+      e.stopPropagation();
+      if(!av) return;
+      try{
+        if(typeof openTelegramPhotoViewer==='function') openTelegramPhotoViewer(av,{title:name});
+        else if(typeof openImageFullscreen==='function') openImageFullscreen(av);
+      }catch(err){}
+    };
+
+    ov.querySelector('[data-cc="msg"]').onclick = function(){
+      closeCard();
+      try{ if(typeof openChat==='function') openChat(profile); }catch(e){}
+    };
+    ov.querySelector('[data-cc="call"]').onclick = function(){
+      try{
+        if(typeof openChat==='function') openChat(profile);
+        if(typeof startCall==='function') startCall(profile, false);
+        else if(typeof showToast==='function') showToast('Звонок…');
+      }catch(e){}
+    };
+    // Ещё → full profile (original sheet)
+    ov.querySelector('[data-cc="more"]').onclick = function(){
+      closeCard();
+      try{
+        var fn = window._slOfpOrig;
+        if(typeof fn==='function' && fn !== window.openFullProfile){
+          fn(profile);
+        } else {
+          // fallback minimal full sheet
+          if(typeof showToast==='function') showToast('Профиль');
+        }
+      }catch(e){ console.warn(e); }
+    };
+  };
+  window.openFullProfile._slCard = 1;
+
+  // Header avatar / name → contact card on SHORT tap (not long-press, not photo)
+  (function(){
+    function bindHeader(){
+      var pav = document.getElementById('partner-avatar');
+      var pnm = document.getElementById('chat-partner-name');
+      function openInfo(e){
+        if(e){ e.preventDefault(); e.stopPropagation(); }
         try{
-          if(typeof openChat==='function') openChat(profile);
-        }catch(e){}
-      };
-      ov.querySelector('[data-cc="call"]').onclick = function(){
-        if(typeof showToast==='function') showToast('Звонок…');
-      };
-      ov.querySelector('[data-cc="more"]').onclick = function(){
-        if(_ofp){ ov.remove(); _ofp(profile); }
-      };
-      return;
-    }catch(e){
-      if(_ofp) return _ofp.apply(this, arguments);
-    }
-  };
-  // also slOpenChatInfo uses openFullProfile
-  window.slOpenChatInfo = function(){
-    try{
-      if(typeof activeGroup!=='undefined' && activeGroup){
-        if(typeof openGroupInfo==='function') return openGroupInfo(activeGroup);
-        return window.openFullProfile(activeGroup);
+          if(window.activeGroup && typeof openGroupInfo==='function'){ openGroupInfo(window.activeGroup); return; }
+          var partner = window.activePartner;
+          if(partner && partner.id && myProfile && partner.id===myProfile.id){
+            // favorites — no card
+            return;
+          }
+          if(partner) window.openFullProfile(partner);
+        }catch(err){}
       }
-      var partner = (typeof activePartner!=='undefined' && activePartner) ? activePartner : window.activePartner;
-      if(partner) return window.openFullProfile(partner);
-    }catch(e){ console.warn(e); }
-  };
+      if(pav && !pav._slTapCard){
+        pav._slTapCard = 1;
+        pav.onclick = openInfo;
+        pav.style.cursor = 'pointer';
+      }
+      if(pnm && !pnm._slTapCard){
+        pnm._slTapCard = 1;
+        pnm.addEventListener('click', openInfo);
+        pnm.style.cursor = 'pointer';
+      }
+    }
+    setTimeout(bindHeader, 400);
+    setTimeout(bindHeader, 2000);
+    document.addEventListener('click', function(){ setTimeout(bindHeader, 100); }, true);
+  })();
 
   console.log('[SL] fix14: chats, no style, username FS, phone, archive, send, stickers, card');
 })();
@@ -58418,12 +58493,12 @@ body:has(#msg-select-bar.show) .bubble-row .sl-sel-check{
   setTimeout(wireSend, 2000);
   setTimeout(paintSettings, 1000);
   setTimeout(paintSettings, 3000);
-  setInterval(function(){
+  /*pk*/0&&setInterval(function(){
     wireSend();
     if(document.getElementById('page-settings') && document.getElementById('page-settings').style.display!=='none')
       paintSettings();
     guardList();
-  }, 4000);
+  },999999);
 
   document.addEventListener('click', function(e){
     var t = e.target;
@@ -58445,6 +58520,95 @@ body:has(#msg-select-bar.show) .bubble-row .sl-sel-check{
     }catch(e){}
   }, 2500);
   console.log('[SL] master fix active');
+})();
+</script>
+
+
+<script>
+(function(){
+  if(window._slMascot) return;
+  window._slMascot = 1;
+  var KEY = 'sl_mascot_seen_v1';
+  function showMascot(kind, onContinue){
+    try{
+      var seen = {};
+      try{ seen = JSON.parse(localStorage.getItem(KEY)||'{}'); }catch(e){}
+      if(seen[kind]){ if(onContinue) onContinue(); return; }
+      var ov = document.createElement('div');
+      ov.id = 'sl-mascot-ov';
+      ov.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:20px';
+      var title = kind==='channel' ? 'Канал' : 'Группа';
+      var text = kind==='channel'
+        ? 'Канал — это лента, куда пишете вы (или админы), а подписчики читают. Удобно для новостей и анонсов.'
+        : 'Группа — общий чат для нескольких людей. Все могут писать, делиться фото и созваниваться.';
+      ov.innerHTML = '<div style="max-width:340px;width:100%;background:var(--panel,#fff);color:var(--text,#111);border-radius:22px;padding:24px 20px;text-align:center;box-shadow:0 16px 50px rgba(0,0,0,.35)">'+
+        '<div style="font-size:56px;line-height:1;margin-bottom:8px">🕊️</div>'+
+        '<div style="font-size:13px;font-weight:700;color:#4C7CF3;margin-bottom:4px">SLine</div>'+
+        '<div style="font-size:20px;font-weight:800;margin-bottom:10px">'+title+'</div>'+
+        '<div style="font-size:14px;line-height:1.45;color:var(--muted,#666);margin-bottom:18px">'+text+'</div>'+
+        '<button type="button" id="sl-mascot-ok" style="width:100%;padding:14px;border:none;border-radius:14px;background:#4C7CF3;color:#fff;font-weight:800;font-size:15px;cursor:pointer">Понятно</button>'+
+        '</div>';
+      document.body.appendChild(ov);
+      ov.querySelector('#sl-mascot-ok').onclick = function(){
+        try{ seen[kind]=1; localStorage.setItem(KEY, JSON.stringify(seen)); }catch(e){}
+        ov.remove();
+        if(onContinue) onContinue();
+      };
+    }catch(e){ if(onContinue) onContinue(); }
+  }
+  window.slShowMascotOnce = showMascot;
+  // Hook common create buttons when they appear
+  document.addEventListener('click', function(e){
+    var t = e.target;
+    if(!t || !t.closest) return;
+    var btn = t.closest('[data-create="channel"], [data-create="group"], #create-channel-btn, #create-group-btn, #btn-new-channel, #btn-new-group, .create-channel, .create-group');
+    var txt = (t.textContent||'').trim().toLowerCase();
+    var kind = null;
+    if(btn){
+      kind = (btn.id||btn.className||btn.getAttribute('data-create')||'').toLowerCase().indexOf('channel')>=0 ? 'channel' : 'group';
+    } else if(/создать канал|new channel|канал/.test(txt) && txt.length<40){
+      kind = 'channel';
+    } else if(/создать группу|new group|группа/.test(txt) && txt.length<40){
+      kind = 'group';
+    }
+    if(!kind) return;
+    var seen = {};
+    try{ seen = JSON.parse(localStorage.getItem(KEY)||'{}'); }catch(err){}
+    if(seen[kind]) return;
+    setTimeout(function(){ showMascot(kind); }, 250);
+  }, true);
+  console.log('[SL] mascot ready');
+})();
+</script>
+
+
+<script>
+(function(){
+  if(window._slListGuard2) return;
+  window._slListGuard2 = 1;
+  var lastHTML = '';
+  var lastCount = 0;
+  setInterval(function(){
+    try{
+      if(document.body.classList.contains('in-chat')) return;
+      var list = document.getElementById('contacts-list');
+      if(!list) return;
+      var rows = list.querySelectorAll('[data-cid], .contact, .sl-n-row, .chat-item, .sl-contact-row');
+      var n = rows.length;
+      if(n >= 2){
+        lastCount = n;
+        lastHTML = list.innerHTML;
+        // remove empty placeholders
+        list.querySelectorAll('.empty-chats, .no-chats, [data-empty]').forEach(function(el){
+          if((el.textContent||'').indexOf('Нет')>=0) el.remove();
+        });
+      } else if(lastCount >= 2 && n < 2 && lastHTML){
+        // restore from last known good snapshot
+        list.innerHTML = lastHTML;
+      }
+    }catch(e){}
+  }, 2000);
+  console.log('[SL] list guard2');
 })();
 </script>
 
