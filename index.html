@@ -4060,6 +4060,41 @@ body.recording #send-btn,
 #sl-chat-style, #sl-btn-chat-style, .sl-chat-style-row{display:none !important}
 </style>
 
+
+<style id="sl-avatar-fix-css">
+.avatar, .avatar.has-photo {
+  overflow: hidden !important;
+  background-size: cover !important;
+  background-position: center !important;
+  flex-shrink: 0 !important;
+}
+.avatar img {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  border-radius: 50% !important;
+  display: block !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+#partner-avatar, #partner-avatar img,
+#settings-avatar, #settings-avatar img,
+#me-avatar-chats, #me-avatar-chats img {
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+#contacts-list .avatar img {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+}
+/* Prevent white blank profile sheet */
+.profile-sheet, #sl-contact-card {
+  background: var(--panel, #12151c) !important;
+  color: var(--text, #fff) !important;
+}
+</style>
+
 </head>
 <body>
 <div id="sl-hard-boot" aria-hidden="true" style="position:fixed;inset:0;z-index:2147483646;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:#000000;color:#E8EEF8;font-family:system-ui,-apple-system,sans-serif"><div class="sl-hb-dot"></div><div style="font:600 13px/1.3 system-ui,-apple-system,sans-serif;color:#8B9BB4">SLine</div></div>
@@ -8411,7 +8446,13 @@ function sanitizeContactsList(){
 window.sanitizeContactsList = sanitizeContactsList;
 
 async function loadChats(){
-  const list=document.getElementById('contacts-list'); if(!list||!myProfile) return;
+  const list=document.getElementById('contacts-list');
+  if(!list) return;
+  // Wait for profile if needed
+  if(!myProfile || !myProfile.id){
+    try{ list.innerHTML='<div class="empty-state" style="padding:28px;text-align:center;color:#8b93a7">Загрузка…</div>'; }catch(e){}
+    return;
+  }
   const me=String(myProfile.id);
   function cacheKey(){ return 'sl_contacts_cache_v2_'+me; }
   function loadCache(){
@@ -8419,107 +8460,55 @@ async function loadChats(){
       const raw=localStorage.getItem(cacheKey());
       if(!raw) return null;
       const o=JSON.parse(raw);
-      if(!o||!Array.isArray(o.items)) return null;
-      return o.items;
+      if(o && Array.isArray(o.items)) return o.items;
+      if(Array.isArray(o)) return o;
+      return null;
     }catch(e){ return null; }
-  }
-  function loadAllLocalCaches(){
-    const out=[];
-    const seen=new Set();
-    function pushArr(arr){
-      if(!Array.isArray(arr)) return;
-      arr.forEach(function(c){
-        if(!c||!c.id) return;
-        const id=String(c.id);
-        if(seen.has(id)) return;
-        seen.add(id);
-        out.push(c);
-      });
-    }
-    try{ pushArr(loadCache()); }catch(e){}
-    try{
-      for(var i=0;i<localStorage.length;i++){
-        var k=localStorage.key(i);
-        if(!k) continue;
-        if(k===cacheKey()) continue;
-        if(/^sl_contacts_cache/.test(k) || /^sl_contacts_cache_v2_/.test(k)){
-          try{
-            var raw=localStorage.getItem(k);
-            var o=JSON.parse(raw);
-            if(Array.isArray(o)) pushArr(o);
-            else if(o && Array.isArray(o.items)) pushArr(o.items);
-          }catch(e){}
-        }
-      }
-    }catch(e){}
-    // legacy plain arrays
-    try{ pushArr(JSON.parse(localStorage.getItem('sl_contacts_cache')||'null')); }catch(e){}
-    return out;
   }
   function saveCache(items){
     try{
-      var arr = items||[];
-      // never overwrite a non-empty cache with empty
-      if(!arr.length){
-        var prev = loadCache();
-        if(prev && prev.length) return;
-      }
-      localStorage.setItem(cacheKey(), JSON.stringify({ts:Date.now(),items:arr}));
+      if(!items || !items.length) return;
+      localStorage.setItem(cacheKey(), JSON.stringify({ts:Date.now(),items:items}));
     }catch(e){}
   }
   window.slSaveContactsCache=function(){ try{ saveCache(contacts); }catch(e){} };
-  window.slLoadContactsCache=loadCache;
 
-  // 1) Instant paint from ANY local cache
-  const cachedAll=loadAllLocalCaches();
-  if(cachedAll && cachedAll.length){
-    contacts=cachedAll.map(function(c){ c._dmWithMe=true; return c; });
-    try{ sanitizeContactsList(); }catch(e){}
-    try{ renderContactsAndGroups(); }catch(e){}
-  } else {
-    try{ list.innerHTML=loaderHTML(); }catch(e){}
+  function selfContact(){
+    return {
+      id: myProfile.id,
+      username: myProfile.username||'',
+      first_name: 'Избранное',
+      last_name: '',
+      avatar_url: myProfile.avatar_url||null,
+      color: myProfile.color||'#2EA6FF',
+      lastMessage: 'Заметки',
+      lastAt: new Date(0).toISOString(),
+      _dmWithMe: true
+    };
   }
 
-  const map=new Map(); // peerId -> {lastMessage,lastAt,chatKey,profile?}
+  // Always start with Избранное
+  let next = [selfContact()];
+  const have = new Set([me]);
 
-  function touchMap(peer, meta){
-    if(!peer) return;
-    peer=String(peer);
-    if(peer===me) return;
-    meta=meta||{};
-    const prev=map.get(peer);
-    if(!prev){
-      map.set(peer, {
-        lastMessage: meta.lastMessage||meta.preview||'',
-        lastAt: meta.lastAt||meta.updated||meta.created_at||null,
-        chatKey: meta.chatKey||null,
-        profile: meta.profile||null
-      });
-      return;
-    }
-    if(meta.lastAt && (!prev.lastAt || String(meta.lastAt)>String(prev.lastAt))){
-      prev.lastAt=meta.lastAt;
-      if(meta.lastMessage!=null) prev.lastMessage=meta.lastMessage;
-    } else if(!prev.lastMessage && meta.lastMessage){
-      prev.lastMessage=meta.lastMessage;
-    }
-    if(meta.chatKey) prev.chatKey=meta.chatKey;
-    if(meta.profile) prev.profile=meta.profile;
-  }
-
-  // Seed map from local caches
+  // Merge cache
   try{
-    cachedAll.forEach(function(c){
+    const cached = loadCache() || [];
+    cached.forEach(function(c){
       if(!c||!c.id) return;
-      touchMap(c.id, {
-        lastMessage: c.lastMessage||'',
-        lastAt: c.lastAt||null,
-        profile: c
-      });
+      const id=String(c.id);
+      if(have.has(id)) return;
+      have.add(id);
+      c._dmWithMe = true;
+      next.push(c);
     });
   }catch(e){}
 
-  // 2) PRIMARY: user_chat_index
+  // Instant paint
+  contacts = next.slice();
+  try{ if(typeof renderContactsAndGroups==='function') renderContactsAndGroups(); }catch(e){}
+
+  // user_chat_index
   try{
     const db = window.firebaseDb || (window.firebase && firebase.database && firebase.database());
     if(db){
@@ -8527,211 +8516,84 @@ async function loadChats(){
       const idx = snap.val() || {};
       Object.keys(idx).forEach(function(k){
         if(!k || String(k).indexOf('g_')===0) return;
-        const meta = idx[k] || {};
+        const meta = idx[k]||{};
         let peer = meta.peer_id || meta.peer || null;
         if(!peer){
-          const parts = String(k).split('_');
-          if(parts.length>=2){
-            peer = parts[0]===me ? parts[1] : parts[0];
-          }
+          const parts=String(k).split('_');
+          if(parts.length>=2) peer = parts[0]===me ? parts[1] : parts[0];
         }
-        if(!peer || String(peer)===me) return;
-        touchMap(peer, {
+        if(!peer || String(peer)===me || have.has(String(peer))) return;
+        have.add(String(peer));
+        next.push({
+          id: String(peer),
+          username: meta.username||'',
+          first_name: meta.name || meta.username || 'Чат',
           lastMessage: meta.lastMessage || meta.preview || '',
-          lastAt: meta.lastAt || meta.updated || meta.created_at || null,
-          chatKey: k
+          lastAt: meta.lastAt || meta.updated || null,
+          avatar_url: meta.avatar_url || null,
+          color: meta.color || null,
+          _dmWithMe: true
         });
       });
     }
-  }catch(e){ console.warn('[SL] loadChats index', e); }
+  }catch(e){ console.warn('[SL] index', e); }
 
-  // 3) my_contacts (Firebase + local)
-  try{
-    const db = window.firebaseDb || (window.firebase && firebase.database && firebase.database());
-    if(db){
-      const snap = await db.ref('my_contacts/'+me).once('value');
-      const val = snap.val();
-      if(val){
-        if(Array.isArray(val)){
-          val.forEach(function(id){ touchMap(id, {}); });
-        } else if(typeof val==='object'){
-          Object.keys(val).forEach(function(id){
-            const v=val[id];
-            if(v && typeof v==='object'){
-              touchMap(v.id||id, {
-                lastMessage: v.lastMessage||'',
-                lastAt: v.lastAt||null,
-                profile: v
-              });
-            } else {
-              touchMap(id, {});
-            }
-          });
-        }
-      }
-    }
-  }catch(e){}
+  // my_contacts local
   try{
     const raw=localStorage.getItem('sl_my_contacts_'+me)||localStorage.getItem('sl_my_contacts')||'[]';
-    const arr=JSON.parse(raw)||[];
-    (arr||[]).forEach(function(id){ touchMap(id, {}); });
+    (JSON.parse(raw)||[]).forEach(function(id){
+      if(!id || have.has(String(id))) return;
+      have.add(String(id));
+      next.push({ id:String(id), first_name:'Чат', lastMessage:'', _dmWithMe:true });
+    });
   }catch(e){}
 
-  // 4) Pinned chats
+  // Load profiles for peers (avatars/names)
   try{
-    const raw=localStorage.getItem('sl_pinned_chats_'+me)||localStorage.getItem('sl_pinned_chats')||'[]';
-    (JSON.parse(raw)||[]).forEach(function(id){ touchMap(id, {}); });
-  }catch(e){}
-
-  // 5) Enrich previews from chat_msgs for known peers + backfill index
-  try{
-    const db = window.firebaseDb || (window.firebase && firebase.database && firebase.database());
-    if(db && map.size){
-      const peers = Array.from(map.keys()).slice(0, 80);
-      await Promise.all(peers.map(async function(peer){
+    const ids = next.map(function(c){ return String(c.id); }).filter(function(id){ return id!==me; }).slice(0,80);
+    if(ids.length && typeof sb!=='undefined' && sb){
+      for(let i=0;i<ids.length;i+=25){
+        const chunk=ids.slice(i,i+25);
         try{
-          const key = (typeof dmPairKey==='function')
-            ? dmPairKey(me, peer)
-            : [me, String(peer)].sort().join('_');
-          const snap = await db.ref('chat_msgs/'+key).orderByChild('created_at').limitToLast(1).once('value');
-          const val = snap.val();
-          if(!val) return;
-          const msgs = Object.keys(val).map(function(id){ return Object.assign({id:id}, val[id]); });
-          msgs.sort(function(a,b){ return String(a.created_at||'').localeCompare(String(b.created_at||'')); });
-          const m = msgs[msgs.length-1];
-          if(!m) return;
-          var _pv=(typeof slMsgPreview==='function'?slMsgPreview(m):(m.content||''));
-          touchMap(peer, { lastMessage:_pv, lastAt:m.created_at, chatKey:key });
-          // backfill own index so list survives reloads
-          try{
-            await db.ref('user_chat_index/'+me+'/'+key).update({
-              lastAt: m.created_at || new Date().toISOString(),
-              lastMessage: String(_pv).slice(0,120),
-              updated: Date.now(),
-              chatKey: key,
-              peer_id: String(peer)
+          const {data:prs}=await sb.from('profiles').select('id,username,username2,first_name,last_name,avatar_url,color,email,phone').in('id', chunk);
+          const map={};
+          (prs||[]).forEach(function(p){ map[String(p.id)]=p; });
+          next = next.map(function(c){
+            const p=map[String(c.id)];
+            if(!p) return c;
+            return Object.assign({}, c, {
+              username: p.username||c.username,
+              username2: p.username2,
+              first_name: (String(c.id)===me) ? 'Избранное' : (p.first_name||c.first_name),
+              last_name: (String(c.id)===me) ? '' : (p.last_name||''),
+              avatar_url: p.avatar_url||c.avatar_url,
+              color: p.color||c.color,
+              email: p.email,
+              phone: p.phone,
+              _dmWithMe: true
             });
-          }catch(eBF){}
-        }catch(err){}
-      }));
-    }
-  }catch(e){ console.warn('[SL] loadChats chat_msgs', e); }
-
-  // Always include self (Избранное)
-  // (added later in build)
-
-  try{
-    const ids = Array.from(map.keys());
-    // always ensure self in list
-    if(!ids.includes(me)) ids.unshift(me);
-
-    let profiles = [];
-    const byId = new Map();
-
-    // Batch via sb
-    try{
-      if(typeof sb!=='undefined' && sb && ids.length){
-        // chunk in 30s
-        for(let i=0;i<ids.length;i+=30){
-          const chunk=ids.slice(i,i+30);
-          try{
-            const {data:prs}=await sb.from('profiles').select('id,username,username2,first_name,last_name,avatar_url,color,email,phone').in('id', chunk);
-            (prs||[]).forEach(function(p){ byId.set(String(p.id), p); });
-          }catch(eC){}
-        }
-      }
-    }catch(e1){}
-
-    // Fill missing via Firebase direct
-    try{
-      const db = window.firebaseDb || (window.firebase && firebase.database && firebase.database());
-      if(db){
-        const missing = ids.filter(function(id){ return !byId.has(String(id)); }).slice(0,60);
-        await Promise.all(missing.map(async function(id){
-          try{
-            const s = await db.ref('tables/profiles/'+id).once('value');
-            const p = s.val();
-            if(p){ p.id = p.id || id; byId.set(String(id), p); }
-          }catch(e2){}
-        }));
-      }
-    }catch(e3){}
-
-    // seed from cache profiles
-    try{
-      cachedAll.forEach(function(c){
-        if(c&&c.id&&!byId.has(String(c.id))) byId.set(String(c.id), c);
-      });
-    }catch(e){}
-
-    const next = [];
-    ids.forEach(function(id){
-      if(String(id)===me){
-        next.push(Object.assign({}, myProfile, {
-          lastMessage: 'Заметки',
-          lastAt: new Date(0).toISOString(),
-          _dmWithMe: true
-        }));
-        return;
-      }
-      const meta = map.get(String(id)) || {};
-      const p = byId.get(String(id)) || meta.profile;
-      if(p){
-        next.push(Object.assign({}, p, {
-          id: p.id || id,
-          lastMessage: meta.lastMessage || p.lastMessage || '',
-          lastAt: meta.lastAt || p.lastAt || null,
-          _dmWithMe: true
-        }));
-      } else {
-        next.push({
-          id: id,
-          username: 'user_'+String(id).slice(0,6),
-          first_name: 'Чат',
-          lastMessage: meta.lastMessage || '',
-          lastAt: meta.lastAt || null,
-          _dmWithMe: true
-        });
-      }
-    });
-
-    next.sort(function(a,b){
-      if(String(a.id)===me) return 1;
-      if(String(b.id)===me) return -1;
-      return String(b.lastAt||'').localeCompare(String(a.lastAt||''));
-    });
-
-    // Merge with previous contacts so we never drop something we already showed
-    try{
-      const have=new Set(next.map(function(c){ return String(c.id); }));
-      (contacts||[]).forEach(function(c){
-        if(!c||!c.id) return;
-        if(have.has(String(c.id))) return;
-        c._dmWithMe=true;
-        next.push(c);
-        have.add(String(c.id));
-      });
-    }catch(e){}
-
-    contacts = next;
-    try{ sanitizeContactsList(); }catch(e){}
-    saveCache(contacts);
-    renderContactsAndGroups();
-    console.log('[SL] loadChats done', contacts.length);
-  }catch(e){
-    console.warn('[SL] loadChats build', e);
-    if(!contacts||!contacts.length){
-      const c2=loadAllLocalCaches();
-      if(c2&&c2.length){ contacts=c2; renderContactsAndGroups(); }
-      else {
-        contacts=[{...myProfile,lastMessage:'Заметки',lastAt:new Date(0).toISOString(),_dmWithMe:true}];
-        renderContactsAndGroups();
+          });
+        }catch(e){}
       }
     }
-  }
+  }catch(e){}
+
+  // Ensure self is first and named Избранное
+  next = next.filter(function(c){ return c && c.id; });
+  const self = selfContact();
+  next = [self].concat(next.filter(function(c){ return String(c.id)!==me; }));
+  next.sort(function(a,b){
+    if(String(a.id)===me) return -1;
+    if(String(b.id)===me) return 1;
+    return String(b.lastAt||'').localeCompare(String(a.lastAt||''));
+  });
+
+  contacts = next;
+  saveCache(contacts);
+  try{ if(typeof renderContactsAndGroups==='function') renderContactsAndGroups(); }catch(e){}
+  console.log('[SL] loadChats ok', contacts.length);
 }
 
-/** Sorted DM pair key + write both users' chat index (strict rules safe) */
 function dmPairKey(a,b){
   return [String(a), String(b)].sort().join('_');
 }
@@ -9032,7 +8894,22 @@ function renderContactsAndGroups(){
     }
   }
   items.sort((a,b)=> (b.unread?1:0)-(a.unread?1:0) || new Date(b.data.lastAt||0)-new Date(a.data.lastAt||0));
-  if(!items.length){ list.innerHTML=`<div class="empty-state">${showArchive?t('empty_archive'):t('no_chats')}</div>`; return; }
+  if(!items.length){
+    // Ensure at least Избранное is offered
+    try{
+      if(!showArchive && myProfile && myProfile.id){
+        items.push({type:'user', data: Object.assign({}, myProfile, {
+          first_name: 'Избранное', lastMessage: 'Заметки', lastAt: new Date(0).toISOString(), _dmWithMe: true
+        }), unread: 0});
+      }
+    }catch(e){}
+  }
+  if(!items.length){
+    list.innerHTML = '<div class="empty-state" style="display:block!important;opacity:1!important;visibility:visible!important;padding:40px 20px;text-align:center;color:#8b93a7!important;font-size:15px;line-height:1.5">'+
+      (showArchive ? 'Архив пуст' : 'Нет чатов')+
+      '<div style="margin-top:10px;font-size:13px;opacity:.85">Нажмите <b>+</b>, чтобы начать общение</div></div>';
+    return;
+  }
   list.innerHTML='';
   items.forEach(({type,data,unread:u})=>{
     const row=document.createElement('div');
@@ -57069,7 +56946,7 @@ body:has(#msg-select-bar.show) .bubble-row .sl-sel-check{
     }
   }
   applySolid();
-  setInterval(applySolid, 1500);
+  /* applySolid interval off */
 
   // Style buttons
   document.addEventListener('click', function(e){
@@ -57498,7 +57375,7 @@ body:has(#msg-select-bar.show) .bubble-row .sl-sel-check{
       // context menu already has Разархивировать — ok
     }catch(e){}
   }
-  setInterval(fixArchiveLabels, 800);
+  setInterval(fixArchiveLabels, 5000);
 
   // patch setArchive bar creation
   document.addEventListener('click', function(){
@@ -57541,7 +57418,7 @@ body:has(#msg-select-bar.show) .bubble-row .sl-sel-check{
       });
     }catch(e){}
   }
-  setInterval(forceComposerButtons, 200);
+  setInterval(forceComposerButtons, 2000);
   document.addEventListener('input', forceComposerButtons, true);
 
   /* ========== 7) STICKER PACKS SEPARATE (news / bunny) ========== */
@@ -57586,7 +57463,7 @@ body:has(#msg-select-bar.show) .bubble-row .sl-sel-check{
       }
     }catch(e){}
   }
-  setInterval(splitStickerPacks, 2500);
+  setInterval(splitStickerPacks, 15000);
 
   /* custom sticker + */
   window.slCreateCustomSticker = function(){
@@ -57902,18 +57779,12 @@ body:has(#msg-select-bar.show) .bubble-row .sl-sel-check{
     }, {passive:true});
   }
 
-  setInterval(bindSmooth, 1500);
+  /* bindSmooth interval off */
   setTimeout(bindSmooth, 500);
   setTimeout(patchReset, 800);
 
   // Also refresh stories more often so new posts appear
-  setInterval(function(){
-    try{
-      if(typeof loadStories==='function' && document.getElementById('stories-bar')){
-        loadStories();
-      }
-    }catch(e){}
-  }, 45000);
+  /* stories poll off */
 
   console.log('[SL] stories smooth + robust viewer');
 })();
@@ -58011,8 +57882,7 @@ body:has(#msg-select-bar.show) .bubble-row .sl-sel-check{
   window.slMigrateMyChats = migrateMyChatsFromMessages;
 
   // auto-run once per login
-  setTimeout(function(){ migrateMyChatsFromMessages(); }, 4000);
-  setTimeout(function(){ migrateMyChatsFromMessages(); }, 12000);
+  /* migrate auto-run disabled — was heavy / OOM */
 
   console.log('[SL] chat migrate helper ready');
 })();
@@ -58079,6 +57949,133 @@ body:has(#msg-select-bar.show) .bubble-row .sl-sel-check{
   });
 
   console.log('[SL] empty list fix on');
+})();
+</script>
+
+
+<script>
+(function(){
+  if(window._slListVisibleFix) return;
+  window._slListVisibleFix = 1;
+
+  function paintFallback(){
+    try{
+      var list = document.getElementById('contacts-list');
+      if(!list) return;
+      var hasRow = list.querySelector('.sw-clip, .contact, [data-cid]');
+      if(hasRow) return;
+      // archive may hide all
+      try{
+        var arch = JSON.parse(localStorage.getItem('sl_archive')||'[]');
+        if(Array.isArray(arch) && arch.length > 0){
+          // if archive has many ids, don't clear — just show message
+        }
+      }catch(e){}
+      if(typeof myProfile!=='undefined' && myProfile && myProfile.id){
+        if(!Array.isArray(window.contacts)) window.contacts=[];
+        if(!contacts.some(function(c){return c&&String(c.id)===String(myProfile.id);})){
+          contacts = [{
+            id: myProfile.id,
+            first_name: 'Избранное',
+            lastMessage: 'Заметки',
+            lastAt: new Date(0).toISOString(),
+            _dmWithMe: true,
+            avatar_url: myProfile.avatar_url,
+            color: myProfile.color || '#2EA6FF'
+          }].concat(contacts);
+        }
+        if(typeof renderContactsAndGroups==='function'){
+          renderContactsAndGroups();
+          if(list.querySelector('.sw-clip, .contact, [data-cid]')) return;
+        }
+      }
+      list.innerHTML = '<div style="padding:48px 20px;text-align:center;color:#8b93a7;font-size:15px">Нет чатов<div style="margin-top:8px;font-size:13px">Нажмите + чтобы начать общение</div></div>';
+    }catch(e){}
+  }
+
+  setTimeout(paintFallback, 600);
+  setTimeout(paintFallback, 2000);
+  setTimeout(paintFallback, 5000);
+  setTimeout(function(){
+    try{ if(typeof loadChats==='function') loadChats().then(paintFallback); }catch(e){ paintFallback(); }
+  }, 1500);
+
+  console.log('[SL] list visible fix');
+})();
+</script>
+
+
+<script>
+(function(){
+  if(window._slLeanBoot) return;
+  window._slLeanBoot = 1;
+
+  function selfRow(){
+    try{
+      if(!myProfile||!myProfile.id) return null;
+      return {
+        id: myProfile.id,
+        first_name: 'Избранное',
+        lastMessage: 'Заметки',
+        lastAt: new Date(0).toISOString(),
+        avatar_url: myProfile.avatar_url||null,
+        color: myProfile.color||'#2EA6FF',
+        username: myProfile.username||'',
+        _dmWithMe: true
+      };
+    }catch(e){ return null; }
+  }
+
+  function ensureList(){
+    try{
+      if(!myProfile||!myProfile.id) return;
+      if(!Array.isArray(window.contacts)) window.contacts = [];
+      var me = String(myProfile.id);
+      if(!contacts.some(function(c){ return c && String(c.id)===me; })){
+        contacts.unshift(selfRow());
+      } else {
+        // rename self to Избранное in list
+        contacts.forEach(function(c){
+          if(c && String(c.id)===me){ c.first_name='Избранное'; c.lastMessage=c.lastMessage||'Заметки'; c._dmWithMe=true; }
+        });
+      }
+      if(typeof renderContactsAndGroups==='function') renderContactsAndGroups();
+      var list=document.getElementById('contacts-list');
+      if(list && !list.querySelector('.sw-clip,[data-cid],.contact')){
+        // hard HTML fallback
+        var av = (myProfile.avatar_url)
+          ? '<img src="'+String(myProfile.avatar_url).replace(/"/g,'')+'" style="width:100%;height:100%;object-fit:cover;border-radius:50%">'
+          : '<svg viewBox="0 0 24 24" fill="#fff" width="22" height="22"><path d="M6 3.5A1.5 1.5 0 017.5 2h9A1.5 1.5 0 0118 3.5v17.2a.8.8 0 01-1.3.6L12 17.2l-4.7 4.1A.8.8 0 016 20.7V3.5z"/></svg>';
+        list.innerHTML = '<div class="sw-clip" data-cid="'+me+'" data-ctype="user">'+
+          '<div class="contact sw-front" data-cid="'+me+'" data-ctype="user" style="display:flex;align-items:center;gap:10px;width:100%;padding:10px 12px;cursor:pointer">'+
+          '<div class="avatar sl-fav-avatar" style="width:48px;height:48px;border-radius:50%;background:#2EA6FF;display:flex;align-items:center;justify-content:center;overflow:hidden">'+av+'</div>'+
+          '<div style="min-width:0;flex:1"><div class="contact-name">Избранное</div><div class="contact-sub">Заметки</div></div>'+
+          '</div></div>';
+        list.querySelector('.contact').onclick=function(){
+          try{
+            if(typeof openChat==='function') openChat(myProfile);
+          }catch(e){}
+        };
+      }
+    }catch(e){ console.warn('ensureList', e); }
+  }
+
+  setTimeout(ensureList, 500);
+  setTimeout(ensureList, 1500);
+  setTimeout(function(){
+    try{ if(typeof loadChats==='function') loadChats().finally(ensureList); }
+    catch(e){ ensureList(); }
+  }, 1000);
+  setTimeout(ensureList, 4000);
+
+  // Fix broken white profile / avatar viewer
+  document.addEventListener('click', function(e){
+    var t=e.target;
+    if(!t||!t.closest) return;
+    // if broken empty overlay, allow back
+  }, true);
+
+  console.log('[SL] lean boot — Избранное guaranteed');
 })();
 </script>
 
