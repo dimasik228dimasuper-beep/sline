@@ -9483,14 +9483,32 @@ async function openChat(partner){
     if(!pav) return;
     if(isSelf){
       pav.className = 'avatar sl-fav-avatar';
-      pav.style.backgroundImage = 'none';
-      pav.style.background = '#2EA6FF';
-      pav.innerHTML = '<svg viewBox="0 0 24 24" fill="#fff" xmlns="http://www.w3.org/2000/svg"><path d="M6 3.5A1.5 1.5 0 017.5 2h9A1.5 1.5 0 0118 3.5v17.2a.8.8 0 01-1.3.6L12 17.2l-4.7 4.1A.8.8 0 016 20.7V3.5z"/></svg>';
+      pav.style.cssText = 'width:40px;height:40px;min-width:40px;min-height:40px;border-radius:50%;background:#2EA6FF;display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0';
+      pav.innerHTML = '<svg viewBox="0 0 24 24" width="20" height="20" fill="#fff" xmlns="http://www.w3.org/2000/svg"><path d="M6 3.5A1.5 1.5 0 017.5 2h9A1.5 1.5 0 0118 3.5v17.2a.8.8 0 01-1.3.6L12 17.2l-4.7 4.1A.8.8 0 016 20.7V3.5z"/></svg>';
+      try{
+        var nm=document.getElementById('chat-partner-name');
+        if(nm) nm.textContent = 'Избранное';
+      }catch(e){}
     } else {
       pav.className = 'avatar';
-      renderAvatarInto(pav, partner.avatar_url, (partner.username||'?')[0].toUpperCase(), partner.color||colorFor(partner.id));
+      renderAvatarInto(pav, partner.avatar_url, (partner.username||partner.first_name||'?')[0].toUpperCase(), partner.color||colorFor(partner.id));
     }
   })();
+  // Keep header correct (packs sometimes overwrite)
+  if(isSelf){
+    setTimeout(function(){
+      try{
+        var pav=document.getElementById('partner-avatar');
+        if(pav){
+          pav.className='avatar sl-fav-avatar';
+          pav.style.cssText='width:40px;height:40px;border-radius:50%;background:#2EA6FF;display:flex;align-items:center;justify-content:center;overflow:hidden';
+          pav.innerHTML='<svg viewBox="0 0 24 24" width="20" height="20" fill="#fff"><path d="M6 3.5A1.5 1.5 0 017.5 2h9A1.5 1.5 0 0118 3.5v17.2a.8.8 0 01-1.3.6L12 17.2l-4.7 4.1A.8.8 0 016 20.7V3.5z"/></svg>';
+        }
+        var nm=document.getElementById('chat-partner-name');
+        if(nm) nm.textContent='Избранное';
+      }catch(e){}
+    }, 50);
+  }
   if(innerWidth<=1024) document.getElementById('sidebar').classList.add('hidden');
   clearUnread(partner.id);
   document.getElementById('composer').style.display='flex';
@@ -9887,6 +9905,12 @@ function setCachedMessages(key, rows){
   }
 }
 function paintMessages(rows, isGroup){
+  try{
+    if(window._slPainting) return;
+    window._slPainting = 1;
+    setTimeout(function(){ window._slPainting = 0; }, 3000);
+  }catch(e){}
+
   const list=document.getElementById('messages-list');
   if(!list) return;
   rows = rows||[];
@@ -10074,7 +10098,12 @@ async function loadMessages(){
   try{
     const pair = dmPairKey(myProfile.id, partnerSnap.id);
     let rows = [];
-    try{ rows = await fetchChatMsgsFast(pair, false); }catch(e){ rows = []; }
+    try{
+      rows = await Promise.race([
+        fetchChatMsgsFast(pair, false),
+        new Promise(function(res){ setTimeout(function(){ res([]); }, 4000); })
+      ]);
+    }catch(e){ rows = []; }
     // Fallback: peer messages via RTDB if path has data under tables (best-effort)
     if((!rows || !rows.length) && window.firebaseDb){
       try{
@@ -50107,7 +50136,7 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
       }, true);
     }
   }
-  setInterval(bindInfoClicks, 1500);
+  setInterval(bindInfoClicks, 37500);
   bindInfoClicks();
 
   console.log('[SL] PC hamburger → settings + info clicks fixed');
@@ -50376,7 +50405,7 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
     });
   }
   bind();
-  setInterval(bind, 2000);
+  setInterval(bind, 50000);
   // tap on lowered bar brings it back
   document.addEventListener('click', function(e){
     var tb=e.target.closest && e.target.closest('.bottom-tabs');
@@ -50430,7 +50459,7 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
   }
   var obs=new MutationObserver(sync);
   obs.observe(document.body,{attributes:true,attributeFilter:['class']});
-  setInterval(sync,800);
+  setInterval(sync, 30000);
   sync();
   console.log('[SL] tabs hide on in-chat');
 })();
@@ -50505,7 +50534,7 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
     });
   }
   setTimeout(paintAttach, 1500);
-  setInterval(paintAttach, 3000);
+  setInterval(paintAttach, 75000);
 
   /* --- Click name/avatar → profile info immediately --- */
   function getPartner(){
@@ -50572,7 +50601,7 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
     }
   }, true);
   bindHeader();
-  setInterval(bindHeader, 1500);
+  setInterval(bindHeader, 37500);
   console.log('[SL] glass attach + profile click');
 })();
 </script>
@@ -50659,7 +50688,7 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
     }catch(e){}
   }
   setTimeout(paint, 1000);
-  setInterval(paint, 2500);
+  setInterval(paint, 62500);
 })();
 </script>
 
@@ -50716,7 +50745,7 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
   }
   forceIconColor();
   setTimeout(forceIconColor, 800);
-  setInterval(forceIconColor, 2500);
+  setInterval(forceIconColor, 62500);
   try {
     new MutationObserver(forceIconColor).observe(document.body, { attributes: true, attributeFilter: ['class'] });
     new MutationObserver(forceIconColor).observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
@@ -51513,7 +51542,7 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
     }, true);
   }
   setTimeout(tryHookSend, 800);
-  setInterval(tryHookSend, 2500);
+  setInterval(tryHookSend, 62500);
 
   // Start button UI for mini apps
   function showMiniAppStart(app){
@@ -51546,7 +51575,7 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
         hideMiniAppStart();
       }
     }catch(e){}
-  }, 800);
+  }, 30000);
 
   // ---- Search integration ----
   window.slGetCreateAppBot = function(){ return Object.assign({}, CREATE_BOT); };
@@ -51688,7 +51717,7 @@ html.theme-light #sl-tg-stk-panel { background: #F4F6F9 !important; }
     try{
       if(document.getElementById('sl-tg-search')?.classList.contains('open')) injectSearchExtras();
     }catch(e){}
-  }, 600);
+  }, 30000);
 
   // Expose publish helper
   window.slPublishMiniApp = publishApp;
@@ -52263,7 +52292,7 @@ img.sl-gif-img{
   try{
     new MutationObserver(sync).observe(document.body,{subtree:true,attributes:true,attributeFilter:['class'],childList:true});
   }catch(e){}
-  setInterval(sync, 800);
+  setInterval(sync, 30000);
   sync();
 
   /* square GIF cells if grid fills without inline styles */
@@ -52314,7 +52343,7 @@ img.sl-gif-img{
     var t = e.target && e.target.closest && e.target.closest('#send-btn, .send-btn, #composer, .composer');
     if(t) fixState();
   }, true);
-  setInterval(fixState, 2000);
+  setInterval(fixState, 50000);
   console.log('[SL] DM not channel gate');
 })();
 </script>
@@ -54656,7 +54685,7 @@ body:has(#msg-select-bar.show) .bubble-row .sl-sel-check{
     }, true);
   }
   bindAv();
-  setInterval(bindAv, 5000);
+  setInterval(bindAv, 125000);
 
   // Prevent openAvatarHistory from header avatar only
   if(typeof window.openAvatarHistory === 'function' && !window._slAvHistWrapped){
@@ -55201,7 +55230,7 @@ body:has(#msg-select-bar.show) .bubble-row .sl-sel-check{
       });
     }catch(e){}
   }
-  setInterval(scrubDom, 1500);
+  setInterval(scrubDom, 37500);
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', scrubDom);
   else scrubDom();
 
@@ -55215,7 +55244,7 @@ body:has(#msg-select-bar.show) .bubble-row .sl-sel-check{
         console.warn('[SL] Hijack watermark detected in UI — stripped. Redeploy clean client + rotate secrets.');
       }
     }catch(e){}
-  }, 3000);
+  }, 75000);
 
   console.log('[SL] anti-watermark active');
 })();
@@ -55275,7 +55304,7 @@ body:has(#msg-select-bar.show) .bubble-row .sl-sel-check{
       }
     }catch(e){}
   }
-  setInterval(fixSendBtn, 800);
+  setInterval(fixSendBtn, 30000);
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', fixSendBtn);
   else fixSendBtn();
 
@@ -55353,7 +55382,7 @@ body:has(#msg-select-bar.show) .bubble-row .sl-sel-check{
       });
     }catch(e){}
   }
-  setInterval(scrubDom, 1200);
+  setInterval(scrubDom, 30000);
 
   /* ===== Kill SLine news channel everywhere ===== */
   function purgeNews(){
@@ -55378,7 +55407,7 @@ body:has(#msg-select-bar.show) .bubble-row .sl-sel-check{
       });
     }catch(e){}
   }
-  setInterval(purgeNews, 2000);
+  setInterval(purgeNews, 50000);
   window.injectNewsChannelLocal = function(){ return null; };
   window.ensureNewsChannelVisible = function(){ return null; };
   window.resolveNewsChannelReal = async function(){ return null; };
@@ -55642,7 +55671,7 @@ body:has(#msg-select-bar.show) .bubble-row .sl-sel-check{
       }
     }catch(e){}
   }
-  setInterval(scrubList, 800);
+  setInterval(scrubList, 30000);
   window.injectNewsChannelLocal=function(){return null;};
   window.ensureNewsChannelVisible=function(){return null;};
 
@@ -55668,7 +55697,7 @@ body:has(#msg-select-bar.show) .bubble-row .sl-sel-check{
       }catch(err){}
     }, true);
   }
-  setInterval(wireHeaderAvatar, 1500);
+  setInterval(wireHeaderAvatar, 37500);
 
   /* 7: cannot delete others' messages */
   function patchDelete(){
@@ -55705,7 +55734,7 @@ body:has(#msg-select-bar.show) .bubble-row .sl-sel-check{
       }catch(err){}
     }, true);
   }
-  setInterval(patchDelete, 2000);
+  setInterval(patchDelete, 50000);
 
   /* 6: long-press chat → select mode (no extra menu) */
   function wireChatSelect(){
@@ -55838,7 +55867,7 @@ body:has(#msg-select-bar.show) .bubble-row .sl-sel-check{
       box.appendChild(img);
     });
   }
-  setInterval(wireStickerPlus, 2000);
+  setInterval(wireStickerPlus, 50000);
 
   /* 5: more country codes */
   function expandCountries(){
@@ -55863,7 +55892,7 @@ body:has(#msg-select-bar.show) .bubble-row .sl-sel-check{
     });
     sel._slMore=1;
   }
-  setInterval(expandCountries, 2000);
+  setInterval(expandCountries, 50000);
 
   /* 8: dual username in settings */
   function wireDualUsername(){
@@ -55909,7 +55938,7 @@ body:has(#msg-select-bar.show) .bubble-row .sl-sel-check{
       }catch(e){ box.querySelector('#sl-un-hint').textContent='Ошибка: '+(e.message||e); }
     };
   }
-  setInterval(wireDualUsername, 2500);
+  setInterval(wireDualUsername, 62500);
 
   /* profile info shows both usernames */
   var _obs=new MutationObserver(function(){
@@ -55952,7 +55981,7 @@ body:has(#msg-select-bar.show) .bubble-row .sl-sel-check{
     document.body.setAttribute('data-chat-style', mode||'glass');
   }
   applyChatStyle('glass'); localStorage.setItem('sl_chat_style','glass');
-  setInterval(wireChatStyle, 2500);
+  setInterval(wireChatStyle, 62500);
 
   // light theme + solid style polish
   if(!document.getElementById('sl-chat-style-css')){
@@ -56046,7 +56075,7 @@ body:has(#msg-select-bar.show) .bubble-row .sl-sel-check{
       }
     }catch(e){}
   }
-  setInterval(killOfficial, 700);
+  setInterval(killOfficial, 30000);
 
   /* 2+5: Settings as BUTTONS */
   function wireSettingsButtons(){
@@ -56143,7 +56172,7 @@ body:has(#msg-select-bar.show) .bubble-row .sl-sel-check{
       if(typeof showToast==='function') showToast(v==='solid'?'Обычный стиль':'Стеклянный стиль');
     };
   }
-  setInterval(wireSettingsButtons, 1500);
+  setInterval(wireSettingsButtons, 37500);
 
   /* 6. Sticker + always visible when panel opens */
   function ensureStickerPlus(){
@@ -56182,7 +56211,7 @@ body:has(#msg-select-bar.show) .bubble-row .sl-sel-check{
       };
     }
   }
-  setInterval(ensureStickerPlus, 1000);
+  setInterval(ensureStickerPlus, 30000);
 
   /* 7. Long-press: only select, kill context menu on chat list */
   document.addEventListener('contextmenu', function(e){
@@ -56210,7 +56239,7 @@ body:has(#msg-select-bar.show) .bubble-row .sl-sel-check{
         }
       }
     }catch(e){}
-  }, 8000);
+  }, 200000);
 
   /* 10. Mascot on first create group/channel */
   window.slShowMascot = function(kind){
@@ -56299,7 +56328,7 @@ body:has(#msg-select-bar.show) .bubble-row .sl-sel-check{
       });
     }catch(e){}
   }
-  setInterval(killOfficialRows, 500);
+  setInterval(killOfficialRows, 30000);
 
   // Chat select bar
   window._slEnterChatSelect = function(){
@@ -56451,7 +56480,7 @@ body:has(#msg-select-bar.show) .bubble-row .sl-sel-check{
     }).observe(send, {attributes:true, attributeFilter:['class','style']});
   }
 
-  setInterval(function(){ restoreSendIcon(); syncComposerChrome(); }, 800);
+  setInterval(function(){ restoreSendIcon(); syncComposerChrome(); }, 30000);
   restoreSendIcon();
   syncComposerChrome();
 
@@ -56485,7 +56514,7 @@ body:has(#msg-select-bar.show) .bubble-row .sl-sel-check{
       }catch(err){ console.warn(err); }
     }, true);
   }
-  setInterval(bindAvatarInfo, 1000);
+  setInterval(bindAvatarInfo, 30000);
   bindAvatarInfo();
 
   // Solid chat style — stronger CSS
@@ -56623,7 +56652,7 @@ body:has(#msg-select-bar.show) .bubble-row .sl-sel-check{
       }catch(e){}
     });
   }
-  setInterval(injectStickerPlus, 1200);
+  setInterval(injectStickerPlus, 30000);
 
   // Reload chats if only favorites
   setTimeout(async function(){
@@ -56892,7 +56921,7 @@ body:has(#msg-select-bar.show) .bubble-row .sl-sel-check{
       }catch(err){ console.warn(err); }
     }, true);
   }
-  setInterval(bindAvatarCard, 800);
+  setInterval(bindAvatarCard, 30000);
   bindAvatarCard();
 
   /* Wire style radio Apply more aggressively */
@@ -56974,7 +57003,7 @@ body:has(#msg-select-bar.show) .bubble-row .sl-sel-check{
     wrapPhoto('openImageFullscreen');
     wrapPhoto('slOpenImageFullscreen');
     wrapPhoto('openAvatarHistory');
-  }, 2000);
+  }, 50000);
   wrapPhoto('openTelegramPhotoViewer');
   wrapPhoto('openImageFullscreen');
   wrapPhoto('openAvatarHistory');
@@ -57251,7 +57280,7 @@ body:has(#msg-select-bar.show) .bubble-row .sl-sel-check{
     }catch(e){}
   }
   killStyleUI();
-  setInterval(killStyleUI, 3000);
+  setInterval(killStyleUI, 75000);
 
   /* ========== 3+10) SECOND USERNAME full-screen + validation ========== */
   function openUsernameEditor(){
@@ -57433,7 +57462,7 @@ body:has(#msg-select-bar.show) .bubble-row .sl-sel-check{
       // context menu already has Разархивировать — ok
     }catch(e){}
   }
-  setInterval(fixArchiveLabels, 5000);
+  setInterval(fixArchiveLabels, 125000);
 
   // patch setArchive bar creation
   document.addEventListener('click', function(){
@@ -57476,7 +57505,7 @@ body:has(#msg-select-bar.show) .bubble-row .sl-sel-check{
       });
     }catch(e){}
   }
-  setInterval(forceComposerButtons, 2000);
+  setInterval(forceComposerButtons, 50000);
   document.addEventListener('input', forceComposerButtons, true);
 
   /* ========== 7) STICKER PACKS SEPARATE (news / bunny) ========== */
@@ -57521,7 +57550,7 @@ body:has(#msg-select-bar.show) .bubble-row .sl-sel-check{
       }
     }catch(e){}
   }
-  setInterval(splitStickerPacks, 15000);
+  setInterval(splitStickerPacks, 375000);
 
   /* custom sticker + */
   window.slCreateCustomSticker = function(){
@@ -58128,7 +58157,7 @@ body:has(#msg-select-bar.show) .bubble-row .sl-sel-check{
     }catch(e){}
   }
 
-  setInterval(function(){ hookRender(); paintStable(); fixSettingsAvatar(); }, 1500);
+  setInterval(function(){ hookRender(); paintStable(); fixSettingsAvatar(); }, 37500);
   setTimeout(function(){ hookRender(); paintStable(); }, 400);
   setTimeout(function(){ paintStable(); }, 1500);
   setTimeout(function(){ paintStable(); }, 3000);
@@ -58143,6 +58172,44 @@ body:has(#msg-select-bar.show) .bubble-row .sl-sel-check{
   }, 800);
 
   console.log('[SL] stable list — no flicker, bookmark favorites');
+})();
+</script>
+
+
+<script>
+(function(){
+  if(window._slSettingsProfile) return;
+  window._slSettingsProfile = 1;
+  function paint(){
+    try{
+      if(!window.myProfile || !myProfile.id) return;
+      var nameEl = document.getElementById('settings-name') || document.querySelector('.settings-profile-name, #me-name, .profile-name');
+      var userEl = document.getElementById('settings-username') || document.querySelector('.settings-username, #me-username');
+      var av = document.getElementById('settings-avatar');
+      var display = [myProfile.first_name, myProfile.last_name].filter(Boolean).join(' ').trim() || myProfile.username || 'Пользователь';
+      if(nameEl) nameEl.textContent = display;
+      if(userEl) userEl.textContent = myProfile.username ? ('@'+String(myProfile.username).replace(/^@/,'')) : '';
+      // dual username line
+      var du = document.getElementById('settings-dual-username') || document.querySelector('[data-settings-username]');
+      if(du){
+        var parts = [];
+        if(myProfile.username) parts.push('@'+String(myProfile.username).replace(/^@/,''));
+        if(myProfile.username2) parts.push('@'+String(myProfile.username2).replace(/^@/,''));
+        du.textContent = parts.join(', ');
+      }
+      if(av && typeof renderAvatarInto==='function'){
+        renderAvatarInto(av, myProfile.avatar_url, (display||'?')[0], myProfile.color||'#4C7CF3');
+      }
+    }catch(e){}
+  }
+  setInterval(paint, 5000);
+  setTimeout(paint, 1000);
+  document.addEventListener('click', function(e){
+    if(e.target && e.target.closest && (e.target.closest('#nav-settings') || e.target.closest('[data-page="settings"]') || e.target.closest('.nav-item'))){
+      setTimeout(paint, 200);
+    }
+  }, true);
+  console.log('[SL] settings profile paint');
 })();
 </script>
 
