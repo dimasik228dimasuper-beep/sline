@@ -8987,9 +8987,8 @@ function renderContactsAndGroups(){
     const avEl = row.querySelector('.avatar');
     if(isSelf){
       avEl.className = 'avatar sl-fav-avatar';
-      avEl.style.backgroundImage = 'none';
-      avEl.style.background = '#2EA6FF';
-      avEl.innerHTML = '<svg viewBox="0 0 24 24" fill="#fff" xmlns="http://www.w3.org/2000/svg"><path d="M6 3.5A1.5 1.5 0 017.5 2h9A1.5 1.5 0 0118 3.5v17.2a.8.8 0 01-1.3.6L12 17.2l-4.7 4.1A.8.8 0 016 20.7V3.5z"/></svg>';
+      avEl.style.cssText = 'width:48px;height:48px;min-width:48px;min-height:48px;border-radius:50%;background:#2EA6FF;display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden';
+      avEl.innerHTML = '<svg viewBox="0 0 24 24" width="22" height="22" fill="#fff" xmlns="http://www.w3.org/2000/svg"><path d="M6 3.5A1.5 1.5 0 017.5 2h9A1.5 1.5 0 0118 3.5v17.2a.8.8 0 01-1.3.6L12 17.2l-4.7 4.1A.8.8 0 016 20.7V3.5z"/></svg>';
     } else if(data.isVerifyCodes || data.id==='sl_verify_codes'){
       avEl.className = 'avatar';
       avEl.style.background = 'linear-gradient(135deg,#2EA6FF,#4C7CF3)';
@@ -10074,10 +10073,20 @@ async function loadMessages(){
   // 3) Network: ONLY this chat path
   try{
     const pair = dmPairKey(myProfile.id, partnerSnap.id);
-    const rows = await fetchChatMsgsFast(pair, false);
+    let rows = [];
+    try{ rows = await fetchChatMsgsFast(pair, false); }catch(e){ rows = []; }
+    // Fallback: peer messages via RTDB if path has data under tables (best-effort)
+    if((!rows || !rows.length) && window.firebaseDb){
+      try{
+        const snap = await firebaseDb.ref('chat_msgs/'+pair).limitToLast(100).once('value');
+        const val = snap.val()||{};
+        rows = Object.keys(val).map(function(k){ return Object.assign({id:k}, val[k]); });
+        rows.sort(function(a,b){ return String(a.created_at||'').localeCompare(String(b.created_at||'')); });
+      }catch(e){}
+    }
     if(_gen !== window._slChatGen) return;
     if(activePartner?.id !== partnerSnap.id) return;
-    if(rows.length){
+    if(rows && rows.length){
       setCachedMessages(cacheKey, rows);
       paintMessages(rows, false);
     } else if(!hadCache){
@@ -57938,340 +57947,202 @@ body:has(#msg-select-bar.show) .bubble-row .sl-sel-check{
 </script>
 
 
-<script>
-(function(){
-  if(window._slEmptyListFix) return;
-  window._slEmptyListFix = 1;
 
-  function ensureSelfContact(){
-    try{
-      if(!window.myProfile || !myProfile.id) return;
-      if(!Array.isArray(window.contacts)) window.contacts = [];
-      var me = String(myProfile.id);
-      if(!contacts.some(function(c){ return c && String(c.id)===me; })){
-        contacts.unshift({
-          id: myProfile.id,
-          username: myProfile.username,
-          first_name: 'Избранное',
-          lastMessage: 'Заметки',
-          lastAt: new Date(0).toISOString(),
-          avatar_url: myProfile.avatar_url,
-          color: myProfile.color,
-          _dmWithMe: true
-        });
-      }
-    }catch(e){}
-  }
 
-  async function forceShowChats(){
-    try{
-      ensureSelfContact();
-      if(typeof loadChats==='function'){
-        try{ await loadChats(); }catch(e){ console.warn(e); }
-      }
-      if(typeof loadGroups==='function'){
-        try{ await loadGroups(); }catch(e){}
-      }
-      ensureSelfContact();
-      if(typeof renderContactsAndGroups==='function') renderContactsAndGroups();
 
-      // if still empty DOM — paint Избранное manually
-      var list = document.getElementById('contacts-list');
-      if(list && !list.querySelector('.sw-clip, .contact, .chat-row')){
-        ensureSelfContact();
-        if(typeof renderContactsAndGroups==='function') renderContactsAndGroups();
-      }
-      if(list && list.children.length===0){
-        list.innerHTML = '<div class="empty-state" style="padding:28px;text-align:center;color:var(--muted)">Нет чатов<br><span style="font-size:12px">Нажмите + чтобы начать общение</span></div>';
-      }
-    }catch(e){ console.warn('forceShowChats', e); }
-  }
 
-  setTimeout(forceShowChats, 800);
-  setTimeout(forceShowChats, 2500);
-  setTimeout(forceShowChats, 6000);
-  setTimeout(forceShowChats, 12000);
 
-  // when app becomes visible
-  document.addEventListener('visibilitychange', function(){
-    if(document.visibilityState==='visible') setTimeout(forceShowChats, 300);
-  });
 
-  console.log('[SL] empty list fix on');
-})();
-</script>
+
+
+
+
 
 
 <script>
 (function(){
-  if(window._slListVisibleFix) return;
-  window._slListVisibleFix = 1;
+  if(window._slStableList) return;
+  window._slStableList = 1;
 
-  function paintFallback(){
-    try{
-      var list = document.getElementById('contacts-list');
-      if(!list) return;
-      var hasRow = list.querySelector('.sw-clip, .contact, [data-cid]');
-      if(hasRow) return;
-      // archive may hide all
-      try{
-        var arch = JSON.parse(localStorage.getItem('sl_archive')||'[]');
-        if(Array.isArray(arch) && arch.length > 0){
-          // if archive has many ids, don't clear — just show message
-        }
-      }catch(e){}
-      if(typeof myProfile!=='undefined' && myProfile && myProfile.id){
-        if(!Array.isArray(window.contacts)) window.contacts=[];
-        if(!contacts.some(function(c){return c&&String(c.id)===String(myProfile.id);})){
-          contacts = [{
-            id: myProfile.id,
-            first_name: 'Избранное',
-            lastMessage: 'Заметки',
-            lastAt: new Date(0).toISOString(),
-            _dmWithMe: true,
-            avatar_url: myProfile.avatar_url,
-            color: myProfile.color || '#2EA6FF'
-          }].concat(contacts);
-        }
-        if(typeof renderContactsAndGroups==='function'){
-          renderContactsAndGroups();
-          if(list.querySelector('.sw-clip, .contact, [data-cid]')) return;
-        }
-      }
-      list.innerHTML = '<div style="padding:48px 20px;text-align:center;color:#8b93a7;font-size:15px">Нет чатов<div style="margin-top:8px;font-size:13px">Нажмите + чтобы начать общение</div></div>';
-    }catch(e){}
-  }
-
-  setTimeout(paintFallback, 600);
-  setTimeout(paintFallback, 2000);
-  setTimeout(paintFallback, 5000);
-  setTimeout(function(){
-    try{ if(typeof loadChats==='function') loadChats().then(paintFallback); }catch(e){ paintFallback(); }
-  }, 1500);
-
-  console.log('[SL] list visible fix');
-})();
-</script>
-
-
-<script>
-(function(){
-  if(window._slLeanBoot) return;
-  window._slLeanBoot = 1;
-
-  function selfRow(){
-    try{
-      if(!myProfile||!myProfile.id) return null;
-      return {
-        id: myProfile.id,
-        first_name: 'Избранное',
-        lastMessage: 'Заметки',
-        lastAt: new Date(0).toISOString(),
-        avatar_url: myProfile.avatar_url||null,
-        color: myProfile.color||'#2EA6FF',
-        username: myProfile.username||'',
-        _dmWithMe: true
-      };
-    }catch(e){ return null; }
-  }
-
-  function ensureList(){
-    try{
-      if(!myProfile||!myProfile.id) return;
-      if(!Array.isArray(window.contacts)) window.contacts = [];
-      var me = String(myProfile.id);
-      if(!contacts.some(function(c){ return c && String(c.id)===me; })){
-        contacts.unshift(selfRow());
-      } else {
-        // rename self to Избранное in list
-        contacts.forEach(function(c){
-          if(c && String(c.id)===me){ c.first_name='Избранное'; c.lastMessage=c.lastMessage||'Заметки'; c._dmWithMe=true; }
-        });
-      }
-      if(typeof renderContactsAndGroups==='function') renderContactsAndGroups();
-      var list=document.getElementById('contacts-list');
-      if(list && !list.querySelector('.sw-clip,[data-cid],.contact')){
-        // hard HTML fallback
-        var av = (myProfile.avatar_url)
-          ? '<img src="'+String(myProfile.avatar_url).replace(/"/g,'')+'" style="width:100%;height:100%;object-fit:cover;border-radius:50%">'
-          : '<svg viewBox="0 0 24 24" fill="#fff" width="22" height="22"><path d="M6 3.5A1.5 1.5 0 017.5 2h9A1.5 1.5 0 0118 3.5v17.2a.8.8 0 01-1.3.6L12 17.2l-4.7 4.1A.8.8 0 016 20.7V3.5z"/></svg>';
-        list.innerHTML = '<div class="sw-clip" data-cid="'+me+'" data-ctype="user">'+
-          '<div class="contact sw-front" data-cid="'+me+'" data-ctype="user" style="display:flex;align-items:center;gap:10px;width:100%;padding:10px 12px;cursor:pointer">'+
-          '<div class="avatar sl-fav-avatar" style="width:48px;height:48px;border-radius:50%;background:#2EA6FF;display:flex;align-items:center;justify-content:center;overflow:hidden">'+av+'</div>'+
-          '<div style="min-width:0;flex:1"><div class="contact-name">Избранное</div><div class="contact-sub">Заметки</div></div>'+
-          '</div></div>';
-        list.querySelector('.contact').onclick=function(){
-          try{
-            if(typeof openChat==='function') openChat(myProfile);
-          }catch(e){}
-        };
-      }
-    }catch(e){ console.warn('ensureList', e); }
-  }
-
-  setTimeout(ensureList, 500);
-  setTimeout(ensureList, 1500);
-  setTimeout(function(){
-    try{ if(typeof loadChats==='function') loadChats().finally(ensureList); }
-    catch(e){ ensureList(); }
-  }, 1000);
-  setTimeout(ensureList, 4000);
-
-  // Fix broken white profile / avatar viewer
-  document.addEventListener('click', function(e){
-    var t=e.target;
-    if(!t||!t.closest) return;
-    // if broken empty overlay, allow back
-  }, true);
-
-  console.log('[SL] lean boot — Избранное guaranteed');
-})();
-</script>
-
-
-<script>
-(function(){
-  if(window._slNuclearList) return;
-  window._slNuclearList = 1;
+  var lastGoodHTML = '';
+  var stableCount = 0;
 
   function esc(s){
     return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
   }
 
-  function paintList(){
-    var list = document.getElementById('contacts-list');
-    if(!list) return;
+  function bookmarkAv(){
+    return '<div class="avatar sl-fav-avatar" style="width:48px;height:48px;min-width:48px;min-height:48px;border-radius:50%;background:#2EA6FF!important;display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden">'+
+      '<svg viewBox="0 0 24 24" width="22" height="22" fill="#fff"><path d="M6 3.5A1.5 1.5 0 017.5 2h9A1.5 1.5 0 0118 3.5v17.2a.8.8 0 01-1.3.6L12 17.2l-4.7 4.1A.8.8 0 016 20.7V3.5z"/></svg></div>';
+  }
 
-    // Kill broken transforms on stories / list
-    try{
-      var bar = document.getElementById('stories-bar');
-      if(bar){
-        bar.style.cssText = 'display:flex;gap:12px;padding:10px 16px;overflow-x:auto;border-bottom:1px solid var(--line)';
-      }
-      document.querySelectorAll('#stories-bar .story-item').forEach(function(it){
-        it.style.transform='';
-        it.style.opacity='1';
-      });
-      var chip=document.getElementById('sl-chats-title-chip');
-      if(chip) chip.remove();
-    }catch(e){}
-
-    var me = null;
-    try{ me = (window.myProfile && myProfile.id) ? myProfile : null; }catch(e){}
-    if(!me){
-      // still show placeholder so screen not empty
-      if(!list.querySelector('[data-sl-nuclear]')){
-        list.innerHTML = '<div data-sl-nuclear="1" style="padding:32px 16px;text-align:center;color:#687787;font-size:15px">Загрузка аккаунта…</div>';
-      }
-      return;
-    }
-
-    // Build contacts array minimum
-    if(!Array.isArray(window.contacts)) window.contacts = [];
+  function buildHTML(listContacts){
+    var me = window.myProfile;
+    if(!me||!me.id) return '';
     var mid = String(me.id);
-    var hasSelf = contacts.some(function(c){ return c && String(c.id)===mid; });
-    if(!hasSelf){
-      contacts.unshift({
-        id: me.id,
-        first_name: 'Избранное',
-        lastMessage: 'Заметки',
-        lastAt: new Date(0).toISOString(),
-        avatar_url: me.avatar_url||null,
-        color: '#2EA6FF',
-        _dmWithMe: true
-      });
+    var arr = Array.isArray(listContacts) ? listContacts.slice() : [];
+    if(!arr.some(function(c){ return c && String(c.id)===mid; })){
+      arr.unshift({id:me.id, first_name:'Избранное', lastMessage:'Заметки', _dmWithMe:true});
     }
-
-    // If complex renderer leaves empty / broken DOM — paint ourselves
-    var rows = list.querySelectorAll('.sw-clip, .contact, [data-cid]');
-    var broken = !rows.length;
-    if(!broken){
-      // detect stretched blue bar (height very small relative to width)
-      try{
-        var av = list.querySelector('.avatar');
-        if(av){
-          var r = av.getBoundingClientRect();
-          if(r.width > 120 && r.height < 30) broken = true;
-        }
-      }catch(e){}
-    }
-
-    if(!broken && rows.length) return;
-
-    var html = '';
-    var seen = {};
-    var arr = contacts.slice();
-    // self first
     arr.sort(function(a,b){
       if(String(a.id)===mid) return -1;
       if(String(b.id)===mid) return 1;
-      return 0;
+      return String(b.lastAt||'').localeCompare(String(a.lastAt||''));
     });
+    var html = '';
+    var seen = {};
     arr.forEach(function(c){
       if(!c||!c.id||seen[String(c.id)]) return;
       seen[String(c.id)]=1;
       var isSelf = String(c.id)===mid;
-      var name = isSelf ? 'Избранное' : ([c.first_name,c.last_name].filter(Boolean).join(' ') || c.username || 'Чат');
-      var sub = isSelf ? 'Заметки' : (c.lastMessage || ('@'+(c.username||'')));
-      var avHtml;
+      var name = isSelf ? 'Избранное' : ([c.first_name,c.last_name].filter(Boolean).join(' ').trim() || c.username || 'Чат');
+      var sub = isSelf ? 'Заметки' : (c.lastMessage || (c.username?('@'+c.username):''));
+      var av;
       if(isSelf){
-        avHtml = '<div class="avatar" style="width:48px;height:48px;min-width:48px;min-height:48px;border-radius:50%;background:#2EA6FF;display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden">'+
-          '<svg viewBox="0 0 24 24" width="22" height="22" fill="#fff"><path d="M6 3.5A1.5 1.5 0 017.5 2h9A1.5 1.5 0 0118 3.5v17.2a.8.8 0 01-1.3.6L12 17.2l-4.7 4.1A.8.8 0 016 20.7V3.5z"/></svg></div>';
+        av = bookmarkAv();
       } else if(c.avatar_url){
-        avHtml = '<div class="avatar" style="width:48px;height:48px;min-width:48px;min-height:48px;border-radius:50%;overflow:hidden;flex-shrink:0;background:#ccc">'+
-          '<img src="'+esc(c.avatar_url)+'" alt="" style="width:48px;height:48px;object-fit:cover;display:block;border-radius:50%" onerror="this.parentNode.style.background=\''+esc(c.color||'#4C7CF3')+'\';this.remove()"></div>';
+        av = '<div class="avatar" style="width:48px;height:48px;min-width:48px;min-height:48px;border-radius:50%;overflow:hidden;flex-shrink:0;background:#4C7CF3">'+
+          '<img src="'+esc(c.avatar_url)+'" style="width:48px;height:48px;object-fit:cover;display:block" onerror="this.remove()"></div>';
       } else {
         var letter = (name||'?').charAt(0).toUpperCase();
-        avHtml = '<div class="avatar" style="width:48px;height:48px;min-width:48px;min-height:48px;border-radius:50%;background:'+esc(c.color||'#4C7CF3')+';color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0">'+esc(letter)+'</div>';
+        av = '<div class="avatar" style="width:48px;height:48px;min-width:48px;min-height:48px;border-radius:50%;background:'+esc(c.color||'#4C7CF3')+';color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0">'+esc(letter)+'</div>';
       }
-      html += '<div class="sl-n-row" data-cid="'+esc(c.id)+'" data-self="'+(isSelf?'1':'0')+'" style="display:flex;align-items:center;gap:12px;padding:10px 14px;cursor:pointer;border-bottom:1px solid rgba(127,127,127,.12)">'+
-        avHtml+
-        '<div style="min-width:0;flex:1">'+
-        '<div style="font-weight:600;font-size:16px;color:var(--text,#111)">'+esc(name)+'</div>'+
-        '<div style="font-size:14px;color:#687787;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(sub)+'</div>'+
-        '</div></div>';
+      html += '<div class="sl-stable-row" data-cid="'+esc(String(c.id))+'" data-self="'+(isSelf?'1':'0')+'" style="display:flex;align-items:center;gap:12px;padding:10px 14px;cursor:pointer;border-bottom:1px solid rgba(127,127,127,.1)">'+
+        av+'<div style="min-width:0;flex:1"><div style="font-weight:600;font-size:15px;color:var(--text,#111)">'+esc(name)+'</div>'+
+        '<div style="font-size:13px;color:#687787;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(sub)+'</div></div></div>';
     });
+    return html;
+  }
 
-    if(!html){
-      html = '<div style="padding:32px;text-align:center;color:#687787">Нет чатов</div>';
-    }
-    list.innerHTML = html;
-    list.querySelectorAll('.sl-n-row').forEach(function(row){
-      row.onclick = function(){
+  function bindRows(list){
+    list.querySelectorAll('.sl-stable-row').forEach(function(row){
+      if(row._bound) return;
+      row._bound = 1;
+      row.addEventListener('click', function(e){
+        e.preventDefault();
+        e.stopPropagation();
         var id = row.getAttribute('data-cid');
         var isSelf = row.getAttribute('data-self')==='1';
         try{
-          if(isSelf && typeof openChat==='function'){ openChat(myProfile); return; }
-          var peer = (contacts||[]).find(function(c){ return c && String(c.id)===String(id); });
-          if(peer && typeof openChat==='function') openChat(peer);
-          else if(typeof openChat==='function') openChat({id:id, first_name: row.querySelector('div div')?.textContent||'Чат'});
-        }catch(e){ console.warn(e); }
-      };
+          var peer = null;
+          if(isSelf) peer = myProfile;
+          else peer = (window.contacts||[]).find(function(c){ return c && String(c.id)===String(id); });
+          if(!peer) peer = {id:id, first_name: row.textContent.trim().split('\n')[0]||'Чат'};
+          if(typeof openChat==='function') openChat(peer);
+        }catch(err){ console.warn(err); }
+      });
     });
-    console.log('[SL] nuclear list painted', list.querySelectorAll('.sl-n-row').length);
   }
 
-  // Run often until list has real rows
-  var n = 0;
-  var t = setInterval(function(){
-    n++;
-    paintList();
-    var list=document.getElementById('contacts-list');
-    if(list && list.querySelectorAll('.sl-n-row,[data-cid]').length > 0 && n > 3){
-      /* keep a slow watchdog */
-      if(n > 15) clearInterval(t);
-    }
-    if(n > 40) clearInterval(t);
+  function paintStable(){
+    try{
+      var list = document.getElementById('contacts-list');
+      if(!list) return;
+      if(!myProfile||!myProfile.id){
+        if(!list.querySelector('.sl-stable-row') && !list.querySelector('[data-cid]')){
+          list.innerHTML = '<div style="padding:28px;text-align:center;color:#687787">Загрузка…</div>';
+        }
+        return;
+      }
+
+      // Ensure contacts has self
+      if(!Array.isArray(window.contacts)) window.contacts = [];
+      var mid = String(myProfile.id);
+      if(!contacts.some(function(c){ return c && String(c.id)===mid; })){
+        contacts.unshift({id:myProfile.id, first_name:'Избранное', lastMessage:'Заметки', _dmWithMe:true});
+      }
+
+      var hasRows = list.querySelectorAll('.sl-stable-row, .sw-clip[data-cid], .contact[data-cid]').length;
+      var text = (list.textContent||'').trim();
+      var isEmptyMsg = /Нет чатов|Загрузка|Нажмите/.test(text) && hasRows===0;
+
+      // If we already have stable rows and contacts not empty — only rebind, don't wipe
+      if(hasRows > 0 && contacts.length > 0 && !isEmptyMsg){
+        // Fix favorites icon if someone put user avatar on self row
+        list.querySelectorAll('.sl-stable-row[data-self="1"] .avatar, .sw-clip[data-cid="'+mid+'"] .avatar').forEach(function(av){
+          if(!av.classList.contains('sl-fav-avatar') || av.querySelector('img')){
+            av.className = 'avatar sl-fav-avatar';
+            av.style.cssText = 'width:48px;height:48px;min-width:48px;min-height:48px;border-radius:50%;background:#2EA6FF;display:flex;align-items:center;justify-content:center;flex-shrink:0';
+            av.innerHTML = '<svg viewBox="0 0 24 24" width="22" height="22" fill="#fff"><path d="M6 3.5A1.5 1.5 0 017.5 2h9A1.5 1.5 0 0118 3.5v17.2a.8.8 0 01-1.3.6L12 17.2l-4.7 4.1A.8.8 0 016 20.7V3.5z"/></svg>';
+          }
+        });
+        bindRows(list);
+        stableCount++;
+        return;
+      }
+
+      var html = buildHTML(contacts);
+      if(!html) return;
+      // Avoid flicker: only replace if different
+      if(html !== lastGoodHTML || hasRows===0){
+        list.innerHTML = html;
+        lastGoodHTML = html;
+        bindRows(list);
+      }
+    }catch(e){ console.warn('paintStable', e); }
+  }
+
+  // Wrap renderContactsAndGroups to not clear when empty if we have lastGoodHTML
+  var _origRender = null;
+  function hookRender(){
+    if(typeof renderContactsAndGroups!=='function') return;
+    if(renderContactsAndGroups._stableHook) return;
+    _origRender = renderContactsAndGroups;
+    window.renderContactsAndGroups = function(){
+      try{
+        _origRender.apply(this, arguments);
+      }catch(e){ console.warn(e); }
+      // After original render — if empty, restore stable
+      try{
+        var list=document.getElementById('contacts-list');
+        if(list && !list.querySelector('.sw-clip, .sl-stable-row, [data-cid]')){
+          paintStable();
+        }
+        // Force bookmark on favorites
+        if(myProfile&&myProfile.id){
+          var mid=String(myProfile.id);
+          list && list.querySelectorAll('[data-cid="'+mid+'"] .avatar').forEach(function(av){
+            av.className='avatar sl-fav-avatar';
+            av.style.background='#2EA6FF';
+            av.style.backgroundImage='none';
+            av.innerHTML='<svg viewBox="0 0 24 24" width="22" height="22" fill="#fff"><path d="M6 3.5A1.5 1.5 0 017.5 2h9A1.5 1.5 0 0118 3.5v17.2a.8.8 0 01-1.3.6L12 17.2l-4.7 4.1A.8.8 0 016 20.7V3.5z"/></svg>';
+          });
+        }
+      }catch(e){}
+    };
+    renderContactsAndGroups._stableHook = 1;
+  }
+
+  // Settings avatar
+  function fixSettingsAvatar(){
+    try{
+      if(!myProfile) return;
+      var el = document.getElementById('settings-avatar');
+      if(!el) return;
+      if(myProfile.avatar_url && typeof renderAvatarInto==='function'){
+        renderAvatarInto(el, myProfile.avatar_url, (myProfile.first_name||myProfile.username||'?')[0], myProfile.color||'#4C7CF3');
+      } else {
+        el.style.background = myProfile.color||'#4C7CF3';
+        el.textContent = (myProfile.first_name||myProfile.username||'?')[0].toUpperCase();
+      }
+    }catch(e){}
+  }
+
+  setInterval(function(){ hookRender(); paintStable(); fixSettingsAvatar(); }, 1500);
+  setTimeout(function(){ hookRender(); paintStable(); }, 400);
+  setTimeout(function(){ paintStable(); }, 1500);
+  setTimeout(function(){ paintStable(); }, 3000);
+
+  // loadChats then stable
+  setTimeout(function(){
+    try{
+      if(typeof loadChats==='function'){
+        loadChats().then(function(){ paintStable(); }).catch(function(){ paintStable(); });
+      }
+    }catch(e){ paintStable(); }
   }, 800);
 
-  setTimeout(paintList, 300);
-  setTimeout(paintList, 1200);
-  setTimeout(function(){
-    try{ if(typeof loadChats==='function') loadChats().then(paintList).catch(paintList); }
-    catch(e){ paintList(); }
-  }, 600);
-
-  console.log('[SL] nuclear list active');
+  console.log('[SL] stable list — no flicker, bookmark favorites');
 })();
 </script>
 
